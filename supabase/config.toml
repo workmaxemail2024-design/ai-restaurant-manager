@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.pos-ai-reconciliation]
 verify_jwt = false
+
+[functions.rbac-resolve-user]
+verify_jwt = true

@@ -669,6 +669,47 @@ export type Database = {
         }
         Relationships: []
       }
+      roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system_role: boolean | null
+          name: string
+          permissions: Json
+          restaurant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system_role?: boolean | null
+          name: string
+          permissions?: Json
+          restaurant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_system_role?: boolean | null
+          name?: string
+          permissions?: Json
+          restaurant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roles_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales: {
         Row: {
           created_at: string
@@ -1045,6 +1086,7 @@ export type Database = {
           is_default: boolean | null
           restaurant_id: string
           role: string
+          role_id: string | null
           user_id: string
         }
         Insert: {
@@ -1053,6 +1095,7 @@ export type Database = {
           is_default?: boolean | null
           restaurant_id: string
           role?: string
+          role_id?: string | null
           user_id: string
         }
         Update: {
@@ -1061,6 +1104,7 @@ export type Database = {
           is_default?: boolean | null
           restaurant_id?: string
           role?: string
+          role_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -1069,6 +1113,13 @@ export type Database = {
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_restaurants_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
             referencedColumns: ["id"]
           },
         ]
@@ -1084,13 +1135,23 @@ export type Database = {
         Args: { p_date: string; p_staff_id: string }
         Returns: number
       }
+      create_default_roles: {
+        Args: { p_restaurant_id: string }
+        Returns: undefined
+      }
       get_latest_ingredient_price: {
         Args: { p_ingredient_id: string }
         Returns: number
       }
+      get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
+      get_user_role_id: { Args: never; Returns: string }
       user_belongs_to_restaurant: {
         Args: { _restaurant_id: string }
+        Returns: boolean
+      }
+      user_has_permission: {
+        Args: { p_action: string; p_resource: string }
         Returns: boolean
       }
     }

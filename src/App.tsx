@@ -29,6 +29,7 @@ import AuthPage from "./pages/AuthPage";
 import MultiLocationIntelligencePage from "./pages/MultiLocationIntelligencePage";
 import ChainMenuPerformancePage from "./pages/ChainMenuPerformancePage";
 import ForecastDashboardPage from "./pages/ForecastDashboardPage";
+import RoleBuilderPage from "./pages/RoleBuilderPage";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="/analytics/forecast" element={<ForecastDashboardPage />} />
               {/* Settings Routes */}
               <Route path="/settings/pos" element={<POSIntegrationsPage />} />
+              <Route path="/settings/roles" element={<RoleBuilderPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
