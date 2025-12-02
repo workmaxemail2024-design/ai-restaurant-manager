@@ -1,5 +1,7 @@
 import { Search, Bell, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
 
 export function Header() {
   const today = new Date().toLocaleDateString('en-US', { 
@@ -20,6 +22,9 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Restaurant Switcher */}
+        <RestaurantSwitcher />
+
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -37,6 +42,9 @@ export function Header() {
             3
           </span>
         </Button>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* Time indicator */}
         <div className="px-4 py-2 rounded-lg bg-secondary border border-border">

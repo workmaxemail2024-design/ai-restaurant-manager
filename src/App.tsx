@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { RestaurantProvider } from "@/contexts/RestaurantContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import LocationsPage from "./pages/LocationsPage";
@@ -24,45 +25,56 @@ import AIDailySummaryPage from "./pages/AIDailySummaryPage";
 import AISchedulingPage from "./pages/AISchedulingPage";
 import CostAnalysisPage from "./pages/CostAnalysisPage";
 import POSIntegrationsPage from "./pages/POSIntegrationsPage";
+import AuthPage from "./pages/AuthPage";
+import MultiLocationIntelligencePage from "./pages/MultiLocationIntelligencePage";
+import ChainMenuPerformancePage from "./pages/ChainMenuPerformancePage";
+import ForecastDashboardPage from "./pages/ForecastDashboardPage";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/locations" element={<LocationsPage />} />
-          <Route path="/suppliers" element={<SuppliersPage />} />
-          <Route path="/ingredients" element={<IngredientsPage />} />
-          <Route path="/stock" element={<StockPage />} />
-          <Route path="/dishes" element={<DishesPage />} />
-          <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
-          <Route path="/sales" element={<SalesPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          {/* Staff Routes */}
-          <Route path="/staff" element={<StaffPage />} />
-          <Route path="/staff/shifts" element={<ShiftSchedulerPage />} />
-          <Route path="/staff/attendance" element={<AttendancePage />} />
-          <Route path="/staff/kpis" element={<StaffKPIsPage />} />
-          {/* Menu Routes */}
-          <Route path="/menu/cost-analysis" element={<CostAnalysisPage />} />
-          <Route path="/menu/engineering" element={<MenuEngineeringPage />} />
-          {/* Inventory Routes */}
-          <Route path="/inventory/forecast" element={<InventoryForecastPage />} />
-          {/* AI Routes */}
-          <Route path="/ai/daily-summary" element={<AIDailySummaryPage />} />
-          <Route path="/ai/scheduling" element={<AISchedulingPage />} />
-          {/* Settings Routes */}
-          <Route path="/settings/pos" element={<POSIntegrationsPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <RestaurantProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/locations" element={<LocationsPage />} />
+              <Route path="/suppliers" element={<SuppliersPage />} />
+              <Route path="/ingredients" element={<IngredientsPage />} />
+              <Route path="/stock" element={<StockPage />} />
+              <Route path="/dishes" element={<DishesPage />} />
+              <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
+              <Route path="/sales" element={<SalesPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              {/* Staff Routes */}
+              <Route path="/staff" element={<StaffPage />} />
+              <Route path="/staff/shifts" element={<ShiftSchedulerPage />} />
+              <Route path="/staff/attendance" element={<AttendancePage />} />
+              <Route path="/staff/kpis" element={<StaffKPIsPage />} />
+              {/* Menu Routes */}
+              <Route path="/menu/cost-analysis" element={<CostAnalysisPage />} />
+              <Route path="/menu/engineering" element={<MenuEngineeringPage />} />
+              {/* Inventory Routes */}
+              <Route path="/inventory/forecast" element={<InventoryForecastPage />} />
+              {/* AI Routes */}
+              <Route path="/ai/daily-summary" element={<AIDailySummaryPage />} />
+              <Route path="/ai/scheduling" element={<AISchedulingPage />} />
+              {/* Analytics Routes */}
+              <Route path="/analytics/multi-location" element={<MultiLocationIntelligencePage />} />
+              <Route path="/analytics/menu-performance" element={<ChainMenuPerformancePage />} />
+              <Route path="/analytics/forecast" element={<ForecastDashboardPage />} />
+              {/* Settings Routes */}
+              <Route path="/settings/pos" element={<POSIntegrationsPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </RestaurantProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );

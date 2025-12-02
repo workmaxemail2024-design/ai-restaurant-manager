@@ -32,6 +32,9 @@ export function useStockLevels(locationId?: string) {
   });
 }
 
+// Alias for backward compatibility
+export const useStock = useStockLevels;
+
 export function useUpdateStock() {
   const queryClient = useQueryClient();
   return useMutation({
