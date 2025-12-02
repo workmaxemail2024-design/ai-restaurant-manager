@@ -12,10 +12,22 @@ import {
   Warehouse,
   ShoppingCart,
   Receipt,
-  FileText
+  Users,
+  Calendar,
+  Clock,
+  Target,
+  DollarSign,
+  Brain,
+  TrendingUp,
+  Sparkles,
+  CalendarClock,
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface NavItem {
   icon: typeof LayoutDashboard;
@@ -24,16 +36,67 @@ interface NavItem {
   badge?: number;
 }
 
-const navItems: NavItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: Store, label: "Locations", path: "/locations" },
-  { icon: Truck, label: "Suppliers", path: "/suppliers" },
-  { icon: Package, label: "Ingredients", path: "/ingredients" },
-  { icon: Warehouse, label: "Inventory", path: "/stock" },
-  { icon: ChefHat, label: "Menu / Dishes", path: "/dishes" },
-  { icon: ShoppingCart, label: "Purchase Orders", path: "/purchase-orders" },
-  { icon: Receipt, label: "Sales", path: "/sales" },
-  { icon: BarChart3, label: "Reports", path: "/reports" },
+interface NavSection {
+  title: string;
+  icon: typeof LayoutDashboard;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
+  {
+    title: "Overview",
+    icon: LayoutDashboard,
+    items: [
+      { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+      { icon: Store, label: "Locations", path: "/locations" },
+    ]
+  },
+  {
+    title: "Staff",
+    icon: Users,
+    items: [
+      { icon: Users, label: "Staff List", path: "/staff" },
+      { icon: Calendar, label: "Shifts", path: "/staff/shifts" },
+      { icon: Clock, label: "Attendance", path: "/staff/attendance" },
+      { icon: Target, label: "KPIs", path: "/staff/kpis" },
+    ]
+  },
+  {
+    title: "Menu",
+    icon: ChefHat,
+    items: [
+      { icon: ChefHat, label: "Dishes", path: "/dishes" },
+      { icon: DollarSign, label: "Cost Analysis", path: "/menu/cost-analysis" },
+      { icon: Brain, label: "AI Engineering", path: "/menu/engineering" },
+    ]
+  },
+  {
+    title: "Inventory",
+    icon: Warehouse,
+    items: [
+      { icon: Package, label: "Ingredients", path: "/ingredients" },
+      { icon: Warehouse, label: "Stock Levels", path: "/stock" },
+      { icon: TrendingUp, label: "Forecasting", path: "/inventory/forecast" },
+    ]
+  },
+  {
+    title: "Operations",
+    icon: ShoppingCart,
+    items: [
+      { icon: Truck, label: "Suppliers", path: "/suppliers" },
+      { icon: ShoppingCart, label: "Purchase Orders", path: "/purchase-orders" },
+      { icon: Receipt, label: "Sales", path: "/sales" },
+      { icon: BarChart3, label: "Reports", path: "/reports" },
+    ]
+  },
+  {
+    title: "AI Intelligence",
+    icon: Sparkles,
+    items: [
+      { icon: Sparkles, label: "Daily Summary", path: "/ai/daily-summary" },
+      { icon: CalendarClock, label: "Staff Scheduling", path: "/ai/scheduling" },
+    ]
+  }
 ];
 
 const bottomItems: NavItem[] = [
@@ -43,6 +106,15 @@ const bottomItems: NavItem[] = [
 
 export function Sidebar() {
   const location = useLocation();
+  const [openSections, setOpenSections] = useState<string[]>(["Overview", "Staff", "Menu", "Inventory", "Operations", "AI Intelligence"]);
+
+  const toggleSection = (title: string) => {
+    setOpenSections(prev => 
+      prev.includes(title) 
+        ? prev.filter(s => s !== title)
+        : [...prev, title]
+    );
+  };
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
@@ -60,14 +132,35 @@ export function Sidebar() {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
-          <NavButton key={item.label} {...item} active={location.pathname === item.path} />
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+        {navSections.map((section) => (
+          <Collapsible
+            key={section.title}
+            open={openSections.includes(section.title)}
+            onOpenChange={() => toggleSection(section.title)}
+          >
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors">
+                <section.icon className="h-3.5 w-3.5" />
+                <span className="flex-1 text-left">{section.title}</span>
+                {openSections.includes(section.title) ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-0.5 pl-2">
+              {section.items.map((item) => (
+                <NavButton key={item.path} {...item} active={location.pathname === item.path} />
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
         ))}
       </nav>
 
       {/* Bottom Navigation */}
-      <div className="p-4 space-y-1 border-t border-sidebar-border">
+      <div className="p-3 space-y-1 border-t border-sidebar-border">
         {bottomItems.map((item) => (
           <NavButton key={item.label} {...item} active={false} />
         ))}
@@ -98,7 +191,7 @@ function NavButton({ icon: Icon, label, path, active, badge }: NavItem & { activ
     <Link to={path}>
       <button
         className={cn(
-          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+          "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
           active 
             ? "bg-primary/10 text-primary border border-primary/20" 
             : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent"

@@ -13,6 +13,15 @@ import DishesPage from "./pages/DishesPage";
 import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
 import SalesPage from "./pages/SalesPage";
 import ReportsPage from "./pages/ReportsPage";
+import StaffPage from "./pages/StaffPage";
+import ShiftSchedulerPage from "./pages/ShiftSchedulerPage";
+import AttendancePage from "./pages/AttendancePage";
+import StaffKPIsPage from "./pages/StaffKPIsPage";
+import MenuEngineeringPage from "./pages/MenuEngineeringPage";
+import InventoryForecastPage from "./pages/InventoryForecastPage";
+import AIDailySummaryPage from "./pages/AIDailySummaryPage";
+import AISchedulingPage from "./pages/AISchedulingPage";
+import CostAnalysisPage from "./pages/CostAnalysisPage";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +41,19 @@ const App = () => (
           <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          {/* Staff Routes */}
+          <Route path="/staff" element={<StaffPage />} />
+          <Route path="/staff/shifts" element={<ShiftSchedulerPage />} />
+          <Route path="/staff/attendance" element={<AttendancePage />} />
+          <Route path="/staff/kpis" element={<StaffKPIsPage />} />
+          {/* Menu Routes */}
+          <Route path="/menu/cost-analysis" element={<CostAnalysisPage />} />
+          <Route path="/menu/engineering" element={<MenuEngineeringPage />} />
+          {/* Inventory Routes */}
+          <Route path="/inventory/forecast" element={<InventoryForecastPage />} />
+          {/* AI Routes */}
+          <Route path="/ai/daily-summary" element={<AIDailySummaryPage />} />
+          <Route path="/ai/scheduling" element={<AISchedulingPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
