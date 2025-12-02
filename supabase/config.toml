@@ -35,3 +35,12 @@ verify_jwt = false
 
 [functions.rbac-resolve-user]
 verify_jwt = true
+
+[functions.automation-process-rules]
+verify_jwt = false
+
+[functions.automation-trigger-event]
+verify_jwt = false
+
+[functions.automation-ai-handler]
+verify_jwt = false
