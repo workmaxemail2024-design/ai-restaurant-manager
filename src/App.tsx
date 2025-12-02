@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import LocationsPage from "./pages/LocationsPage";
@@ -22,16 +23,18 @@ import InventoryForecastPage from "./pages/InventoryForecastPage";
 import AIDailySummaryPage from "./pages/AIDailySummaryPage";
 import AISchedulingPage from "./pages/AISchedulingPage";
 import CostAnalysisPage from "./pages/CostAnalysisPage";
+import POSIntegrationsPage from "./pages/POSIntegrationsPage";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
+    <ThemeProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/locations" element={<LocationsPage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
@@ -54,10 +57,13 @@ const App = () => (
           {/* AI Routes */}
           <Route path="/ai/daily-summary" element={<AIDailySummaryPage />} />
           <Route path="/ai/scheduling" element={<AISchedulingPage />} />
+          {/* Settings Routes */}
+          <Route path="/settings/pos" element={<POSIntegrationsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
