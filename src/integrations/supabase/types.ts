@@ -1334,6 +1334,7 @@ export type Database = {
         }
         Returns: string
       }
+      ensure_user_restaurant: { Args: never; Returns: Json }
       get_latest_ingredient_price: {
         Args: { p_ingredient_id: string }
         Returns: number

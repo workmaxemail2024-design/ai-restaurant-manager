@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useCallback } from 'react';
 import { useRestaurant } from '@/contexts/RestaurantContext';
 
 export type PermissionAction = 'view' | 'edit' | 'admin';
@@ -43,38 +42,8 @@ export interface Permissions {
 }
 
 export function usePermissions() {
-  const { user, currentRestaurant } = useRestaurant();
-  const [permissions, setPermissions] = useState<Permissions | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user || !currentRestaurant) {
-      setPermissions(null);
-      setIsLoading(false);
-      return;
-    }
-
-    loadPermissions();
-  }, [user, currentRestaurant]);
-
-  const loadPermissions = async () => {
-    try {
-      const { data, error } = await supabase.rpc('get_user_permissions');
-      
-      if (error) {
-        console.error('Error loading permissions:', error);
-        // Default to empty permissions if error
-        setPermissions({});
-      } else {
-        setPermissions(data as Permissions || {});
-      }
-    } catch (error) {
-      console.error('Error loading permissions:', error);
-      setPermissions({});
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Read permissions directly from RestaurantContext
+  const { permissions, isLoading, refreshPermissions } = useRestaurant();
 
   const hasPermission = useCallback((resource: PermissionResource, action: PermissionAction): boolean => {
     if (!permissions) return false;
@@ -102,11 +71,6 @@ export function usePermissions() {
   const hasFullAccess = useCallback((): boolean => {
     return permissions?.full_access === true;
   }, [permissions]);
-
-  const refreshPermissions = async () => {
-    setIsLoading(true);
-    await loadPermissions();
-  };
 
   return {
     permissions,
