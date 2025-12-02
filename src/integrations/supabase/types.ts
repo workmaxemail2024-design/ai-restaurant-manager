@@ -14,16 +14,393 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      dish_ingredients: {
+        Row: {
+          created_at: string
+          dish_id: string
+          id: string
+          ingredient_id: string
+          quantity: number
+        }
+        Insert: {
+          created_at?: string
+          dish_id: string
+          id?: string
+          ingredient_id: string
+          quantity?: number
+        }
+        Update: {
+          created_at?: string
+          dish_id?: string
+          id?: string
+          ingredient_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dish_ingredients_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dish_ingredients_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dishes: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          location_id: string | null
+          name: string
+          selling_price: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          name: string
+          selling_price?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          name?: string
+          selling_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dishes_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingredient_prices: {
+        Row: {
+          cost_price: number
+          created_at: string
+          id: string
+          ingredient_id: string
+        }
+        Insert: {
+          cost_price: number
+          created_at?: string
+          id?: string
+          ingredient_id: string
+        }
+        Update: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          ingredient_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredient_prices_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingredients: {
+        Row: {
+          created_at: string
+          default_cost_price: number
+          id: string
+          name: string
+          storage_type: Database["public"]["Enums"]["storage_type"]
+          supplier_id: string | null
+          unit: Database["public"]["Enums"]["unit_type"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_cost_price?: number
+          id?: string
+          name: string
+          storage_type?: Database["public"]["Enums"]["storage_type"]
+          supplier_id?: string | null
+          unit?: Database["public"]["Enums"]["unit_type"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_cost_price?: number
+          id?: string
+          name?: string
+          storage_type?: Database["public"]["Enums"]["storage_type"]
+          supplier_id?: string | null
+          unit?: Database["public"]["Enums"]["unit_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingredients_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      locations: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      purchase_order_items: {
+        Row: {
+          cost_price: number
+          created_at: string
+          id: string
+          ingredient_id: string
+          purchase_order_id: string
+          quantity: number
+        }
+        Insert: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          ingredient_id: string
+          purchase_order_id: string
+          quantity?: number
+        }
+        Update: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          ingredient_id?: string
+          purchase_order_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          created_at: string
+          id: string
+          location_id: string
+          order_date: string
+          status: string
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          location_id: string
+          order_date?: string
+          status?: string
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location_id?: string
+          order_date?: string
+          status?: string
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales: {
+        Row: {
+          created_at: string
+          dish_id: string
+          id: string
+          location_id: string
+          quantity: number
+          sale_date: string
+          total_price: number
+        }
+        Insert: {
+          created_at?: string
+          dish_id: string
+          id?: string
+          location_id: string
+          quantity?: number
+          sale_date?: string
+          total_price?: number
+        }
+        Update: {
+          created_at?: string
+          dish_id?: string
+          id?: string
+          location_id?: string
+          quantity?: number
+          sale_date?: string
+          total_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_levels: {
+        Row: {
+          id: string
+          ingredient_id: string
+          location_id: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          ingredient_id: string
+          location_id: string
+          quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          ingredient_id?: string
+          location_id?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_levels_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_levels_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_name?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_dish_cost: { Args: { p_dish_id: string }; Returns: number }
+      calculate_dish_margin: { Args: { p_dish_id: string }; Returns: number }
+      get_latest_ingredient_price: {
+        Args: { p_ingredient_id: string }
+        Returns: number
+      }
     }
     Enums: {
-      [_ in never]: never
+      storage_type: "freezer" | "fridge" | "dry"
+      unit_type: "kg" | "g" | "L" | "ml" | "oz" | "each"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +527,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      storage_type: ["freezer", "fridge", "dry"],
+      unit_type: ["kg", "g", "L", "ml", "oz", "each"],
+    },
   },
 } as const
