@@ -132,6 +132,9 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       // Create default roles for the restaurant
       await supabase.rpc('create_default_roles', { p_restaurant_id: restaurant.id });
 
+      // Create default automation rules for the restaurant
+      await supabase.rpc('create_default_automation_rules', { p_restaurant_id: restaurant.id });
+
       // Get the Owner role
       const { data: ownerRole } = await supabase
         .from('roles')

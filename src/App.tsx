@@ -30,6 +30,9 @@ import MultiLocationIntelligencePage from "./pages/MultiLocationIntelligencePage
 import ChainMenuPerformancePage from "./pages/ChainMenuPerformancePage";
 import ForecastDashboardPage from "./pages/ForecastDashboardPage";
 import RoleBuilderPage from "./pages/RoleBuilderPage";
+import AutomationRulesPage from "./pages/AutomationRulesPage";
+import NotificationsPage from "./pages/NotificationsPage";
+import AuditLogPage from "./pages/AuditLogPage";
 
 const queryClient = new QueryClient();
 
@@ -69,9 +72,14 @@ const App = () => (
               <Route path="/analytics/multi-location" element={<MultiLocationIntelligencePage />} />
               <Route path="/analytics/menu-performance" element={<ChainMenuPerformancePage />} />
               <Route path="/analytics/forecast" element={<ForecastDashboardPage />} />
+              {/* Automation Routes */}
+              <Route path="/automation/rules" element={<AutomationRulesPage />} />
+              {/* Notifications */}
+              <Route path="/notifications" element={<NotificationsPage />} />
               {/* Settings Routes */}
               <Route path="/settings/pos" element={<POSIntegrationsPage />} />
               <Route path="/settings/roles" element={<RoleBuilderPage />} />
+              <Route path="/settings/audit-log" element={<AuditLogPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

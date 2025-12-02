@@ -24,7 +24,9 @@ import {
   ChevronDown,
   ChevronRight,
   Plug,
-  Shield
+  Shield,
+  Zap,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
@@ -111,6 +113,14 @@ const navSections: NavSection[] = [
     ]
   },
   {
+    title: "Automation",
+    icon: Zap,
+    permission: 'automation',
+    items: [
+      { icon: Zap, label: "Automation Rules", path: "/automation/rules", permission: { resource: 'automation', action: 'view' } },
+    ]
+  },
+  {
     title: "Analytics",
     icon: BarChart3,
     permission: 'analytics',
@@ -127,12 +137,13 @@ const navSections: NavSection[] = [
     items: [
       { icon: Plug, label: "POS Integrations", path: "/settings/pos", permission: { resource: 'pos', action: 'view' } },
       { icon: Shield, label: "Role Builder", path: "/settings/roles", permission: { resource: 'settings', action: 'view' } },
+      { icon: FileText, label: "Audit Log", path: "/settings/audit-log", permission: { resource: 'settings', action: 'view' } },
     ]
   }
 ];
 
 const bottomItems: NavItem[] = [
-  { icon: Bell, label: "Notifications", path: "#", badge: 5 },
+  { icon: Bell, label: "Notifications", path: "/notifications" },
 ];
 
 export function PermissionFilteredSidebar() {
@@ -215,7 +226,7 @@ export function PermissionFilteredSidebar() {
           <ThemeToggle />
         </div>
         {bottomItems.map((item) => (
-          <NavButton key={item.label} {...item} active={false} />
+          <NavButton key={item.label} {...item} active={location.pathname === item.path} />
         ))}
         <Button 
           variant="ghost" 

@@ -1,7 +1,7 @@
-import { Search, Bell, Calendar } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search, Calendar } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export function Header() {
   const today = new Date().toLocaleDateString('en-US', { 
@@ -36,12 +36,7 @@ export function Header() {
         </div>
 
         {/* Notifications */}
-        <Button variant="outline" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] font-semibold flex items-center justify-center">
-            3
-          </span>
-        </Button>
+        <NotificationBell />
 
         {/* Theme Toggle */}
         <ThemeToggle />
