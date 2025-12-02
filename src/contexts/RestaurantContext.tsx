@@ -129,13 +129,25 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
 
       if (restError) throw restError;
 
-      // Link user to restaurant
+      // Create default roles for the restaurant
+      await supabase.rpc('create_default_roles', { p_restaurant_id: restaurant.id });
+
+      // Get the Owner role
+      const { data: ownerRole } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('restaurant_id', restaurant.id)
+        .eq('name', 'Owner')
+        .single();
+
+      // Link user to restaurant with Owner role
       const { error: linkError } = await supabase
         .from('user_restaurants')
         .insert({
           user_id: user.id,
           restaurant_id: restaurant.id,
           role: 'owner',
+          role_id: ownerRole?.id,
           is_default: userRestaurants.length === 0
         });
 
