@@ -185,6 +185,258 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_integrations: {
+        Row: {
+          api_key: string | null
+          api_secret: string | null
+          created_at: string
+          id: string
+          last_sync_time: string | null
+          location_id: string
+          pos_provider: string
+          settings: Json | null
+          status: string
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          api_key?: string | null
+          api_secret?: string | null
+          created_at?: string
+          id?: string
+          last_sync_time?: string | null
+          location_id: string
+          pos_provider: string
+          settings?: Json | null
+          status?: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          api_key?: string | null
+          api_secret?: string | null
+          created_at?: string
+          id?: string
+          last_sync_time?: string | null
+          location_id?: string
+          pos_provider?: string
+          settings?: Json | null
+          status?: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_integrations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_mappings: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          external_id: string
+          external_name: string | null
+          id: string
+          internal_id: string | null
+          is_verified: boolean | null
+          location_id: string
+          mapping_type: string
+          pos_provider: string
+          updated_at: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          external_id: string
+          external_name?: string | null
+          id?: string
+          internal_id?: string | null
+          is_verified?: boolean | null
+          location_id: string
+          mapping_type: string
+          pos_provider: string
+          updated_at?: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          external_id?: string
+          external_name?: string | null
+          id?: string
+          internal_id?: string | null
+          is_verified?: boolean | null
+          location_id?: string
+          mapping_type?: string
+          pos_provider?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_mappings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_sales_import: {
+        Row: {
+          created_at: string
+          data: Json
+          external_sale_id: string | null
+          id: string
+          location_id: string
+          mapped_dish_id: string | null
+          mapped_quantity: number | null
+          mapped_sale_date: string | null
+          mapped_total_price: number | null
+          pos_provider: string
+          sync_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          external_sale_id?: string | null
+          id?: string
+          location_id: string
+          mapped_dish_id?: string | null
+          mapped_quantity?: number | null
+          mapped_sale_date?: string | null
+          mapped_total_price?: number | null
+          pos_provider: string
+          sync_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          external_sale_id?: string | null
+          id?: string
+          location_id?: string
+          mapped_dish_id?: string | null
+          mapped_quantity?: number | null
+          mapped_sale_date?: string | null
+          mapped_total_price?: number | null
+          pos_provider?: string
+          sync_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sales_import_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_import_mapped_dish_id_fkey"
+            columns: ["mapped_dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_staff_import: {
+        Row: {
+          clock_in: string | null
+          clock_out: string | null
+          created_at: string
+          data: Json
+          external_staff_id: string
+          id: string
+          location_id: string
+          mapped_staff_id: string | null
+          pos_provider: string
+          sync_status: string | null
+        }
+        Insert: {
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string
+          data: Json
+          external_staff_id: string
+          id?: string
+          location_id: string
+          mapped_staff_id?: string | null
+          pos_provider: string
+          sync_status?: string | null
+        }
+        Update: {
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string
+          data?: Json
+          external_staff_id?: string
+          id?: string
+          location_id?: string
+          mapped_staff_id?: string | null
+          pos_provider?: string
+          sync_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_staff_import_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_staff_import_mapped_staff_id_fkey"
+            columns: ["mapped_staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_sync_logs: {
+        Row: {
+          created_at: string
+          details: Json | null
+          event_type: string
+          id: string
+          location_id: string
+          message: string | null
+          pos_provider: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json | null
+          event_type: string
+          id?: string
+          location_id: string
+          message?: string | null
+          pos_provider: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json | null
+          event_type?: string
+          id?: string
+          location_id?: string
+          message?: string | null
+          pos_provider?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_sync_logs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_items: {
         Row: {
           cost_price: number

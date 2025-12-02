@@ -17,3 +17,18 @@ verify_jwt = false
 
 [functions.ai-cost-analysis]
 verify_jwt = false
+
+[functions.pos-import-sales]
+verify_jwt = false
+
+[functions.pos-import-staff]
+verify_jwt = false
+
+[functions.pos-test-connection]
+verify_jwt = false
+
+[functions.pos-webhook-handler]
+verify_jwt = false
+
+[functions.pos-ai-reconciliation]
+verify_jwt = false

@@ -22,12 +22,14 @@ import {
   Sparkles,
   CalendarClock,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Plug
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface NavItem {
   icon: typeof LayoutDashboard;
@@ -96,17 +98,23 @@ const navSections: NavSection[] = [
       { icon: Sparkles, label: "Daily Summary", path: "/ai/daily-summary" },
       { icon: CalendarClock, label: "Staff Scheduling", path: "/ai/scheduling" },
     ]
+  },
+  {
+    title: "Settings",
+    icon: Settings,
+    items: [
+      { icon: Plug, label: "POS Integrations", path: "/settings/pos" },
+    ]
   }
 ];
 
 const bottomItems: NavItem[] = [
   { icon: Bell, label: "Notifications", path: "#", badge: 5 },
-  { icon: Settings, label: "Settings", path: "#" },
 ];
 
 export function Sidebar() {
   const location = useLocation();
-  const [openSections, setOpenSections] = useState<string[]>(["Overview", "Staff", "Menu", "Inventory", "Operations", "AI Intelligence"]);
+  const [openSections, setOpenSections] = useState<string[]>(["Overview", "Staff", "Menu", "Inventory", "Operations", "AI Intelligence", "Settings"]);
 
   const toggleSection = (title: string) => {
     setOpenSections(prev => 
@@ -161,6 +169,10 @@ export function Sidebar() {
 
       {/* Bottom Navigation */}
       <div className="p-3 space-y-1 border-t border-sidebar-border">
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-sm text-muted-foreground">Theme</span>
+          <ThemeToggle />
+        </div>
         {bottomItems.map((item) => (
           <NavButton key={item.label} {...item} active={false} />
         ))}
