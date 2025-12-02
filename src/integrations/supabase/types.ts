@@ -317,6 +317,190 @@ export type Database = {
           },
         ]
       }
+      staff: {
+        Row: {
+          created_at: string
+          email: string | null
+          first_name: string
+          hourly_rate: number
+          id: string
+          last_name: string
+          location_id: string | null
+          phone: string | null
+          role: Database["public"]["Enums"]["staff_role"]
+          status: Database["public"]["Enums"]["staff_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          first_name: string
+          hourly_rate?: number
+          id?: string
+          last_name: string
+          location_id?: string | null
+          phone?: string | null
+          role?: Database["public"]["Enums"]["staff_role"]
+          status?: Database["public"]["Enums"]["staff_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          first_name?: string
+          hourly_rate?: number
+          id?: string
+          last_name?: string
+          location_id?: string | null
+          phone?: string | null
+          role?: Database["public"]["Enums"]["staff_role"]
+          status?: Database["public"]["Enums"]["staff_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_attendance: {
+        Row: {
+          clock_in: string
+          clock_out: string | null
+          created_at: string
+          id: string
+          location_id: string
+          source: Database["public"]["Enums"]["attendance_source"]
+          staff_id: string
+        }
+        Insert: {
+          clock_in: string
+          clock_out?: string | null
+          created_at?: string
+          id?: string
+          location_id: string
+          source?: Database["public"]["Enums"]["attendance_source"]
+          staff_id: string
+        }
+        Update: {
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+          id?: string
+          location_id?: string
+          source?: Database["public"]["Enums"]["attendance_source"]
+          staff_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_attendance_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_attendance_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_performance: {
+        Row: {
+          created_at: string
+          date: string
+          id: string
+          kpi_customers_served: number
+          kpi_errors: number
+          kpi_sales: number
+          score: number | null
+          staff_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          id?: string
+          kpi_customers_served?: number
+          kpi_errors?: number
+          kpi_sales?: number
+          score?: number | null
+          staff_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          id?: string
+          kpi_customers_served?: number
+          kpi_errors?: number
+          kpi_sales?: number
+          score?: number | null
+          staff_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_performance_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_shifts: {
+        Row: {
+          created_at: string
+          id: string
+          location_id: string
+          notes: string | null
+          shift_end: string
+          shift_start: string
+          staff_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          location_id: string
+          notes?: string | null
+          shift_end: string
+          shift_start: string
+          staff_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location_id?: string
+          notes?: string | null
+          shift_end?: string
+          shift_start?: string
+          staff_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_shifts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_shifts_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_levels: {
         Row: {
           id: string
@@ -393,12 +577,26 @@ export type Database = {
     Functions: {
       calculate_dish_cost: { Args: { p_dish_id: string }; Returns: number }
       calculate_dish_margin: { Args: { p_dish_id: string }; Returns: number }
+      calculate_staff_score: {
+        Args: { p_date: string; p_staff_id: string }
+        Returns: number
+      }
       get_latest_ingredient_price: {
         Args: { p_ingredient_id: string }
         Returns: number
       }
     }
     Enums: {
+      attendance_source: "manual" | "pos" | "auto"
+      staff_role:
+        | "chef"
+        | "waiter"
+        | "manager"
+        | "host"
+        | "bartender"
+        | "kitchen_assistant"
+        | "cleaner"
+      staff_status: "active" | "inactive" | "on_leave"
       storage_type: "freezer" | "fridge" | "dry"
       unit_type: "kg" | "g" | "L" | "ml" | "oz" | "each"
     }
@@ -528,6 +726,17 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      attendance_source: ["manual", "pos", "auto"],
+      staff_role: [
+        "chef",
+        "waiter",
+        "manager",
+        "host",
+        "bartender",
+        "kitchen_assistant",
+        "cleaner",
+      ],
+      staff_status: ["active", "inactive", "on_leave"],
       storage_type: ["freezer", "fridge", "dry"],
       unit_type: ["kg", "g", "L", "ml", "oz", "each"],
     },
