@@ -1,1 +1,19 @@
 project_id = "bjykbjpyodowzstfqoge"
+
+[functions.ai-menu-engineering]
+verify_jwt = false
+
+[functions.ai-inventory-forecast]
+verify_jwt = false
+
+[functions.ai-purchase-order]
+verify_jwt = false
+
+[functions.ai-daily-summary]
+verify_jwt = false
+
+[functions.ai-staff-scheduling]
+verify_jwt = false
+
+[functions.ai-cost-analysis]
+verify_jwt = false
