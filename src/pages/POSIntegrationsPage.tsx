@@ -138,10 +138,10 @@ export default function POSIntegrationsPage() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-4">
               <MapPin className="h-5 w-5 text-muted-foreground" />
-              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+              <Select value={selectedLocation} onValueChange={v => setSelectedLocation(v === "all" ? "" : v)}>
                 <SelectTrigger className="w-64"><SelectValue placeholder="All locations" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Locations</SelectItem>
+                  <SelectItem value="all">All Locations</SelectItem>
                   {locations?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
