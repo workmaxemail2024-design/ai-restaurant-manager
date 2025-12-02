@@ -87,11 +87,74 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
         } else if (restaurants.length > 0) {
           setCurrentRestaurant(restaurants[0]);
         }
+      } else {
+        // No restaurant linkage found - auto-create one for the user
+        console.log('No restaurant found for user, creating default...');
+        await createDefaultRestaurantForUser(userId);
       }
     } catch (error) {
       console.error('Error loading restaurants:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const createDefaultRestaurantForUser = async (userId: string) => {
+    try {
+      // Get user email for owner_email field
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      // Create restaurant
+      const { data: restaurant, error: restError } = await supabase
+        .from('restaurants')
+        .insert({ name: 'My Restaurant', owner_email: authUser?.email })
+        .select()
+        .single();
+
+      if (restError) throw restError;
+
+      // Create default roles for the restaurant
+      await supabase.rpc('create_default_roles', { p_restaurant_id: restaurant.id });
+
+      // Create default automation rules for the restaurant
+      await supabase.rpc('create_default_automation_rules', { p_restaurant_id: restaurant.id });
+
+      // Get the Owner role
+      const { data: ownerRole } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('restaurant_id', restaurant.id)
+        .eq('name', 'Owner')
+        .single();
+
+      // Link user to restaurant with Owner role
+      const { error: linkError } = await supabase
+        .from('user_restaurants')
+        .insert({
+          user_id: userId,
+          restaurant_id: restaurant.id,
+          role: 'owner',
+          role_id: ownerRole?.id,
+          is_default: true
+        });
+
+      if (linkError) throw linkError;
+
+      // Create default location
+      await supabase
+        .from('locations')
+        .insert({
+          name: 'Main Location',
+          restaurant_id: restaurant.id
+        });
+
+      // Update state
+      setUserRestaurants([restaurant]);
+      setCurrentRestaurant(restaurant);
+      
+      console.log('Default restaurant created and linked successfully');
+    } catch (error) {
+      console.error('Error creating default restaurant:', error);
     }
   };
 
