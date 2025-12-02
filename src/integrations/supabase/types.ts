@@ -14,6 +14,142 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          created_at: string
+          data: Json | null
+          description: string
+          event_type: string
+          id: string
+          restaurant_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          data?: Json | null
+          description: string
+          event_type: string
+          id?: string
+          restaurant_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          data?: Json | null
+          description?: string
+          event_type?: string
+          id?: string
+          restaurant_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_rule_runs: {
+        Row: {
+          created_at: string
+          id: string
+          message: string | null
+          restaurant_id: string
+          rule_id: string
+          run_data: Json | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          restaurant_id: string
+          rule_id: string
+          run_data?: Json | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string | null
+          restaurant_id?: string
+          rule_id?: string
+          run_data?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_rule_runs_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_rule_runs_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automation_rules: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          last_run: string | null
+          name: string
+          restaurant_id: string
+          run_frequency: string
+          trigger: Json
+          updated_at: string
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_run?: string | null
+          name: string
+          restaurant_id: string
+          run_frequency?: string
+          trigger?: Json
+          updated_at?: string
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          last_run?: string | null
+          name?: string
+          restaurant_id?: string
+          run_frequency?: string
+          trigger?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_rules_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dish_ingredients: {
         Row: {
           created_at: string
@@ -229,6 +365,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "locations_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          restaurant_id: string
+          title: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          restaurant_id: string
+          title: string
+          type?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          restaurant_id?: string
+          title?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
@@ -1135,9 +1315,24 @@ export type Database = {
         Args: { p_date: string; p_staff_id: string }
         Returns: number
       }
+      create_default_automation_rules: {
+        Args: { p_restaurant_id: string }
+        Returns: undefined
+      }
       create_default_roles: {
         Args: { p_restaurant_id: string }
         Returns: undefined
+      }
+      create_notification: {
+        Args: {
+          p_message: string
+          p_metadata?: Json
+          p_restaurant_id: string
+          p_title: string
+          p_type?: string
+          p_user_id?: string
+        }
+        Returns: string
       }
       get_latest_ingredient_price: {
         Args: { p_ingredient_id: string }
@@ -1146,6 +1341,15 @@ export type Database = {
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
+      log_audit_event: {
+        Args: {
+          p_data?: Json
+          p_description: string
+          p_event_type: string
+          p_restaurant_id: string
+        }
+        Returns: string
+      }
       user_belongs_to_restaurant: {
         Args: { _restaurant_id: string }
         Returns: boolean
