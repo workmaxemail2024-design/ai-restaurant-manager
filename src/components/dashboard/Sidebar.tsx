@@ -100,6 +100,15 @@ const navSections: NavSection[] = [
     ]
   },
   {
+    title: "Analytics",
+    icon: BarChart3,
+    items: [
+      { icon: Store, label: "Multi-Location", path: "/analytics/multi-location" },
+      { icon: ChefHat, label: "Menu Performance", path: "/analytics/menu-performance" },
+      { icon: TrendingUp, label: "Forecast", path: "/analytics/forecast" },
+    ]
+  },
+  {
     title: "Settings",
     icon: Settings,
     items: [
@@ -114,7 +123,7 @@ const bottomItems: NavItem[] = [
 
 export function Sidebar() {
   const location = useLocation();
-  const [openSections, setOpenSections] = useState<string[]>(["Overview", "Staff", "Menu", "Inventory", "Operations", "AI Intelligence", "Settings"]);
+  const [openSections, setOpenSections] = useState<string[]>(["Overview", "Staff", "Menu", "Inventory", "Operations", "AI Intelligence", "Analytics", "Settings"]);
 
   const toggleSection = (title: string) => {
     setOpenSections(prev => 
