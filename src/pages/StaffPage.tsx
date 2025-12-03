@@ -139,10 +139,10 @@ export default function StaffPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Location</Label>
-                  <Select value={form.location_id || ""} onValueChange={(v) => setForm({ ...form, location_id: v || null })}>
+                  <Select value={form.location_id || "_none"} onValueChange={(v) => setForm({ ...form, location_id: v === "_none" ? null : v })}>
                     <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No location</SelectItem>
+                      <SelectItem value="_none">No location</SelectItem>
                       {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
