@@ -10,20 +10,36 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme") as Theme;
-      if (stored) return stored;
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+// Apply theme to HTML element immediately
+function applyTheme(theme: Theme) {
+  const root = document.documentElement;
+  root.classList.remove("light", "dark");
+  root.classList.add(theme);
+}
+
+// Get initial theme from localStorage or system preference
+function getInitialTheme(): Theme {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("theme") as Theme | null;
+    if (stored === "dark" || stored === "light") {
+      return stored;
     }
-    return "dark";
-  });
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return "dark";
+}
+
+// Apply theme immediately on script load (before React hydrates)
+if (typeof window !== "undefined") {
+  const initialTheme = getInitialTheme();
+  applyTheme(initialTheme);
+}
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
 
   useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("light", "dark");
-    root.classList.add(theme);
+    applyTheme(theme);
     localStorage.setItem("theme", theme);
   }, [theme]);
 
