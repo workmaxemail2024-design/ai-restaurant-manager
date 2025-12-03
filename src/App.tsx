@@ -27,6 +27,7 @@ import MenuEngineeringPage from "./pages/MenuEngineeringPage";
 import InventoryForecastPage from "./pages/InventoryForecastPage";
 import AIDailySummaryPage from "./pages/AIDailySummaryPage";
 import AISchedulingPage from "./pages/AISchedulingPage";
+import AIInsightsPage from "./pages/AIInsightsPage";
 import CostAnalysisPage from "./pages/CostAnalysisPage";
 import POSIntegrationsPage from "./pages/POSIntegrationsPage";
 import MultiLocationIntelligencePage from "./pages/MultiLocationIntelligencePage";
@@ -79,6 +80,7 @@ const App = () => (
               {/* Inventory Routes */}
               <Route path="/inventory/forecast" element={<ProtectedRoute><InventoryForecastPage /></ProtectedRoute>} />
               {/* AI Routes */}
+              <Route path="/ai/insights" element={<ProtectedRoute><AIInsightsPage /></ProtectedRoute>} />
               <Route path="/ai/daily-summary" element={<ProtectedRoute><AIDailySummaryPage /></ProtectedRoute>} />
               <Route path="/ai/scheduling" element={<ProtectedRoute><AISchedulingPage /></ProtectedRoute>} />
               {/* Analytics Routes */}
