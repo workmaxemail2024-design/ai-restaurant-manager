@@ -19,13 +19,13 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.pos-import-sales]
-verify_jwt = false
+verify_jwt = true
 
 [functions.pos-import-staff]
-verify_jwt = false
+verify_jwt = true
 
 [functions.pos-test-connection]
-verify_jwt = false
+verify_jwt = true
 
 [functions.pos-webhook-handler]
 verify_jwt = false
