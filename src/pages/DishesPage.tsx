@@ -152,12 +152,12 @@ export default function DishesPage() {
               </div>
               <div>
                 <Label>Location (optional)</Label>
-                <Select value={formData.location_id || ""} onValueChange={(v) => setFormData({ ...formData, location_id: v || null })}>
+                <Select value={formData.location_id || "_all"} onValueChange={(v) => setFormData({ ...formData, location_id: v === "_all" ? null : v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="All locations" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All locations</SelectItem>
+                    <SelectItem value="_all">All locations</SelectItem>
                     {locations.map((loc) => (
                       <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
                     ))}
