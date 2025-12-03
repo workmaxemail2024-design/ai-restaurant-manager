@@ -4,7 +4,8 @@ import {
   Store, 
   Truck, 
   Package, 
-  BarChart3, 
+  BarChart3,
+  Calculator,
   Settings,
   ChefHat,
   Bell,
@@ -26,7 +27,8 @@ import {
   Plug,
   Shield,
   Zap,
-  FileText
+  FileText,
+  Wrench
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
@@ -130,6 +132,13 @@ const navSections: NavSection[] = [
       { icon: Store, label: "Multi-Location", path: "/analytics/multi-location", permission: { resource: 'analytics', action: 'view' } },
       { icon: ChefHat, label: "Menu Performance", path: "/analytics/menu-performance", permission: { resource: 'analytics', action: 'view' } },
       { icon: TrendingUp, label: "Forecast", path: "/analytics/forecast", permission: { resource: 'analytics', action: 'view' } },
+    ]
+  },
+  {
+    title: "Tools",
+    icon: Wrench,
+    items: [
+      { icon: Calculator, label: "Margin Calculator", path: "/tools/margin-calculator" },
     ]
   },
   {

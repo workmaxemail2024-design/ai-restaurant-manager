@@ -38,6 +38,7 @@ import RoleBuilderPage from "./pages/RoleBuilderPage";
 import AutomationRulesPage from "./pages/AutomationRulesPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import AuditLogPage from "./pages/AuditLogPage";
+import MarginCalculatorPage from "./pages/MarginCalculatorPage";
 
 const queryClient = new QueryClient();
 
@@ -97,6 +98,8 @@ const App = () => (
               <Route path="/settings/pos" element={<ProtectedRoute><POSIntegrationsPage /></ProtectedRoute>} />
               <Route path="/settings/roles" element={<ProtectedRoute><RoleBuilderPage /></ProtectedRoute>} />
               <Route path="/settings/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
+              {/* Tools Routes */}
+              <Route path="/tools/margin-calculator" element={<ProtectedRoute><MarginCalculatorPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
