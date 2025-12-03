@@ -108,10 +108,10 @@ export default function StaffKPIsPage() {
         {/* Staff Filter */}
         <div className="flex items-center gap-4">
           <Label>Filter by Staff:</Label>
-          <Select value={selectedStaff} onValueChange={setSelectedStaff}>
+          <Select value={selectedStaff || "_all"} onValueChange={(v) => setSelectedStaff(v === "_all" ? "" : v)}>
             <SelectTrigger className="w-64"><SelectValue placeholder="All Staff" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Staff</SelectItem>
+              <SelectItem value="_all">All Staff</SelectItem>
               {staff.map((s) => (
                 <SelectItem key={s.id} value={s.id}>{s.first_name} {s.last_name}</SelectItem>
               ))}
