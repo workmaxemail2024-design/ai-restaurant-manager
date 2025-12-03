@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,30 +8,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
-import { ChefHat } from 'lucide-react';
+import { ChefHat, Loader2 } from 'lucide-react';
 
 const authSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-export default function AuthPage() {
+export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        navigate('/');
-      }
-    };
-    checkSession();
-  }, [navigate]);
 
   const validate = () => {
     try {
@@ -63,11 +53,17 @@ export default function AuthPage() {
         description: error.message,
         variant: 'destructive',
       });
+      setIsLoading(false);
     } else {
+      // Call ensure_user_restaurant after successful login
+      const { error: ensureError } = await supabase.rpc('ensure_user_restaurant');
+      if (ensureError) {
+        console.error('Error ensuring user restaurant:', ensureError);
+      }
+      
       toast({ title: 'Welcome back!' });
       navigate('/');
     }
-    setIsLoading(false);
   };
 
   const handleSignUp = async () => {
@@ -105,9 +101,19 @@ export default function AuthPage() {
     setIsLoading(false);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent, action: 'signin' | 'signup') => {
+    if (e.key === 'Enter') {
+      if (action === 'signin') handleSignIn();
+      else handleSignUp();
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+      {/* Background glow effect */}
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_hsl(30_100%_50%_/_0.08),_transparent_50%)] pointer-events-none" />
+      
+      <Card className="w-full max-w-md relative z-10">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <div className="p-3 rounded-full bg-primary/10">
@@ -131,7 +137,9 @@ export default function AuthPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, 'signin')}
                   placeholder="you@example.com"
+                  disabled={isLoading}
                 />
                 {errors.email && <p className="text-sm text-destructive mt-1">{errors.email}</p>}
               </div>
@@ -141,12 +149,21 @@ export default function AuthPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, 'signin')}
                   placeholder="••••••••"
+                  disabled={isLoading}
                 />
                 {errors.password && <p className="text-sm text-destructive mt-1">{errors.password}</p>}
               </div>
               <Button onClick={handleSignIn} disabled={isLoading} className="w-full">
-                {isLoading ? 'Signing in...' : 'Sign In'}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
               </Button>
             </TabsContent>
             
@@ -157,7 +174,9 @@ export default function AuthPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, 'signup')}
                   placeholder="you@example.com"
+                  disabled={isLoading}
                 />
                 {errors.email && <p className="text-sm text-destructive mt-1">{errors.email}</p>}
               </div>
@@ -167,12 +186,21 @@ export default function AuthPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(e, 'signup')}
                   placeholder="••••••••"
+                  disabled={isLoading}
                 />
                 {errors.password && <p className="text-sm text-destructive mt-1">{errors.password}</p>}
               </div>
               <Button onClick={handleSignUp} disabled={isLoading} className="w-full">
-                {isLoading ? 'Creating account...' : 'Create Account'}
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating account...
+                  </>
+                ) : (
+                  'Create Account'
+                )}
               </Button>
             </TabsContent>
           </Tabs>
