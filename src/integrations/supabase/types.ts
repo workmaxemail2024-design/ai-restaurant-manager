@@ -1306,7 +1306,66 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      pos_integrations_safe: {
+        Row: {
+          api_key: string | null
+          api_secret: string | null
+          created_at: string | null
+          id: string | null
+          last_sync_time: string | null
+          location_id: string | null
+          pos_provider: string | null
+          restaurant_id: string | null
+          settings: Json | null
+          status: string | null
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          api_key?: never
+          api_secret?: never
+          created_at?: string | null
+          id?: string | null
+          last_sync_time?: string | null
+          location_id?: string | null
+          pos_provider?: string | null
+          restaurant_id?: string | null
+          settings?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          api_key?: never
+          api_secret?: never
+          created_at?: string | null
+          id?: string | null
+          last_sync_time?: string | null
+          location_id?: string | null
+          pos_provider?: string | null
+          restaurant_id?: string | null
+          settings?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_integrations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_integrations_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       calculate_dish_cost: { Args: { p_dish_id: string }; Returns: number }
@@ -1360,6 +1419,7 @@ export type Database = {
         Args: { p_action: string; p_resource: string }
         Returns: boolean
       }
+      user_has_pos_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       attendance_source: "manual" | "pos" | "auto"
