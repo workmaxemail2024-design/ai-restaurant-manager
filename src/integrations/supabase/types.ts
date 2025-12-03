@@ -659,6 +659,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pos_staff_import_mapped_staff_id_fkey"
+            columns: ["mapped_staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pos_staff_import_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
@@ -1058,6 +1065,13 @@ export type Database = {
             referencedRelation: "staff"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "staff_attendance_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       staff_performance: {
@@ -1107,6 +1121,13 @@ export type Database = {
             columns: ["staff_id"]
             isOneToOne: false
             referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_performance_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1165,6 +1186,13 @@ export type Database = {
             columns: ["staff_id"]
             isOneToOne: false
             referencedRelation: "staff"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_shifts_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "staff_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1306,7 +1334,126 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      pos_integrations_safe: {
+        Row: {
+          api_key: string | null
+          api_secret: string | null
+          created_at: string | null
+          id: string | null
+          last_sync_time: string | null
+          location_id: string | null
+          pos_provider: string | null
+          restaurant_id: string | null
+          settings: Json | null
+          status: string | null
+          updated_at: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          api_key?: never
+          api_secret?: never
+          created_at?: string | null
+          id?: string | null
+          last_sync_time?: string | null
+          location_id?: string | null
+          pos_provider?: string | null
+          restaurant_id?: string | null
+          settings?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          api_key?: never
+          api_secret?: never
+          created_at?: string | null
+          id?: string | null
+          last_sync_time?: string | null
+          location_id?: string | null
+          pos_provider?: string | null
+          restaurant_id?: string | null
+          settings?: Json | null
+          status?: string | null
+          updated_at?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_integrations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_integrations_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_safe: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          first_name: string | null
+          hourly_rate: number | null
+          id: string | null
+          last_name: string | null
+          location_id: string | null
+          phone: string | null
+          restaurant_id: string | null
+          role: Database["public"]["Enums"]["staff_role"] | null
+          status: Database["public"]["Enums"]["staff_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: never
+          first_name?: string | null
+          hourly_rate?: never
+          id?: string | null
+          last_name?: string | null
+          location_id?: string | null
+          phone?: never
+          restaurant_id?: string | null
+          role?: Database["public"]["Enums"]["staff_role"] | null
+          status?: Database["public"]["Enums"]["staff_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: never
+          first_name?: string | null
+          hourly_rate?: never
+          id?: string | null
+          last_name?: string | null
+          location_id?: string | null
+          phone?: never
+          restaurant_id?: string | null
+          role?: Database["public"]["Enums"]["staff_role"] | null
+          status?: Database["public"]["Enums"]["staff_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       calculate_dish_cost: { Args: { p_dish_id: string }; Returns: number }
@@ -1356,11 +1503,13 @@ export type Database = {
         Args: { _restaurant_id: string }
         Returns: boolean
       }
+      user_can_view_pos_credentials: { Args: never; Returns: boolean }
       user_has_permission: {
         Args: { p_action: string; p_resource: string }
         Returns: boolean
       }
       user_has_pos_admin: { Args: never; Returns: boolean }
+      user_is_manager_or_owner: { Args: never; Returns: boolean }
     }
     Enums: {
       attendance_source: "manual" | "pos" | "auto"
