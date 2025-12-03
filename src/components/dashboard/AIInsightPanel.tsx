@@ -153,11 +153,16 @@ export function AIInsightPanel() {
         )}
       </div>
       
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-2">
+        <Link to="/ai/assistant">
+          <Button variant="outline" className="w-full justify-center hover:bg-primary/10 hover:border-primary/30">
+            <Sparkles className="h-4 w-4 mr-2" />
+            Ask AI Assistant
+          </Button>
+        </Link>
         <Link to="/ai/insights">
           <Button variant="ghost" className="w-full justify-center text-primary hover:text-primary hover:bg-primary/10">
-            <Sparkles className="h-4 w-4 mr-2" />
-            View All AI Insights
+            View All Insights
             <ArrowRight className="h-4 w-4 ml-2" />
           </Button>
         </Link>

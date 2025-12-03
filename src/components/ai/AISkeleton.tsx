@@ -16,7 +16,10 @@ export function AISkeleton() {
 
 export function AICardSkeleton() {
   return (
-    <div className="rounded-xl bg-card border border-border p-4 space-y-4">
+    <div className="relative rounded-xl bg-card border border-border p-4 space-y-4 overflow-hidden">
+      {/* Shimmer effect */}
+      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Skeleton className="h-10 w-10 rounded-lg" />

@@ -1,14 +1,17 @@
 import { Search, Calendar, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
-import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
+import { RealtimeIndicator } from "@/components/dashboard/RealtimeIndicator";
 import { Button } from "@/components/ui/button";
 import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 import { useNavigate } from "react-router-dom";
 
 export function Header() {
   const { signOut, user } = useRestaurant();
   const navigate = useNavigate();
+  const { isConnected } = useRealtimeEvents({ showToasts: true });
   
   const today = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -33,6 +36,9 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Real-time Indicator */}
+        <RealtimeIndicator isConnected={isConnected} />
+
         {/* Restaurant Switcher */}
         <RestaurantSwitcher />
 
@@ -47,7 +53,7 @@ export function Header() {
         </div>
 
         {/* Notifications */}
-        <NotificationBell />
+        <NotificationDrawer />
 
         {/* Theme Toggle */}
         <ThemeToggle />

@@ -109,6 +109,7 @@ const navSections: NavSection[] = [
     permission: 'ai_features',
     items: [
       { icon: Brain, label: "Insights Dashboard", path: "/ai/insights", permission: { resource: 'ai_features', action: 'view' } },
+      { icon: Sparkles, label: "AI Assistant", path: "/ai/assistant", permission: { resource: 'ai_features', action: 'view' } },
       { icon: Sparkles, label: "Daily Summary", path: "/ai/daily-summary", permission: { resource: 'ai_features', action: 'view' } },
       { icon: CalendarClock, label: "Staff Scheduling", path: "/ai/scheduling", permission: { resource: 'ai_features', action: 'view' } },
     ]
