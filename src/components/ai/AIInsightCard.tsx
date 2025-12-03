@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { AICardSkeleton } from "./AISkeleton";
 import { RefreshCw, Clock, AlertTriangle, CheckCircle, Info, Sparkles } from "lucide-react";
 import { format } from "date-fns";
@@ -23,11 +22,27 @@ export interface AIInsightCardProps {
   className?: string;
 }
 
-const typeStyles: Record<InsightType, { badge: string; border: string; icon: React.ElementType }> = {
-  success: { badge: "bg-green-500/10 text-green-500 border-green-500/20", border: "border-green-500/20", icon: CheckCircle },
-  warning: { badge: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20", border: "border-yellow-500/20", icon: AlertTriangle },
-  error: { badge: "bg-red-500/10 text-red-500 border-red-500/20", border: "border-red-500/20", icon: AlertTriangle },
-  info: { badge: "bg-blue-500/10 text-blue-500 border-blue-500/20", border: "border-blue-500/20", icon: Info },
+const typeStyles: Record<InsightType, { badge: string; border: string; glow: string }> = {
+  success: { 
+    badge: "bg-green-500/10 text-green-500 border-green-500/20", 
+    border: "border-green-500/20 hover:border-green-500/40", 
+    glow: "hover:shadow-green-500/10" 
+  },
+  warning: { 
+    badge: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20", 
+    border: "border-yellow-500/20 hover:border-yellow-500/40", 
+    glow: "hover:shadow-yellow-500/10" 
+  },
+  error: { 
+    badge: "bg-red-500/10 text-red-500 border-red-500/20", 
+    border: "border-red-500/20 hover:border-red-500/40", 
+    glow: "hover:shadow-red-500/10" 
+  },
+  info: { 
+    badge: "bg-primary/10 text-primary border-primary/20", 
+    border: "border-primary/20 hover:border-primary/40", 
+    glow: "hover:shadow-primary/10" 
+  },
 };
 
 export function AIInsightCard({
@@ -59,11 +74,19 @@ export function AIInsightCard({
   }
 
   return (
-    <Card className={cn("overflow-hidden transition-all duration-300 hover:shadow-lg", style.border, className)}>
+    <Card className={cn(
+      "overflow-hidden transition-all duration-300 hover:shadow-lg animate-fade-in",
+      style.border,
+      style.glow,
+      className
+    )}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className={cn("p-2.5 rounded-lg", style.badge)}>
+            <div className={cn(
+              "p-2.5 rounded-lg transition-transform hover:scale-105",
+              style.badge
+            )}>
               <Icon className="h-5 w-5" />
             </div>
             <div>
@@ -77,7 +100,7 @@ export function AIInsightCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-8 w-8 hover:bg-background/50"
               onClick={handleRefresh}
               disabled={isRefreshing}
             >
@@ -98,7 +121,11 @@ export function AIInsightCard({
         ) : items && items.length > 0 ? (
           <ul className="space-y-2">
             {items.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
+              <li 
+                key={i} 
+                className="flex items-start gap-2 text-sm animate-fade-in"
+                style={{ animationDelay: `${i * 50}ms` }}
+              >
                 <Sparkles className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
                 <span className="text-muted-foreground">{item}</span>
               </li>
@@ -111,7 +138,7 @@ export function AIInsightCard({
         )}
         
         {lastUpdated && (
-          <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-border">
+          <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-border/50">
             <Clock className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">
               Updated {format(lastUpdated, "MMM d, h:mm a")}

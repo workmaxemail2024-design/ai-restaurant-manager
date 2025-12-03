@@ -18,6 +18,15 @@ verify_jwt = false
 [functions.ai-cost-analysis]
 verify_jwt = false
 
+[functions.ai-staff-forecasting]
+verify_jwt = true
+
+[functions.ai-purchase-suggestions]
+verify_jwt = true
+
+[functions.ai-assistant]
+verify_jwt = true
+
 [functions.pos-import-sales]
 verify_jwt = true
 

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PermissionFilteredSidebar } from "@/components/dashboard/PermissionFilteredSidebar";
 import { Header } from "@/components/dashboard/Header";
 import { MetricCard } from "@/components/dashboard/MetricCard";
@@ -5,6 +6,7 @@ import { LocationCard } from "@/components/dashboard/LocationCard";
 import { AlertItem } from "@/components/dashboard/AlertItem";
 import { AIInsightPanel } from "@/components/dashboard/AIInsightPanel";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
+import { LocationToggle } from "@/components/common/LocationToggle";
 import { DollarSign, ShoppingBag, Users, TrendingUp } from "lucide-react";
 
 const metrics = [
@@ -29,6 +31,8 @@ const alerts = [
 ];
 
 const Index = () => {
+  const [showAllLocations, setShowAllLocations] = useState(true);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Background glow effect */}
@@ -39,8 +43,17 @@ const Index = () => {
       <main className="ml-64 p-8">
         <Header />
         
+        {/* Location Toggle */}
+        <div className="flex items-center justify-between mt-6">
+          <h2 className="text-lg font-semibold">Performance Overview</h2>
+          <LocationToggle 
+            showAllLocations={showAllLocations} 
+            onToggle={setShowAllLocations} 
+          />
+        </div>
+        
         {/* Metrics Grid */}
-        <div className="grid grid-cols-4 gap-4 mt-6">
+        <div className="grid grid-cols-4 gap-4 mt-4">
           {metrics.map((metric, index) => (
             <MetricCard key={metric.title} {...metric} delay={index * 100} />
           ))}
