@@ -53,6 +53,9 @@ export const TRIGGER_TYPES = [
   { value: 'sales_imported', label: 'Sales Imported' },
   { value: 'supplier_delivery_completed', label: 'Supplier Delivery Completed' },
   { value: 'ai_forecast_ready', label: 'AI Forecast Ready' },
+  { value: 'ai_daily_summary_generated', label: 'AI Daily Summary Generated' },
+  { value: 'ai_stock_forecast_ready', label: 'AI Stock Forecast Ready' },
+  { value: 'ai_menu_repricing_recommended', label: 'AI Menu Repricing Recommended' },
 ];
 
 export const CONDITION_FIELDS = [
@@ -71,6 +74,8 @@ export const ACTION_TYPES = [
   { value: 'reduce_waste_item', label: 'Reduce Waste Item' },
   { value: 'run_ai_forecast_now', label: 'Run AI Forecast' },
   { value: 'escalate_to_manager', label: 'Escalate to Manager' },
+  { value: 'write_audit_log', label: 'Write Audit Log' },
+  { value: 'generate_purchase_order', label: 'AI Generate Purchase Order' },
 ];
 
 export const RUN_FREQUENCIES = [
