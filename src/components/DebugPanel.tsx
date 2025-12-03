@@ -1,5 +1,6 @@
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { usePermissions, PermissionResource } from "@/hooks/usePermissions";
+import { useLocation } from "react-router-dom";
 
 interface NavItem {
   label: string;
@@ -35,6 +36,12 @@ const navSections: NavSection[] = [
 export function DebugPanel() {
   const { user, currentRestaurant, permissions, isLoading } = useRestaurant();
   const { hasPermission, hasFullAccess } = usePermissions();
+  const location = useLocation();
+  
+  // Don't show debug panel on login page
+  if (location.pathname === '/login') {
+    return null;
+  }
 
   // Calculate which items would be hidden and why
   const hiddenItems: { section: string; item: string; reason: string }[] = [];

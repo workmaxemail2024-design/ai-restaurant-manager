@@ -1,15 +1,26 @@
-import { Search, Calendar } from "lucide-react";
+import { Search, Calendar, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { Button } from "@/components/ui/button";
+import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useNavigate } from "react-router-dom";
 
 export function Header() {
+  const { signOut, user } = useRestaurant();
+  const navigate = useNavigate();
+  
   const today = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
     year: 'numeric', 
     month: 'long', 
     day: 'numeric' 
   });
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <header className="flex items-center justify-between py-6">
@@ -47,6 +58,16 @@ export function Header() {
             {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
+
+        {/* Sign Out */}
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={handleSignOut}
+          title={`Sign out (${user?.email})`}
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
       </div>
     </header>
   );
