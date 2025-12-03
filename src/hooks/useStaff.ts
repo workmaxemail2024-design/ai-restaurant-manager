@@ -72,12 +72,32 @@ export function useStaff() {
   return useQuery({
     queryKey: ["staff"],
     queryFn: async () => {
+      // Use the safe view that hides PII from non-managers
       const { data, error } = await supabase
-        .from("staff")
-        .select("*, locations(name)")
+        .from("staff_safe")
+        .select("*")
         .order("last_name");
       if (error) throw error;
-      return data as Staff[];
+      
+      // Fetch locations separately since the view doesn't have joins
+      const locationIds = [...new Set(data?.map(s => s.location_id).filter(Boolean))];
+      let locationsMap: Record<string, { name: string }> = {};
+      
+      if (locationIds.length > 0) {
+        const { data: locations } = await supabase
+          .from("locations")
+          .select("id, name")
+          .in("id", locationIds);
+        
+        if (locations) {
+          locationsMap = Object.fromEntries(locations.map(l => [l.id, { name: l.name }]));
+        }
+      }
+      
+      return data?.map(s => ({
+        ...s,
+        locations: s.location_id ? locationsMap[s.location_id] || null : null
+      })) as Staff[];
     },
   });
 }
