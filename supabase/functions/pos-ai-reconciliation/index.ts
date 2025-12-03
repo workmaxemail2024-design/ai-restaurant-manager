@@ -12,18 +12,59 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Use service role for data operations
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { location_id, pos_provider } = await req.json();
+    const { location_id, pos_provider, restaurant_id } = await req.json();
 
     if (!location_id) {
       return new Response(
         JSON.stringify({ error: "Missing location_id" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Verify user belongs to restaurant if provided
+    if (restaurant_id) {
+      const { data: membership } = await supabaseClient
+        .from('user_restaurants')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('restaurant_id', restaurant_id)
+        .single();
+      
+      if (!membership) {
+        return new Response(JSON.stringify({ error: "Access denied to this restaurant" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Get unmapped sales imports

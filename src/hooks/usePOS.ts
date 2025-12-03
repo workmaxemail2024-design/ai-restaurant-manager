@@ -61,9 +61,10 @@ export function usePOSIntegrations(locationId?: string) {
   return useQuery({
     queryKey: ["pos-integrations", locationId],
     queryFn: async () => {
+      // Use safe view that masks credentials for non-admin users
       let query = supabase
-        .from("pos_integrations")
-        .select("*, locations(name)")
+        .from("pos_integrations_safe")
+        .select("*")
         .order("created_at", { ascending: false });
       
       if (locationId) {
@@ -72,7 +73,26 @@ export function usePOSIntegrations(locationId?: string) {
       
       const { data, error } = await query;
       if (error) throw error;
-      return data as POSIntegration[];
+      
+      // Fetch locations separately
+      const locationIds = [...new Set(data?.map(p => p.location_id).filter(Boolean))];
+      let locationsMap: Record<string, { name: string }> = {};
+      
+      if (locationIds.length > 0) {
+        const { data: locations } = await supabase
+          .from("locations")
+          .select("id, name")
+          .in("id", locationIds);
+        
+        if (locations) {
+          locationsMap = Object.fromEntries(locations.map(l => [l.id, { name: l.name }]));
+        }
+      }
+      
+      return data?.map(p => ({
+        ...p,
+        locations: p.location_id ? locationsMap[p.location_id] || null : null
+      })) as POSIntegration[];
     },
   });
 }
