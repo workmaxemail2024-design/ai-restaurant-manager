@@ -1,22 +1,22 @@
 project_id = "bjykbjpyodowzstfqoge"
 
 [functions.ai-menu-engineering]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-inventory-forecast]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-purchase-order]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-daily-summary]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-staff-scheduling]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-cost-analysis]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-staff-forecasting]
 verify_jwt = true
@@ -40,16 +40,16 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.pos-ai-reconciliation]
-verify_jwt = false
+verify_jwt = true
 
 [functions.rbac-resolve-user]
 verify_jwt = true
 
 [functions.automation-process-rules]
-verify_jwt = false
+verify_jwt = true
 
 [functions.automation-trigger-event]
-verify_jwt = false
+verify_jwt = true
 
 [functions.automation-ai-handler]
-verify_jwt = false
+verify_jwt = true
