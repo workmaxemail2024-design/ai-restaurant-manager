@@ -12,6 +12,33 @@ serve(async (req) => {
   }
 
   try {
+    // Verify user authentication
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create client with user's auth context to verify authentication
+    const userSupabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await userSupabase.auth.getUser();
+    if (authError || !user) {
+      console.error("Authentication error:", authError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Use service role for data operations after auth is verified
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -23,6 +50,21 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify user has access to this location's restaurant
+    const { data: location, error: locationError } = await userSupabase
+      .from("locations")
+      .select("id, restaurant_id")
+      .eq("id", location_id)
+      .single();
+
+    if (locationError || !location) {
+      console.error("Location access error:", locationError);
+      return new Response(
+        JSON.stringify({ error: "Access denied to this location" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
