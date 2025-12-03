@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -154,6 +154,12 @@ export default function LoginPage() {
                   disabled={isLoading}
                 />
                 {errors.password && <p className="text-sm text-destructive mt-1">{errors.password}</p>}
+                <Link 
+                  to="/forgot-password" 
+                  className="text-sm text-muted-foreground hover:text-primary mt-1 inline-block"
+                >
+                  Forgot Password?
+                </Link>
               </div>
               <Button onClick={handleSignIn} disabled={isLoading} className="w-full">
                 {isLoading ? (
