@@ -1351,6 +1351,7 @@ export type Database = {
         }
         Returns: string
       }
+      tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       user_belongs_to_restaurant: {
         Args: { _restaurant_id: string }
         Returns: boolean
