@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { Permissions } from '@/hooks/usePermissions';
@@ -33,126 +33,174 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
   const [userRestaurants, setUserRestaurants] = useState<Restaurant[]>([]);
   const [permissions, setPermissions] = useState<Permissions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        // Use setTimeout to avoid Supabase deadlock
-        setTimeout(() => {
-          ensureUserRestaurant();
-        }, 0);
-      } else {
-        setCurrentRestaurant(null);
-        setUserRestaurants([]);
-        setPermissions(null);
-        setIsLoading(false);
-      }
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        ensureUserRestaurant();
-      } else {
-        setIsLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const ensureUserRestaurant = async () => {
+  // Memoized function to load user data
+  const loadUserData = useCallback(async (currentUser: User) => {
+    console.log('[RestaurantContext] loadUserData called for user:', currentUser.id);
+    
     try {
       // Call the backend function that ensures user has a restaurant
       const { data, error } = await supabase.rpc('ensure_user_restaurant');
       
       if (error) {
-        console.error('Error ensuring user restaurant:', error);
+        console.error('[RestaurantContext] Error ensuring user restaurant:', error);
         setIsLoading(false);
         return;
       }
 
       if (data) {
-        console.log('ensure_user_restaurant result:', data);
+        console.log('[RestaurantContext] ensure_user_restaurant result:', data);
         
         // Cast the JSON response to proper type
         const result = data as unknown as {
           restaurant_id: string;
-          restaurant_name: string;
-          role_id: string;
-          permissions: Permissions;
+          restaurant_name?: string;
+          role_id?: string;
+          permissions?: Permissions;
         };
         
-        // Set permissions from the response
-        setPermissions(result.permissions);
-        
-        // Set current restaurant
-        const restaurant: Restaurant = {
-          id: result.restaurant_id,
-          name: result.restaurant_name,
-          owner_email: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        setCurrentRestaurant(restaurant);
+        // If we got permissions from ensure_user_restaurant, use them
+        if (result.permissions) {
+          setPermissions(result.permissions);
+        } else {
+          // Otherwise fetch them separately
+          const { data: permsData, error: permsError } = await supabase.rpc('get_user_permissions');
+          if (!permsError && permsData) {
+            console.log('[RestaurantContext] Loaded permissions:', permsData);
+            setPermissions(permsData as Permissions);
+          } else {
+            console.error('[RestaurantContext] Error loading permissions:', permsError);
+          }
+        }
         
         // Load all user restaurants for the switcher
-        await loadUserRestaurants();
-      }
-    } catch (error) {
-      console.error('Error in ensureUserRestaurant:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        const { data: userRests, error: restError } = await supabase
+          .from('user_restaurants')
+          .select('*, restaurants(*)')
+          .order('is_default', { ascending: false });
 
-  const loadUserRestaurants = async () => {
-    try {
-      const { data: userRests, error } = await supabase
-        .from('user_restaurants')
-        .select('*, restaurants(*)')
-        .order('is_default', { ascending: false });
-
-      if (error) {
-        console.error('Error loading user restaurants:', error);
-        return;
-      }
-
-      if (userRests && userRests.length > 0) {
-        const restaurants = userRests.map((ur: any) => ur.restaurants).filter(Boolean);
-        setUserRestaurants(restaurants);
-        
-        // Update currentRestaurant with full data if available
-        const defaultLink = userRests.find((ur: any) => ur.is_default);
-        if (defaultLink?.restaurants) {
-          setCurrentRestaurant(defaultLink.restaurants);
-        } else if (restaurants.length > 0) {
-          setCurrentRestaurant(restaurants[0]);
+        if (restError) {
+          console.error('[RestaurantContext] Error loading user restaurants:', restError);
+        } else if (userRests && userRests.length > 0) {
+          const restaurants = userRests.map((ur: any) => ur.restaurants).filter(Boolean);
+          setUserRestaurants(restaurants);
+          
+          // Set current restaurant
+          const defaultLink = userRests.find((ur: any) => ur.is_default);
+          if (defaultLink?.restaurants) {
+            setCurrentRestaurant(defaultLink.restaurants);
+            console.log('[RestaurantContext] Set current restaurant:', defaultLink.restaurants.name);
+          } else if (restaurants.length > 0) {
+            setCurrentRestaurant(restaurants[0]);
+            console.log('[RestaurantContext] Set current restaurant (fallback):', restaurants[0].name);
+          }
         }
       }
     } catch (error) {
-      console.error('Error loading restaurants:', error);
+      console.error('[RestaurantContext] Error in loadUserData:', error);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, []);
 
-  const refreshPermissions = async () => {
+  // Initialize auth state
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
+      console.log('[RestaurantContext] Initializing auth...');
+      
+      // First, get the current session
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('[RestaurantContext] Error getting session:', error);
+        if (mounted) {
+          setIsLoading(false);
+          setIsInitialized(true);
+        }
+        return;
+      }
+
+      if (currentSession?.user) {
+        console.log('[RestaurantContext] Found existing session for user:', currentSession.user.id);
+        if (mounted) {
+          setSession(currentSession);
+          setUser(currentSession.user);
+          // Load user data after setting user
+          await loadUserData(currentSession.user);
+        }
+      } else {
+        console.log('[RestaurantContext] No existing session found');
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+
+      if (mounted) {
+        setIsInitialized(true);
+      }
+    };
+
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      console.log('[RestaurantContext] Auth state changed:', event, newSession?.user?.id);
+      
+      if (!mounted) return;
+
+      if (event === 'SIGNED_OUT') {
+        console.log('[RestaurantContext] User signed out, clearing state');
+        setSession(null);
+        setUser(null);
+        setCurrentRestaurant(null);
+        setUserRestaurants([]);
+        setPermissions(null);
+        setIsLoading(false);
+        return;
+      }
+
+      if (newSession?.user) {
+        setSession(newSession);
+        setUser(newSession.user);
+        
+        // Only load data if we're initialized (avoid duplicate loading on init)
+        if (isInitialized) {
+          setIsLoading(true);
+          // Use setTimeout to avoid Supabase deadlock
+          setTimeout(() => {
+            if (mounted) {
+              loadUserData(newSession.user);
+            }
+          }, 0);
+        }
+      }
+    });
+
+    // Initialize
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [loadUserData, isInitialized]);
+
+  const refreshPermissions = useCallback(async () => {
     try {
       const { data, error } = await supabase.rpc('get_user_permissions');
       if (error) {
-        console.error('Error refreshing permissions:', error);
+        console.error('[RestaurantContext] Error refreshing permissions:', error);
         return;
       }
+      console.log('[RestaurantContext] Refreshed permissions:', data);
       setPermissions(data as Permissions);
     } catch (error) {
-      console.error('Error refreshing permissions:', error);
+      console.error('[RestaurantContext] Error refreshing permissions:', error);
     }
-  };
+  }, []);
 
-  const switchRestaurant = async (restaurantId: string) => {
+  const switchRestaurant = useCallback(async (restaurantId: string) => {
     if (!user) return;
     
     // Update default flag
@@ -174,9 +222,9 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
     
     // Refresh permissions for the new restaurant context
     await refreshPermissions();
-  };
+  }, [user, userRestaurants, refreshPermissions]);
 
-  const createRestaurant = async (name: string): Promise<Restaurant | null> => {
+  const createRestaurant = useCallback(async (name: string): Promise<Restaurant | null> => {
     if (!user) return null;
     
     try {
@@ -232,19 +280,16 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
 
       return restaurant;
     } catch (error) {
-      console.error('Error creating restaurant:', error);
+      console.error('[RestaurantContext] Error creating restaurant:', error);
       return null;
     }
-  };
+  }, [user, userRestaurants, refreshPermissions]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
+    console.log('[RestaurantContext] Signing out...');
     await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    setCurrentRestaurant(null);
-    setUserRestaurants([]);
-    setPermissions(null);
-  };
+    // State will be cleared by the onAuthStateChange handler
+  }, []);
 
   return (
     <RestaurantContext.Provider value={{
