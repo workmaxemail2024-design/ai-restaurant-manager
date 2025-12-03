@@ -133,12 +133,12 @@ export default function IngredientsPage() {
               </div>
               <div>
                 <Label>Supplier</Label>
-                <Select value={formData.supplier_id || ""} onValueChange={(v) => setFormData({ ...formData, supplier_id: v || null })}>
+                <Select value={formData.supplier_id || "_none"} onValueChange={(v) => setFormData({ ...formData, supplier_id: v === "_none" ? null : v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select supplier" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="_none">None</SelectItem>
                     {suppliers.map((supplier) => (
                       <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
                     ))}

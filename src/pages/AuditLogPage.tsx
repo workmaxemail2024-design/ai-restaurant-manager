@@ -120,12 +120,12 @@ export default function AuditLogPage() {
             <div className="flex flex-wrap gap-4 items-end">
               <div className="flex-1 min-w-[200px]">
                 <Label className="text-xs text-muted-foreground">Event Type</Label>
-                <Select value={eventType} onValueChange={setEventType}>
+              <Select value={eventType || "_all"} onValueChange={(v) => setEventType(v === "_all" ? "" : v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="All events" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All events</SelectItem>
+                    <SelectItem value="_all">All events</SelectItem>
                     {EVENT_TYPES.map((type) => (
                       <SelectItem key={type} value={type}>
                         {eventTypeLabels[type] || type}
