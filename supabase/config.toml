@@ -53,3 +53,15 @@ verify_jwt = true
 
 [functions.automation-ai-handler]
 verify_jwt = true
+
+[functions.captiva-test]
+verify_jwt = true
+
+[functions.captiva-sync]
+verify_jwt = true
+
+[functions.captiva-webhook-handler]
+verify_jwt = false
+
+[functions.captiva-schedule-sync]
+verify_jwt = false
