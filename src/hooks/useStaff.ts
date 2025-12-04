@@ -16,6 +16,7 @@ export interface Staff {
   status: StaffStatus;
   email: string | null;
   phone: string | null;
+  captiva_operator_code?: string | null;
   created_at: string;
   updated_at: string;
   locations?: { name: string } | null;
@@ -66,6 +67,7 @@ export type StaffInsert = {
   status?: StaffStatus;
   email?: string | null;
   phone?: string | null;
+  captiva_operator_code?: string | null;
 };
 
 export function useStaff() {

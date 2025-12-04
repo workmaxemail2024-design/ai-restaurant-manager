@@ -957,6 +957,7 @@ export type Database = {
       }
       staff: {
         Row: {
+          captiva_operator_code: string | null
           created_at: string
           email: string | null
           first_name: string
@@ -971,6 +972,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          captiva_operator_code?: string | null
           created_at?: string
           email?: string | null
           first_name: string
@@ -985,6 +987,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          captiva_operator_code?: string | null
           created_at?: string
           email?: string | null
           first_name?: string
