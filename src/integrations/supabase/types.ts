@@ -1402,6 +1402,7 @@ export type Database = {
       }
       staff_safe: {
         Row: {
+          captiva_operator_code: string | null
           created_at: string | null
           email: string | null
           first_name: string | null
@@ -1416,6 +1417,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          captiva_operator_code?: string | null
           created_at?: string | null
           email?: never
           first_name?: string | null
@@ -1430,6 +1432,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          captiva_operator_code?: string | null
           created_at?: string | null
           email?: never
           first_name?: string | null
