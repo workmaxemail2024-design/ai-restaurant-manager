@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,6 +65,26 @@ export default function POSIntegrationsPage() {
     anomalies?: Array<{ type: string; severity: string; message: string; recommendation: string }>;
     mapping_suggestions?: Array<{ import_id: string; external_name: string; suggested_matches: Array<{ dish_id: string; dish_name: string; confidence: number }> }>;
   } | null>(null);
+  const [syncingIntegrationId, setSyncingIntegrationId] = useState<string | null>(null);
+
+  const handleCaptivaSync = useCallback(async (integrationId: string) => {
+    setSyncingIntegrationId(integrationId);
+    try {
+      const { data, error } = await supabase.functions.invoke("captiva-sync", {
+        body: { integration_id: integrationId },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast({ title: "Sync Complete", description: "Captiva sync completed successfully" });
+      } else {
+        toast({ title: "Sync Failed", description: data?.error || "Unknown error", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Sync Failed", description: `Captiva sync failed: ${err instanceof Error ? err.message : "Unknown error"}`, variant: "destructive" });
+    } finally {
+      setSyncingIntegrationId(null);
+    }
+  }, [toast]);
 
   const handleSubmit = async () => {
     const submitData = {
@@ -243,6 +263,18 @@ export default function POSIntegrationsPage() {
                         <span className="text-muted-foreground">Last Sync</span>
                         <span>{integration.last_sync_time ? format(new Date(integration.last_sync_time), "MMM d, HH:mm") : "Never"}</span>
                       </div>
+                      {integration.pos_provider === "captiva" && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Sync Status</span>
+                          <Badge variant={integration.last_sync_time ? "default" : "secondary"}>
+                            {integration.last_sync_time ? (
+                              <><CheckCircle2 className="h-3 w-3 mr-1" />OK</>
+                            ) : (
+                              "Never Synced"
+                            )}
+                          </Badge>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Active</span>
                         <Switch 
@@ -254,6 +286,17 @@ export default function POSIntegrationsPage() {
                         <Button size="sm" variant="outline" onClick={() => handleTestConnection(integration)}>
                           <RefreshCw className="h-4 w-4 mr-1" />Test
                         </Button>
+                        {integration.pos_provider === "captiva" && (
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleCaptivaSync(integration.id)}
+                            disabled={!integration.api_key || syncingIntegrationId === integration.id}
+                          >
+                            <RefreshCw className={`h-4 w-4 mr-1 ${syncingIntegrationId === integration.id ? "animate-spin" : ""}`} />
+                            {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
+                          </Button>
+                        )}
                         <Button size="sm" variant="destructive" onClick={() => deleteIntegration.mutate(integration.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
