@@ -201,6 +201,7 @@ export type Database = {
       }
       dishes: {
         Row: {
+          captiva_external_id: string | null
           category: string | null
           created_at: string
           id: string
@@ -211,6 +212,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          captiva_external_id?: string | null
           category?: string | null
           created_at?: string
           id?: string
@@ -221,6 +223,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          captiva_external_id?: string | null
           category?: string | null
           created_at?: string
           id?: string

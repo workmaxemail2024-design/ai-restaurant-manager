@@ -20,12 +20,15 @@ import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
 import { useLocations } from "@/hooks/useLocations";
 import { useDishes } from "@/hooks/useDishes";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
   { value: "lightspeed", label: "Lightspeed" },
   { value: "clover", label: "Clover" },
   { value: "toast", label: "Toast" },
+  { value: "captiva", label: "Captiva" },
   { value: "custom", label: "Custom API" },
 ];
 
@@ -38,6 +41,8 @@ export default function POSIntegrationsPage() {
     api_key: "",
     api_secret: "",
     webhook_url: "",
+    captiva_base_url: "",
+    captiva_store_id: "",
   });
 
   const { data: locations } = useLocations();
@@ -53,6 +58,7 @@ export default function POSIntegrationsPage() {
   const testConnection = useTestPOSConnection();
   const reconciliation = usePOSReconciliation();
   const updateMapping = useUpdatePOSMapping();
+  const { toast } = useToast();
 
   const [reconciliationData, setReconciliationData] = useState<{
     summary?: { system_total: number; pos_total: number; difference: number; unmapped_count: number };
@@ -61,17 +67,56 @@ export default function POSIntegrationsPage() {
   } | null>(null);
 
   const handleSubmit = async () => {
-    await createIntegration.mutateAsync(formData);
+    const submitData = {
+      location_id: formData.location_id,
+      pos_provider: formData.pos_provider,
+      api_key: formData.api_key,
+      api_secret: formData.api_secret,
+      webhook_url: formData.webhook_url,
+      settings: formData.pos_provider === "captiva" ? {
+        base_url: formData.captiva_base_url,
+        store_id: formData.captiva_store_id,
+      } : undefined,
+    };
+    
+    await createIntegration.mutateAsync(submitData);
     setIsAddOpen(false);
-    setFormData({ location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "" });
+    setFormData({ location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "", captiva_base_url: "", captiva_store_id: "" });
   };
 
-  const handleTestConnection = (integration: { pos_provider: string; api_key: string | null; api_secret: string | null }) => {
-    testConnection.mutate({
-      pos_provider: integration.pos_provider,
-      api_key: integration.api_key || "",
-      api_secret: integration.api_secret || undefined,
-    });
+  const handleTestConnection = (integration: { pos_provider: string; api_key: string | null; api_secret: string | null; settings?: Record<string, unknown> | null }) => {
+    if (integration.pos_provider === "captiva") {
+      // Use Captiva-specific test endpoint
+      const settings = integration.settings as Record<string, string> || {};
+      testCaptivaConnection({
+        base_url: settings.base_url || "",
+        api_key: integration.api_key || "",
+        api_secret: integration.api_secret || "",
+        store_id: settings.store_id || "",
+      });
+    } else {
+      testConnection.mutate({
+        pos_provider: integration.pos_provider,
+        api_key: integration.api_key || "",
+        api_secret: integration.api_secret || undefined,
+      });
+    }
+  };
+  
+  const testCaptivaConnection = async (params: { base_url: string; api_key: string; api_secret: string; store_id: string }) => {
+    try {
+      const { data, error } = await supabase.functions.invoke("captiva-test", {
+        body: params,
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast({ title: "Connection Successful", description: "Captiva connection validated" });
+      } else {
+        toast({ title: "Connection Failed", description: data?.error || "Unknown error", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Connection Failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    }
   };
 
   const handleRunReconciliation = async () => {
@@ -121,10 +166,22 @@ export default function POSIntegrationsPage() {
                 <Input type="password" value={formData.api_key} onChange={e => setFormData(p => ({ ...p, api_key: e.target.value }))} />
               </div>
               <div>
-                <Label>API Secret (optional)</Label>
+                <Label>API Secret</Label>
                 <Input type="password" value={formData.api_secret} onChange={e => setFormData(p => ({ ...p, api_secret: e.target.value }))} />
               </div>
-              <Button onClick={handleSubmit} disabled={!formData.location_id || !formData.pos_provider}>
+              {formData.pos_provider === "captiva" && (
+                <>
+                  <div>
+                    <Label>Captiva Cloud Base URL</Label>
+                    <Input placeholder="https://your-captiva-cloud.com" value={formData.captiva_base_url} onChange={e => setFormData(p => ({ ...p, captiva_base_url: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label>Store / Outlet ID</Label>
+                    <Input placeholder="Store ID (optional)" value={formData.captiva_store_id} onChange={e => setFormData(p => ({ ...p, captiva_store_id: e.target.value }))} />
+                  </div>
+                </>
+              )}
+              <Button onClick={handleSubmit} disabled={!formData.location_id || !formData.pos_provider || (formData.pos_provider === "captiva" && !formData.captiva_base_url)}>
                 Create Integration
               </Button>
             </div>
