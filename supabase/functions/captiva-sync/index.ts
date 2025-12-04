@@ -8,14 +8,10 @@ const corsHeaders = {
 
 // XML to JSON converter for Captiva responses
 function parseXmlToJson(xml: string): Record<string, unknown> {
-  // Remove XML declaration
   xml = xml.replace(/<\?xml[^>]*\?>/g, '').trim();
   
-  // Parse elements
   const parseElement = (xmlStr: string): Record<string, unknown> | string => {
     const obj: Record<string, unknown> = {};
-    
-    // Match tags and content
     const tagRegex = /<(\w+)([^>]*)>([\s\S]*?)<\/\1>/g;
     let match;
     let hasChildren = false;
@@ -25,7 +21,6 @@ function parseXmlToJson(xml: string): Record<string, unknown> {
       const [, tagName, , content] = match;
       const trimmedContent = content.trim();
       
-      // Check if content has nested tags
       if (/<\w+[^>]*>/.test(trimmedContent)) {
         const parsed = parseElement(trimmedContent);
         if (obj[tagName]) {
@@ -38,7 +33,6 @@ function parseXmlToJson(xml: string): Record<string, unknown> {
           obj[tagName] = parsed;
         }
       } else {
-        // Leaf node - convert to appropriate type
         let value: unknown = trimmedContent;
         if (trimmedContent === '') value = null;
         else if (trimmedContent === 'true') value = true;
@@ -77,6 +71,7 @@ interface CaptivaOrder {
   payments?: CaptivaPayment[] | CaptivaPayment;
   staff_id?: string;
   employee_id?: string;
+  operator_code?: string;
 }
 
 interface CaptivaOrderItem {
@@ -93,6 +88,25 @@ interface CaptivaPayment {
   method?: string;
   type?: string;
   amount?: number | string;
+}
+
+interface CaptivaOperator {
+  operator_code?: string;
+  code?: string;
+  id?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  role?: string;
+}
+
+interface CaptivaAttendance {
+  operator_code?: string;
+  employee_id?: string;
+  staff_id?: string;
+  clock_in?: string;
+  clock_out?: string;
+  date?: string;
 }
 
 interface Integration {
@@ -137,7 +151,7 @@ serve(async (req) => {
       );
     }
 
-    const { integration_id, location_id } = await req.json();
+    const { integration_id, location_id, test_mode } = await req.json();
 
     // Get the Captiva integration
     const { data: integration, error: intError } = await supabase
@@ -162,6 +176,7 @@ serve(async (req) => {
     const storeId = settings.store_id;
     const apiKey = typedIntegration.api_key;
     const apiSecret = typedIntegration.api_secret;
+    const isTestMode = test_mode === true || settings.test_mode === "true";
 
     if (!baseUrl || !apiKey || !apiSecret) {
       return new Response(
@@ -170,79 +185,125 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Starting Captiva sync for location ${typedIntegration.location_id}, store ${storeId || 'default'}`);
+    console.log(`Starting Captiva sync for location ${typedIntegration.location_id}, store ${storeId || 'default'}, test_mode: ${isTestMode}`);
 
     const authString = btoa(`${apiKey}:${apiSecret}`);
     const lastSync = settings.last_sync_time ? new Date(settings.last_sync_time) : new Date(Date.now() - 24 * 60 * 60 * 1000);
     const now = new Date();
-
-    // Format dates for Captiva API (typically ISO or YYYY-MM-DD)
     const fromDate = lastSync.toISOString();
     const toDate = now.toISOString();
 
-    // Fetch orders from Captiva
-    const ordersEndpoint = storeId
-      ? `${baseUrl.replace(/\/$/, '')}/api/v1/stores/${storeId}/orders`
-      : `${baseUrl.replace(/\/$/, '')}/api/v1/orders`;
-
-    const ordersUrl = `${ordersEndpoint}?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`;
-    
-    console.log(`Fetching orders from: ${ordersUrl}`);
-
-    const ordersResponse = await fetch(ordersUrl, {
-      headers: {
-        "Authorization": `Basic ${authString}`,
-        "Accept": "application/json, application/xml",
-      },
-    });
-
-    if (!ordersResponse.ok) {
-      const errorText = await ordersResponse.text();
-      console.error("Captiva orders error:", errorText);
+    // Helper to make Captiva API requests
+    const captivaFetch = async (endpoint: string) => {
+      const url = storeId
+        ? `${baseUrl.replace(/\/$/, '')}/api/v1/stores/${storeId}${endpoint}`
+        : `${baseUrl.replace(/\/$/, '')}/api/v1${endpoint}`;
       
-      // Log sync failure
-      await adminClient.from("pos_sync_logs").insert({
-        location_id: typedIntegration.location_id,
-        restaurant_id: typedIntegration.restaurant_id,
-        pos_provider: "captiva",
-        event_type: "sync_failed",
-        status: "fail",
-        message: `Failed to fetch orders: ${ordersResponse.status}`,
-        details: { error: errorText.substring(0, 500) },
+      console.log(`Fetching: ${url}`);
+      const response = await fetch(url, {
+        headers: {
+          "Authorization": `Basic ${authString}`,
+          "Accept": "application/json, application/xml",
+        },
       });
-
-      return new Response(
-        JSON.stringify({ success: false, error: `Captiva API error: ${ordersResponse.status}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const contentType = ordersResponse.headers.get("content-type") || "";
-    let ordersData: Record<string, unknown>;
-
-    if (contentType.includes("xml")) {
-      const xmlText = await ordersResponse.text();
-      ordersData = parseXmlToJson(xmlText);
-      console.log("Parsed XML response to JSON");
-    } else {
-      ordersData = await ordersResponse.json();
-    }
-
-    // Extract orders array
-    const orders: CaptivaOrder[] = Array.isArray(ordersData.orders) 
-      ? ordersData.orders as CaptivaOrder[]
-      : (ordersData.order ? [ordersData.order as CaptivaOrder] : []);
-
-    console.log(`Processing ${orders.length} orders`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Captiva API error ${response.status}: ${errorText.substring(0, 200)}`);
+      }
+      
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("xml")) {
+        const xmlText = await response.text();
+        return parseXmlToJson(xmlText);
+      }
+      return await response.json();
+    };
 
     let salesCreated = 0;
     let dishesCreated = 0;
     let mappingsCreated = 0;
+    let attendanceCreated = 0;
+    const unmappedStaff: string[] = [];
+
+    // Load staff mapping cache
+    const { data: staffList } = await adminClient
+      .from("staff")
+      .select("id, captiva_operator_code, location_id")
+      .eq("restaurant_id", typedIntegration.restaurant_id)
+      .not("captiva_operator_code", "is", null);
+
+    const staffByOperatorCode: Record<string, { id: string; location_id: string | null }> = {};
+    staffList?.forEach(s => {
+      if (s.captiva_operator_code) {
+        staffByOperatorCode[s.captiva_operator_code] = { id: s.id, location_id: s.location_id };
+      }
+    });
+
+    // Fetch and process attendance (skip in test mode)
+    if (!isTestMode) {
+      try {
+        const attendanceData = await captivaFetch(`/attendance?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
+        const attendanceRecords: CaptivaAttendance[] = Array.isArray(attendanceData.attendance)
+          ? attendanceData.attendance
+          : (attendanceData.attendance ? [attendanceData.attendance] : []);
+
+        console.log(`Processing ${attendanceRecords.length} attendance records`);
+
+        for (const record of attendanceRecords) {
+          const operatorCode = record.operator_code || record.employee_id || record.staff_id;
+          if (!operatorCode) continue;
+
+          const staffMatch = staffByOperatorCode[operatorCode];
+          if (!staffMatch) {
+            if (!unmappedStaff.includes(operatorCode)) {
+              unmappedStaff.push(operatorCode);
+              console.log(`Unmapped staff: operator_code ${operatorCode}`);
+            }
+            continue;
+          }
+
+          if (record.clock_in) {
+            const { error: attError } = await adminClient.from("staff_attendance").upsert({
+              staff_id: staffMatch.id,
+              location_id: staffMatch.location_id || typedIntegration.location_id,
+              restaurant_id: typedIntegration.restaurant_id,
+              clock_in: record.clock_in,
+              clock_out: record.clock_out || null,
+              source: "pos",
+            }, {
+              onConflict: "staff_id,clock_in",
+            });
+
+            if (!attError) attendanceCreated++;
+          }
+        }
+      } catch (attError) {
+        console.log("Attendance fetch skipped or failed:", attError instanceof Error ? attError.message : "Unknown error");
+      }
+    } else {
+      console.log("Test mode: Skipping attendance sync");
+    }
+
+    // Fetch orders
+    const ordersData = await captivaFetch(`/orders?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
+    const orders: CaptivaOrder[] = Array.isArray(ordersData.orders) 
+      ? ordersData.orders
+      : (ordersData.order ? [ordersData.order] : []);
+
+    console.log(`Processing ${orders.length} orders`);
 
     for (const order of orders) {
       const orderId = order.id || order.order_id || order.order_number || `unknown-${Date.now()}`;
       const orderDate = order.date || order.timestamp || new Date().toISOString();
       const items: CaptivaOrderItem[] = Array.isArray(order.items) ? order.items : (order.items ? [order.items] : []);
+
+      // Check staff mapping for order
+      const orderOperatorCode = order.operator_code || order.staff_id || order.employee_id;
+      if (orderOperatorCode && !staffByOperatorCode[orderOperatorCode] && !unmappedStaff.includes(orderOperatorCode)) {
+        unmappedStaff.push(orderOperatorCode);
+        console.log(`Unmapped staff: operator_code ${orderOperatorCode}`);
+      }
 
       for (const item of items) {
         const externalId = item.plu || item.sku || item.item_id || "";
@@ -279,8 +340,8 @@ serve(async (req) => {
           }
         }
 
-        // Create placeholder dish if not found
-        if (!dishId) {
+        // Create placeholder dish if not found (skip in test mode)
+        if (!dishId && !isTestMode) {
           const { data: newDish, error: dishError } = await adminClient
             .from("dishes")
             .insert({
@@ -315,17 +376,15 @@ serve(async (req) => {
           if (!mapError) mappingsCreated++;
         }
 
-        if (dishId) {
-          // Check if sale already exists (avoid duplicates)
+        if (dishId && !isTestMode) {
           const saleDate = new Date(orderDate).toISOString().split('T')[0];
           
-          // Import to pos_sales_import for tracking
           await adminClient.from("pos_sales_import").insert({
             location_id: typedIntegration.location_id,
             restaurant_id: typedIntegration.restaurant_id,
             pos_provider: "captiva",
             external_sale_id: `${orderId}-${externalId}`,
-            data: { order_id: orderId, item, order_date: orderDate },
+            data: { order_id: orderId, item, order_date: orderDate, operator_code: orderOperatorCode },
             mapped_dish_id: dishId,
             mapped_quantity: quantity,
             mapped_total_price: totalPrice,
@@ -333,7 +392,6 @@ serve(async (req) => {
             sync_status: "synced",
           });
 
-          // Insert into sales table
           const { error: saleError } = await adminClient.from("sales").insert({
             dish_id: dishId,
             location_id: typedIntegration.location_id,
@@ -348,39 +406,55 @@ serve(async (req) => {
       }
     }
 
-    // Update last sync time
-    const newSettings = { ...settings, last_sync_time: now.toISOString() };
-    await adminClient
-      .from("pos_integrations")
-      .update({ 
-        settings: newSettings,
-        last_sync_time: now.toISOString(),
-      })
-      .eq("id", typedIntegration.id);
+    // Update last sync time (unless test mode)
+    if (!isTestMode) {
+      const newSettings = { ...settings, last_sync_time: now.toISOString() };
+      await adminClient
+        .from("pos_integrations")
+        .update({ 
+          settings: newSettings,
+          last_sync_time: now.toISOString(),
+        })
+        .eq("id", typedIntegration.id);
+    }
 
-    // Log successful sync
+    // Log sync result
     await adminClient.from("pos_sync_logs").insert({
       location_id: typedIntegration.location_id,
       restaurant_id: typedIntegration.restaurant_id,
       pos_provider: "captiva",
-      event_type: "sync_completed",
+      event_type: isTestMode ? "test_sync" : "sync_completed",
       status: "success",
-      message: `Synced ${orders.length} orders, created ${salesCreated} sales, ${dishesCreated} new dishes`,
-      details: { orders_count: orders.length, sales_created: salesCreated, dishes_created: dishesCreated, mappings_created: mappingsCreated },
+      message: `Synced ${orders.length} orders, created ${salesCreated} sales, ${dishesCreated} new dishes, ${attendanceCreated} attendance records`,
+      details: { 
+        orders_count: orders.length, 
+        sales_created: salesCreated, 
+        dishes_created: dishesCreated, 
+        mappings_created: mappingsCreated,
+        attendance_created: attendanceCreated,
+        unmapped_staff: unmappedStaff,
+        test_mode: isTestMode,
+      },
     });
 
-    console.log(`Captiva sync completed: ${orders.length} orders, ${salesCreated} sales, ${dishesCreated} dishes`);
+    console.log(`Captiva sync completed: ${orders.length} orders, ${salesCreated} sales, ${dishesCreated} dishes, ${attendanceCreated} attendance`);
+    if (unmappedStaff.length > 0) {
+      console.log(`Unmapped staff operator codes: ${unmappedStaff.join(', ')}`);
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Captiva sync completed",
+        message: isTestMode ? "Test sync completed (no data written)" : "Captiva sync completed",
         data: {
           orders_processed: orders.length,
-          sales_created: salesCreated,
-          dishes_created: dishesCreated,
-          mappings_created: mappingsCreated,
-          last_sync: now.toISOString(),
+          sales_created: isTestMode ? 0 : salesCreated,
+          dishes_created: isTestMode ? 0 : dishesCreated,
+          mappings_created: isTestMode ? 0 : mappingsCreated,
+          attendance_created: isTestMode ? 0 : attendanceCreated,
+          unmapped_staff: unmappedStaff,
+          last_sync: isTestMode ? settings.last_sync_time : now.toISOString(),
+          test_mode: isTestMode,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

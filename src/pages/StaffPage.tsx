@@ -10,6 +10,7 @@ import { Plus } from "lucide-react";
 import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInsert, StaffRole, StaffStatus } from "@/hooks/useStaff";
 import { useLocations } from "@/hooks/useLocations";
 import { Badge } from "@/components/ui/badge";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const roles: StaffRole[] = ["chef", "waiter", "manager", "host", "bartender", "kitchen_assistant", "cleaner"];
 const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
@@ -17,9 +18,12 @@ const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
 export default function StaffPage() {
   const { data: staff = [], isLoading } = useStaff();
   const { data: locations = [] } = useLocations();
+  const { hasPermission } = usePermissions();
   const createStaff = useCreateStaff();
   const updateStaff = useUpdateStaff();
   const deleteStaff = useDeleteStaff();
+
+  const canEditPOSMapping = hasPermission("staff", "admin") || hasPermission("pos", "admin");
 
   const [open, setOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
@@ -32,10 +36,11 @@ export default function StaffPage() {
     location_id: null,
     email: null,
     phone: null,
+    captiva_operator_code: null,
   });
 
   const resetForm = () => {
-    setForm({ first_name: "", last_name: "", role: "waiter", hourly_rate: 0, status: "active", location_id: null, email: null, phone: null });
+    setForm({ first_name: "", last_name: "", role: "waiter", hourly_rate: 0, status: "active", location_id: null, email: null, phone: null, captiva_operator_code: null });
     setEditingStaff(null);
   };
 
@@ -61,6 +66,7 @@ export default function StaffPage() {
       location_id: item.location_id,
       email: item.email,
       phone: item.phone,
+      captiva_operator_code: item.captiva_operator_code,
     });
     setOpen(true);
   };
@@ -158,6 +164,17 @@ export default function StaffPage() {
                   <Input value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value || null })} />
                 </div>
               </div>
+              {canEditPOSMapping && (
+                <div className="space-y-2">
+                  <Label>Captiva Operator Code</Label>
+                  <Input 
+                    value={form.captiva_operator_code || ""} 
+                    onChange={(e) => setForm({ ...form, captiva_operator_code: e.target.value || null })} 
+                    placeholder="e.g., OP001"
+                  />
+                  <p className="text-xs text-muted-foreground">Used for POS staff mapping</p>
+                </div>
+              )}
               <Button type="submit" className="w-full">{editingStaff ? "Update" : "Create"} Staff</Button>
             </form>
           </DialogContent>
