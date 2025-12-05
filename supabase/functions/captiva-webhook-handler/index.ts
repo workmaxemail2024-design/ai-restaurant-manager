@@ -6,6 +6,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-captiva-signature",
 };
 
+// ============ SIMULATION DATA GENERATOR ============
+function generateSimulatedWebhookOrder() {
+  const now = new Date();
+  return {
+    id: `sim-webhook-${Date.now()}`,
+    total: 28.50,
+    date: now.toISOString(),
+    items: [
+      { plu: "sim-burger-001", name: "Simulated Burger", quantity: 1, price: 14.90, total: 14.90 },
+      { plu: "sim-drink-001", name: "Simulated Drink", quantity: 2, price: 3.80, total: 7.60 }
+    ],
+    operator_code: "SIM-WEBHOOK-OP"
+  };
+}
+
 // XML to JSON converter
 function parseXmlToJson(xml: string): Record<string, unknown> {
   xml = xml.replace(/<\?xml[^>]*\?>/g, '').trim();
@@ -76,12 +91,15 @@ serve(async (req) => {
   // deno-lint-ignore no-explicit-any
   const adminClient: SupabaseClient<any> = createClient(supabaseUrl, serviceRoleKey);
 
+  // Check global simulation mode
+  const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
+
   try {
     const signature = req.headers.get("x-captiva-signature");
     const contentType = req.headers.get("content-type") || "";
     const rawBody = await req.text();
 
-    console.log("Received Captiva webhook:", rawBody.substring(0, 500));
+    console.log(`Received Captiva webhook (simulation_mode: ${globalSimulateMode}):`, rawBody.substring(0, 500));
 
     // Parse payload
     let payload: Record<string, unknown>;
@@ -91,13 +109,25 @@ serve(async (req) => {
       payload = JSON.parse(rawBody);
     }
 
+    // Check for simulation flag in payload
+    const isSimulationMode = globalSimulateMode || (payload.simulate === true);
+
     // Extract event type and store info
-    const eventType = (payload.event || payload.event_type || payload.type || "unknown") as string;
-    const storeId = (payload.store_id || payload.outlet_id || payload.location_id || "") as string;
+    let eventType = (payload.event || payload.event_type || payload.type || "unknown") as string;
+    let storeId = (payload.store_id || payload.outlet_id || payload.location_id || "") as string;
+    let order = (payload.order || payload.data || payload) as Record<string, unknown>;
 
-    console.log(`Processing Captiva webhook: ${eventType} for store ${storeId}`);
+    // ============ SIMULATION MODE ============
+    if (isSimulationMode) {
+      console.log("🎮 SIMULATION MODE - Processing simulated webhook");
+      eventType = payload.event as string || "new_order";
+      order = generateSimulatedWebhookOrder();
+      storeId = "simulation";
+    }
 
-    // Find the integration for this store
+    console.log(`Processing Captiva webhook: ${eventType} for store ${storeId}, simulation: ${isSimulationMode}`);
+
+    // Find the integration for this store (or use first one in simulation mode)
     const { data: integrations } = await adminClient
       .from("pos_integrations")
       .select("id, location_id, restaurant_id, api_secret, settings")
@@ -105,10 +135,16 @@ serve(async (req) => {
       .eq("status", "active");
 
     // Match by store_id in settings
-    const integration = (integrations as Integration[] | null)?.find(int => {
+    let integration = (integrations as Integration[] | null)?.find(int => {
       const settings = int.settings || {};
       return settings.store_id === storeId || !storeId;
     });
+
+    // In simulation mode, use the first available integration
+    if (!integration && isSimulationMode && integrations && integrations.length > 0) {
+      integration = integrations[0] as Integration;
+      console.log("🎮 Using first available integration for simulation");
+    }
 
     if (!integration) {
       console.warn("No matching Captiva integration found for store:", storeId);
@@ -118,8 +154,8 @@ serve(async (req) => {
       );
     }
 
-    // Verify signature if secret is available (skip for demo)
-    if (integration.api_secret && signature) {
+    // Verify signature if secret is available (skip for demo and simulation)
+    if (integration.api_secret && signature && !isSimulationMode) {
       console.log("Signature verification skipped (demo mode)");
     }
 
@@ -128,15 +164,13 @@ serve(async (req) => {
       case "new_order":
       case "order_created":
       case "order.created": {
-        const order = (payload.order || payload.data || payload) as Record<string, unknown>;
-        await processOrder(adminClient, integration, order);
+        await processOrder(adminClient, integration, order, isSimulationMode);
         break;
       }
 
       case "order_updated":
       case "order.updated": {
-        const order = (payload.order || payload.data || payload) as Record<string, unknown>;
-        await processOrder(adminClient, integration, order);
+        await processOrder(adminClient, integration, order, isSimulationMode);
         break;
       }
 
@@ -144,7 +178,7 @@ serve(async (req) => {
       case "payment_received":
       case "payment.created": {
         const payment = (payload.payment || payload.data || payload) as Record<string, unknown>;
-        await processPayment(adminClient, integration, payment);
+        await processPayment(adminClient, integration, payment, isSimulationMode);
         break;
       }
 
@@ -152,7 +186,7 @@ serve(async (req) => {
       case "refund_created":
       case "refund.created": {
         const refund = (payload.refund || payload.data || payload) as Record<string, unknown>;
-        await processRefund(adminClient, integration, refund);
+        await processRefund(adminClient, integration, refund, isSimulationMode);
         break;
       }
 
@@ -165,14 +199,14 @@ serve(async (req) => {
       location_id: integration.location_id,
       restaurant_id: integration.restaurant_id,
       pos_provider: "captiva",
-      event_type: `webhook_${eventType}`,
+      event_type: isSimulationMode ? `simulation_webhook_${eventType}` : `webhook_${eventType}`,
       status: "success",
-      message: `Processed webhook event: ${eventType}`,
-      details: { event_type: eventType, store_id: storeId },
+      message: `${isSimulationMode ? "[SIMULATION] " : ""}Processed webhook event: ${eventType}`,
+      details: { event_type: eventType, store_id: storeId, simulation: isSimulationMode },
     });
 
     return new Response(
-      JSON.stringify({ success: true, message: `Processed ${eventType} event` }),
+      JSON.stringify({ success: true, message: `Processed ${eventType} event`, simulation: isSimulationMode }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
@@ -195,13 +229,13 @@ serve(async (req) => {
 });
 
 // deno-lint-ignore no-explicit-any
-async function processOrder(adminClient: SupabaseClient<any>, integration: Integration, order: Record<string, unknown>) {
+async function processOrder(adminClient: SupabaseClient<any>, integration: Integration, order: Record<string, unknown>, isSimulation: boolean) {
   const orderId = (order.id || order.order_id || order.order_number || `webhook-${Date.now()}`) as string;
   const orderDate = (order.date || order.timestamp || order.created_at || new Date().toISOString()) as string;
   // deno-lint-ignore no-explicit-any
   const items: any[] = Array.isArray(order.items) ? order.items : (order.items ? [order.items] : []);
 
-  console.log(`Processing order ${orderId} with ${items.length} items`);
+  console.log(`Processing order ${orderId} with ${items.length} items (simulation: ${isSimulation})`);
 
   for (const item of items) {
     const externalId = (item.plu || item.sku || item.item_id || "") as string;
@@ -241,12 +275,12 @@ async function processOrder(adminClient: SupabaseClient<any>, integration: Integ
       const { data: newDish } = await adminClient
         .from("dishes")
         .insert({
-          name: `[Captiva] ${itemName}`,
+          name: isSimulation ? `[Simulated] ${itemName}` : `[Captiva] ${itemName}`,
           captiva_external_id: externalId,
           restaurant_id: integration.restaurant_id,
           location_id: integration.location_id,
           selling_price: price,
-          category: "Imported from POS",
+          category: isSimulation ? "Simulated from Webhook" : "Imported from POS",
         })
         .select("id")
         .single();
@@ -275,7 +309,7 @@ async function processOrder(adminClient: SupabaseClient<any>, integration: Integ
         restaurant_id: integration.restaurant_id,
         pos_provider: "captiva",
         external_sale_id: `${orderId}-${externalId}`,
-        data: { order_id: orderId, item, order_date: orderDate, source: "webhook" },
+        data: { order_id: orderId, item, order_date: orderDate, source: "webhook", simulation: isSimulation },
         mapped_dish_id: dishId,
         mapped_quantity: quantity,
         mapped_total_price: totalPrice,
@@ -296,32 +330,32 @@ async function processOrder(adminClient: SupabaseClient<any>, integration: Integ
 }
 
 // deno-lint-ignore no-explicit-any
-async function processPayment(adminClient: SupabaseClient<any>, integration: Integration, payment: Record<string, unknown>) {
-  console.log("Processing payment:", payment);
+async function processPayment(adminClient: SupabaseClient<any>, integration: Integration, payment: Record<string, unknown>, isSimulation: boolean) {
+  console.log(`Processing payment (simulation: ${isSimulation}):`, payment);
   
   await adminClient.from("pos_sync_logs").insert({
     location_id: integration.location_id,
     restaurant_id: integration.restaurant_id,
     pos_provider: "captiva",
-    event_type: "payment_received",
+    event_type: isSimulation ? "simulation_payment_received" : "payment_received",
     status: "success",
-    message: `Payment received: ${payment.amount || 'unknown amount'}`,
-    details: payment,
+    message: `${isSimulation ? "[SIMULATION] " : ""}Payment received: ${payment.amount || 'unknown amount'}`,
+    details: { ...payment, simulation: isSimulation },
   });
 }
 
 // deno-lint-ignore no-explicit-any
-async function processRefund(adminClient: SupabaseClient<any>, integration: Integration, refund: Record<string, unknown>) {
-  console.log("Processing refund:", refund);
+async function processRefund(adminClient: SupabaseClient<any>, integration: Integration, refund: Record<string, unknown>, isSimulation: boolean) {
+  console.log(`Processing refund (simulation: ${isSimulation}):`, refund);
   
   await adminClient.from("pos_sync_logs").insert({
     location_id: integration.location_id,
     restaurant_id: integration.restaurant_id,
     pos_provider: "captiva",
-    event_type: "refund_processed",
+    event_type: isSimulation ? "simulation_refund_processed" : "refund_processed",
     status: "success",
-    message: `Refund processed: ${refund.amount || 'unknown amount'}`,
-    details: refund,
+    message: `${isSimulation ? "[SIMULATION] " : ""}Refund processed: ${refund.amount || 'unknown amount'}`,
+    details: { ...refund, simulation: isSimulation },
   });
 
   // deno-lint-ignore no-explicit-any

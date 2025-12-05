@@ -6,6 +6,63 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============ SIMULATION DATA GENERATOR ============
+function generateSimulatedData() {
+  const now = new Date();
+  const baseDate = now.toISOString();
+  
+  return {
+    orders: [
+      {
+        id: `sim-${Date.now()}-1001`,
+        total: 45.80,
+        date: baseDate,
+        items: [
+          { plu: "burger-001", name: "Classic Burger", quantity: 2, price: 12.50, total: 25.00 },
+          { plu: "fries-001", name: "French Fries", quantity: 1, price: 3.30, total: 3.30 },
+          { plu: "cola-001", name: "Cola", quantity: 2, price: 2.60, total: 5.20 }
+        ],
+        operator_code: "SIM-OP-001"
+      },
+      {
+        id: `sim-${Date.now()}-1002`,
+        total: 32.90,
+        date: new Date(now.getTime() - 30 * 60000).toISOString(),
+        items: [
+          { plu: "pizza-001", name: "Margherita Pizza", quantity: 1, price: 15.90, total: 15.90 },
+          { plu: "salad-001", name: "Caesar Salad", quantity: 1, price: 8.50, total: 8.50 },
+          { plu: "water-001", name: "Sparkling Water", quantity: 2, price: 2.25, total: 4.50 }
+        ],
+        operator_code: "SIM-OP-002"
+      },
+      {
+        id: `sim-${Date.now()}-1003`,
+        total: 67.40,
+        date: new Date(now.getTime() - 60 * 60000).toISOString(),
+        items: [
+          { plu: "steak-001", name: "Grilled Steak", quantity: 2, price: 24.90, total: 49.80 },
+          { plu: "wine-001", name: "House Wine", quantity: 2, price: 6.80, total: 13.60 }
+        ],
+        operator_code: "SIM-OP-001"
+      }
+    ],
+    staff_events: [
+      {
+        operator_code: "SIM-OP-001",
+        name: "John Smith",
+        clock_in: new Date(now.getTime() - 4 * 3600000).toISOString(),
+        clock_out: null
+      },
+      {
+        operator_code: "SIM-OP-002",
+        name: "Jane Doe",
+        clock_in: new Date(now.getTime() - 3 * 3600000).toISOString(),
+        clock_out: null
+      }
+    ]
+  };
+}
+
 // XML to JSON converter for Captiva responses
 function parseXmlToJson(xml: string): Record<string, unknown> {
   xml = xml.replace(/<\?xml[^>]*\?>/g, '').trim();
@@ -90,20 +147,11 @@ interface CaptivaPayment {
   amount?: number | string;
 }
 
-interface CaptivaOperator {
-  operator_code?: string;
-  code?: string;
-  id?: string;
-  name?: string;
-  first_name?: string;
-  last_name?: string;
-  role?: string;
-}
-
 interface CaptivaAttendance {
   operator_code?: string;
   employee_id?: string;
   staff_id?: string;
+  name?: string;
   clock_in?: string;
   clock_out?: string;
   date?: string;
@@ -151,7 +199,11 @@ serve(async (req) => {
       );
     }
 
-    const { integration_id, location_id, test_mode } = await req.json();
+    const { integration_id, location_id, test_mode, simulate } = await req.json();
+
+    // Check global simulation mode or per-request simulate flag
+    const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
+    const isSimulationMode = simulate === true || globalSimulateMode;
 
     // Get the Captiva integration
     const { data: integration, error: intError } = await supabase
@@ -178,48 +230,78 @@ serve(async (req) => {
     const apiSecret = typedIntegration.api_secret;
     const isTestMode = test_mode === true || settings.test_mode === "true";
 
-    if (!baseUrl || !apiKey || !apiSecret) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing Captiva credentials in integration settings" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    console.log(`Starting Captiva sync for location ${typedIntegration.location_id}, simulation_mode: ${isSimulationMode}, test_mode: ${isTestMode}`);
+
+    let orders: CaptivaOrder[] = [];
+    let attendanceRecords: CaptivaAttendance[] = [];
+
+    // ============ SIMULATION MODE ============
+    if (isSimulationMode) {
+      console.log("🎮 SIMULATION MODE ACTIVE - Using simulated Captiva data");
+      const simulatedData = generateSimulatedData();
+      orders = simulatedData.orders as unknown as CaptivaOrder[];
+      attendanceRecords = simulatedData.staff_events as unknown as CaptivaAttendance[];
+    } else {
+      // ============ REAL API MODE ============
+      if (!baseUrl || !apiKey || !apiSecret) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing Captiva credentials in integration settings" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const authString = btoa(`${apiKey}:${apiSecret}`);
+      const lastSync = settings.last_sync_time ? new Date(settings.last_sync_time) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const fromDate = lastSync.toISOString();
+      const toDate = new Date().toISOString();
+
+      // Helper to make Captiva API requests
+      const captivaFetch = async (endpoint: string) => {
+        const url = storeId
+          ? `${baseUrl.replace(/\/$/, '')}/api/v1/stores/${storeId}${endpoint}`
+          : `${baseUrl.replace(/\/$/, '')}/api/v1${endpoint}`;
+        
+        console.log(`Fetching: ${url}`);
+        const response = await fetch(url, {
+          headers: {
+            "Authorization": `Basic ${authString}`,
+            "Accept": "application/json, application/xml",
+          },
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Captiva API error ${response.status}: ${errorText.substring(0, 200)}`);
+        }
+        
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("xml")) {
+          const xmlText = await response.text();
+          return parseXmlToJson(xmlText);
+        }
+        return await response.json();
+      };
+
+      // Fetch attendance (skip in test mode)
+      if (!isTestMode) {
+        try {
+          const attendanceData = await captivaFetch(`/attendance?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
+          attendanceRecords = Array.isArray(attendanceData.attendance)
+            ? attendanceData.attendance
+            : (attendanceData.attendance ? [attendanceData.attendance] : []);
+        } catch (attError) {
+          console.log("Attendance fetch skipped or failed:", attError instanceof Error ? attError.message : "Unknown error");
+        }
+      }
+
+      // Fetch orders
+      const ordersData = await captivaFetch(`/orders?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
+      orders = Array.isArray(ordersData.orders) 
+        ? ordersData.orders
+        : (ordersData.order ? [ordersData.order] : []);
     }
 
-    console.log(`Starting Captiva sync for location ${typedIntegration.location_id}, store ${storeId || 'default'}, test_mode: ${isTestMode}`);
-
-    const authString = btoa(`${apiKey}:${apiSecret}`);
-    const lastSync = settings.last_sync_time ? new Date(settings.last_sync_time) : new Date(Date.now() - 24 * 60 * 60 * 1000);
     const now = new Date();
-    const fromDate = lastSync.toISOString();
-    const toDate = now.toISOString();
-
-    // Helper to make Captiva API requests
-    const captivaFetch = async (endpoint: string) => {
-      const url = storeId
-        ? `${baseUrl.replace(/\/$/, '')}/api/v1/stores/${storeId}${endpoint}`
-        : `${baseUrl.replace(/\/$/, '')}/api/v1${endpoint}`;
-      
-      console.log(`Fetching: ${url}`);
-      const response = await fetch(url, {
-        headers: {
-          "Authorization": `Basic ${authString}`,
-          "Accept": "application/json, application/xml",
-        },
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Captiva API error ${response.status}: ${errorText.substring(0, 200)}`);
-      }
-      
-      const contentType = response.headers.get("content-type") || "";
-      if (contentType.includes("xml")) {
-        const xmlText = await response.text();
-        return parseXmlToJson(xmlText);
-      }
-      return await response.json();
-    };
-
     let salesCreated = 0;
     let dishesCreated = 0;
     let mappingsCreated = 0;
@@ -240,56 +322,39 @@ serve(async (req) => {
       }
     });
 
-    // Fetch and process attendance (skip in test mode)
+    // Process attendance records
     if (!isTestMode) {
-      try {
-        const attendanceData = await captivaFetch(`/attendance?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
-        const attendanceRecords: CaptivaAttendance[] = Array.isArray(attendanceData.attendance)
-          ? attendanceData.attendance
-          : (attendanceData.attendance ? [attendanceData.attendance] : []);
+      console.log(`Processing ${attendanceRecords.length} attendance records`);
 
-        console.log(`Processing ${attendanceRecords.length} attendance records`);
+      for (const record of attendanceRecords) {
+        const operatorCode = record.operator_code || record.employee_id || record.staff_id;
+        if (!operatorCode) continue;
 
-        for (const record of attendanceRecords) {
-          const operatorCode = record.operator_code || record.employee_id || record.staff_id;
-          if (!operatorCode) continue;
-
-          const staffMatch = staffByOperatorCode[operatorCode];
-          if (!staffMatch) {
-            if (!unmappedStaff.includes(operatorCode)) {
-              unmappedStaff.push(operatorCode);
-              console.log(`Unmapped staff: operator_code ${operatorCode}`);
-            }
-            continue;
+        const staffMatch = staffByOperatorCode[operatorCode];
+        if (!staffMatch) {
+          if (!unmappedStaff.includes(operatorCode)) {
+            unmappedStaff.push(operatorCode);
+            console.log(`Unmapped staff: operator_code ${operatorCode}`);
           }
-
-          if (record.clock_in) {
-            const { error: attError } = await adminClient.from("staff_attendance").upsert({
-              staff_id: staffMatch.id,
-              location_id: staffMatch.location_id || typedIntegration.location_id,
-              restaurant_id: typedIntegration.restaurant_id,
-              clock_in: record.clock_in,
-              clock_out: record.clock_out || null,
-              source: "pos",
-            }, {
-              onConflict: "staff_id,clock_in",
-            });
-
-            if (!attError) attendanceCreated++;
-          }
+          continue;
         }
-      } catch (attError) {
-        console.log("Attendance fetch skipped or failed:", attError instanceof Error ? attError.message : "Unknown error");
-      }
-    } else {
-      console.log("Test mode: Skipping attendance sync");
-    }
 
-    // Fetch orders
-    const ordersData = await captivaFetch(`/orders?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
-    const orders: CaptivaOrder[] = Array.isArray(ordersData.orders) 
-      ? ordersData.orders
-      : (ordersData.order ? [ordersData.order] : []);
+        if (record.clock_in) {
+          const { error: attError } = await adminClient.from("staff_attendance").upsert({
+            staff_id: staffMatch.id,
+            location_id: staffMatch.location_id || typedIntegration.location_id,
+            restaurant_id: typedIntegration.restaurant_id,
+            clock_in: record.clock_in,
+            clock_out: record.clock_out || null,
+            source: "pos",
+          }, {
+            onConflict: "staff_id,clock_in",
+          });
+
+          if (!attError) attendanceCreated++;
+        }
+      }
+    }
 
     console.log(`Processing ${orders.length} orders`);
 
@@ -340,17 +405,17 @@ serve(async (req) => {
           }
         }
 
-        // Create placeholder dish if not found (skip in test mode)
+        // Create placeholder dish if not found (skip in test mode, allow in simulation)
         if (!dishId && !isTestMode) {
           const { data: newDish, error: dishError } = await adminClient
             .from("dishes")
             .insert({
-              name: `[Captiva] ${itemName}`,
+              name: isSimulationMode ? `[Simulated] ${itemName}` : `[Captiva] ${itemName}`,
               captiva_external_id: externalId,
               restaurant_id: typedIntegration.restaurant_id,
               location_id: typedIntegration.location_id,
               selling_price: price,
-              category: "Imported from POS",
+              category: isSimulationMode ? "Simulated from POS" : "Imported from POS",
             })
             .select("id")
             .single();
@@ -384,7 +449,13 @@ serve(async (req) => {
             restaurant_id: typedIntegration.restaurant_id,
             pos_provider: "captiva",
             external_sale_id: `${orderId}-${externalId}`,
-            data: { order_id: orderId, item, order_date: orderDate, operator_code: orderOperatorCode },
+            data: { 
+              order_id: orderId, 
+              item, 
+              order_date: orderDate, 
+              operator_code: orderOperatorCode,
+              simulation: isSimulationMode 
+            },
             mapped_dish_id: dishId,
             mapped_quantity: quantity,
             mapped_total_price: totalPrice,
@@ -408,7 +479,11 @@ serve(async (req) => {
 
     // Update last sync time (unless test mode)
     if (!isTestMode) {
-      const newSettings = { ...settings, last_sync_time: now.toISOString() };
+      const newSettings = { 
+        ...settings, 
+        last_sync_time: now.toISOString(),
+        last_sync_mode: isSimulationMode ? "simulation" : "live"
+      };
       await adminClient
         .from("pos_integrations")
         .update({ 
@@ -423,9 +498,9 @@ serve(async (req) => {
       location_id: typedIntegration.location_id,
       restaurant_id: typedIntegration.restaurant_id,
       pos_provider: "captiva",
-      event_type: isTestMode ? "test_sync" : "sync_completed",
+      event_type: isSimulationMode ? "simulation_sync" : (isTestMode ? "test_sync" : "sync_completed"),
       status: "success",
-      message: `Synced ${orders.length} orders, created ${salesCreated} sales, ${dishesCreated} new dishes, ${attendanceCreated} attendance records`,
+      message: `${isSimulationMode ? "[SIMULATION] " : ""}Synced ${orders.length} orders, created ${salesCreated} sales, ${dishesCreated} new dishes, ${attendanceCreated} attendance records`,
       details: { 
         orders_count: orders.length, 
         sales_created: salesCreated, 
@@ -434,10 +509,11 @@ serve(async (req) => {
         attendance_created: attendanceCreated,
         unmapped_staff: unmappedStaff,
         test_mode: isTestMode,
+        simulation_mode: isSimulationMode,
       },
     });
 
-    console.log(`Captiva sync completed: ${orders.length} orders, ${salesCreated} sales, ${dishesCreated} dishes, ${attendanceCreated} attendance`);
+    console.log(`Captiva sync completed: ${orders.length} orders, ${salesCreated} sales, ${dishesCreated} dishes, ${attendanceCreated} attendance, simulation: ${isSimulationMode}`);
     if (unmappedStaff.length > 0) {
       console.log(`Unmapped staff operator codes: ${unmappedStaff.join(', ')}`);
     }
@@ -445,7 +521,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: isTestMode ? "Test sync completed (no data written)" : "Captiva sync completed",
+        message: isSimulationMode 
+          ? "Simulation sync completed - fake data inserted" 
+          : (isTestMode ? "Test sync completed (no data written)" : "Captiva sync completed"),
         data: {
           orders_processed: orders.length,
           sales_created: isTestMode ? 0 : salesCreated,
@@ -455,6 +533,7 @@ serve(async (req) => {
           unmapped_staff: unmappedStaff,
           last_sync: isTestMode ? settings.last_sync_time : now.toISOString(),
           test_mode: isTestMode,
+          simulation_mode: isSimulationMode,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
