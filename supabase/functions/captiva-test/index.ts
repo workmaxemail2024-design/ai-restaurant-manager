@@ -6,6 +6,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ============ SIMULATION RESPONSE ============
+function simulateCaptivaTestResponse() {
+  return {
+    success: true,
+    message: "[SIMULATION] Captiva connection test successful",
+    provider: "captiva",
+    simulation: true,
+    data: {
+      status: "connected",
+      store_name: "Simulated Store",
+      api_version: "v1.0-simulated",
+      capabilities: ["orders", "attendance", "inventory"],
+      last_heartbeat: new Date().toISOString()
+    }
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -35,8 +52,22 @@ serve(async (req) => {
       );
     }
 
-    const { base_url, api_key, api_secret, store_id } = await req.json();
+    const { base_url, api_key, api_secret, store_id, simulate } = await req.json();
 
+    // Check global simulation mode or per-request simulate flag
+    const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
+    const isSimulationMode = simulate === true || globalSimulateMode;
+
+    // ============ SIMULATION MODE ============
+    if (isSimulationMode) {
+      console.log("🎮 SIMULATION MODE - Returning simulated Captiva test response");
+      return new Response(
+        JSON.stringify(simulateCaptivaTestResponse()),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ============ REAL API MODE ============
     if (!base_url || !api_key || !api_secret) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing required credentials (base_url, api_key, api_secret)" }),
@@ -92,6 +123,7 @@ serve(async (req) => {
             message: "Captiva connection successful",
             provider: "captiva",
             store_id: store_id || "default",
+            simulation: false,
             data: responseData,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
