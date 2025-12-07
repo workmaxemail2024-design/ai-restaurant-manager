@@ -144,7 +144,7 @@ export default function AIInsightsPage() {
               description="Pricing optimization opportunities"
               icon={DollarSign}
               type="warning"
-              items={menuInsights?.insights?.filter((i: string) => i.toLowerCase().includes('price') || i.toLowerCase().includes('margin'))}
+              items={Array.isArray(menuInsights?.insights) ? menuInsights.insights.filter((i: string) => i.toLowerCase().includes('price') || i.toLowerCase().includes('margin')) : undefined}
               isLoading={menuInsightsLoading}
               error={menuInsights?.error}
               lastUpdated={menuInsightsUpdated}
@@ -155,7 +155,7 @@ export default function AIInsightsPage() {
               description="Your most profitable dishes"
               icon={Target}
               type="success"
-              items={costAnalysis?.recommendations?.filter((r: string) => r.toLowerCase().includes('profit') || r.toLowerCase().includes('winner') || r.toLowerCase().includes('margin'))}
+              items={Array.isArray(costAnalysis?.recommendations) ? costAnalysis.recommendations.filter((r: string) => r.toLowerCase().includes('profit') || r.toLowerCase().includes('winner') || r.toLowerCase().includes('margin')) : undefined}
               isLoading={costAnalysisLoading}
               error={costAnalysis?.error}
               lastUpdated={costAnalysisUpdated}
@@ -166,7 +166,7 @@ export default function AIInsightsPage() {
               description="Areas where you're losing money"
               icon={AlertTriangle}
               type="error"
-              items={costAnalysis?.insights?.filter((i: string) => i.toLowerCase().includes('cost') || i.toLowerCase().includes('loss') || i.toLowerCase().includes('high'))}
+              items={Array.isArray(costAnalysis?.insights) ? costAnalysis.insights.filter((i: string) => i.toLowerCase().includes('cost') || i.toLowerCase().includes('loss') || i.toLowerCase().includes('high')) : undefined}
               isLoading={costAnalysisLoading}
               error={costAnalysis?.error}
               lastUpdated={costAnalysisUpdated}
