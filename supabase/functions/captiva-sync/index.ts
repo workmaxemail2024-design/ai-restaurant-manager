@@ -133,21 +133,37 @@ serve(async (req) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     // Read incoming request
-    const { integration_id, location_id, test_mode, simulate } = await req.json();
+    const { integration_id, location_id, restaurant_id, test_mode, simulate } = await req.json();
 
-    console.log("Incoming body:", { integration_id, location_id, test_mode, simulate });
+    console.log("Incoming body:", { integration_id, location_id, restaurant_id, test_mode, simulate });
 
     // Global simulate mode
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
     const isSimulationMode = simulate === true || globalSimulateMode;
 
     // ALWAYS use service role client for integration lookup (bypasses RLS)
-    const { data: integrationRows, error: integrationError } = await adminClient
+    // Support both integration_id and location_id lookup
+    let integrationQuery = adminClient
       .from("pos_integrations")
       .select("*")
       .eq("pos_provider", "captiva")
-      .eq("location_id", location_id)
       .eq("status", "active");
+
+    if (integration_id) {
+      integrationQuery = integrationQuery.eq("id", integration_id);
+    } else if (location_id) {
+      integrationQuery = integrationQuery.eq("location_id", location_id);
+    } else {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "Either integration_id or location_id is required",
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: integrationRows, error: integrationError } = await integrationQuery;
 
     console.log("DEBUG — integration rows:", JSON.stringify(integrationRows, null, 2), integrationError?.message);
 
@@ -155,6 +171,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         success: false, 
         error: "No active Captiva integration found",
+        debug_integration_id: integration_id,
         debug_location_id: location_id,
         debug_rows: integrationRows,
         query_error: integrationError?.message

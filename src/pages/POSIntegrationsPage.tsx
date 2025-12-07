@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
-  useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping } from "@/hooks/usePOS";
+  useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, POSIntegration } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
 import { useDishes } from "@/hooks/useDishes";
 import { format } from "date-fns";
@@ -81,16 +81,26 @@ export default function POSIntegrationsPage() {
     }
   }, [integrations]);
 
-  const handleCaptivaSync = useCallback(async (integrationId: string, simulate: boolean = false) => {
-    setSyncingIntegrationId(integrationId);
+  const handleCaptivaSync = useCallback(async (integration: POSIntegration, forceSimulate: boolean = false) => {
+    setSyncingIntegrationId(integration.id);
     try {
+      // Check if simulation mode is enabled in integration settings
+      const settings = (integration.settings || {}) as Record<string, unknown>;
+      const integrationSimulate = settings.simulate === true || settings.simulate === "true";
+      const shouldSimulate = forceSimulate || integrationSimulate;
+
       const { data, error } = await supabase.functions.invoke("captiva-sync", {
-        body: { integration_id: integrationId, simulate },
+        body: { 
+          integration_id: integration.id,
+          location_id: integration.location_id,
+          restaurant_id: (integration as any).restaurant_id,
+          simulate: shouldSimulate,
+        },
       });
       if (error) throw error;
       if (data?.success) {
         toast({ 
-          title: simulate ? "Simulation Complete" : "Sync Complete", 
+          title: shouldSimulate ? "Simulation sync completed" : "Sync Complete", 
           description: data.message || "Captiva sync completed successfully" 
         });
         refetchIntegrations();
@@ -115,14 +125,19 @@ export default function POSIntegrationsPage() {
     setSimulationRunning(true);
     try {
       const { data, error } = await supabase.functions.invoke("captiva-sync", {
-        body: { integration_id: captivaIntegration.id, simulate: true },
+        body: { 
+          integration_id: captivaIntegration.id,
+          location_id: captivaIntegration.location_id,
+          restaurant_id: (captivaIntegration as any).restaurant_id,
+          simulate: true,
+        },
       });
       if (error) throw error;
       
       if (data?.success) {
         toast({ 
-          title: "🎮 Simulation Test Complete", 
-          description: `Created ${data.data?.sales_created || 0} sales, ${data.data?.dishes_created || 0} dishes, ${data.data?.attendance_created || 0} attendance records` 
+          title: "Simulation sync completed", 
+          description: data.message || `Simulation completed with ${data.data?.orders_processed || 0} orders` 
         });
         refetchIntegrations();
         refetchLogs();
@@ -413,8 +428,8 @@ export default function POSIntegrationsPage() {
                               <Button 
                                 size="sm" 
                                 variant="outline" 
-                                onClick={() => handleCaptivaSync(integration.id, false)}
-                                disabled={!integration.api_key || syncingIntegrationId === integration.id}
+                                onClick={() => handleCaptivaSync(integration, false)}
+                                disabled={syncingIntegrationId === integration.id}
                               >
                                 <RefreshCw className={`h-4 w-4 mr-1 ${syncingIntegrationId === integration.id ? "animate-spin" : ""}`} />
                                 {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
@@ -422,7 +437,7 @@ export default function POSIntegrationsPage() {
                               <Button 
                                 size="sm" 
                                 variant="secondary"
-                                onClick={() => handleCaptivaSync(integration.id, true)}
+                                onClick={() => handleCaptivaSync(integration, true)}
                                 disabled={syncingIntegrationId === integration.id}
                                 className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300"
                               >

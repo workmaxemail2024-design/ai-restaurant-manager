@@ -5,13 +5,14 @@ import { toast } from "@/hooks/use-toast";
 export interface POSIntegration {
   id: string;
   location_id: string;
+  restaurant_id: string | null;
   pos_provider: string;
   api_key: string | null;
   api_secret: string | null;
   webhook_url: string | null;
   status: string;
   last_sync_time: string | null;
-  settings: Record<string, unknown>;
+  settings: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
   locations?: { name: string };
