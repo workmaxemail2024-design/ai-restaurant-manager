@@ -145,19 +145,19 @@ serve(async (req) => {
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
     const isSimulationMode = simulate === true || globalSimulateMode;
 
-    // Debug: fetch all pos_integrations to see what's in the database
-    const { data: debugRows, error: debugError } = await supabase
+    // Debug: fetch all pos_integrations using adminClient to bypass RLS
+    const { data: debugRows, error: debugError } = await adminClient
       .from("pos_integrations")
       .select("id, pos_provider, location_id, status, settings, restaurant_id");
 
     console.log("All pos_integrations rows:", JSON.stringify(debugRows, null, 2), debugError?.message);
 
-    // Load integration record - always lookup by location_id when integration_id is not provided
+    // Load integration record using adminClient to bypass RLS
     let integration = null;
     let intError = null;
 
     if (integration_id) {
-      const result = await supabase
+      const result = await adminClient
         .from("pos_integrations")
         .select("*")
         .eq("id", integration_id)
@@ -167,7 +167,7 @@ serve(async (req) => {
       integration = result.data;
       intError = result.error;
     } else if (location_id) {
-      const result = await supabase
+      const result = await adminClient
         .from("pos_integrations")
         .select("*")
         .eq("pos_provider", "captiva")
