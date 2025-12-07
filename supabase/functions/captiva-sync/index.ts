@@ -126,15 +126,11 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // ❌ REMOVED ALL AUTH REQUIREMENTS
-    // --------------------------------------------------------
+    // Service role client only - bypasses RLS
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
 
-    const supabase = createClient(supabaseUrl, anonKey);
-    // @ts-ignore
-    const adminClient: SupabaseClient<any> = createClient(supabaseUrl, serviceRoleKey);
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     // Read incoming request
     const { integration_id, location_id, test_mode, simulate } = await req.json();
@@ -145,57 +141,33 @@ serve(async (req) => {
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
     const isSimulationMode = simulate === true || globalSimulateMode;
 
-    // Debug: fetch all pos_integrations using adminClient to bypass RLS
-    const { data: debugRows, error: debugError } = await adminClient
+    // ALWAYS use service role client for integration lookup (bypasses RLS)
+    const { data: integrationRows, error: integrationError } = await adminClient
       .from("pos_integrations")
-      .select("id, pos_provider, location_id, status, settings, restaurant_id");
+      .select("*")
+      .eq("pos_provider", "captiva")
+      .eq("location_id", location_id)
+      .eq("status", "active");
 
-    console.log("All pos_integrations rows:", JSON.stringify(debugRows, null, 2), debugError?.message);
+    console.log("DEBUG — integration rows:", JSON.stringify(integrationRows, null, 2), integrationError?.message);
 
-    // Load integration record using adminClient to bypass RLS
-    let integration = null;
-    let intError = null;
-
-    if (integration_id) {
-      const result = await adminClient
-        .from("pos_integrations")
-        .select("*")
-        .eq("id", integration_id)
-        .eq("pos_provider", "captiva")
-        .eq("status", "active")
-        .maybeSingle();
-      integration = result.data;
-      intError = result.error;
-    } else if (location_id) {
-      const result = await adminClient
-        .from("pos_integrations")
-        .select("*")
-        .eq("pos_provider", "captiva")
-        .eq("location_id", location_id)
-        .eq("status", "active")
-        .maybeSingle();
-      integration = result.data;
-      intError = result.error;
-    }
-
-    console.log("Integration lookup result:", JSON.stringify(integration, null, 2), intError?.message);
-
-    if (!integration) {
+    if (!integrationRows || integrationRows.length === 0) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: "No matching Captiva integration found",
-        received_location_id: location_id,
-        received_integration_id: integration_id,
-        rows_in_db: debugRows,
-        query_error: intError?.message
+        error: "No active Captiva integration found",
+        debug_location_id: location_id,
+        debug_rows: integrationRows,
+        query_error: integrationError?.message
       }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
+    const integration = integrationRows[0];
+
     const typedIntegration = integration as Integration;
-    const settings = typedIntegration.settings || {};
+    const settings = (typedIntegration.settings || {}) as Record<string, string>;
     const isTestMode = test_mode === true || settings.test_mode === "true";
 
     let orders: CaptivaOrder[] = [];
