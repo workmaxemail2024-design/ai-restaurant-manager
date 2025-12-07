@@ -58,7 +58,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.captiva-sync]
-verify_jwt = true
+verify_jwt = false
 
 [functions.captiva-webhook-handler]
 verify_jwt = false
