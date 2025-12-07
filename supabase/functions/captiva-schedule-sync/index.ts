@@ -12,16 +12,25 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
+  
+  if (!serviceRoleKey) {
+    console.error("No service role key found");
+    return new Response(
+      JSON.stringify({ success: false, error: "Server configuration error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
   // Check global simulation mode
   const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
 
   try {
-    console.log(`Starting scheduled Captiva sync for all restaurants (simulation_mode: ${globalSimulateMode})`);
+    console.log(`=== SCHEDULED CAPTIVA SYNC START (simulation_mode: ${globalSimulateMode}) ===`);
 
-    // Get all active Captiva integrations
+    // Get all active Captiva integrations using admin client
     const { data: integrations, error: intError } = await adminClient
       .from("pos_integrations")
       .select("id, location_id, restaurant_id, settings")
@@ -46,13 +55,29 @@ serve(async (req) => {
 
     console.log(`Found ${integrations.length} active Captiva integrations`);
 
-    const results: Array<{ integration_id: string; success: boolean; message: string; simulation: boolean }> = [];
+    const results: Array<{ 
+      integration_id: string; 
+      success: boolean; 
+      message: string; 
+      simulation: boolean;
+      stats?: {
+        orders_processed: number;
+        sales_created: number;
+        dishes_created: number;
+        attendance_created: number;
+      };
+    }> = [];
 
     for (const integration of integrations) {
       try {
-        console.log(`Syncing integration ${integration.id} for location ${integration.location_id} (simulation: ${globalSimulateMode})`);
+        // Check if this integration has simulation mode enabled in settings
+        const settings = (integration.settings || {}) as Record<string, unknown>;
+        const integrationSimulate = settings.simulate === true || settings.simulate === "true";
+        const shouldSimulate = globalSimulateMode || integrationSimulate;
 
-        // Call the captiva-sync function internally, passing simulation flag
+        console.log(`Syncing integration ${integration.id} for location ${integration.location_id} (simulation: ${shouldSimulate})`);
+
+        // Call the captiva-sync function using fetch
         const syncResponse = await fetch(`${supabaseUrl}/functions/v1/captiva-sync`, {
           method: "POST",
           headers: {
@@ -61,7 +86,9 @@ serve(async (req) => {
           },
           body: JSON.stringify({ 
             integration_id: integration.id,
-            simulate: globalSimulateMode 
+            location_id: integration.location_id,
+            restaurant_id: integration.restaurant_id,
+            simulate: shouldSimulate,
           }),
         });
 
@@ -71,16 +98,20 @@ serve(async (req) => {
           integration_id: integration.id,
           success: syncResult.success,
           message: syncResult.message || syncResult.error || "Unknown result",
-          simulation: globalSimulateMode,
+          simulation: shouldSimulate,
+          stats: syncResult.data,
         });
 
         if (syncResult.success) {
-          console.log(`Successfully synced integration ${integration.id} (simulation: ${globalSimulateMode})`);
+          console.log(`✅ Successfully synced integration ${integration.id}`);
+          if (syncResult.data) {
+            console.log(`   Stats: ${syncResult.data.sales_created} sales, ${syncResult.data.dishes_created} dishes, ${syncResult.data.attendance_created} attendance`);
+          }
         } else {
-          console.error(`Failed to sync integration ${integration.id}:`, syncResult.error);
+          console.error(`❌ Failed to sync integration ${integration.id}:`, syncResult.error);
         }
       } catch (syncError) {
-        console.error(`Error syncing integration ${integration.id}:`, syncError);
+        console.error(`❌ Error syncing integration ${integration.id}:`, syncError);
         results.push({
           integration_id: integration.id,
           success: false,
@@ -93,7 +124,19 @@ serve(async (req) => {
     const successCount = results.filter(r => r.success).length;
     const failCount = results.filter(r => !r.success).length;
 
-    console.log(`Scheduled sync completed: ${successCount} succeeded, ${failCount} failed (simulation: ${globalSimulateMode})`);
+    // Calculate totals
+    const totalStats = results.reduce((acc, r) => {
+      if (r.stats) {
+        acc.sales += r.stats.sales_created;
+        acc.dishes += r.stats.dishes_created;
+        acc.attendance += r.stats.attendance_created;
+      }
+      return acc;
+    }, { sales: 0, dishes: 0, attendance: 0 });
+
+    console.log(`=== SCHEDULED SYNC COMPLETE ===`);
+    console.log(`Results: ${successCount} succeeded, ${failCount} failed`);
+    console.log(`Totals: ${totalStats.sales} sales, ${totalStats.dishes} dishes, ${totalStats.attendance} attendance`);
 
     // Log the batch sync completion
     const { error: logError } = await adminClient.from("pos_sync_logs").insert({
@@ -102,8 +145,15 @@ serve(async (req) => {
       pos_provider: "captiva",
       event_type: globalSimulateMode ? "simulation_scheduled_batch_sync" : "scheduled_batch_sync",
       status: failCount === 0 ? "success" : "partial",
-      message: `${globalSimulateMode ? "[SIMULATION] " : ""}Batch sync: ${successCount}/${integrations.length} succeeded`,
-      details: { results, total: integrations.length, success: successCount, failed: failCount, simulation: globalSimulateMode },
+      message: `${globalSimulateMode ? "[SIMULATION] " : ""}Batch sync: ${successCount}/${integrations.length} succeeded. Total: ${totalStats.sales} sales, ${totalStats.dishes} dishes, ${totalStats.attendance} attendance`,
+      details: { 
+        results, 
+        total: integrations.length, 
+        success: successCount, 
+        failed: failCount, 
+        simulation: globalSimulateMode,
+        totals: totalStats,
+      },
     });
     
     if (logError) console.error("Error logging sync:", logError);
@@ -113,6 +163,7 @@ serve(async (req) => {
         success: true,
         message: `${globalSimulateMode ? "[SIMULATION] " : ""}Scheduled sync completed: ${successCount}/${integrations.length} integrations synced`,
         results,
+        totals: totalStats,
         simulation_mode: globalSimulateMode,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
