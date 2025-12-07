@@ -10,6 +10,7 @@ export interface Dish {
   selling_price: number;
   created_at: string;
   updated_at: string;
+  captiva_external_id: string | null;
   locations?: { name: string } | null;
   dish_cost?: number;
   profit_margin?: number;
