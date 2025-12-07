@@ -143,18 +143,31 @@ serve(async (req) => {
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
     const isSimulationMode = simulate === true || globalSimulateMode;
 
-    // Load integration record
-    const { data: integration } = await supabase
+    // Load integration record - build query based on provided parameters
+    let query = supabase
       .from("pos_integrations")
       .select("*")
       .eq("pos_provider", "captiva")
-      .eq(integration_id ? "id" : "location_id", integration_id || location_id)
-      .single();
+      .eq("status", "active");
+    
+    if (integration_id) {
+      query = query.eq("id", integration_id);
+    } else if (location_id) {
+      query = query.eq("location_id", location_id);
+    }
+    
+    const { data: integration, error: integrationError } = await query.maybeSingle();
+
+    console.log("Integration lookup:", { integration_id, location_id, found: !!integration, error: integrationError?.message });
 
     if (!integration) {
-      return new Response(JSON.stringify({ success: false, error: "No active Captiva integration found." }), {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "No active Captiva integration found.",
+        details: { integration_id, location_id, queryError: integrationError?.message }
+      }), {
         status: 404,
-        headers: corsHeaders,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -188,6 +201,11 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: corsHeaders });
+    const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+    console.error("Captiva sync error:", errorMessage);
+    return new Response(JSON.stringify({ success: false, error: errorMessage }), { 
+      status: 500, 
+      headers: { ...corsHeaders, "Content-Type": "application/json" } 
+    });
   }
 });
