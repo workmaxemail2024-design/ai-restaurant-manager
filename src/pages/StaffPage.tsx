@@ -6,9 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Plus, Link2, AlertCircle } from "lucide-react";
 import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInsert, StaffRole, StaffStatus } from "@/hooks/useStaff";
 import { useLocations } from "@/hooks/useLocations";
+import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -18,10 +21,12 @@ const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
 export default function StaffPage() {
   const { data: staff = [], isLoading } = useStaff();
   const { data: locations = [] } = useLocations();
+  const { data: posMappings = [] } = usePOSMappings(undefined, "captiva");
   const { hasPermission } = usePermissions();
   const createStaff = useCreateStaff();
   const updateStaff = useUpdateStaff();
   const deleteStaff = useDeleteStaff();
+  const updateMapping = useUpdatePOSMapping();
 
   const canEditPOSMapping = hasPermission("staff", "admin") || hasPermission("pos", "admin");
 
@@ -38,6 +43,10 @@ export default function StaffPage() {
     phone: null,
     captiva_operator_code: null,
   });
+
+  // Get unmapped staff from POS
+  const staffMappings = posMappings.filter(m => m.mapping_type === "staff");
+  const unmappedStaffMappings = staffMappings.filter(m => !m.is_verified);
 
   const resetForm = () => {
     setForm({ first_name: "", last_name: "", role: "waiter", hourly_rate: 0, status: "active", location_id: null, email: null, phone: null, captiva_operator_code: null });
@@ -71,6 +80,10 @@ export default function StaffPage() {
     setOpen(true);
   };
 
+  const handleMapStaff = (mappingId: string, staffId: string) => {
+    updateMapping.mutate({ id: mappingId, internal_id: staffId, is_verified: true });
+  };
+
   const columns = [
     { key: "first_name", header: "First Name" },
     { key: "last_name", header: "Last Name" },
@@ -92,6 +105,21 @@ export default function StaffPage() {
     },
     { key: "hourly_rate", header: "Hourly Rate", render: (item: Staff) => `$${item.hourly_rate.toFixed(2)}` },
     { key: "location", header: "Location", render: (item: Staff) => item.locations?.name || "-" },
+    {
+      key: "pos_mapping",
+      header: "POS Mapping",
+      render: (item: Staff) => (
+        item.captiva_operator_code ? (
+          <Badge variant="default" className="bg-green-500/20 text-green-700">
+            <Link2 className="h-3 w-3 mr-1" />{item.captiva_operator_code}
+          </Badge>
+        ) : (
+          <Badge variant="secondary" className="text-amber-600">
+            <AlertCircle className="h-3 w-3 mr-1" />Unmapped
+          </Badge>
+        )
+      )
+    },
   ];
 
   return (
@@ -181,13 +209,80 @@ export default function StaffPage() {
         </Dialog>
       }
     >
-      <DataTable
-        data={staff}
-        columns={columns}
-        isLoading={isLoading}
-        onEdit={handleEdit}
-        onDelete={(item) => deleteStaff.mutate(item.id)}
-      />
+      <Tabs defaultValue="staff" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="staff">Staff List</TabsTrigger>
+          <TabsTrigger value="mapping" className="relative">
+            POS Mapping
+            {unmappedStaffMappings.length > 0 && (
+              <Badge variant="destructive" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                {unmappedStaffMappings.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="staff">
+          <DataTable
+            data={staff}
+            columns={columns}
+            isLoading={isLoading}
+            onEdit={handleEdit}
+            onDelete={(item) => deleteStaff.mutate(item.id)}
+          />
+        </TabsContent>
+
+        <TabsContent value="mapping">
+          <Card>
+            <CardHeader>
+              <CardTitle>Staff POS Mapping</CardTitle>
+              <CardDescription>Map Captiva operator codes to your staff members</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {staffMappings.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">
+                  No staff imported from POS yet. Run a sync first.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {staffMappings.map(mapping => (
+                    <div key={mapping.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <p className="font-medium">{mapping.external_name || mapping.external_id}</p>
+                        <p className="text-sm text-muted-foreground">Code: {mapping.external_id}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {mapping.is_verified ? (
+                          <Badge variant="default" className="bg-green-500">Mapped</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-amber-600">
+                            <AlertCircle className="h-3 w-3 mr-1" />Unmapped
+                          </Badge>
+                        )}
+                        <Select 
+                          value={mapping.internal_id || ""} 
+                          onValueChange={v => handleMapStaff(mapping.id, v)}
+                        >
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="Select staff member" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {staff.map(s => (
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.first_name} {s.last_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </PageLayout>
   );
 }

@@ -43,19 +43,87 @@ interface SyncStats {
   dishes_created: number;
   attendance_created: number;
   simulation_mode: boolean;
+  skipped_sales: number;
+  skipped_dishes: number;
+  skipped_attendance: number;
+  validation_errors: ValidationError[];
+}
+
+interface ValidationError {
+  type: "sale" | "dish" | "staff" | "attendance";
+  record_id: string;
+  field: string;
+  message: string;
+  raw_data?: unknown;
+}
+
+// ================== VALIDATION SYSTEM ==================
+function validatePosRecord(
+  type: "sale" | "dish" | "staff" | "attendance",
+  record: unknown
+): { valid: boolean; errors: ValidationError[] } {
+  const errors: ValidationError[] = [];
+  const data = record as Record<string, unknown>;
+  const recordId = (data?.id || data?.plu || data?.operator_code || "unknown") as string;
+
+  if (type === "sale") {
+    if (!data?.name && !data?.plu) {
+      errors.push({ type, record_id: recordId, field: "name", message: "Dish name or PLU is missing" });
+    }
+    if (data?.price === undefined || data?.price === null || isNaN(Number(data?.price))) {
+      errors.push({ type, record_id: recordId, field: "price", message: "Price is missing or not numeric" });
+    }
+    if (!data?.quantity || isNaN(Number(data?.quantity))) {
+      errors.push({ type, record_id: recordId, field: "quantity", message: "Quantity is missing or invalid" });
+    }
+  }
+
+  if (type === "dish") {
+    if (!data?.name) {
+      errors.push({ type, record_id: recordId, field: "name", message: "Dish name is required" });
+    }
+    if (!data?.plu && !data?.external_id) {
+      errors.push({ type, record_id: recordId, field: "external_id", message: "External ID (PLU) is required" });
+    }
+  }
+
+  if (type === "staff") {
+    if (!data?.operator_code) {
+      errors.push({ type, record_id: recordId, field: "operator_code", message: "Operator code is required" });
+    }
+    if (!data?.name) {
+      errors.push({ type, record_id: recordId, field: "name", message: "Staff name is required" });
+    }
+  }
+
+  if (type === "attendance") {
+    if (!data?.clock_in) {
+      errors.push({ type, record_id: recordId, field: "clock_in", message: "Clock in time is required" });
+    }
+    if (data?.clock_out && data?.clock_in) {
+      const clockIn = new Date(data.clock_in as string);
+      const clockOut = new Date(data.clock_out as string);
+      if (clockOut <= clockIn) {
+        errors.push({ type, record_id: recordId, field: "clock_out", message: "Clock out must be after clock in" });
+      }
+    }
+    if (!data?.operator_code) {
+      errors.push({ type, record_id: recordId, field: "operator_code", message: "Operator/staff mapping is required" });
+    }
+  }
+
+  return { valid: errors.length === 0, errors };
 }
 
 // ================== SIMULATION DATA GENERATOR ==================
 function generateSimulatedData(): { orders: SimulatedOrder[]; staff_events: SimulatedStaffEvent[] } {
   const now = new Date();
   
-  // Random timestamps within last 24 hours
   const randomHoursAgo = (maxHours: number) => {
     const hoursAgo = Math.random() * maxHours;
     return new Date(now.getTime() - hoursAgo * 3600000).toISOString();
   };
 
-  // Generate 3-6 orders
   const orderCount = 3 + Math.floor(Math.random() * 4);
   const orders: SimulatedOrder[] = [];
   
@@ -103,7 +171,6 @@ function generateSimulatedData(): { orders: SimulatedOrder[]; staff_events: Simu
     });
   }
 
-  // Generate 1-3 staff attendance events
   const attendanceCount = 1 + Math.floor(Math.random() * 3);
   const staffNames = [
     { code: "SIM-OP-001", name: "John Smith" },
@@ -133,16 +200,30 @@ async function processOrders(
   adminClient: SupabaseClient,
   integration: Integration,
   orders: SimulatedOrder[],
-  isSimulation: boolean
-): Promise<{ sales_created: number; dishes_created: number }> {
-  let salesCreated = 0;
-  let dishesCreated = 0;
-
+  isSimulation: boolean,
+  stats: SyncStats
+): Promise<void> {
   for (const order of orders) {
     console.log(`Processing order ${order.id} with ${order.items.length} items`);
 
     for (const item of order.items) {
-      // Find or create dish by captiva_external_id
+      // Validate sale item
+      const validation = validatePosRecord("sale", { 
+        id: `${order.id}-${item.plu}`,
+        name: item.name, 
+        plu: item.plu, 
+        price: item.price, 
+        quantity: item.quantity,
+        date: order.date
+      });
+
+      if (!validation.valid) {
+        stats.skipped_sales++;
+        stats.validation_errors.push(...validation.errors);
+        console.warn(`Skipping invalid sale item: ${item.plu}`, validation.errors);
+        continue;
+      }
+
       let dishId: string | null = null;
 
       const { data: existingDish } = await adminClient
@@ -155,7 +236,6 @@ async function processOrders(
       if (existingDish?.id) {
         dishId = existingDish.id;
       } else {
-        // Check pos_mappings
         const { data: mapping } = await adminClient
           .from("pos_mappings")
           .select("internal_id")
@@ -168,7 +248,14 @@ async function processOrders(
         if (mapping?.internal_id) {
           dishId = mapping.internal_id;
         } else {
-          // Create new dish
+          // Validate dish before creation
+          const dishValidation = validatePosRecord("dish", { name: item.name, plu: item.plu });
+          if (!dishValidation.valid) {
+            stats.skipped_dishes++;
+            stats.validation_errors.push(...dishValidation.errors);
+            continue;
+          }
+
           const { data: newDish, error: dishError } = await adminClient
             .from("dishes")
             .insert({
@@ -184,13 +271,19 @@ async function processOrders(
 
           if (dishError) {
             console.error(`Failed to create dish ${item.name}:`, dishError.message);
+            stats.skipped_dishes++;
+            stats.validation_errors.push({
+              type: "dish",
+              record_id: item.plu,
+              field: "insert",
+              message: dishError.message
+            });
             continue;
           }
 
           dishId = newDish?.id || null;
-          dishesCreated++;
+          stats.dishes_created++;
 
-          // Create mapping entry
           if (dishId) {
             await adminClient.from("pos_mappings").insert({
               location_id: integration.location_id,
@@ -209,10 +302,10 @@ async function processOrders(
 
       if (!dishId) {
         console.warn(`Could not find or create dish for ${item.name}`);
+        stats.skipped_sales++;
         continue;
       }
 
-      // Insert sale
       const saleDate = new Date(order.date).toISOString().split("T")[0];
       const { error: saleError } = await adminClient.from("sales").insert({
         dish_id: dishId,
@@ -225,11 +318,17 @@ async function processOrders(
 
       if (saleError) {
         console.error(`Failed to create sale for ${item.name}:`, saleError.message);
+        stats.skipped_sales++;
+        stats.validation_errors.push({
+          type: "sale",
+          record_id: `${order.id}-${item.plu}`,
+          field: "insert",
+          message: saleError.message
+        });
       } else {
-        salesCreated++;
+        stats.sales_created++;
       }
 
-      // Also add to pos_sales_import for tracking
       await adminClient.from("pos_sales_import").upsert({
         location_id: integration.location_id,
         restaurant_id: integration.restaurant_id,
@@ -244,20 +343,31 @@ async function processOrders(
       }, { onConflict: "external_sale_id,location_id,pos_provider" });
     }
   }
-
-  return { sales_created: salesCreated, dishes_created: dishesCreated };
 }
 
 async function processAttendance(
   adminClient: SupabaseClient,
   integration: Integration,
   staffEvents: SimulatedStaffEvent[],
-  isSimulation: boolean
-): Promise<number> {
-  let attendanceCreated = 0;
-
+  isSimulation: boolean,
+  stats: SyncStats
+): Promise<void> {
   for (const event of staffEvents) {
-    // Find or create staff by captiva_operator_code
+    // Validate attendance record
+    const validation = validatePosRecord("attendance", {
+      operator_code: event.operator_code,
+      name: event.name,
+      clock_in: event.clock_in,
+      clock_out: event.clock_out
+    });
+
+    if (!validation.valid) {
+      stats.skipped_attendance++;
+      stats.validation_errors.push(...validation.errors);
+      console.warn(`Skipping invalid attendance: ${event.operator_code}`, validation.errors);
+      continue;
+    }
+
     let staffId: string | null = null;
 
     const { data: existingStaff } = await adminClient
@@ -270,7 +380,6 @@ async function processAttendance(
     if (existingStaff?.id) {
       staffId = existingStaff.id;
     } else {
-      // Check pos_mappings for staff
       const { data: mapping } = await adminClient
         .from("pos_mappings")
         .select("internal_id")
@@ -284,7 +393,14 @@ async function processAttendance(
       if (mapping?.internal_id) {
         staffId = mapping.internal_id;
       } else {
-        // Create new staff member
+        // Validate staff before creation
+        const staffValidation = validatePosRecord("staff", { operator_code: event.operator_code, name: event.name });
+        if (!staffValidation.valid) {
+          stats.skipped_attendance++;
+          stats.validation_errors.push(...staffValidation.errors);
+          continue;
+        }
+
         const nameParts = event.name.split(" ");
         const { data: newStaff, error: staffError } = await adminClient
           .from("staff")
@@ -303,12 +419,18 @@ async function processAttendance(
 
         if (staffError) {
           console.error(`Failed to create staff ${event.name}:`, staffError.message);
+          stats.skipped_attendance++;
+          stats.validation_errors.push({
+            type: "staff",
+            record_id: event.operator_code,
+            field: "insert",
+            message: staffError.message
+          });
           continue;
         }
 
         staffId = newStaff?.id || null;
 
-        // Create mapping entry
         if (staffId) {
           await adminClient.from("pos_mappings").insert({
             location_id: integration.location_id,
@@ -327,26 +449,32 @@ async function processAttendance(
 
     if (!staffId) {
       console.warn(`Could not find or create staff for ${event.name}`);
+      stats.skipped_attendance++;
       continue;
     }
 
-    // Insert attendance record
     const { error: attendanceError } = await adminClient.from("staff_attendance").insert({
       staff_id: staffId,
       location_id: integration.location_id,
       restaurant_id: integration.restaurant_id,
       clock_in: event.clock_in,
       clock_out: event.clock_out,
-      source: isSimulation ? "pos" : "pos",
+      source: "pos",
     });
 
     if (attendanceError) {
       console.error(`Failed to create attendance for ${event.name}:`, attendanceError.message);
+      stats.skipped_attendance++;
+      stats.validation_errors.push({
+        type: "attendance",
+        record_id: event.operator_code,
+        field: "insert",
+        message: attendanceError.message
+      });
     } else {
-      attendanceCreated++;
+      stats.attendance_created++;
     }
 
-    // Also add to pos_staff_import for tracking
     await adminClient.from("pos_staff_import").upsert({
       location_id: integration.location_id,
       restaurant_id: integration.restaurant_id,
@@ -359,8 +487,6 @@ async function processAttendance(
       sync_status: "synced",
     }, { onConflict: "external_staff_id,location_id,pos_provider" });
   }
-
-  return attendanceCreated;
 }
 
 // ========================== MAIN FUNCTION ===============================
@@ -388,10 +514,8 @@ serve(async (req) => {
     console.log("=== CAPTIVA SYNC START ===");
     console.log("Request:", { integration_id, location_id, restaurant_id, test_mode, simulate });
 
-    // Global simulate mode from environment
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
 
-    // Find integration using adminClient (bypasses RLS)
     let integrationQuery = adminClient
       .from("pos_integrations")
       .select("*")
@@ -432,7 +556,6 @@ serve(async (req) => {
 
     const integration = integrationRows[0] as Integration;
 
-    // Get settings with defaults
     const settings = (integration.settings || {}) as Record<string, unknown>;
     const settingsSimulate = settings.simulate === true || settings.simulate === "true";
     const isSimulationMode = simulate === true || settingsSimulate || globalSimulateMode;
@@ -442,15 +565,18 @@ serve(async (req) => {
 
     let orders: SimulatedOrder[] = [];
     let staffEvents: SimulatedStaffEvent[] = [];
-    let stats: SyncStats = {
+    const stats: SyncStats = {
       orders_processed: 0,
       sales_created: 0,
       dishes_created: 0,
       attendance_created: 0,
       simulation_mode: isSimulationMode,
+      skipped_sales: 0,
+      skipped_dishes: 0,
+      skipped_attendance: 0,
+      validation_errors: [],
     };
 
-    // ================= SIMULATION MODE =================
     if (isSimulationMode) {
       console.log("🎮 SIMULATION MODE - Generating fake data");
       const simulated = generateSimulatedData();
@@ -458,13 +584,10 @@ serve(async (req) => {
       staffEvents = simulated.staff_events;
       console.log(`Generated ${orders.length} orders and ${staffEvents.length} staff events`);
     } else {
-      // ================= LIVE MODE =================
       console.log("🔴 LIVE MODE - Would fetch from real Captiva API");
       
       const baseUrl = settings.base_url as string || "";
       const apiKey = integration.api_key || settings.api_key as string || "";
-      const apiSecret = integration.api_secret || settings.api_secret as string || "";
-      const storeId = settings.store_id as string || "";
 
       if (!baseUrl || !apiKey) {
         console.warn("Missing Captiva API credentials, falling back to simulation");
@@ -473,33 +596,35 @@ serve(async (req) => {
         staffEvents = simulated.staff_events;
         stats.simulation_mode = true;
       } else {
-        // TODO: Implement real Captiva API calls here
-        // For now, return empty if in live mode without proper API setup
         console.log("Real API mode - credentials present but API not implemented yet");
       }
     }
 
-    // ================= PROCESS DATA =================
     if (orders.length > 0) {
       console.log(`Processing ${orders.length} orders...`);
-      const orderStats = await processOrders(adminClient, integration, orders, stats.simulation_mode);
       stats.orders_processed = orders.length;
-      stats.sales_created = orderStats.sales_created;
-      stats.dishes_created = orderStats.dishes_created;
-      console.log(`Created ${orderStats.sales_created} sales, ${orderStats.dishes_created} dishes`);
+      await processOrders(adminClient, integration, orders, stats.simulation_mode, stats);
+      console.log(`Created ${stats.sales_created} sales, ${stats.dishes_created} dishes, skipped ${stats.skipped_sales} sales`);
     }
 
     if (staffEvents.length > 0) {
       console.log(`Processing ${staffEvents.length} attendance events...`);
-      stats.attendance_created = await processAttendance(adminClient, integration, staffEvents, stats.simulation_mode);
-      console.log(`Created ${stats.attendance_created} attendance records`);
+      await processAttendance(adminClient, integration, staffEvents, stats.simulation_mode, stats);
+      console.log(`Created ${stats.attendance_created} attendance records, skipped ${stats.skipped_attendance}`);
     }
 
-    // ================= UPDATE INTEGRATION =================
     const updateSettings = {
       ...settings,
       last_sync_mode: stats.simulation_mode ? "simulation" : "live",
-      last_sync_stats: stats,
+      last_sync_stats: {
+        orders_processed: stats.orders_processed,
+        sales_created: stats.sales_created,
+        dishes_created: stats.dishes_created,
+        attendance_created: stats.attendance_created,
+        skipped_sales: stats.skipped_sales,
+        skipped_dishes: stats.skipped_dishes,
+        skipped_attendance: stats.skipped_attendance,
+      },
     };
 
     const { error: updateError } = await adminClient
@@ -514,7 +639,7 @@ serve(async (req) => {
       console.error("Failed to update integration:", updateError.message);
     }
 
-    // ================= LOG SYNC =================
+    // Log sync with validation results
     const { error: logError } = await adminClient.from("pos_sync_logs").insert({
       location_id: integration.location_id,
       restaurant_id: integration.restaurant_id,
@@ -527,6 +652,10 @@ serve(async (req) => {
         sales_created: stats.sales_created,
         dishes_created: stats.dishes_created,
         attendance_created: stats.attendance_created,
+        skipped_sales: stats.skipped_sales,
+        skipped_dishes: stats.skipped_dishes,
+        skipped_attendance: stats.skipped_attendance,
+        validation_errors: stats.validation_errors,
         simulation_mode: stats.simulation_mode,
         timestamp: new Date().toISOString(),
       },
@@ -545,7 +674,10 @@ serve(async (req) => {
         message: stats.simulation_mode
           ? `[SIMULATION] Sync completed: ${stats.sales_created} sales, ${stats.dishes_created} dishes, ${stats.attendance_created} attendance`
           : `Sync completed: ${stats.sales_created} sales, ${stats.dishes_created} dishes, ${stats.attendance_created} attendance`,
-        data: stats,
+        data: {
+          ...stats,
+          validation_errors: stats.validation_errors.length > 0 ? stats.validation_errors : undefined,
+        },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -553,7 +685,6 @@ serve(async (req) => {
     const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
     console.error("=== CAPTIVA SYNC ERROR ===", errorMessage);
 
-    // Try to log the error
     try {
       await adminClient.from("pos_sync_logs").insert({
         location_id: "00000000-0000-0000-0000-000000000000",
