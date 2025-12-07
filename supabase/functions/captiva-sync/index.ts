@@ -139,32 +139,55 @@ serve(async (req) => {
     // Read incoming request
     const { integration_id, location_id, test_mode, simulate } = await req.json();
 
+    console.log("Incoming body:", { integration_id, location_id, test_mode, simulate });
+
     // Global simulate mode
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
     const isSimulationMode = simulate === true || globalSimulateMode;
 
-    // Load integration record - build query based on provided parameters
-    let query = supabase
+    // Debug: fetch all pos_integrations to see what's in the database
+    const { data: debugRows, error: debugError } = await supabase
       .from("pos_integrations")
-      .select("*")
-      .eq("pos_provider", "captiva")
-      .eq("status", "active");
-    
-    if (integration_id) {
-      query = query.eq("id", integration_id);
-    } else if (location_id) {
-      query = query.eq("location_id", location_id);
-    }
-    
-    const { data: integration, error: integrationError } = await query.maybeSingle();
+      .select("id, pos_provider, location_id, status, settings, restaurant_id");
 
-    console.log("Integration lookup:", { integration_id, location_id, found: !!integration, error: integrationError?.message });
+    console.log("All pos_integrations rows:", JSON.stringify(debugRows, null, 2), debugError?.message);
+
+    // Load integration record - always lookup by location_id when integration_id is not provided
+    let integration = null;
+    let intError = null;
+
+    if (integration_id) {
+      const result = await supabase
+        .from("pos_integrations")
+        .select("*")
+        .eq("id", integration_id)
+        .eq("pos_provider", "captiva")
+        .eq("status", "active")
+        .maybeSingle();
+      integration = result.data;
+      intError = result.error;
+    } else if (location_id) {
+      const result = await supabase
+        .from("pos_integrations")
+        .select("*")
+        .eq("pos_provider", "captiva")
+        .eq("location_id", location_id)
+        .eq("status", "active")
+        .maybeSingle();
+      integration = result.data;
+      intError = result.error;
+    }
+
+    console.log("Integration lookup result:", JSON.stringify(integration, null, 2), intError?.message);
 
     if (!integration) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: "No active Captiva integration found.",
-        details: { integration_id, location_id, queryError: integrationError?.message }
+        error: "No matching Captiva integration found",
+        received_location_id: location_id,
+        received_integration_id: integration_id,
+        rows_in_db: debugRows,
+        query_error: intError?.message
       }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
