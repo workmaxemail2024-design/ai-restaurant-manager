@@ -10,74 +10,74 @@ const corsHeaders = {
 function generateSimulatedData() {
   const now = new Date();
   const baseDate = now.toISOString();
-  
+
   return {
     orders: [
       {
         id: `sim-${Date.now()}-1001`,
-        total: 45.80,
+        total: 45.8,
         date: baseDate,
         items: [
-          { plu: "burger-001", name: "Classic Burger", quantity: 2, price: 12.50, total: 25.00 },
-          { plu: "fries-001", name: "French Fries", quantity: 1, price: 3.30, total: 3.30 },
-          { plu: "cola-001", name: "Cola", quantity: 2, price: 2.60, total: 5.20 }
+          { plu: "burger-001", name: "Classic Burger", quantity: 2, price: 12.5, total: 25.0 },
+          { plu: "fries-001", name: "French Fries", quantity: 1, price: 3.3, total: 3.3 },
+          { plu: "cola-001", name: "Cola", quantity: 2, price: 2.6, total: 5.2 },
         ],
-        operator_code: "SIM-OP-001"
+        operator_code: "SIM-OP-001",
       },
       {
         id: `sim-${Date.now()}-1002`,
-        total: 32.90,
+        total: 32.9,
         date: new Date(now.getTime() - 30 * 60000).toISOString(),
         items: [
-          { plu: "pizza-001", name: "Margherita Pizza", quantity: 1, price: 15.90, total: 15.90 },
-          { plu: "salad-001", name: "Caesar Salad", quantity: 1, price: 8.50, total: 8.50 },
-          { plu: "water-001", name: "Sparkling Water", quantity: 2, price: 2.25, total: 4.50 }
+          { plu: "pizza-001", name: "Margherita Pizza", quantity: 1, price: 15.9, total: 15.9 },
+          { plu: "salad-001", name: "Caesar Salad", quantity: 1, price: 8.5, total: 8.5 },
+          { plu: "water-001", name: "Sparkling Water", quantity: 2, price: 2.25, total: 4.5 },
         ],
-        operator_code: "SIM-OP-002"
+        operator_code: "SIM-OP-002",
       },
       {
         id: `sim-${Date.now()}-1003`,
-        total: 67.40,
+        total: 67.4,
         date: new Date(now.getTime() - 60 * 60000).toISOString(),
         items: [
-          { plu: "steak-001", name: "Grilled Steak", quantity: 2, price: 24.90, total: 49.80 },
-          { plu: "wine-001", name: "House Wine", quantity: 2, price: 6.80, total: 13.60 }
+          { plu: "steak-001", name: "Grilled Steak", quantity: 2, price: 24.9, total: 49.8 },
+          { plu: "wine-001", name: "House Wine", quantity: 2, price: 6.8, total: 13.6 },
         ],
-        operator_code: "SIM-OP-001"
-      }
+        operator_code: "SIM-OP-001",
+      },
     ],
     staff_events: [
       {
         operator_code: "SIM-OP-001",
         name: "John Smith",
         clock_in: new Date(now.getTime() - 4 * 3600000).toISOString(),
-        clock_out: null
+        clock_out: null,
       },
       {
         operator_code: "SIM-OP-002",
         name: "Jane Doe",
         clock_in: new Date(now.getTime() - 3 * 3600000).toISOString(),
-        clock_out: null
-      }
-    ]
+        clock_out: null,
+      },
+    ],
   };
 }
 
 // XML to JSON converter for Captiva responses
 function parseXmlToJson(xml: string): Record<string, unknown> {
-  xml = xml.replace(/<\?xml[^>]*\?>/g, '').trim();
-  
+  xml = xml.replace(/<\?xml[^>]*\?>/g, "").trim();
+
   const parseElement = (xmlStr: string): Record<string, unknown> | string => {
     const obj: Record<string, unknown> = {};
     const tagRegex = /<(\w+)([^>]*)>([\s\S]*?)<\/\1>/g;
     let match;
     let hasChildren = false;
-    
+
     while ((match = tagRegex.exec(xmlStr)) !== null) {
       hasChildren = true;
       const [, tagName, , content] = match;
       const trimmedContent = content.trim();
-      
+
       if (/<\w+[^>]*>/.test(trimmedContent)) {
         const parsed = parseElement(trimmedContent);
         if (obj[tagName]) {
@@ -91,12 +91,12 @@ function parseXmlToJson(xml: string): Record<string, unknown> {
         }
       } else {
         let value: unknown = trimmedContent;
-        if (trimmedContent === '') value = null;
-        else if (trimmedContent === 'true') value = true;
-        else if (trimmedContent === 'false') value = false;
+        if (trimmedContent === "") value = null;
+        else if (trimmedContent === "true") value = true;
+        else if (trimmedContent === "false") value = false;
         else if (/^-?\d+$/.test(trimmedContent)) value = parseInt(trimmedContent);
         else if (/^-?\d+\.\d+$/.test(trimmedContent)) value = parseFloat(trimmedContent);
-        
+
         if (obj[tagName]) {
           if (Array.isArray(obj[tagName])) {
             (obj[tagName] as unknown[]).push(value);
@@ -108,10 +108,10 @@ function parseXmlToJson(xml: string): Record<string, unknown> {
         }
       }
     }
-    
+
     return hasChildren ? obj : xmlStr;
   };
-  
+
   return parseElement(xml) as Record<string, unknown>;
 }
 
@@ -174,29 +174,32 @@ serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: false, error: "Missing authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY") ?? "";
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
+      global: { headers: { Authorization: authHeader } },
     });
 
     // deno-lint-ignore no-explicit-any
     const adminClient: SupabaseClient<any> = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: false, error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { integration_id, location_id, test_mode, simulate } = await req.json();
@@ -216,10 +219,10 @@ serve(async (req) => {
 
     if (intError || !integration) {
       console.error("Integration error:", intError);
-      return new Response(
-        JSON.stringify({ success: false, error: "Captiva integration not found or inactive" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: false, error: "Captiva integration not found or inactive" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const typedIntegration = integration as Integration;
@@ -230,7 +233,9 @@ serve(async (req) => {
     const apiSecret = typedIntegration.api_secret;
     const isTestMode = test_mode === true || settings.test_mode === "true";
 
-    console.log(`Starting Captiva sync for location ${typedIntegration.location_id}, simulation_mode: ${isSimulationMode}, test_mode: ${isTestMode}`);
+    console.log(
+      `Starting Captiva sync for location ${typedIntegration.location_id}, simulation_mode: ${isSimulationMode}, test_mode: ${isTestMode}`,
+    );
 
     let orders: CaptivaOrder[] = [];
     let attendanceRecords: CaptivaAttendance[] = [];
@@ -246,34 +251,36 @@ serve(async (req) => {
       if (!baseUrl || !apiKey || !apiSecret) {
         return new Response(
           JSON.stringify({ success: false, error: "Missing Captiva credentials in integration settings" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
       const authString = btoa(`${apiKey}:${apiSecret}`);
-      const lastSync = settings.last_sync_time ? new Date(settings.last_sync_time) : new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const lastSync = settings.last_sync_time
+        ? new Date(settings.last_sync_time)
+        : new Date(Date.now() - 24 * 60 * 60 * 1000);
       const fromDate = lastSync.toISOString();
       const toDate = new Date().toISOString();
 
       // Helper to make Captiva API requests
       const captivaFetch = async (endpoint: string) => {
         const url = storeId
-          ? `${baseUrl.replace(/\/$/, '')}/api/v1/stores/${storeId}${endpoint}`
-          : `${baseUrl.replace(/\/$/, '')}/api/v1${endpoint}`;
-        
+          ? `${baseUrl.replace(/\/$/, "")}/api/v1/stores/${storeId}${endpoint}`
+          : `${baseUrl.replace(/\/$/, "")}/api/v1${endpoint}`;
+
         console.log(`Fetching: ${url}`);
         const response = await fetch(url, {
           headers: {
-            "Authorization": `Basic ${authString}`,
-            "Accept": "application/json, application/xml",
+            Authorization: `Basic ${authString}`,
+            Accept: "application/json, application/xml",
           },
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`Captiva API error ${response.status}: ${errorText.substring(0, 200)}`);
         }
-        
+
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("xml")) {
           const xmlText = await response.text();
@@ -285,20 +292,27 @@ serve(async (req) => {
       // Fetch attendance (skip in test mode)
       if (!isTestMode) {
         try {
-          const attendanceData = await captivaFetch(`/attendance?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
+          const attendanceData = await captivaFetch(
+            `/attendance?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+          );
           attendanceRecords = Array.isArray(attendanceData.attendance)
             ? attendanceData.attendance
-            : (attendanceData.attendance ? [attendanceData.attendance] : []);
+            : attendanceData.attendance
+              ? [attendanceData.attendance]
+              : [];
         } catch (attError) {
-          console.log("Attendance fetch skipped or failed:", attError instanceof Error ? attError.message : "Unknown error");
+          console.log(
+            "Attendance fetch skipped or failed:",
+            attError instanceof Error ? attError.message : "Unknown error",
+          );
         }
       }
 
       // Fetch orders
-      const ordersData = await captivaFetch(`/orders?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`);
-      orders = Array.isArray(ordersData.orders) 
-        ? ordersData.orders
-        : (ordersData.order ? [ordersData.order] : []);
+      const ordersData = await captivaFetch(
+        `/orders?from=${encodeURIComponent(fromDate)}&to=${encodeURIComponent(toDate)}`,
+      );
+      orders = Array.isArray(ordersData.orders) ? ordersData.orders : ordersData.order ? [ordersData.order] : [];
     }
 
     const now = new Date();
@@ -316,7 +330,7 @@ serve(async (req) => {
       .not("captiva_operator_code", "is", null);
 
     const staffByOperatorCode: Record<string, { id: string; location_id: string | null }> = {};
-    staffList?.forEach(s => {
+    staffList?.forEach((s) => {
       if (s.captiva_operator_code) {
         staffByOperatorCode[s.captiva_operator_code] = { id: s.id, location_id: s.location_id };
       }
@@ -340,16 +354,19 @@ serve(async (req) => {
         }
 
         if (record.clock_in) {
-          const { error: attError } = await adminClient.from("staff_attendance").upsert({
-            staff_id: staffMatch.id,
-            location_id: staffMatch.location_id || typedIntegration.location_id,
-            restaurant_id: typedIntegration.restaurant_id,
-            clock_in: record.clock_in,
-            clock_out: record.clock_out || null,
-            source: "pos",
-          }, {
-            onConflict: "staff_id,clock_in",
-          });
+          const { error: attError } = await adminClient.from("staff_attendance").upsert(
+            {
+              staff_id: staffMatch.id,
+              location_id: staffMatch.location_id || typedIntegration.location_id,
+              restaurant_id: typedIntegration.restaurant_id,
+              clock_in: record.clock_in,
+              clock_out: record.clock_out || null,
+              source: "pos",
+            },
+            {
+              onConflict: "staff_id,clock_in",
+            },
+          );
 
           if (!attError) attendanceCreated++;
         }
@@ -361,7 +378,7 @@ serve(async (req) => {
     for (const order of orders) {
       const orderId = order.id || order.order_id || order.order_number || `unknown-${Date.now()}`;
       const orderDate = order.date || order.timestamp || new Date().toISOString();
-      const items: CaptivaOrderItem[] = Array.isArray(order.items) ? order.items : (order.items ? [order.items] : []);
+      const items: CaptivaOrderItem[] = Array.isArray(order.items) ? order.items : order.items ? [order.items] : [];
 
       // Check staff mapping for order
       const orderOperatorCode = order.operator_code || order.staff_id || order.employee_id;
@@ -373,9 +390,9 @@ serve(async (req) => {
       for (const item of items) {
         const externalId = item.plu || item.sku || item.item_id || "";
         const itemName = item.name || `Item ${externalId}`;
-        const quantity = typeof item.quantity === 'string' ? parseInt(item.quantity) : (item.quantity || 1);
-        const price = typeof item.price === 'string' ? parseFloat(item.price) : (item.price || 0);
-        const totalPrice = typeof item.total === 'string' ? parseFloat(item.total) : (item.total || price * quantity);
+        const quantity = typeof item.quantity === "string" ? parseInt(item.quantity) : item.quantity || 1;
+        const price = typeof item.price === "string" ? parseFloat(item.price) : item.price || 0;
+        const totalPrice = typeof item.total === "string" ? parseFloat(item.total) : item.total || price * quantity;
 
         if (!externalId) continue;
 
@@ -442,19 +459,19 @@ serve(async (req) => {
         }
 
         if (dishId && !isTestMode) {
-          const saleDate = new Date(orderDate).toISOString().split('T')[0];
-          
+          const saleDate = new Date(orderDate).toISOString().split("T")[0];
+
           await adminClient.from("pos_sales_import").insert({
             location_id: typedIntegration.location_id,
             restaurant_id: typedIntegration.restaurant_id,
             pos_provider: "captiva",
             external_sale_id: `${orderId}-${externalId}`,
-            data: { 
-              order_id: orderId, 
-              item, 
-              order_date: orderDate, 
+            data: {
+              order_id: orderId,
+              item,
+              order_date: orderDate,
               operator_code: orderOperatorCode,
-              simulation: isSimulationMode 
+              simulation: isSimulationMode,
             },
             mapped_dish_id: dishId,
             mapped_quantity: quantity,
@@ -479,14 +496,14 @@ serve(async (req) => {
 
     // Update last sync time (unless test mode)
     if (!isTestMode) {
-      const newSettings = { 
-        ...settings, 
+      const newSettings = {
+        ...settings,
         last_sync_time: now.toISOString(),
-        last_sync_mode: isSimulationMode ? "simulation" : "live"
+        last_sync_mode: isSimulationMode ? "simulation" : "live",
       };
       await adminClient
         .from("pos_integrations")
-        .update({ 
+        .update({
           settings: newSettings,
           last_sync_time: now.toISOString(),
         })
@@ -498,13 +515,13 @@ serve(async (req) => {
       location_id: typedIntegration.location_id,
       restaurant_id: typedIntegration.restaurant_id,
       pos_provider: "captiva",
-      event_type: isSimulationMode ? "simulation_sync" : (isTestMode ? "test_sync" : "sync_completed"),
+      event_type: isSimulationMode ? "simulation_sync" : isTestMode ? "test_sync" : "sync_completed",
       status: "success",
       message: `${isSimulationMode ? "[SIMULATION] " : ""}Synced ${orders.length} orders, created ${salesCreated} sales, ${dishesCreated} new dishes, ${attendanceCreated} attendance records`,
-      details: { 
-        orders_count: orders.length, 
-        sales_created: salesCreated, 
-        dishes_created: dishesCreated, 
+      details: {
+        orders_count: orders.length,
+        sales_created: salesCreated,
+        dishes_created: dishesCreated,
         mappings_created: mappingsCreated,
         attendance_created: attendanceCreated,
         unmapped_staff: unmappedStaff,
@@ -513,17 +530,21 @@ serve(async (req) => {
       },
     });
 
-    console.log(`Captiva sync completed: ${orders.length} orders, ${salesCreated} sales, ${dishesCreated} dishes, ${attendanceCreated} attendance, simulation: ${isSimulationMode}`);
+    console.log(
+      `Captiva sync completed: ${orders.length} orders, ${salesCreated} sales, ${dishesCreated} dishes, ${attendanceCreated} attendance, simulation: ${isSimulationMode}`,
+    );
     if (unmappedStaff.length > 0) {
-      console.log(`Unmapped staff operator codes: ${unmappedStaff.join(', ')}`);
+      console.log(`Unmapped staff operator codes: ${unmappedStaff.join(", ")}`);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: isSimulationMode 
-          ? "Simulation sync completed - fake data inserted" 
-          : (isTestMode ? "Test sync completed (no data written)" : "Captiva sync completed"),
+        message: isSimulationMode
+          ? "Simulation sync completed - fake data inserted"
+          : isTestMode
+            ? "Test sync completed (no data written)"
+            : "Captiva sync completed",
         data: {
           orders_processed: orders.length,
           sales_created: isTestMode ? 0 : salesCreated,
@@ -536,13 +557,13 @@ serve(async (req) => {
           simulation_mode: isSimulationMode,
         },
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Captiva sync error:", error);
     return new Response(
       JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
