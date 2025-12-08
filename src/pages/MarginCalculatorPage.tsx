@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Calculator, TrendingUp, Percent, DollarSign, Target, Building2, Zap, Users, MoreHorizontal } from "lucide-react";
+import { Calculator, TrendingUp, Percent, Target, Building2, Zap, Users, MoreHorizontal } from "lucide-react";
 import { PageLayout } from "@/components/common/PageLayout";
+import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 const inputSchema = z.object({
   ingredientCost: z.number().min(0, "Must be positive"),
@@ -104,7 +105,6 @@ export default function MarginCalculatorPage() {
     };
   }, [ingredientCost, sellingPrice, vatPercent, rentCost, utilitiesCost, labourAllocation, otherOverheads, breakEvenPeriod]);
 
-  const formatCurrency = (value: number) => `$${value.toFixed(2)}`;
   const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
   return (
@@ -123,8 +123,8 @@ export default function MarginCalculatorPage() {
             {/* Core Inputs */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="ingredientCost" className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <Label htmlFor="ingredientCost" className="flex items-center gap-2">
+                  <span className="h-4 w-4 text-muted-foreground font-medium">{currencySymbol}</span>
                   Ingredient Cost
                 </Label>
                 <Input

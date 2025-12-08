@@ -13,6 +13,7 @@ import { useSuppliers } from "@/hooks/useSuppliers";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
 
 export default function PurchaseOrdersPage() {
   const { data: orders = [], isLoading } = usePurchaseOrders();
@@ -49,7 +50,7 @@ export default function PurchaseOrdersPage() {
     { 
       key: "total", 
       header: "Total",
-      render: (item: PurchaseOrder) => `$${Number(item.total || 0).toFixed(2)}`
+      render: (item: PurchaseOrder) => formatCurrency(Number(item.total || 0))
     },
     { 
       key: "status", 
@@ -224,14 +225,14 @@ export default function PurchaseOrdersPage() {
                     <span>{item.ingredients?.name}</span>
                     <div className="flex items-center gap-4">
                       <span className="text-muted-foreground">{Number(item.quantity).toFixed(2)} {item.ingredients?.unit}</span>
-                      <span className="font-medium">${(Number(item.quantity) * Number(item.cost_price)).toFixed(2)}</span>
+                      <span className="font-medium">{formatCurrency(Number(item.quantity) * Number(item.cost_price))}</span>
                     </div>
                   </div>
                 ))
               )}
             </div>
             <div className="flex justify-end text-lg font-semibold">
-              Total: ${orderItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.cost_price)), 0).toFixed(2)}
+              Total: {formatCurrency(orderItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.cost_price)), 0))}
             </div>
           </div>
         </DialogContent>

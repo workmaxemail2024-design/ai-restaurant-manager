@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useDishes } from "@/hooks/useDishes";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Sparkles, Loader2, Percent } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Loader2, Percent } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 interface DishCost {
   id: string;
@@ -133,11 +134,11 @@ export default function CostAnalysisPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <DollarSign className="h-4 w-4" /> Total Potential Profit
+                <span className="h-4 w-4 font-medium">{currencySymbol}</span> Total Potential Profit
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${totalProfit.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(totalProfit)}</div>
               <p className="text-xs text-muted-foreground">
                 per unit sold
               </p>
@@ -217,7 +218,7 @@ export default function CostAnalysisPage() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Cost:</span>
-                        <span className="font-medium">${item.cost.toFixed(2)}</span>
+                        <span className="font-medium">{formatCurrency(item.cost)}</span>
                       </div>
                     </div>
                   </div>
@@ -276,8 +277,8 @@ export default function CostAnalysisPage() {
                     <tr key={dish.id} className="border-b hover:bg-muted/50">
                       <td className="py-2 font-medium">{dish.name}</td>
                       <td className="py-2">{dish.category}</td>
-                      <td className="py-2 text-right">${dish.sellingPrice.toFixed(2)}</td>
-                      <td className="py-2 text-right">${dish.cost.toFixed(2)}</td>
+                      <td className="py-2 text-right">{formatCurrency(dish.sellingPrice)}</td>
+                      <td className="py-2 text-right">{formatCurrency(dish.cost)}</td>
                       <td className="py-2 text-right">
                         <span className={dish.foodCostPercent > 35 ? "text-destructive font-medium" : ""}>
                           {dish.foodCostPercent.toFixed(1)}%
@@ -288,7 +289,7 @@ export default function CostAnalysisPage() {
                           {dish.marginPercent.toFixed(1)}%
                         </span>
                       </td>
-                      <td className="py-2 text-right font-medium">${dish.grossProfit.toFixed(2)}</td>
+                      <td className="py-2 text-right font-medium">{formatCurrency(dish.grossProfit)}</td>
                     </tr>
                   ))}
                 </tbody>

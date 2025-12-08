@@ -6,9 +6,10 @@ import { useSales } from '@/hooks/useSales';
 import { useStock } from '@/hooks/useStock';
 import { useStaff } from '@/hooks/useStaff';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
-import { Building2, TrendingUp, TrendingDown, DollarSign, Users, Package } from 'lucide-react';
+import { Building2, TrendingUp, TrendingDown, Users, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { formatCurrency, currencySymbol } from '@/lib/currency';
 
 export default function MultiLocationIntelligencePage() {
   const { data: locations } = useLocations();
@@ -92,10 +93,10 @@ export default function MultiLocationIntelligencePage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Total Revenue</p>
                   <p className="text-2xl font-bold">
-                    ${locationMetrics.reduce((sum, l) => sum + l.revenue, 0).toFixed(0)}
+                    {formatCurrency(locationMetrics.reduce((sum, l) => sum + l.revenue, 0))}
                   </p>
                 </div>
-                <DollarSign className="h-8 w-8 text-green-500" />
+                <span className="h-8 w-8 text-green-500 font-bold text-2xl">{currencySymbol}</span>
               </div>
             </CardContent>
           </Card>
@@ -224,9 +225,9 @@ export default function MultiLocationIntelligencePage() {
                   {locationMetrics.map(location => (
                     <tr key={location.id} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-2 font-medium">{location.name}</td>
-                      <td className="py-3 px-2 text-right">${location.revenue.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right">{formatCurrency(location.revenue)}</td>
                       <td className="py-3 px-2 text-right">{location.salesCount}</td>
-                      <td className="py-3 px-2 text-right">${location.avgOrderValue.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right">{formatCurrency(location.avgOrderValue)}</td>
                       <td className="py-3 px-2 text-right">{location.staffCount}</td>
                       <td className="py-3 px-2 text-right">
                         <Badge variant={location.healthScore >= 70 ? 'default' : 'secondary'}>

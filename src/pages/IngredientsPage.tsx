@@ -10,6 +10,7 @@ import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useIngredients, useCreateIngredient, useUpdateIngredient, useDeleteIngredient, Ingredient, IngredientInsert, UnitType, StorageType } from "@/hooks/useIngredients";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { formatCurrency } from "@/lib/currency";
 
 const unitOptions: UnitType[] = ["kg", "g", "L", "ml", "oz", "each"];
 const storageOptions: StorageType[] = ["freezer", "fridge", "dry"];
@@ -48,7 +49,7 @@ export default function IngredientsPage() {
     { 
       key: "default_cost_price", 
       header: "Cost Price",
-      render: (item: Ingredient) => `$${Number(item.default_cost_price).toFixed(2)}`
+      render: (item: Ingredient) => formatCurrency(Number(item.default_cost_price))
     },
   ];
 
