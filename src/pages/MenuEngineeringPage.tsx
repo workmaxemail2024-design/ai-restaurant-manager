@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Star, TrendingUp, TrendingDown, HelpCircle, Dog, Sparkles, Loader2 } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
+import { formatCurrency } from "@/lib/currency";
 
 interface DishAnalysis {
   id: string;
@@ -300,11 +301,11 @@ export default function MenuEngineeringPage() {
                     <tr key={dish.id} className="border-b hover:bg-muted/50">
                       <td className="py-2 font-medium">{dish.name}</td>
                       <td className="py-2">{dish.category}</td>
-                      <td className="py-2 text-right">${dish.sellingPrice.toFixed(2)}</td>
-                      <td className="py-2 text-right">${dish.cost.toFixed(2)}</td>
+                      <td className="py-2 text-right">{formatCurrency(dish.sellingPrice)}</td>
+                      <td className="py-2 text-right">{formatCurrency(dish.cost)}</td>
                       <td className="py-2 text-right">{dish.marginPercent.toFixed(1)}%</td>
                       <td className="py-2 text-right">{dish.salesVolume}</td>
-                      <td className="py-2 text-right">${dish.contribution.toFixed(2)}</td>
+                      <td className="py-2 text-right">{formatCurrency(dish.contribution)}</td>
                       <td className="py-2 text-center">
                         <Badge variant={getClassificationBadge(dish.classification)} className="capitalize flex items-center gap-1 w-fit mx-auto">
                           {getClassificationIcon(dish.classification)}

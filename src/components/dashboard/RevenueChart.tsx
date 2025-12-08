@@ -1,4 +1,5 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { formatCurrency, formatCurrencyShort } from '@/lib/currency';
 
 const data = [
   { time: '9AM', revenue: 2400, orders: 24 },
@@ -25,7 +26,7 @@ export function RevenueChart() {
         </div>
         <div className="flex gap-4">
           <div className="text-right">
-            <p className="text-2xl font-bold text-gradient">$73,000</p>
+            <p className="text-2xl font-bold text-gradient">{formatCurrencyShort(73000)}</p>
             <p className="text-xs text-success">+12% from yesterday</p>
           </div>
         </div>
@@ -50,7 +51,7 @@ export function RevenueChart() {
               axisLine={false}
               tickLine={false}
               tick={{ fill: 'hsl(215, 20%, 55%)', fontSize: 12 }}
-              tickFormatter={(value) => `$${value / 1000}k`}
+              tickFormatter={(value) => formatCurrencyShort(value)}
             />
             <Tooltip
               contentStyle={{
@@ -61,7 +62,7 @@ export function RevenueChart() {
               }}
               labelStyle={{ color: 'hsl(210, 40%, 98%)' }}
               itemStyle={{ color: 'hsl(30, 100%, 50%)' }}
-              formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+              formatter={(value: number) => [formatCurrency(value), 'Revenue']}
             />
             <Area
               type="monotone"

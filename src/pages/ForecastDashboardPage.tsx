@@ -6,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useLocations } from '@/hooks/useLocations';
 import { useSales } from '@/hooks/useSales';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts';
-import { TrendingUp, Calendar, DollarSign, Users, Package } from 'lucide-react';
+import { TrendingUp, Calendar, Users, Package } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
+import { formatCurrency, currencySymbol } from '@/lib/currency';
 
 export default function ForecastDashboardPage() {
   const [forecastDays, setForecastDays] = useState('7');
@@ -118,10 +119,10 @@ export default function ForecastDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Predicted Revenue</p>
-                  <p className="text-2xl font-bold">${summaryMetrics.totalRevenue.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(summaryMetrics.totalRevenue)}</p>
                   <p className="text-xs text-muted-foreground">Next {forecastDays} days</p>
                 </div>
-                <DollarSign className="h-8 w-8 text-green-500" />
+                <span className="h-8 w-8 text-green-500 font-bold text-2xl">{currencySymbol}</span>
               </div>
             </CardContent>
           </Card>
@@ -131,7 +132,7 @@ export default function ForecastDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Predicted Profit</p>
-                  <p className="text-2xl font-bold">${summaryMetrics.totalProfit.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(summaryMetrics.totalProfit)}</p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-primary" />
               </div>
@@ -143,7 +144,7 @@ export default function ForecastDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Staff Cost Forecast</p>
-                  <p className="text-2xl font-bold">${summaryMetrics.totalStaffCost.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">{formatCurrency(summaryMetrics.totalStaffCost)}</p>
                 </div>
                 <Users className="h-8 w-8 text-blue-500" />
               </div>
@@ -195,7 +196,7 @@ export default function ForecastDashboardPage() {
                           border: '1px solid hsl(var(--border))',
                           color: 'hsl(var(--foreground))'
                         }}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                        formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                       />
                       <Area 
                         type="monotone" 
@@ -302,9 +303,9 @@ export default function ForecastDashboardPage() {
                   {forecastData.map((day, i) => (
                     <tr key={i} className="border-b hover:bg-muted/50">
                       <td className="py-3 px-2 font-medium">{day.date}</td>
-                      <td className="py-3 px-2 text-right text-green-500">${day.revenue.toLocaleString()}</td>
-                      <td className="py-3 px-2 text-right">${day.profit.toLocaleString()}</td>
-                      <td className="py-3 px-2 text-right text-destructive">${day.staffCost.toLocaleString()}</td>
+                      <td className="py-3 px-2 text-right text-green-500">{formatCurrency(day.revenue)}</td>
+                      <td className="py-3 px-2 text-right">{formatCurrency(day.profit)}</td>
+                      <td className="py-3 px-2 text-right text-destructive">{formatCurrency(day.staffCost)}</td>
                       <td className="py-3 px-2 text-right">
                         <span className={day.confidence >= 70 ? 'text-green-500' : 'text-yellow-500'}>
                           {day.confidence}%

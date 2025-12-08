@@ -15,6 +15,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
 import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
 
 const categories = ["Appetizers", "Mains", "Desserts", "Beverages", "Sides", "Other"];
 
@@ -54,12 +55,12 @@ export default function DishesPage() {
     { 
       key: "selling_price", 
       header: "Price",
-      render: (item: Dish) => `$${Number(item.selling_price).toFixed(2)}`
+      render: (item: Dish) => formatCurrency(Number(item.selling_price))
     },
     { 
       key: "dish_cost", 
       header: "Cost",
-      render: (item: Dish) => `$${Number(item.dish_cost || 0).toFixed(2)}`
+      render: (item: Dish) => formatCurrency(Number(item.dish_cost || 0))
     },
     { 
       key: "profit_margin", 

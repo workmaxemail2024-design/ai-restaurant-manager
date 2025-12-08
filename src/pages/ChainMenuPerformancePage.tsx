@@ -7,6 +7,7 @@ import { useSales } from '@/hooks/useSales';
 import { Badge } from '@/components/ui/badge';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, AlertTriangle, Lightbulb } from 'lucide-react';
+import { formatCurrency, currencySymbol } from '@/lib/currency';
 
 export default function ChainMenuPerformancePage() {
   const { data: dishes } = useDishes();
@@ -159,7 +160,7 @@ export default function ChainMenuPerformancePage() {
                       color: 'hsl(var(--foreground))'
                     }} 
                   />
-                  <Bar dataKey="revenue" fill="hsl(var(--primary))" name="Revenue ($)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="revenue" fill="hsl(var(--primary))" name={`Revenue (${currencySymbol})`} radius={[4, 4, 0, 0]} />
                   <Bar dataKey="quantity" fill="hsl(var(--chart-2))" name="Quantity" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -195,12 +196,12 @@ export default function ChainMenuPerformancePage() {
                           <p className="text-xs text-muted-foreground">{dish.category}</p>
                         </div>
                       </td>
-                      <td className="py-3 px-2 text-right">${dish.basePrice.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right">{formatCurrency(dish.basePrice)}</td>
                       <td className="py-3 px-2 text-right">{dish.totalQuantity}</td>
-                      <td className="py-3 px-2 text-right">${dish.totalRevenue.toFixed(2)}</td>
+                      <td className="py-3 px-2 text-right">{formatCurrency(dish.totalRevenue)}</td>
                       <td className="py-3 px-2 text-right">
                         {dish.priceVariance > 0 ? (
-                          <span className="text-yellow-500">${dish.priceVariance.toFixed(2)}</span>
+                          <span className="text-yellow-500">{formatCurrency(dish.priceVariance)}</span>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
@@ -238,12 +239,12 @@ export default function ChainMenuPerformancePage() {
                     <div>
                       <p className="font-medium">{dish.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Price range: ${Math.min(...dish.byLocation.filter(l => l.quantity > 0).map(l => l.avgPrice)).toFixed(2)} - 
-                        ${Math.max(...dish.byLocation.filter(l => l.quantity > 0).map(l => l.avgPrice)).toFixed(2)}
+                        Price range: {formatCurrency(Math.min(...dish.byLocation.filter(l => l.quantity > 0).map(l => l.avgPrice)))} - 
+                        {formatCurrency(Math.max(...dish.byLocation.filter(l => l.quantity > 0).map(l => l.avgPrice)))}
                       </p>
                     </div>
                     <Badge variant="outline" className="text-yellow-500 border-yellow-500">
-                      ${dish.priceVariance.toFixed(2)} variance
+                      {formatCurrency(dish.priceVariance)} variance
                     </Badge>
                   </div>
                 ))}

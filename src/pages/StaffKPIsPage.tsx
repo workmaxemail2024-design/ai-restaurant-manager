@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { TrendingUp, TrendingDown, Users, DollarSign, AlertTriangle, Plus } from "lucide-react";
+import { TrendingUp, TrendingDown, Users, AlertTriangle, Plus } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format, parseISO, subDays } from "date-fns";
+import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 export default function StaffKPIsPage() {
   const { data: staff = [] } = useStaff();
@@ -86,7 +87,7 @@ export default function StaffKPIsPage() {
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Sales ($)</Label>
+                  <Label>Sales ({currencySymbol})</Label>
                   <Input type="number" step="0.01" value={form.kpi_sales} onChange={(e) => setForm({ ...form, kpi_sales: parseFloat(e.target.value) || 0 })} />
                 </div>
                 <div className="space-y-2">
@@ -124,10 +125,10 @@ export default function StaffKPIsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Avg Sales</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <span className="h-4 w-4 text-muted-foreground font-medium">{currencySymbol}</span>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${avgSales.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{formatCurrency(avgSales)}</div>
               <p className="text-xs text-muted-foreground">per day</p>
             </CardContent>
           </Card>
@@ -176,7 +177,7 @@ export default function StaffKPIsPage() {
                   <XAxis dataKey="date" className="text-xs" />
                   <YAxis className="text-xs" />
                   <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }} />
-                  <Line type="monotone" dataKey="sales" name="Sales ($)" stroke="hsl(var(--primary))" strokeWidth={2} />
+                  <Line type="monotone" dataKey="sales" name={`Sales (${currencySymbol})`} stroke="hsl(var(--primary))" strokeWidth={2} />
                   <Line type="monotone" dataKey="customers" name="Customers" stroke="hsl(var(--accent))" strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
@@ -211,7 +212,7 @@ export default function StaffKPIsPage() {
                     <tr key={p.id} className="border-b">
                       <td className="py-2">{p.staff?.first_name} {p.staff?.last_name}</td>
                       <td className="py-2">{format(parseISO(p.date), "MMM d, yyyy")}</td>
-                      <td className="py-2 text-right">${Number(p.kpi_sales).toFixed(2)}</td>
+                      <td className="py-2 text-right">{formatCurrency(Number(p.kpi_sales))}</td>
                       <td className="py-2 text-right">{p.kpi_customers_served}</td>
                       <td className="py-2 text-right">{p.kpi_errors}</td>
                       <td className="py-2 text-right">{p.score !== null ? Number(p.score).toFixed(1) : "-"}</td>

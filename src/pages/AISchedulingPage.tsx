@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, parseISO, getHours } from "date-fns";
 import { Sparkles, Loader2, Users, Clock, TrendingUp, Calendar } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { formatCurrency } from "@/lib/currency";
 
 interface StaffSuggestion {
   day: string;
@@ -166,7 +167,7 @@ export default function AISchedulingPage() {
                   <YAxis className="text-xs" />
                   <Tooltip 
                     contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
-                    formatter={(value: number) => [`$${value.toFixed(2)}`, "Sales"]}
+                    formatter={(value: number) => [formatCurrency(value), "Sales"]}
                   />
                   <Bar dataKey="sales" radius={[4, 4, 0, 0]}>
                     {hourlySales.map((entry, index) => (

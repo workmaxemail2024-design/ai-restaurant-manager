@@ -3,8 +3,9 @@ import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DollarSign, TrendingUp, Percent, ShoppingBag } from "lucide-react";
+import { TrendingUp, Percent, ShoppingBag } from "lucide-react";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 export default function ReportsPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -32,10 +33,10 @@ export default function ReportsPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Revenue</CardTitle>
-                <DollarSign className="h-4 w-4 text-primary" />
+                <span className="h-4 w-4 text-primary font-medium">{currencySymbol}</span>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${metrics?.totalRevenue.toFixed(2) || "0.00"}</div>
+                <div className="text-2xl font-bold">{formatCurrency(metrics?.totalRevenue || 0)}</div>
               </CardContent>
             </Card>
             <Card>
@@ -62,7 +63,7 @@ export default function ReportsPage() {
                 <TrendingUp className="h-4 w-4 text-success" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-success">${metrics?.totalProfit.toFixed(2) || "0.00"}</div>
+                <div className="text-2xl font-bold text-success">{formatCurrency(metrics?.totalProfit || 0)}</div>
               </CardContent>
             </Card>
           </div>
@@ -83,7 +84,7 @@ export default function ReportsPage() {
                         <span>{dish.name}</span>
                         <div className="text-right">
                           <span className="font-medium">{dish.quantity} sold</span>
-                          <span className="text-muted-foreground ml-2">${dish.revenue.toFixed(2)}</span>
+                          <span className="text-muted-foreground ml-2">{formatCurrency(dish.revenue)}</span>
                         </div>
                       </div>
                     ))}
@@ -107,7 +108,7 @@ export default function ReportsPage() {
                         <span>{dish.name}</span>
                         <div className="text-right">
                           <span className="font-medium">{dish.quantity} sold</span>
-                          <span className="text-muted-foreground ml-2">${dish.revenue.toFixed(2)}</span>
+                          <span className="text-muted-foreground ml-2">{formatCurrency(dish.revenue)}</span>
                         </div>
                       </div>
                     ))}
@@ -137,7 +138,7 @@ export default function ReportsPage() {
                         </div>
                         <div>
                           <span className="text-muted-foreground mr-2">Revenue:</span>
-                          <span className="font-medium text-success">${loc.revenue.toFixed(2)}</span>
+                          <span className="font-medium text-success">{formatCurrency(loc.revenue)}</span>
                         </div>
                       </div>
                     </div>
