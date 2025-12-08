@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
-  Settings2, List, MapPin, Brain, Clock, Trash2, Play, Zap, Radio
+  Settings2, List, MapPin, Brain, Clock, Trash2, Play, Zap, Radio, Eye, EyeOff, ShieldAlert
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
@@ -22,6 +23,7 @@ import { useDishes } from "@/hooks/useDishes";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/currency";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -31,6 +33,16 @@ const POS_PROVIDERS = [
   { value: "captiva", label: "Captiva" },
   { value: "custom", label: "Custom API" },
 ];
+
+interface CaptivaSettings {
+  base_url?: string;
+  store_id?: string;
+  api_key?: string;
+  username?: string;
+  password?: string;
+  simulate?: boolean;
+  last_sync_mode?: string;
+}
 
 export default function POSIntegrationsPage() {
   const [selectedLocation, setSelectedLocation] = useState<string>("");
@@ -43,6 +55,8 @@ export default function POSIntegrationsPage() {
     webhook_url: "",
     captiva_base_url: "",
     captiva_store_id: "",
+    captiva_username: "",
+    captiva_password: "",
   });
 
   const { data: locations } = useLocations();
@@ -67,28 +81,51 @@ export default function POSIntegrationsPage() {
   } | null>(null);
   const [syncingIntegrationId, setSyncingIntegrationId] = useState<string | null>(null);
   const [simulationRunning, setSimulationRunning] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [liveModeConfirmOpen, setLiveModeConfirmOpen] = useState(false);
+  const [pendingLiveModeIntegration, setPendingLiveModeIntegration] = useState<POSIntegration | null>(null);
 
-  // Simulation Mode state - check settings from integration
+  // Simulation Mode state
   const [simulationMode, setSimulationMode] = useState<boolean>(true);
 
   // Load simulation mode from first Captiva integration settings
   useEffect(() => {
     const captivaIntegration = integrations?.find(i => i.pos_provider === "captiva");
     if (captivaIntegration) {
-      const settings = captivaIntegration.settings as Record<string, string> | null;
-      // Default to simulation mode unless explicitly set to live
-      setSimulationMode(settings?.last_sync_mode !== "live");
+      const settings = captivaIntegration.settings as CaptivaSettings | null;
+      setSimulationMode(settings?.simulate !== false);
     }
   }, [integrations]);
 
+  const hasValidCredentials = useCallback((integration: POSIntegration): boolean => {
+    if (integration.pos_provider !== "captiva") return true;
+    const settings = integration.settings as CaptivaSettings | null;
+    return !!(
+      settings?.base_url && 
+      settings?.store_id && 
+      (settings?.api_key || integration.api_key) &&
+      settings?.username &&
+      settings?.password
+    );
+  }, []);
+
   const handleCaptivaSync = useCallback(async (integration: POSIntegration, forceSimulate: boolean = false) => {
+    // Check if trying to do live sync without credentials
+    const settings = (integration.settings || {}) as CaptivaSettings;
+    const shouldSimulate = forceSimulate || settings.simulate !== false;
+    
+    if (!shouldSimulate && !hasValidCredentials(integration)) {
+      toast({ 
+        title: "Missing Credentials", 
+        description: "Please configure all Captiva credentials before using Live Mode", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     setSyncingIntegrationId(integration.id);
     try {
-      // Check if simulation mode is enabled in integration settings
-      const settings = (integration.settings || {}) as Record<string, unknown>;
-      const integrationSimulate = settings.simulate === true || settings.simulate === "true";
-      const shouldSimulate = forceSimulate || integrationSimulate;
-
       const { data, error } = await supabase.functions.invoke("captiva-sync", {
         body: { 
           integration_id: integration.id,
@@ -113,7 +150,43 @@ export default function POSIntegrationsPage() {
     } finally {
       setSyncingIntegrationId(null);
     }
-  }, [toast, refetchIntegrations, refetchLogs]);
+  }, [toast, refetchIntegrations, refetchLogs, hasValidCredentials]);
+
+  const handleLiveSyncClick = useCallback((integration: POSIntegration) => {
+    const settings = integration.settings as CaptivaSettings | null;
+    if (settings?.simulate !== false) {
+      // Currently in simulation mode, ask for confirmation
+      setPendingLiveModeIntegration(integration);
+      setLiveModeConfirmOpen(true);
+    } else {
+      // Already in live mode, proceed with sync
+      handleCaptivaSync(integration, false);
+    }
+  }, [handleCaptivaSync]);
+
+  const confirmLiveMode = useCallback(async () => {
+    if (!pendingLiveModeIntegration) return;
+    
+    // Update the integration to disable simulation
+    try {
+      const currentSettings = (pendingLiveModeIntegration.settings || {}) as CaptivaSettings;
+      await supabase
+        .from("pos_integrations")
+        .update({ 
+          settings: { ...currentSettings, simulate: false } 
+        })
+        .eq("id", pendingLiveModeIntegration.id);
+      
+      setSimulationMode(false);
+      refetchIntegrations();
+      toast({ title: "Live Mode Enabled", description: "Captiva integration is now using real API" });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to enable live mode", variant: "destructive" });
+    }
+    
+    setLiveModeConfirmOpen(false);
+    setPendingLiveModeIntegration(null);
+  }, [pendingLiveModeIntegration, refetchIntegrations, toast]);
 
   const handleRunSimulationTest = useCallback(async () => {
     const captivaIntegration = integrations?.find(i => i.pos_provider === "captiva");
@@ -161,23 +234,32 @@ export default function POSIntegrationsPage() {
       settings: formData.pos_provider === "captiva" ? {
         base_url: formData.captiva_base_url,
         store_id: formData.captiva_store_id,
+        api_key: formData.api_key,
+        username: formData.captiva_username,
+        password: formData.captiva_password,
+        simulate: true, // Default to simulation mode
       } : undefined,
     };
     
     await createIntegration.mutateAsync(submitData);
     setIsAddOpen(false);
-    setFormData({ location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "", captiva_base_url: "", captiva_store_id: "" });
+    setFormData({ 
+      location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "", 
+      captiva_base_url: "", captiva_store_id: "", captiva_username: "", captiva_password: "" 
+    });
   };
 
-  const handleTestConnection = (integration: { pos_provider: string; api_key: string | null; api_secret: string | null; settings?: Record<string, unknown> | null }) => {
+  const handleTestConnection = (integration: POSIntegration) => {
     if (integration.pos_provider === "captiva") {
-      const settings = integration.settings as Record<string, string> || {};
+      const settings = integration.settings as CaptivaSettings || {};
       testCaptivaConnection({
         base_url: settings.base_url || "",
-        api_key: integration.api_key || "",
+        api_key: settings.api_key || integration.api_key || "",
         api_secret: integration.api_secret || "",
         store_id: settings.store_id || "",
-        simulate: simulationMode,
+        username: settings.username || "",
+        password: settings.password || "",
+        simulate: settings.simulate !== false,
       });
     } else {
       testConnection.mutate({
@@ -188,7 +270,15 @@ export default function POSIntegrationsPage() {
     }
   };
   
-  const testCaptivaConnection = async (params: { base_url: string; api_key: string; api_secret: string; store_id: string; simulate?: boolean }) => {
+  const testCaptivaConnection = async (params: { 
+    base_url: string; 
+    api_key: string; 
+    api_secret: string; 
+    store_id: string; 
+    username?: string;
+    password?: string;
+    simulate?: boolean 
+  }) => {
     try {
       const { data, error } = await supabase.functions.invoke("captiva-test", {
         body: params,
@@ -217,7 +307,6 @@ export default function POSIntegrationsPage() {
     updateMapping.mutate({ id: mappingId, internal_id: dishId, is_verified: true });
   };
 
-  // Get latest Captiva sync stats from logs
   const getLatestCaptivaStats = (integrationId: string) => {
     const latestLog = syncLogs?.find(
       log => log.pos_provider === "captiva" && 
@@ -233,6 +322,33 @@ export default function POSIntegrationsPage() {
     };
   };
 
+  const toggleSimulationMode = async (integration: POSIntegration, enable: boolean) => {
+    if (!enable && !hasValidCredentials(integration)) {
+      toast({ 
+        title: "Missing Credentials", 
+        description: "Please configure all credentials before disabling simulation mode", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (!enable) {
+      setPendingLiveModeIntegration(integration);
+      setLiveModeConfirmOpen(true);
+      return;
+    }
+    
+    const currentSettings = (integration.settings || {}) as CaptivaSettings;
+    await supabase
+      .from("pos_integrations")
+      .update({ settings: { ...currentSettings, simulate: enable } })
+      .eq("id", integration.id);
+    
+    setSimulationMode(enable);
+    refetchIntegrations();
+    toast({ title: enable ? "Simulation Mode Enabled" : "Live Mode Enabled" });
+  };
+
   return (
     <PageLayout 
       title="POS Integrations" 
@@ -242,11 +358,12 @@ export default function POSIntegrationsPage() {
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" />Add Integration</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Add POS Integration</DialogTitle>
+              <DialogDescription>Configure a new POS system connection</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               <div>
                 <Label>Location</Label>
                 <Select value={formData.location_id} onValueChange={v => setFormData(p => ({ ...p, location_id: v }))}>
@@ -265,34 +382,130 @@ export default function POSIntegrationsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>API Key</Label>
-                <Input type="password" value={formData.api_key} onChange={e => setFormData(p => ({ ...p, api_key: e.target.value }))} />
-              </div>
-              <div>
-                <Label>API Secret</Label>
-                <Input type="password" value={formData.api_secret} onChange={e => setFormData(p => ({ ...p, api_secret: e.target.value }))} />
-              </div>
+              
               {formData.pos_provider === "captiva" && (
                 <>
-                  <div>
-                    <Label>Captiva Cloud Base URL</Label>
-                    <Input placeholder="https://your-captiva-cloud.com" value={formData.captiva_base_url} onChange={e => setFormData(p => ({ ...p, captiva_base_url: e.target.value }))} />
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="h-4 w-4 inline mr-1" />
+                      New integrations start in Simulation Mode for testing.
+                    </p>
                   </div>
                   <div>
-                    <Label>Store / Outlet ID</Label>
-                    <Input placeholder="Store ID (optional)" value={formData.captiva_store_id} onChange={e => setFormData(p => ({ ...p, captiva_store_id: e.target.value }))} />
+                    <Label>Captiva Cloud Base URL *</Label>
+                    <Input 
+                      placeholder="https://your-captiva-cloud.com" 
+                      value={formData.captiva_base_url} 
+                      onChange={e => setFormData(p => ({ ...p, captiva_base_url: e.target.value }))} 
+                    />
+                  </div>
+                  <div>
+                    <Label>Store / Outlet ID *</Label>
+                    <Input 
+                      placeholder="Store ID" 
+                      value={formData.captiva_store_id} 
+                      onChange={e => setFormData(p => ({ ...p, captiva_store_id: e.target.value }))} 
+                    />
+                  </div>
+                  <div>
+                    <Label>API Key *</Label>
+                    <div className="relative">
+                      <Input 
+                        type={showApiKey ? "text" : "password"} 
+                        value={formData.api_key} 
+                        onChange={e => setFormData(p => ({ ...p, api_key: e.target.value }))} 
+                      />
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                      >
+                        {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Username *</Label>
+                    <Input 
+                      value={formData.captiva_username} 
+                      onChange={e => setFormData(p => ({ ...p, captiva_username: e.target.value }))} 
+                    />
+                  </div>
+                  <div>
+                    <Label>Password *</Label>
+                    <div className="relative">
+                      <Input 
+                        type={showPassword ? "text" : "password"} 
+                        value={formData.captiva_password} 
+                        onChange={e => setFormData(p => ({ ...p, captiva_password: e.target.value }))} 
+                      />
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
-              <Button onClick={handleSubmit} disabled={!formData.location_id || !formData.pos_provider || (formData.pos_provider === "captiva" && !formData.captiva_base_url && !simulationMode)}>
+              
+              {formData.pos_provider !== "captiva" && (
+                <>
+                  <div>
+                    <Label>API Key</Label>
+                    <Input type="password" value={formData.api_key} onChange={e => setFormData(p => ({ ...p, api_key: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label>API Secret</Label>
+                    <Input type="password" value={formData.api_secret} onChange={e => setFormData(p => ({ ...p, api_secret: e.target.value }))} />
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button onClick={handleSubmit} disabled={!formData.location_id || !formData.pos_provider}>
                 Create Integration
               </Button>
-            </div>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       }
     >
+      {/* Live Mode Confirmation Dialog */}
+      <AlertDialog open={liveModeConfirmOpen} onOpenChange={setLiveModeConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-amber-500" />
+              Switch to Live Mode?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>You are switching to <strong>LIVE POS data</strong>. This will:</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Import real sales and staff activity from Captiva</li>
+                <li>Create actual records in your database</li>
+                <li>Use your configured API credentials</li>
+              </ul>
+              <p className="text-amber-600 dark:text-amber-400 font-medium mt-2">
+                Ensure your Captiva API credentials are correct before proceeding.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmLiveMode} className="bg-amber-600 hover:bg-amber-700">
+              Enable Live Mode
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="space-y-6">
         {/* Location Filter + Simulation Controls */}
         <Card>
@@ -310,7 +523,6 @@ export default function POSIntegrationsPage() {
                 <Brain className="h-4 w-4 mr-2" />AI Reconciliation
               </Button>
               
-              {/* Simulation Test Button */}
               <Button 
                 variant="secondary" 
                 onClick={handleRunSimulationTest}
@@ -340,9 +552,11 @@ export default function POSIntegrationsPage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {integrations?.map(integration => {
-                  const settings = integration.settings as Record<string, string> | null;
+                  const settings = integration.settings as CaptivaSettings | null;
                   const lastSyncMode = settings?.last_sync_mode;
+                  const isSimulation = settings?.simulate !== false;
                   const stats = getLatestCaptivaStats(integration.id);
+                  const credentialsValid = hasValidCredentials(integration);
                   
                   return (
                     <Card key={integration.id}>
@@ -359,21 +573,56 @@ export default function POSIntegrationsPage() {
                         <CardDescription>{integration.locations?.name}</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {/* Simulation Mode Status for Captiva */}
+                        {/* Simulation Mode Banner */}
                         {integration.pos_provider === "captiva" && (
-                          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                          <div className={`p-3 rounded-lg ${isSimulation ? "bg-amber-500/10 border border-amber-500/30" : "bg-green-500/10 border border-green-500/30"}`}>
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
-                                <Radio className="h-4 w-4 text-amber-500" />
-                                <span className="text-sm font-medium">Simulation Mode</span>
+                                <Radio className={`h-4 w-4 ${isSimulation ? "text-amber-500" : "text-green-500"}`} />
+                                <span className="text-sm font-medium">
+                                  {isSimulation ? "Simulation Mode" : "Live Mode"}
+                                </span>
                               </div>
-                              <Badge variant={simulationMode ? "default" : "outline"} className={simulationMode ? "bg-amber-500 text-white" : ""}>
-                                {simulationMode ? "ON" : "OFF"}
-                              </Badge>
+                              <Switch
+                                checked={isSimulation}
+                                onCheckedChange={(checked) => toggleSimulationMode(integration, checked)}
+                              />
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
-                              {simulationMode ? "Using fake data for testing" : "Using real Captiva API"}
+                              {isSimulation ? "Using fake data for testing" : "Using real Captiva API"}
                             </p>
+                            {!isSimulation && !credentialsValid && (
+                              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Missing credentials - Live sync disabled
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Credentials Display for Captiva */}
+                        {integration.pos_provider === "captiva" && settings && (
+                          <div className="text-xs space-y-1 p-2 rounded bg-muted/50">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Base URL:</span>
+                              <span className="font-mono">{settings.base_url || "Not set"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Store ID:</span>
+                              <span className="font-mono">{settings.store_id || "Not set"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">API Key:</span>
+                              <span className="font-mono">{settings.api_key || integration.api_key ? "••••••••" : "Not set"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Username:</span>
+                              <span className="font-mono">{settings.username || "Not set"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Password:</span>
+                              <span className="font-mono">{settings.password ? "••••••••" : "Not set"}</span>
+                            </div>
                           </div>
                         )}
 
@@ -428,11 +677,12 @@ export default function POSIntegrationsPage() {
                               <Button 
                                 size="sm" 
                                 variant="outline" 
-                                onClick={() => handleCaptivaSync(integration, false)}
-                                disabled={syncingIntegrationId === integration.id}
+                                onClick={() => handleLiveSyncClick(integration)}
+                                disabled={syncingIntegrationId === integration.id || (settings?.simulate === false && !credentialsValid)}
+                                title={!credentialsValid && settings?.simulate === false ? "Configure credentials to enable" : ""}
                               >
                                 <RefreshCw className={`h-4 w-4 mr-1 ${syncingIntegrationId === integration.id ? "animate-spin" : ""}`} />
-                                {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
+                                {syncingIntegrationId === integration.id ? "Syncing..." : "Live Sync"}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -551,24 +801,23 @@ export default function POSIntegrationsPage() {
               </Card>
             ) : (
               <>
-                {/* Summary */}
                 <div className="grid gap-4 md:grid-cols-4">
                   <Card>
                     <CardContent className="pt-4">
                       <p className="text-sm text-muted-foreground">System Total</p>
-                      <p className="text-2xl font-bold">${reconciliationData.summary?.system_total.toFixed(2)}</p>
+                      <p className="text-2xl font-bold">{formatCurrency(reconciliationData.summary?.system_total || 0)}</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="pt-4">
                       <p className="text-sm text-muted-foreground">POS Total</p>
-                      <p className="text-2xl font-bold">${reconciliationData.summary?.pos_total.toFixed(2)}</p>
+                      <p className="text-2xl font-bold">{formatCurrency(reconciliationData.summary?.pos_total || 0)}</p>
                     </CardContent>
                   </Card>
                   <Card>
                     <CardContent className="pt-4">
                       <p className="text-sm text-muted-foreground">Difference</p>
-                      <p className="text-2xl font-bold text-destructive">${reconciliationData.summary?.difference.toFixed(2)}</p>
+                      <p className="text-2xl font-bold text-destructive">{formatCurrency(reconciliationData.summary?.difference || 0)}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -579,7 +828,6 @@ export default function POSIntegrationsPage() {
                   </Card>
                 </div>
 
-                {/* Anomalies */}
                 {reconciliationData.anomalies && reconciliationData.anomalies.length > 0 && (
                   <Card>
                     <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-yellow-500" />Detected Anomalies</CardTitle></CardHeader>
@@ -594,7 +842,6 @@ export default function POSIntegrationsPage() {
                   </Card>
                 )}
 
-                {/* Mapping Suggestions */}
                 {reconciliationData.mapping_suggestions && reconciliationData.mapping_suggestions.length > 0 && (
                   <Card>
                     <CardHeader><CardTitle>AI Mapping Suggestions</CardTitle></CardHeader>

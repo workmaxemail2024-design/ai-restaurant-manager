@@ -6,7 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ============ SIMULATION RESPONSE ============
 function simulateCaptivaTestResponse() {
   return {
     success: true,
@@ -47,7 +46,6 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      console.error("Authentication error:", authError);
       return new Response(
         JSON.stringify({ success: false, error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -55,21 +53,21 @@ serve(async (req) => {
     }
 
     const requestBody = await req.json();
-    const { base_url, api_key, api_secret, store_id, simulate } = requestBody;
+    const { base_url, api_key, api_secret, store_id, username, password, simulate } = requestBody;
 
-    // Check global simulation mode or per-request simulate flag
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
     const isSimulationMode = simulate === true || globalSimulateMode;
 
     console.log("Captiva test request:", { 
       base_url: base_url || "(empty)", 
       store_id: store_id || "(empty)", 
-      hasApiKey: !!api_key, 
-      hasApiSecret: !!api_secret,
+      hasApiKey: !!api_key,
+      hasUsername: !!username,
+      hasPassword: !!password,
       simulate: isSimulationMode 
     });
 
-    // ============ SIMULATION MODE ============
+    // SIMULATION MODE
     if (isSimulationMode) {
       console.log("🎮 SIMULATION MODE - Returning simulated Captiva test response");
       return new Response(
@@ -78,63 +76,46 @@ serve(async (req) => {
       );
     }
 
-    // ============ REAL API MODE ============
-    // Use defaults for missing credentials in simulation mode
-    const effectiveBaseUrl = base_url || "simulated";
-    const effectiveApiKey = api_key || "sim-key";
-    const effectiveApiSecret = api_secret || "sim-secret";
-    const effectiveStoreId = store_id || "sim-store";
-
-    if (effectiveBaseUrl === "simulated" || !base_url) {
-      console.log("No base_url provided, returning simulation response");
+    // LIVE MODE - Validate credentials
+    if (!base_url || !store_id) {
       return new Response(
-        JSON.stringify(simulateCaptivaTestResponse()),
+        JSON.stringify({ success: false, error: "Missing base_url or store_id for live mode" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Testing Captiva connection to ${effectiveBaseUrl} for store ${effectiveStoreId}`);
+    console.log(`Testing LIVE Captiva connection to ${base_url} for store ${store_id}`);
 
-    // Captiva typically uses Basic Auth with API key and secret
-    const authString = btoa(`${effectiveApiKey}:${effectiveApiSecret}`);
-    
-    // Test endpoint - typically /api/v1/status or /api/v1/stores
-    const testEndpoint = effectiveStoreId && effectiveStoreId !== "sim-store"
-      ? `${effectiveBaseUrl.replace(/\/$/, "")}/api/v1/stores/${effectiveStoreId}`
-      : `${effectiveBaseUrl.replace(/\/$/, "")}/api/v1/status`;
+    // Build auth header based on available credentials
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    };
+
+    if (api_key) {
+      headers["X-API-Key"] = api_key;
+    }
+    if (username && password) {
+      headers["Authorization"] = `Basic ${btoa(`${username}:${password}`)}`;
+    } else if (api_key && api_secret) {
+      headers["Authorization"] = `Basic ${btoa(`${api_key}:${api_secret}`)}`;
+    }
+
+    const testEndpoint = `${base_url.replace(/\/$/, "")}/outlet/${store_id}/status`;
 
     try {
       const response = await fetch(testEndpoint, {
         method: "GET",
-        headers: {
-          "Authorization": `Basic ${authString}`,
-          "Content-Type": "application/json",
-          "Accept": "application/json, application/xml",
-        },
+        headers,
       });
 
-      const contentType = response.headers.get("content-type") || "";
+      const responseText = await response.text();
       let responseData;
       
-      if (contentType.includes("xml")) {
-        const xmlText = await response.text();
-        // Basic XML parsing for status check
-        const successMatch = xmlText.match(/<status>(\w+)<\/status>/i);
-        const errorMatch = xmlText.match(/<error>([^<]+)<\/error>/i);
-        
-        if (errorMatch) {
-          return new Response(
-            JSON.stringify({ success: false, error: errorMatch[1] }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        
-        responseData = { 
-          status: successMatch ? successMatch[1] : "unknown", 
-          raw: xmlText.substring(0, 200),
-        };
-      } else {
-        responseData = await response.json().catch(() => ({}));
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = { raw: responseText.substring(0, 500) };
       }
 
       if (response.ok) {
@@ -143,8 +124,9 @@ serve(async (req) => {
             success: true,
             message: "Captiva connection successful",
             provider: "captiva",
-            store_id: effectiveStoreId,
+            store_id,
             simulation: false,
+            status_code: response.status,
             data: responseData,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -154,6 +136,7 @@ serve(async (req) => {
           JSON.stringify({
             success: false,
             error: `Captiva API returned ${response.status}: ${response.statusText}`,
+            status_code: response.status,
             details: responseData,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }

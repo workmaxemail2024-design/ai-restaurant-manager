@@ -10,17 +10,17 @@ import { LocationToggle } from "@/components/common/LocationToggle";
 import { DollarSign, ShoppingBag, Users, TrendingUp } from "lucide-react";
 
 const metrics = [
-  { title: "Total Revenue", value: "$73,240", change: "+12.5% from yesterday", changeType: "positive" as const, icon: DollarSign },
+  { title: "Total Revenue", value: "€73,240", change: "+12.5% from yesterday", changeType: "positive" as const, icon: DollarSign },
   { title: "Orders Today", value: "847", change: "+8.2% from yesterday", changeType: "positive" as const, icon: ShoppingBag },
   { title: "Active Staff", value: "124", change: "Across all locations", changeType: "neutral" as const, icon: Users },
-  { title: "Avg Order Value", value: "$86.40", change: "+3.1% this week", changeType: "positive" as const, icon: TrendingUp },
+  { title: "Avg Order Value", value: "€86.40", change: "+3.1% this week", changeType: "positive" as const, icon: TrendingUp },
 ];
 
 const locations = [
-  { name: "Downtown Flagship", address: "123 Main St", status: "busy" as const, revenue: "$24,500", staff: 28, waitTime: "25min" },
-  { name: "Midtown Plaza", address: "456 Oak Ave", status: "open" as const, revenue: "$18,200", staff: 22, waitTime: "10min" },
-  { name: "Harbor District", address: "789 Beach Rd", status: "open" as const, revenue: "$15,800", staff: 18, waitTime: "5min" },
-  { name: "Airport Terminal", address: "Terminal B", status: "busy" as const, revenue: "$14,740", staff: 16, waitTime: "15min" },
+  { name: "Downtown Flagship", address: "123 Main St", status: "busy" as const, revenue: "€24,500", staff: 28, waitTime: "25min" },
+  { name: "Midtown Plaza", address: "456 Oak Ave", status: "open" as const, revenue: "€18,200", staff: 22, waitTime: "10min" },
+  { name: "Harbor District", address: "789 Beach Rd", status: "open" as const, revenue: "€15,800", staff: 18, waitTime: "5min" },
+  { name: "Airport Terminal", address: "Terminal B", status: "busy" as const, revenue: "€14,740", staff: 16, waitTime: "15min" },
 ];
 
 const alerts = [

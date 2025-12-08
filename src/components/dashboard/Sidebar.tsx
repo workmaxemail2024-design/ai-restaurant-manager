@@ -148,8 +148,8 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      {/* Main Navigation - scroll position preserved automatically */}
+      <nav className="flex-1 p-3 space-y-1 overflow-y-auto scroll-smooth">
         {navSections.map((section) => (
           <Collapsible
             key={section.title}

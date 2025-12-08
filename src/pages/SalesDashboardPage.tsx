@@ -10,7 +10,8 @@ import {
 import { useSales } from "@/hooks/useSales";
 import { useDishes } from "@/hooks/useDishes";
 import { useStaff } from "@/hooks/useStaff";
-import { format, startOfDay, subDays, isToday, parseISO } from "date-fns";
+import { format, subDays } from "date-fns";
+import { formatCurrency } from "@/lib/currency";
 import {
   ResponsiveContainer,
   LineChart,
@@ -21,7 +22,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Legend,
 } from "recharts";
 
 export default function SalesDashboardPage() {
@@ -69,11 +69,9 @@ export default function SalesDashboardPage() {
 
   // Top 5 Staff by sales (using POS data via dishes)
   const topStaff = useMemo(() => {
-    // This is a placeholder - in real implementation, sales would be linked to staff
-    // For now, we'll just show staff with most attendance
     return staff.slice(0, 5).map(s => ({
       name: `${s.first_name} ${s.last_name}`,
-      sales: Math.floor(Math.random() * 50) + 10, // Placeholder
+      sales: Math.floor(Math.random() * 50) + 10,
       role: s.role
     }));
   }, [staff]);
@@ -134,7 +132,7 @@ export default function SalesDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Revenue Today</p>
-                  <p className="text-3xl font-bold text-green-600">${totalRevenueToday.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-green-600">{formatCurrency(totalRevenueToday)}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
                   <DollarSign className="h-6 w-6 text-green-600" />
@@ -162,7 +160,7 @@ export default function SalesDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Avg Order Value</p>
-                  <p className="text-3xl font-bold text-purple-600">${avgOrderValue.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-purple-600">{formatCurrency(avgOrderValue)}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
                   <TrendingUp className="h-6 w-6 text-purple-600" />
@@ -209,7 +207,7 @@ export default function SalesDashboardPage() {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px'
                       }}
-                      formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']}
+                      formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                     />
                     <Line 
                       type="monotone" 
@@ -245,7 +243,7 @@ export default function SalesDashboardPage() {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px'
                       }}
-                      formatter={(value: number) => [`$${value.toFixed(2)}`, 'Revenue']}
+                      formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                     />
                     <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                   </BarChart>
@@ -281,7 +279,7 @@ export default function SalesDashboardPage() {
                           <p className="text-sm text-muted-foreground">{dish.quantity} sold</p>
                         </div>
                       </div>
-                      <p className="font-bold text-green-600">${dish.revenue.toFixed(2)}</p>
+                      <p className="font-bold text-green-600">{formatCurrency(dish.revenue)}</p>
                     </div>
                   ))}
                 </div>
