@@ -17,7 +17,7 @@ import {
   Calendar,
   Clock,
   Target,
-  DollarSign,
+  Euro,
   Brain,
   TrendingUp,
   Sparkles,
@@ -80,7 +80,7 @@ const navSections: NavSection[] = [
     permission: 'menu',
     items: [
       { icon: ChefHat, label: "Dishes", path: "/dishes", permission: { resource: 'menu', action: 'view' } },
-      { icon: DollarSign, label: "Cost Analysis", path: "/menu/cost-analysis", permission: { resource: 'menu', action: 'view' } },
+      { icon: Euro, label: "Cost Analysis", path: "/menu/cost-analysis", permission: { resource: 'menu', action: 'view' } },
       { icon: Brain, label: "AI Engineering", path: "/menu/engineering", permission: { resource: 'ai_features', action: 'view' } },
     ]
   },

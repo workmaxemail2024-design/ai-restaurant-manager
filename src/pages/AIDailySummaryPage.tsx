@@ -9,11 +9,12 @@ import { useIngredients } from "@/hooks/useIngredients";
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays } from "date-fns";
 import { 
-  Sparkles, Loader2, TrendingUp, TrendingDown, DollarSign, 
+  Sparkles, Loader2, TrendingUp, TrendingDown, Euro, 
   Percent, ShoppingCart, AlertTriangle, CheckCircle, ChefHat,
   Users, Package
 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { formatCurrency } from "@/lib/currency";
 
 export default function AIDailySummaryPage() {
   const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
@@ -70,11 +71,11 @@ export default function AIDailySummaryPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Yesterday's Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <Euro className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${metricsLoading ? "..." : metrics?.totalRevenue.toFixed(2) || "0.00"}
+                {metricsLoading ? "..." : formatCurrency(metrics?.totalRevenue || 0)}
               </div>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <TrendingUp className="h-3 w-3 text-green-500" /> +12% from last week
@@ -102,7 +103,7 @@ export default function AIDailySummaryPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${metricsLoading ? "..." : metrics?.totalProfit.toFixed(2) || "0.00"}
+                {metricsLoading ? "..." : formatCurrency(metrics?.totalProfit || 0)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Gross profit margin
@@ -165,7 +166,7 @@ export default function AIDailySummaryPage() {
                       </div>
                       <div className="text-right text-sm">
                         <div className="font-medium">{dish.quantity} sold</div>
-                        <div className="text-muted-foreground">${dish.revenue.toFixed(2)}</div>
+                        <div className="text-muted-foreground">{formatCurrency(dish.revenue)}</div>
                       </div>
                     </div>
                   ))}
@@ -193,7 +194,7 @@ export default function AIDailySummaryPage() {
                       <span className="font-medium">{dish.name}</span>
                       <div className="text-right text-sm">
                         <div className="font-medium">{dish.quantity} sold</div>
-                        <div className="text-muted-foreground">${dish.revenue.toFixed(2)}</div>
+                        <div className="text-muted-foreground">{formatCurrency(dish.revenue)}</div>
                       </div>
                     </div>
                   ))}
@@ -281,7 +282,7 @@ export default function AIDailySummaryPage() {
                     <div className="mt-2 space-y-1 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Revenue:</span>
-                        <span className="font-medium">${location.revenue.toFixed(2)}</span>
+                        <span className="font-medium">{formatCurrency(location.revenue)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Orders:</span>
