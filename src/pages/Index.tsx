@@ -7,10 +7,10 @@ import { AlertItem } from "@/components/dashboard/AlertItem";
 import { AIInsightPanel } from "@/components/dashboard/AIInsightPanel";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { LocationToggle } from "@/components/common/LocationToggle";
-import { DollarSign, ShoppingBag, Users, TrendingUp } from "lucide-react";
+import { Euro, ShoppingBag, Users, TrendingUp } from "lucide-react";
 
 const metrics = [
-  { title: "Total Revenue", value: "€73,240", change: "+12.5% from yesterday", changeType: "positive" as const, icon: DollarSign },
+  { title: "Total Revenue", value: "€73,240", change: "+12.5% from yesterday", changeType: "positive" as const, icon: Euro },
   { title: "Orders Today", value: "847", change: "+8.2% from yesterday", changeType: "positive" as const, icon: ShoppingBag },
   { title: "Active Staff", value: "124", change: "Across all locations", changeType: "neutral" as const, icon: Users },
   { title: "Avg Order Value", value: "€86.40", change: "+3.1% this week", changeType: "positive" as const, icon: TrendingUp },

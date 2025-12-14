@@ -14,6 +14,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
+import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 const roles: StaffRole[] = ["chef", "waiter", "manager", "host", "bartender", "kitchen_assistant", "cleaner"];
 const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
@@ -103,7 +104,7 @@ export default function StaffPage() {
         </Badge>
       )
     },
-    { key: "hourly_rate", header: "Hourly Rate", render: (item: Staff) => `$${item.hourly_rate.toFixed(2)}` },
+    { key: "hourly_rate", header: "Hourly Rate", render: (item: Staff) => formatCurrency(item.hourly_rate) },
     { key: "location", header: "Location", render: (item: Staff) => item.locations?.name || "-" },
     {
       key: "pos_mapping",
@@ -168,7 +169,7 @@ export default function StaffPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Hourly Rate ($)</Label>
+                  <Label>Hourly Rate ({currencySymbol})</Label>
                   <Input type="number" step="0.01" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: parseFloat(e.target.value) || 0 })} />
                 </div>
                 <div className="space-y-2">

@@ -9,7 +9,7 @@ import {
   Sparkles, 
   TrendingUp, 
   Package, 
-  DollarSign, 
+  Euro, 
   AlertTriangle,
   Users,
   ShoppingCart,
@@ -142,7 +142,7 @@ export default function AIInsightsPage() {
             <AIInsightCard
               title="Menu Items to Reprice"
               description="Pricing optimization opportunities"
-              icon={DollarSign}
+              icon={Euro}
               type="warning"
               items={Array.isArray(menuInsights?.insights) ? menuInsights.insights.filter((i: string) => i.toLowerCase().includes('price') || i.toLowerCase().includes('margin')) : undefined}
               isLoading={menuInsightsLoading}

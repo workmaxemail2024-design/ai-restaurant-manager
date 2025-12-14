@@ -10,6 +10,7 @@ import { Plus } from "lucide-react";
 import { useSales, useCreateSale, useDeleteSale, Sale, SaleInsert } from "@/hooks/useSales";
 import { useDishes } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
+import { formatCurrency } from "@/lib/currency";
 
 export default function SalesPage() {
   const { data: sales = [], isLoading } = useSales();
@@ -38,7 +39,7 @@ export default function SalesPage() {
     { 
       key: "total_price", 
       header: "Total",
-      render: (item: Sale) => `$${Number(item.total_price).toFixed(2)}`
+      render: (item: Sale) => formatCurrency(Number(item.total_price))
     },
     { 
       key: "created_at", 
@@ -106,7 +107,7 @@ export default function SalesPage() {
                   <SelectContent>
                     {dishes.map((dish) => (
                       <SelectItem key={dish.id} value={dish.id}>
-                        {dish.name} - ${Number(dish.selling_price).toFixed(2)}
+                        {dish.name} - {formatCurrency(Number(dish.selling_price))}
                       </SelectItem>
                     ))}
                   </SelectContent>

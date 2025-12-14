@@ -16,7 +16,7 @@ import {
   Calendar,
   Clock,
   Target,
-  DollarSign,
+  Euro,
   Brain,
   TrendingUp,
   Sparkles,
@@ -68,7 +68,7 @@ const navSections: NavSection[] = [
     icon: ChefHat,
     items: [
       { icon: ChefHat, label: "Dishes", path: "/dishes" },
-      { icon: DollarSign, label: "Cost Analysis", path: "/menu/cost-analysis" },
+      { icon: Euro, label: "Cost Analysis", path: "/menu/cost-analysis" },
       { icon: Brain, label: "AI Engineering", path: "/menu/engineering" },
     ]
   },

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  DollarSign, ShoppingCart, TrendingUp, Utensils, Users, 
+  Euro, ShoppingCart, TrendingUp, Utensils, Users, 
   BarChart3, Clock
 } from "lucide-react";
 import { useSales } from "@/hooks/useSales";
@@ -135,7 +135,7 @@ export default function SalesDashboardPage() {
                   <p className="text-3xl font-bold text-green-600">{formatCurrency(totalRevenueToday)}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-green-600" />
+                  <Euro className="h-6 w-6 text-green-600" />
                 </div>
               </div>
             </CardContent>
