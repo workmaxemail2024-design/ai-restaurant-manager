@@ -74,6 +74,7 @@ function NotificationCard({ notification }: { notification: Notification }) {
                     variant="ghost"
                     size="icon"
                     onClick={() => markRead.mutate(notification.id)}
+                    disabled={markRead.isPending}
                   >
                     <Check className="h-4 w-4" />
                   </Button>
@@ -82,6 +83,7 @@ function NotificationCard({ notification }: { notification: Notification }) {
                   variant="ghost"
                   size="icon"
                   onClick={() => deleteNotification.mutate(notification.id)}
+                  disabled={deleteNotification.isPending}
                 >
                   <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
@@ -124,7 +126,7 @@ export default function NotificationsPage() {
           </Tabs>
           
           {unreadCount > 0 && (
-            <Button variant="outline" onClick={() => markAllRead.mutate()}>
+            <Button variant="outline" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
               <CheckCheck className="h-4 w-4 mr-2" />
               Mark all as read
             </Button>

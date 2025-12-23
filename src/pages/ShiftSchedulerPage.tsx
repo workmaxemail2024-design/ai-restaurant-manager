@@ -144,6 +144,7 @@ export default function ShiftSchedulerPage() {
                             size="icon" 
                             className="h-5 w-5 text-destructive hover:text-destructive"
                             onClick={() => deleteShift.mutate(shift.id)}
+                            disabled={deleteShift.isPending}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>

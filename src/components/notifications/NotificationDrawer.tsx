@@ -119,6 +119,7 @@ export function NotificationDrawer() {
                               size="sm"
                               className="h-7 text-xs"
                               onClick={() => handleMarkRead(notification.id)}
+                              disabled={markRead.isPending}
                             >
                               <Check className="h-3 w-3 mr-1" />
                               Mark read
@@ -129,6 +130,7 @@ export function NotificationDrawer() {
                             size="sm"
                             className="h-7 text-xs text-destructive hover:text-destructive"
                             onClick={() => handleDelete(notification.id)}
+                            disabled={deleteNotification.isPending}
                           >
                             <Trash2 className="h-3 w-3 mr-1" />
                             Delete

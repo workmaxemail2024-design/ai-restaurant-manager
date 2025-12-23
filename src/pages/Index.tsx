@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PermissionFilteredSidebar } from "@/components/dashboard/PermissionFilteredSidebar";
 import { Header } from "@/components/dashboard/Header";
 import { MetricCard } from "@/components/dashboard/MetricCard";
@@ -31,6 +32,7 @@ const alerts = [
 ];
 
 const Index = () => {
+  const navigate = useNavigate();
   const [showAllLocations, setShowAllLocations] = useState(true);
 
   return (
@@ -69,7 +71,7 @@ const Index = () => {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold">Location Overview</h2>
-                <button className="text-sm text-primary hover:underline">View All</button>
+                <button className="text-sm text-primary hover:underline" onClick={() => navigate('/locations')}>View All</button>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {locations.map((location, index) => (
