@@ -78,7 +78,7 @@ export default function AttendancePage() {
       key: "actions",
       header: "",
       render: (item: StaffAttendance) => !item.clock_out && (
-        <Button size="sm" variant="outline" onClick={() => clockOut.mutate(item.id)}>
+        <Button size="sm" variant="outline" onClick={() => clockOut.mutate(item.id)} disabled={clockOut.isPending}>
           <LogOut className="mr-2 h-4 w-4" /> Clock Out
         </Button>
       )
@@ -151,6 +151,7 @@ export default function AttendancePage() {
                       variant="outline" 
                       className="mt-2 w-full"
                       onClick={() => clockOut.mutate(session.id)}
+                      disabled={clockOut.isPending}
                     >
                       <LogOut className="mr-2 h-3 w-3" /> Clock Out
                     </Button>
