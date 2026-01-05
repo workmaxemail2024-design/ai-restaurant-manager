@@ -5,14 +5,23 @@ import { LocationSelector } from "@/components/LocationSelector";
 import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
 import { RealtimeIndicator } from "@/components/dashboard/RealtimeIndicator";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useLocation } from "@/contexts/LocationContext";
+import { useLocations } from "@/hooks/useLocations";
 import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 import { useNavigate } from "react-router-dom";
 
 export function Header() {
   const { signOut, user } = useRestaurant();
+  const { selectedLocationId } = useLocation();
+  const { data: locations = [] } = useLocations();
   const navigate = useNavigate();
   const { isConnected } = useRealtimeEvents({ showToasts: true });
+  
+  const selectedLocationName = selectedLocationId 
+    ? locations.find(l => l.id === selectedLocationId)?.name 
+    : null;
   
   const today = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -43,8 +52,13 @@ export function Header() {
         {/* Restaurant Switcher */}
         <RestaurantSwitcher />
 
-        {/* Location Selector */}
-        <LocationSelector />
+        {/* Location Selector with Scope Label */}
+        <div className="flex items-center gap-2">
+          <LocationSelector />
+          <Badge variant="outline" className="text-xs whitespace-nowrap">
+            Scope: {selectedLocationName || "All Locations"}
+          </Badge>
+        </div>
 
         {/* Search */}
         <div className="relative">
