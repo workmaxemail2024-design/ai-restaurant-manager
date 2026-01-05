@@ -6,6 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function formatEUR(n: number): string {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -149,7 +153,7 @@ serve(async (req) => {
         anomalies.push({
           type: "total_mismatch",
           severity: percentDiff > 20 ? "high" : "medium",
-          message: `System total ($${systemTotal.toFixed(2)}) differs from POS total ($${posTotal.toFixed(2)}) by ${percentDiff.toFixed(1)}%`,
+          message: `System total (${formatEUR(systemTotal)}) differs from POS total (${formatEUR(posTotal)}) by ${percentDiff.toFixed(1)}%`,
           recommendation: "Review unmapped POS sales and verify all transactions are synced correctly",
         });
       }

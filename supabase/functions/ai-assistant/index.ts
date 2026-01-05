@@ -6,6 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function formatEUR(n: number): string {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -143,7 +147,7 @@ function buildContext(sales: any[], stock: any[], dishes: any[], staff: any[]): 
     const totalRevenue = sales.reduce((sum, s) => sum + Number(s.total_price), 0);
     const recentSales = sales.slice(0, 10);
     parts.push(`RECENT SALES (${sales.length} records):
-- Total revenue: $${totalRevenue.toFixed(2)}
+- Total revenue: ${formatEUR(totalRevenue)}
 - Recent items: ${recentSales.map(s => s.dishes?.name || 'Unknown').join(', ')}`);
   }
 
@@ -158,7 +162,7 @@ function buildContext(sales: any[], stock: any[], dishes: any[], staff: any[]): 
   // Menu items
   if (dishes.length > 0) {
     parts.push(`MENU (${dishes.length} dishes):
-- Items: ${dishes.map(d => `${d.name} ($${d.selling_price})`).join(', ')}`);
+- Items: ${dishes.map(d => `${d.name} (${formatEUR(d.selling_price)})`).join(', ')}`);
   }
 
   // Staff
