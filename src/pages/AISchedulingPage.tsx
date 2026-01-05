@@ -217,8 +217,13 @@ export default function AISchedulingPage() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  No sales data available for pattern analysis. Add sales to see staffing recommendations.
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
+                  <p>No sales data for {selectedLocationId ? "this location" : "any location"} yet.</p>
+                  <p className="text-xs">
+                    {selectedLocationId 
+                      ? "Try switching to 'All Locations' or import POS data for this location."
+                      : "Import POS sales data to see staffing recommendations."}
+                  </p>
                 </div>
               )}
             </div>

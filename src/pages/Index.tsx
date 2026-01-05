@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PermissionFilteredSidebar } from "@/components/dashboard/PermissionFilteredSidebar";
 import { Header } from "@/components/dashboard/Header";
@@ -7,22 +6,12 @@ import { LocationCard } from "@/components/dashboard/LocationCard";
 import { AlertItem } from "@/components/dashboard/AlertItem";
 import { AIInsightPanel } from "@/components/dashboard/AIInsightPanel";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
-import { LocationToggle } from "@/components/common/LocationToggle";
 import { Euro, ShoppingBag, Users, TrendingUp } from "lucide-react";
-
-const metrics = [
-  { title: "Total Revenue", value: "€73,240", change: "+12.5% from yesterday", changeType: "positive" as const, icon: Euro },
-  { title: "Orders Today", value: "847", change: "+8.2% from yesterday", changeType: "positive" as const, icon: ShoppingBag },
-  { title: "Active Staff", value: "124", change: "Across all locations", changeType: "neutral" as const, icon: Users },
-  { title: "Avg Order Value", value: "€86.40", change: "+3.1% this week", changeType: "positive" as const, icon: TrendingUp },
-];
-
-const locations = [
-  { name: "Downtown Flagship", address: "123 Main St", status: "busy" as const, revenue: "€24,500", staff: 28, waitTime: "25min" },
-  { name: "Midtown Plaza", address: "456 Oak Ave", status: "open" as const, revenue: "€18,200", staff: 22, waitTime: "10min" },
-  { name: "Harbor District", address: "789 Beach Rd", status: "open" as const, revenue: "€15,800", staff: 18, waitTime: "5min" },
-  { name: "Airport Terminal", address: "Terminal B", status: "busy" as const, revenue: "€14,740", staff: 16, waitTime: "15min" },
-];
+import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { useLocation } from "@/contexts/LocationContext";
+import { useLocations } from "@/hooks/useLocations";
+import { useStaff } from "@/hooks/useStaff";
+import { formatCurrency } from "@/lib/currency";
 
 const alerts = [
   { type: "warning" as const, title: "Low Inventory", description: "Chicken breast running low at Downtown location", time: "5m ago" },
@@ -33,7 +22,12 @@ const alerts = [
 
 const Index = () => {
   const navigate = useNavigate();
-  const [showAllLocations, setShowAllLocations] = useState(true);
+  const { selectedLocationId } = useLocation();
+  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics(undefined, selectedLocationId);
+  const { data: locations = [] } = useLocations();
+  const { data: staff = [] } = useStaff(selectedLocationId);
+
+  const activeStaffCount = staff.filter(s => s.status === "active").length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -45,20 +39,45 @@ const Index = () => {
       <main className="ml-64 p-8">
         <Header />
         
-        {/* Location Toggle */}
+        {/* Performance Overview */}
         <div className="flex items-center justify-between mt-6">
           <h2 className="text-lg font-semibold">Performance Overview</h2>
-          <LocationToggle 
-            showAllLocations={showAllLocations} 
-            onToggle={setShowAllLocations} 
-          />
         </div>
         
         {/* Metrics Grid */}
         <div className="grid grid-cols-4 gap-4 mt-4">
-          {metrics.map((metric, index) => (
-            <MetricCard key={metric.title} {...metric} delay={index * 100} />
-          ))}
+          <MetricCard 
+            title="Total Revenue" 
+            value={metricsLoading ? "..." : formatCurrency(metrics?.totalRevenue || 0)} 
+            change={selectedLocationId ? "Filtered by location" : "All locations"} 
+            changeType="neutral" 
+            icon={Euro} 
+            delay={0} 
+          />
+          <MetricCard 
+            title="Orders Today" 
+            value={metricsLoading ? "..." : String(metrics?.totalOrders || 0)} 
+            change={`Avg ${formatCurrency(metrics?.avgOrderValue || 0)}`} 
+            changeType="neutral" 
+            icon={ShoppingBag} 
+            delay={100} 
+          />
+          <MetricCard 
+            title="Active Staff" 
+            value={String(activeStaffCount)} 
+            change={selectedLocationId ? "At selected location" : "Across all locations"} 
+            changeType="neutral" 
+            icon={Users} 
+            delay={200} 
+          />
+          <MetricCard 
+            title="Food Cost %" 
+            value={metricsLoading ? "..." : `${(metrics?.foodCostPercent || 0).toFixed(1)}%`} 
+            change={`Profit: ${formatCurrency(metrics?.totalProfit || 0)}`} 
+            changeType={metrics?.foodCostPercent && metrics.foodCostPercent < 30 ? "positive" : "neutral"} 
+            icon={TrendingUp} 
+            delay={300} 
+          />
         </div>
 
         <div className="grid grid-cols-3 gap-6 mt-6">
@@ -74,8 +93,17 @@ const Index = () => {
                 <button className="text-sm text-primary hover:underline" onClick={() => navigate('/locations')}>View All</button>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                {locations.map((location, index) => (
-                  <LocationCard key={location.name} {...location} delay={index * 100 + 200} />
+                {locations.slice(0, 4).map((location, index) => (
+                  <LocationCard 
+                    key={location.id} 
+                    name={location.name} 
+                    address={location.address || ""} 
+                    status="open" 
+                    revenue={formatCurrency(metrics?.locationPerformance?.find(l => l.name === location.name)?.revenue || 0)}
+                    staff={staff.filter(s => s.location_id === location.id && s.status === "active").length}
+                    waitTime="--"
+                    delay={index * 100 + 200} 
+                  />
                 ))}
               </div>
             </div>
