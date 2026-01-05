@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function formatEUR(n: number): string {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -111,7 +115,7 @@ STAFF AVAILABLE:
 - Active: ${staff?.filter((s: any) => s.status === 'active').length || 0}
 
 SALES PATTERNS:
-${avgSalesByDay.map(d => `- ${d.day}: Avg $${d.avgRevenue.toFixed(2)}`).join('\n') || 'No historical data'}
+${avgSalesByDay.map(d => `- ${d.day}: Avg ${formatEUR(d.avgRevenue)}`).join('\n') || 'No historical data'}
 
 RECENT SHIFTS:
 ${shifts?.slice(0, 10).map((s: any) => `- ${new Date(s.shift_start).toLocaleDateString()}: ${new Date(s.shift_start).toLocaleTimeString()} - ${new Date(s.shift_end).toLocaleTimeString()}`).join('\n') || 'No recent shifts'}

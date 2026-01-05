@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function formatEUR(n: number): string {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -104,13 +108,13 @@ SUMMARY:
 - Total dishes: ${dishes.length}
 - Average food cost: ${avgFoodCost.toFixed(1)}%
 - Average margin: ${avgMargin.toFixed(1)}%
-- Total gross profit: $${totalProfit.toFixed(2)}
+- Total gross profit: ${formatEUR(totalProfit)}
 
 HIGH COST ITEMS (>35% food cost):
-${highCostDishes.slice(0, 5).map((d: any) => `- ${d.name}: ${d.foodCostPercent.toFixed(1)}% food cost, $${d.cost.toFixed(2)} cost`).join('\n') || 'None'}
+${highCostDishes.slice(0, 5).map((d: any) => `- ${d.name}: ${d.foodCostPercent.toFixed(1)}% food cost, ${formatEUR(d.cost)} cost`).join('\n') || 'None'}
 
 LOW MARGIN ITEMS (<50% margin):
-${lowMarginDishes.slice(0, 5).map((d: any) => `- ${d.name}: ${d.marginPercent.toFixed(1)}% margin, sells at $${d.sellingPrice.toFixed(2)}`).join('\n') || 'None'}
+${lowMarginDishes.slice(0, 5).map((d: any) => `- ${d.name}: ${d.marginPercent.toFixed(1)}% margin, sells at ${formatEUR(d.sellingPrice)}`).join('\n') || 'None'}
 
 Provide:
 1. Overall assessment (2 sentences)

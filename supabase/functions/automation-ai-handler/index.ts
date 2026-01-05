@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function formatEUR(n: number): string {
+  return new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -96,7 +100,7 @@ serve(async (req) => {
                 },
                 {
                   role: 'user',
-                  content: `Generate a daily summary for a restaurant with: ${totalSales} sales, $${totalRevenue.toFixed(2)} revenue. Top dishes: ${sales?.slice(0, 5).map(s => s.dishes?.name).join(', ') || 'N/A'}`,
+                  content: `Generate a daily summary for a restaurant with: ${totalSales} sales, ${formatEUR(totalRevenue)} revenue. Top dishes: ${sales?.slice(0, 5).map(s => s.dishes?.name).join(', ') || 'N/A'}`,
                 },
               ],
             }),
