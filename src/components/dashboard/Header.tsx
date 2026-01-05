@@ -1,6 +1,7 @@
 import { Search, Calendar, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
+import { LocationSelector } from "@/components/LocationSelector";
 import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
 import { RealtimeIndicator } from "@/components/dashboard/RealtimeIndicator";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,9 @@ export function Header() {
 
         {/* Restaurant Switcher */}
         <RestaurantSwitcher />
+
+        {/* Location Selector */}
+        <LocationSelector />
 
         {/* Search */}
         <div className="relative">

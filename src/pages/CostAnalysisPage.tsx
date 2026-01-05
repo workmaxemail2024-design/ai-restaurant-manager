@@ -3,12 +3,13 @@ import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useDishes } from "@/hooks/useDishes";
+import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Loader2, Percent } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import { TrendingUp, TrendingDown, AlertTriangle, Sparkles, Loader2, Percent, AlertCircle } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 interface DishCost {
@@ -24,21 +25,22 @@ interface DishCost {
 }
 
 export default function CostAnalysisPage() {
-  const { data: dishes = [] } = useDishes();
-  const [selectedDish, setSelectedDish] = useState<string>("");
+  const { selectedLocationId } = useLocation();
+  const { data: dishes = [], isLoading: dishesLoading, error: dishesError } = useDishes(selectedLocationId);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Calculate dish costs
-  const { data: dishCosts = [], isLoading } = useQuery({
-    queryKey: ["dish-costs", dishes],
+  const { data: dishCosts = [], isLoading, error: costsError } = useQuery({
+    queryKey: ["dish-costs", dishes, selectedLocationId],
     queryFn: async () => {
       if (dishes.length === 0) return [];
 
       const costs: DishCost[] = await Promise.all(
         dishes.map(async (dish) => {
           const { data: costData } = await supabase.rpc("calculate_dish_cost", { p_dish_id: dish.id });
-          const cost = costData || 0;
+          const cost = Number(costData) || 0;
           const sellingPrice = Number(dish.selling_price);
           const margin = sellingPrice - cost;
           const marginPercent = sellingPrice > 0 ? (margin / sellingPrice) * 100 : 0;
@@ -81,21 +83,33 @@ export default function CostAnalysisPage() {
 
   const generateAIInsight = async () => {
     setLoadingInsight(true);
+    setAiError(null);
     try {
       const response = await supabase.functions.invoke("ai-cost-analysis", {
         body: { dishCosts, avgFoodCost, highCostItems },
       });
+      
+      if (response.error) {
+        throw new Error(response.error.message || "Failed to get AI analysis");
+      }
+      
       if (response.data?.insight) {
         setAiInsight(response.data.insight);
+      } else if (response.data?.error) {
+        throw new Error(response.data.error);
+      } else {
+        throw new Error("No insight returned from AI");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating AI insight:", error);
+      setAiError(error.message || "Failed to generate AI insight");
     } finally {
       setLoadingInsight(false);
     }
   };
 
-  const selectedDishData = dishCosts.find((d) => d.id === selectedDish);
+  const dataLoading = dishesLoading || isLoading;
+  const dataError = dishesError || costsError;
 
   return (
     <PageLayout
@@ -103,6 +117,38 @@ export default function CostAnalysisPage() {
       description="Real-time food cost tracking and margin analysis"
     >
       <div className="space-y-6">
+        {/* Error State */}
+        {dataError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error loading data</AlertTitle>
+            <AlertDescription>
+              {(dataError as Error).message || "Failed to load dish data. Please try again."}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Loading State */}
+        {dataLoading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Loading cost data...</span>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!dataLoading && !dataError && dishes.length === 0 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>No dishes found</AlertTitle>
+            <AlertDescription>
+              Add dishes to your menu to see cost analysis. {selectedLocationId ? "Try selecting 'All locations' to see more data." : ""}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!dataLoading && dishes.length > 0 && (
+          <>
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
@@ -243,13 +289,20 @@ export default function CostAnalysisPage() {
             </Button>
           </CardHeader>
           <CardContent>
+            {aiError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{aiError}</AlertDescription>
+              </Alert>
+            )}
             {aiInsight ? (
               <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
                 {aiInsight}
               </div>
-            ) : (
+            ) : !aiError ? (
               <p className="text-muted-foreground">Click "Analyze Costs" to get AI recommendations.</p>
-            )}
+            ) : null}
           </CardContent>
         </Card>
 
@@ -297,6 +350,8 @@ export default function CostAnalysisPage() {
             </div>
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
     </PageLayout>
   );

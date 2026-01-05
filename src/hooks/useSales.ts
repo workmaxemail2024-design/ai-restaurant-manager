@@ -22,9 +22,9 @@ export type SaleInsert = {
   sale_date?: string;
 };
 
-export function useSales(startDate?: string, endDate?: string) {
+export function useSales(startDate?: string, endDate?: string, locationId?: string | null) {
   return useQuery({
-    queryKey: ["sales", startDate, endDate],
+    queryKey: ["sales", startDate, endDate, locationId],
     queryFn: async () => {
       let query = supabase
         .from("sales")
@@ -36,6 +36,9 @@ export function useSales(startDate?: string, endDate?: string) {
       }
       if (endDate) {
         query = query.lte("sale_date", endDate);
+      }
+      if (locationId) {
+        query = query.eq("location_id", locationId);
       }
       
       const { data, error } = await query;
