@@ -31,14 +31,20 @@ export type PurchaseOrderInsert = {
   status?: string;
 };
 
-export function usePurchaseOrders() {
+export function usePurchaseOrders(locationId?: string | null) {
   return useQuery({
-    queryKey: ["purchase-orders"],
+    queryKey: ["purchase-orders", locationId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("purchase_orders")
         .select("*, suppliers(name), locations(name)")
         .order("order_date", { ascending: false });
+      
+      if (locationId) {
+        query = query.eq("location_id", locationId);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       
       // Calculate total for each order

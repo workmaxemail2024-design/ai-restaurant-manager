@@ -15,17 +15,23 @@ export interface DashboardMetrics {
   locationPerformance: LocationMetric[];
 }
 
-export function useDashboardMetrics(date?: string) {
+export function useDashboardMetrics(date?: string, locationId?: string | null) {
   const targetDate = date || new Date().toISOString().split("T")[0];
   
   return useQuery({
-    queryKey: ["dashboard-metrics", targetDate],
+    queryKey: ["dashboard-metrics", targetDate, locationId],
     queryFn: async (): Promise<DashboardMetrics> => {
       // Get sales for the date
-      const { data: sales } = await supabase
+      let query = supabase
         .from("sales")
         .select("*, dishes(name, selling_price), locations(name)")
         .eq("sale_date", targetDate);
+      
+      if (locationId) {
+        query = query.eq("location_id", locationId);
+      }
+      
+      const { data: sales } = await query;
       
       const totalRevenue = sales?.reduce((sum, sale) => sum + Number(sale.total_price), 0) || 0;
       const totalOrders = sales?.reduce((sum, sale) => sum + sale.quantity, 0) || 0;

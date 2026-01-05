@@ -14,13 +14,15 @@ import { useLocations } from "@/hooks/useLocations";
 import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useLocation } from "@/contexts/LocationContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 const roles: StaffRole[] = ["chef", "waiter", "manager", "host", "bartender", "kitchen_assistant", "cleaner"];
 const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
 
 export default function StaffPage() {
-  const { data: staff = [], isLoading } = useStaff();
+  const { selectedLocationId } = useLocation();
+  const { data: staff = [], isLoading } = useStaff(selectedLocationId);
   const { data: locations = [] } = useLocations();
   const { data: posMappings = [] } = usePOSMappings(undefined, "captiva");
   const { hasPermission } = usePermissions();
