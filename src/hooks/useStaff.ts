@@ -70,15 +70,21 @@ export type StaffInsert = {
   captiva_operator_code?: string | null;
 };
 
-export function useStaff() {
+export function useStaff(locationId?: string | null) {
   return useQuery({
-    queryKey: ["staff"],
+    queryKey: ["staff", locationId],
     queryFn: async () => {
       // Use the safe view that hides PII from non-managers
-      const { data, error } = await supabase
+      let query = supabase
         .from("staff_safe")
         .select("*")
         .order("last_name");
+      
+      if (locationId) {
+        query = query.eq("location_id", locationId);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       
       // Fetch locations separately since the view doesn't have joins

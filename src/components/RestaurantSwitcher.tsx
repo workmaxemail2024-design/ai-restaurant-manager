@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useRestaurant } from '@/contexts/RestaurantContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,13 +18,21 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building2, ChevronDown, Plus, Check } from 'lucide-react';
+import { Building2, ChevronDown, Plus, Check, Loader2 } from 'lucide-react';
 
 export function RestaurantSwitcher() {
-  const { currentRestaurant, userRestaurants, switchRestaurant, createRestaurant } = useRestaurant();
+  const { currentRestaurant, userRestaurants, switchRestaurant, createRestaurant, isSwitching } = useRestaurant();
+  const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  const handleSwitch = async (restaurantId: string) => {
+    if (restaurantId === currentRestaurant?.id) return;
+    await switchRestaurant(restaurantId);
+    // Invalidate all queries to refetch data for the new restaurant
+    queryClient.invalidateQueries();
+  };
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -68,8 +77,12 @@ export function RestaurantSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Building2 className="h-4 w-4" />
+        <Button variant="outline" size="sm" className="gap-2" disabled={isSwitching}>
+          {isSwitching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Building2 className="h-4 w-4" />
+          )}
           <span className="max-w-[150px] truncate">{currentRestaurant.name}</span>
           <ChevronDown className="h-4 w-4" />
         </Button>
@@ -78,8 +91,9 @@ export function RestaurantSwitcher() {
         {userRestaurants.map((restaurant) => (
           <DropdownMenuItem
             key={restaurant.id}
-            onClick={() => switchRestaurant(restaurant.id)}
+            onClick={() => handleSwitch(restaurant.id)}
             className="flex items-center justify-between"
+            disabled={isSwitching}
           >
             <span className="truncate">{restaurant.name}</span>
             {restaurant.id === currentRestaurant.id && (

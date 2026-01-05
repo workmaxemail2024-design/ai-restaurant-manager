@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { RestaurantProvider } from "@/contexts/RestaurantContext";
+import { LocationProvider } from "@/contexts/LocationContext";
 import { AuthGuard } from "@/components/AuthGuard";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -51,9 +52,10 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <RestaurantProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
+        <LocationProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
           <BrowserRouter>
             <Routes>
               {/* Public routes */}
@@ -104,6 +106,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </LocationProvider>
       </RestaurantProvider>
     </ThemeProvider>
   </QueryClientProvider>

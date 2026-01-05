@@ -31,14 +31,20 @@ export type DishInsert = {
   selling_price: number;
 };
 
-export function useDishes() {
+export function useDishes(locationId?: string | null) {
   return useQuery({
-    queryKey: ["dishes"],
+    queryKey: ["dishes", locationId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("dishes")
         .select("*, locations(name)")
         .order("name");
+      
+      if (locationId) {
+        query = query.eq("location_id", locationId);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       
       // Calculate cost and margin for each dish

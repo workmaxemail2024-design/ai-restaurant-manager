@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { supabase } from '@/integrations/supabase/client';
 import { User, Session } from '@supabase/supabase-js';
 import { Permissions } from '@/hooks/usePermissions';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from '@/hooks/use-toast';
 
 interface Restaurant {
   id: string;
@@ -18,6 +20,7 @@ interface RestaurantContextType {
   userRestaurants: Restaurant[];
   permissions: Permissions | null;
   isLoading: boolean;
+  isSwitching: boolean;
   switchRestaurant: (restaurantId: string) => Promise<void>;
   createRestaurant: (name: string) => Promise<Restaurant | null>;
   signOut: () => Promise<void>;
@@ -33,6 +36,7 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
   const [userRestaurants, setUserRestaurants] = useState<Restaurant[]>([]);
   const [permissions, setPermissions] = useState<Permissions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSwitching, setIsSwitching] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Memoized function to load user data
@@ -203,25 +207,38 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
   const switchRestaurant = useCallback(async (restaurantId: string) => {
     if (!user) return;
     
-    // Update default flag
-    await supabase
-      .from('user_restaurants')
-      .update({ is_default: false })
-      .eq('user_id', user.id);
-    
-    await supabase
-      .from('user_restaurants')
-      .update({ is_default: true })
-      .eq('user_id', user.id)
-      .eq('restaurant_id', restaurantId);
-    
-    const restaurant = userRestaurants.find(r => r.id === restaurantId);
-    if (restaurant) {
-      setCurrentRestaurant(restaurant);
+    setIsSwitching(true);
+    try {
+      // Update default flag
+      await supabase
+        .from('user_restaurants')
+        .update({ is_default: false })
+        .eq('user_id', user.id);
+      
+      await supabase
+        .from('user_restaurants')
+        .update({ is_default: true })
+        .eq('user_id', user.id)
+        .eq('restaurant_id', restaurantId);
+      
+      const restaurant = userRestaurants.find(r => r.id === restaurantId);
+      if (restaurant) {
+        setCurrentRestaurant(restaurant);
+        toast({ title: `Switched to ${restaurant.name}` });
+      }
+      
+      // Refresh permissions for the new restaurant context
+      await refreshPermissions();
+      
+      // Clear location from localStorage for new restaurant
+      const locationKey = `selectedLocation_${restaurantId}`;
+      localStorage.removeItem(locationKey);
+    } catch (error) {
+      console.error('[RestaurantContext] Error switching restaurant:', error);
+      toast({ title: 'Failed to switch restaurant', variant: 'destructive' });
+    } finally {
+      setIsSwitching(false);
     }
-    
-    // Refresh permissions for the new restaurant context
-    await refreshPermissions();
   }, [user, userRestaurants, refreshPermissions]);
 
   const createRestaurant = useCallback(async (name: string): Promise<Restaurant | null> => {
@@ -299,6 +316,7 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       userRestaurants,
       permissions,
       isLoading,
+      isSwitching,
       switchRestaurant,
       createRestaurant,
       signOut,
