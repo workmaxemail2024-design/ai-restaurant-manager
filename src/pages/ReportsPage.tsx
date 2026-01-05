@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TrendingUp, Percent, ShoppingBag } from "lucide-react";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
+import { useLocation } from "@/contexts/LocationContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 export default function ReportsPage() {
+  const { selectedLocationId } = useLocation();
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const { data: metrics, isLoading } = useDashboardMetrics(date);
+  const { data: metrics, isLoading } = useDashboardMetrics(date, selectedLocationId);
 
   return (
     <PageLayout title="Reports" subtitle="View business performance metrics">

@@ -12,11 +12,13 @@ import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
+import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 
 export default function PurchaseOrdersPage() {
-  const { data: orders = [], isLoading } = usePurchaseOrders();
+  const { selectedLocationId } = useLocation();
+  const { data: orders = [], isLoading } = usePurchaseOrders(selectedLocationId);
   const { data: suppliers = [] } = useSuppliers();
   const { data: locations = [] } = useLocations();
   const { data: ingredients = [] } = useIngredients();

@@ -204,6 +204,8 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const queryClient = useQueryClient();
+  
   const switchRestaurant = useCallback(async (restaurantId: string) => {
     if (!user) return;
     
@@ -230,16 +232,15 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       // Refresh permissions for the new restaurant context
       await refreshPermissions();
       
-      // Clear location from localStorage for new restaurant
-      const locationKey = `selectedLocation_${restaurantId}`;
-      localStorage.removeItem(locationKey);
+      // Invalidate all queries to fetch fresh data for the new restaurant
+      await queryClient.invalidateQueries();
     } catch (error) {
       console.error('[RestaurantContext] Error switching restaurant:', error);
       toast({ title: 'Failed to switch restaurant', variant: 'destructive' });
     } finally {
       setIsSwitching(false);
     }
-  }, [user, userRestaurants, refreshPermissions]);
+  }, [user, userRestaurants, refreshPermissions, queryClient]);
 
   const createRestaurant = useCallback(async (name: string): Promise<Restaurant | null> => {
     if (!user) return null;

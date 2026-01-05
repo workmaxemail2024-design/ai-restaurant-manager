@@ -11,9 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { useStockLevels, useUpdateStock, StockLevel } from "@/hooks/useStock";
 import { useIngredients } from "@/hooks/useIngredients";
 import { useLocations } from "@/hooks/useLocations";
+import { useLocation } from "@/contexts/LocationContext";
 
 export default function StockPage() {
-  const { data: stockLevels = [], isLoading } = useStockLevels();
+  const { selectedLocationId } = useLocation();
+  const { data: stockLevels = [], isLoading } = useStockLevels(selectedLocationId);
   const { data: ingredients = [] } = useIngredients();
   const { data: locations = [] } = useLocations();
   const updateStock = useUpdateStock();

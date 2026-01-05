@@ -10,11 +10,13 @@ import { Plus } from "lucide-react";
 import { useSales, useCreateSale, useDeleteSale, Sale, SaleInsert } from "@/hooks/useSales";
 import { useDishes } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
+import { useLocation } from "@/contexts/LocationContext";
 import { formatCurrency } from "@/lib/currency";
 
 export default function SalesPage() {
-  const { data: sales = [], isLoading } = useSales();
-  const { data: dishes = [] } = useDishes();
+  const { selectedLocationId } = useLocation();
+  const { data: sales = [], isLoading } = useSales(undefined, undefined, selectedLocationId);
+  const { data: dishes = [] } = useDishes(selectedLocationId);
   const { data: locations = [] } = useLocations();
   const createSale = useCreateSale();
   const deleteSale = useDeleteSale();

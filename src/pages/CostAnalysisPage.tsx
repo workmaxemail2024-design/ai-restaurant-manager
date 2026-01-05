@@ -33,7 +33,7 @@ export default function CostAnalysisPage() {
 
   // Calculate dish costs
   const { data: dishCosts = [], isLoading, error: costsError } = useQuery({
-    queryKey: ["dish-costs", dishes, selectedLocationId],
+    queryKey: ["dish-costs", selectedLocationId, dishes.length],
     queryFn: async () => {
       if (dishes.length === 0) return [];
 

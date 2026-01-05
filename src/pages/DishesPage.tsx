@@ -14,13 +14,15 @@ import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredie
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
 import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
+import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 
 const categories = ["Appetizers", "Mains", "Desserts", "Beverages", "Sides", "Other"];
 
 export default function DishesPage() {
-  const { data: dishes = [], isLoading } = useDishes();
+  const { selectedLocationId } = useLocation();
+  const { data: dishes = [], isLoading } = useDishes(selectedLocationId);
   const { data: locations = [] } = useLocations();
   const { data: ingredients = [] } = useIngredients();
   const { data: posMappings = [] } = usePOSMappings(undefined, "captiva");
