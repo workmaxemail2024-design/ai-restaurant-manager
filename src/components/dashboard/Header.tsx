@@ -12,7 +12,11 @@ import { useLocations } from "@/hooks/useLocations";
 import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 import { useNavigate } from "react-router-dom";
 
-export function Header() {
+interface HeaderProps {
+  showRestaurantSwitcher?: boolean;
+}
+
+export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
   const { signOut, user } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const { data: locations = [] } = useLocations();
@@ -36,7 +40,7 @@ export function Header() {
   };
 
   return (
-    <header className="flex items-center justify-between py-6">
+    <header className="flex items-center justify-between py-6 relative z-50">
       <div>
         <h1 className="text-2xl font-bold">Operations Dashboard</h1>
         <div className="flex items-center gap-2 text-muted-foreground mt-1">
@@ -45,12 +49,12 @@ export function Header() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 relative z-50">
         {/* Real-time Indicator */}
         <RealtimeIndicator isConnected={isConnected} />
 
-        {/* Restaurant Switcher */}
-        <RestaurantSwitcher />
+        {/* Restaurant Switcher - conditionally rendered */}
+        {showRestaurantSwitcher && <RestaurantSwitcher />}
 
         {/* Location Selector with Scope Label */}
         <div className="flex items-center gap-2">

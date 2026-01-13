@@ -87,7 +87,7 @@ export function RestaurantSwitcher() {
           <ChevronDown className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 bg-popover">
+      <DropdownMenuContent align="end" className="w-56 bg-popover z-[100]">
         {userRestaurants.map((restaurant) => (
           <DropdownMenuItem
             key={restaurant.id}
