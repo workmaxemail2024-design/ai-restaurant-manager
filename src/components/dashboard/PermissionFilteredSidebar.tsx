@@ -28,7 +28,8 @@ import {
   Shield,
   Zap,
   FileText,
-  Wrench
+  Wrench,
+  FlaskConical
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
@@ -149,6 +150,7 @@ const navSections: NavSection[] = [
       { icon: Plug, label: "POS Integrations", path: "/settings/pos", permission: { resource: 'pos', action: 'view' } },
       { icon: Shield, label: "Role Builder", path: "/settings/roles", permission: { resource: 'settings', action: 'view' } },
       { icon: FileText, label: "Audit Log", path: "/settings/audit-log", permission: { resource: 'settings', action: 'view' } },
+      { icon: FlaskConical, label: "System QA", path: "/settings/system-qa", permission: { resource: 'settings', action: 'view' } },
     ]
   }
 ];
