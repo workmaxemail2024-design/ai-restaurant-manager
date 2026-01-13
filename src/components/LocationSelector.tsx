@@ -51,7 +51,7 @@ export function LocationSelector() {
         <MapPin className="h-4 w-4 text-muted-foreground" />
         <SelectValue placeholder="All locations" />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="z-[100]">
         <SelectItem value="all">All locations</SelectItem>
         {locations.map((location) => (
           <SelectItem key={location.id} value={location.id}>
