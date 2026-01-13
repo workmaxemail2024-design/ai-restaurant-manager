@@ -23,7 +23,8 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronRight,
-  Plug
+  Plug,
+  FlaskConical
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
@@ -113,6 +114,7 @@ const navSections: NavSection[] = [
     icon: Settings,
     items: [
       { icon: Plug, label: "POS Integrations", path: "/settings/pos" },
+      { icon: FlaskConical, label: "System QA", path: "/settings/system-qa" },
     ]
   }
 ];
