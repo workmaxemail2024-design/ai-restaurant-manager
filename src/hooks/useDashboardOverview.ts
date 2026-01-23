@@ -186,7 +186,7 @@ export function useDashboardOverview(locationId?: string | null) {
       };
     },
     enabled: !!restaurantId,
-    refetchOnMount: true,
+    refetchOnMount: "always",
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
