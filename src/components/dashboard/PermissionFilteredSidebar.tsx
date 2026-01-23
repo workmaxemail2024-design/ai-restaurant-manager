@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { usePermissions, PermissionResource } from "@/hooks/usePermissions";
@@ -164,11 +164,32 @@ export function PermissionFilteredSidebar() {
   const location = useLocation();
   const { hasPermission, isLoading } = usePermissions();
   const { signOut, user } = useRestaurant();
-  const [openSections, setOpenSections] = useState<string[]>(
+  
+  // Preserve scroll position across re-renders / route changes
+  const navRef = useRef<HTMLElement>(null);
+  const scrollPosRef = useRef<number>(0);
+
+  // Initialize openSections only once (all sections open by default)
+  const [openSections, setOpenSections] = useState<string[]>(() =>
     navSections.map(s => s.title)
   );
 
+  // Save scroll position before any re-render / navigation
+  const saveScrollPos = useCallback(() => {
+    if (navRef.current) {
+      scrollPosRef.current = navRef.current.scrollTop;
+    }
+  }, []);
+
+  // Restore scroll position after render
+  useEffect(() => {
+    if (navRef.current) {
+      navRef.current.scrollTop = scrollPosRef.current;
+    }
+  });
+
   const toggleSection = (title: string) => {
+    saveScrollPos();
     setOpenSections(prev => 
       prev.includes(title) 
         ? prev.filter(s => s !== title)
@@ -205,8 +226,8 @@ export function PermissionFilteredSidebar() {
         </div>
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      {/* Main Navigation - scroll position preserved via ref */}
+      <nav ref={navRef} className="flex-1 p-3 space-y-1 overflow-y-auto">
         {visibleSections.map((section) => (
           <Collapsible
             key={section.title}
