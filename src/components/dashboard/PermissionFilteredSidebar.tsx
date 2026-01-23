@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { usePermissions, PermissionResource } from "@/hooks/usePermissions";
@@ -163,38 +163,90 @@ const bottomItems: NavItem[] = [
 export function PermissionFilteredSidebar() {
   const location = useLocation();
   const { hasPermission, isLoading } = usePermissions();
-  const { signOut, user } = useRestaurant();
+  const { signOut, user, currentRestaurant } = useRestaurant();
+
+  const restaurantKey = currentRestaurant?.id ?? "none";
+  const scrollStorageKey = `sidebar_scroll_${restaurantKey}`;
+  const openStorageKey = `sidebar_open_${restaurantKey}`;
   
   // Preserve scroll position across re-renders / route changes
   const navRef = useRef<HTMLElement>(null);
   const scrollPosRef = useRef<number>(0);
 
-  // Initialize openSections only once (all sections open by default)
-  const [openSections, setOpenSections] = useState<string[]>(() =>
-    navSections.map(s => s.title)
-  );
-
-  // Save scroll position before any re-render / navigation
-  const saveScrollPos = useCallback(() => {
-    if (navRef.current) {
-      scrollPosRef.current = navRef.current.scrollTop;
-    }
-  }, []);
-
-  // Restore scroll position after render
-  useEffect(() => {
-    if (navRef.current) {
-      navRef.current.scrollTop = scrollPosRef.current;
-    }
+  const [openSections, setOpenSections] = useState<string[]>(() => {
+    // Default: all open
+    const fallback = navSections.map(s => s.title);
+    if (typeof window === "undefined") return fallback;
+    // We might not know the restaurant yet on first render.
+    // We'll re-hydrate from storage once restaurantKey becomes available.
+    return fallback;
   });
 
+  const persistScrollNow = () => {
+    const el = navRef.current;
+    if (!el) return;
+    scrollPosRef.current = el.scrollTop;
+    if (restaurantKey !== "none") {
+      try {
+        sessionStorage.setItem(scrollStorageKey, String(el.scrollTop));
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  // Hydrate persisted state when restaurant changes (sidebar remounts on route changes)
+  useEffect(() => {
+    if (restaurantKey === "none") return;
+
+    try {
+      const storedScroll = sessionStorage.getItem(scrollStorageKey);
+      if (storedScroll !== null) {
+        const parsed = Number(storedScroll);
+        if (!Number.isNaN(parsed)) scrollPosRef.current = parsed;
+      }
+
+      const storedOpen = sessionStorage.getItem(openStorageKey);
+      if (storedOpen) {
+        const parsed = JSON.parse(storedOpen);
+        if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
+          setOpenSections(parsed);
+        }
+      }
+    } catch {
+      // ignore storage/JSON failures
+    }
+  }, [openStorageKey, restaurantKey, scrollStorageKey]);
+
+  // Keep the active route's section open (so the user stays in the same category)
+  useEffect(() => {
+    const activeSection = navSections.find((s) => s.items.some((i) => i.path === location.pathname))?.title;
+    if (!activeSection) return;
+    setOpenSections((prev) => (prev.includes(activeSection) ? prev : [...prev, activeSection]));
+  }, [location.pathname]);
+
   const toggleSection = (title: string) => {
-    saveScrollPos();
-    setOpenSections(prev => 
-      prev.includes(title) 
-        ? prev.filter(s => s !== title)
-        : [...prev, title]
-    );
+    // Prevent visual jump when expanding/collapsing by capturing + restoring scrollTop.
+    const el = navRef.current;
+    const prevTop = el?.scrollTop ?? 0;
+    persistScrollNow();
+
+    setOpenSections((prev) => {
+      const next = prev.includes(title) ? prev.filter((s) => s !== title) : [...prev, title];
+      if (restaurantKey !== "none") {
+        try {
+          sessionStorage.setItem(openStorageKey, JSON.stringify(next));
+        } catch {
+          // ignore storage failures
+        }
+      }
+      return next;
+    });
+
+    // Restore scrollTop next frame (after DOM height changes)
+    requestAnimationFrame(() => {
+      if (navRef.current) navRef.current.scrollTop = prevTop;
+    });
   };
 
   // Filter sections based on permissions
@@ -211,6 +263,33 @@ export function PermissionFilteredSidebar() {
     })
   })).filter(section => section.items.length > 0);
 
+  // Persist scroll position while the user scrolls, so route changes don't reset it.
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      scrollPosRef.current = el.scrollTop;
+      if (restaurantKey !== "none") {
+        try {
+          sessionStorage.setItem(scrollStorageKey, String(el.scrollTop));
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [restaurantKey, scrollStorageKey]);
+
+  // Restore scroll position after DOM updates (route changes and permission filtering can remount the sidebar)
+  useLayoutEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    el.scrollTop = scrollPosRef.current;
+  }, [location.pathname, restaurantKey, visibleSections.length]);
+
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
       {/* Logo */}
@@ -226,7 +305,7 @@ export function PermissionFilteredSidebar() {
         </div>
       </div>
 
-      {/* Main Navigation - scroll position preserved via ref */}
+      {/* Main Navigation - scroll position preserved via storage */}
       <nav ref={navRef} className="flex-1 p-3 space-y-1 overflow-y-auto">
         {visibleSections.map((section) => (
           <Collapsible
@@ -234,8 +313,11 @@ export function PermissionFilteredSidebar() {
             open={openSections.includes(section.title)}
             onOpenChange={() => toggleSection(section.title)}
           >
-            <CollapsibleTrigger asChild>
-              <button className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors">
+              <CollapsibleTrigger asChild>
+                <button
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                  onMouseDown={persistScrollNow}
+                >
                 <section.icon className="h-3.5 w-3.5" />
                 <span className="flex-1 text-left">{section.title}</span>
                 {openSections.includes(section.title) ? (
@@ -247,7 +329,12 @@ export function PermissionFilteredSidebar() {
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-0.5 pl-2">
               {section.items.map((item) => (
-                <NavButton key={item.path} {...item} active={location.pathname === item.path} />
+                <NavButton
+                  key={item.path}
+                  {...item}
+                  active={location.pathname === item.path}
+                  onNavigate={persistScrollNow}
+                />
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -291,9 +378,9 @@ export function PermissionFilteredSidebar() {
   );
 }
 
-function NavButton({ icon: Icon, label, path, active, badge }: NavItem & { active: boolean }) {
+function NavButton({ icon: Icon, label, path, active, badge, onNavigate }: NavItem & { active: boolean; onNavigate?: () => void }) {
   return (
-    <Link to={path}>
+    <Link to={path} onMouseDown={onNavigate}>
       <button
         className={cn(
           "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
