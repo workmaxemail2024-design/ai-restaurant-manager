@@ -10,6 +10,7 @@ import {
 import { useSales } from "@/hooks/useSales";
 import { useDishes } from "@/hooks/useDishes";
 import { useStaff } from "@/hooks/useStaff";
+import { useLocation } from "@/contexts/LocationContext";
 import { format, subDays } from "date-fns";
 import { formatCurrency } from "@/lib/currency";
 import {
@@ -25,12 +26,13 @@ import {
 } from "recharts";
 
 export default function SalesDashboardPage() {
+  const { selectedLocationId } = useLocation();
   const today = format(new Date(), "yyyy-MM-dd");
   const weekAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
   
-  const { data: sales = [], isLoading: salesLoading } = useSales(weekAgo, today);
-  const { data: dishes = [] } = useDishes();
-  const { data: staff = [] } = useStaff();
+  const { data: sales = [], isLoading: salesLoading } = useSales(weekAgo, today, selectedLocationId);
+  const { data: dishes = [] } = useDishes(selectedLocationId);
+  const { data: staff = [] } = useStaff(selectedLocationId);
 
   // Calculate KPIs
   const todaySales = useMemo(() => {

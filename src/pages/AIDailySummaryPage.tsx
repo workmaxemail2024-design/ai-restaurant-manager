@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useStockLevels } from "@/hooks/useStock";
 import { useIngredients } from "@/hooks/useIngredients";
+import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format, subDays } from "date-fns";
 import { 
@@ -17,9 +18,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { formatCurrency } from "@/lib/currency";
 
 export default function AIDailySummaryPage() {
+  const { selectedLocationId } = useLocation();
   const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
-  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics(yesterday);
-  const { data: stockLevels = [] } = useStockLevels();
+  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics(yesterday, selectedLocationId);
+  const { data: stockLevels = [] } = useStockLevels(selectedLocationId ?? undefined);
   const { data: ingredients = [] } = useIngredients();
   
   const [aiSummary, setAiSummary] = useState<string | null>(null);

@@ -106,7 +106,7 @@ PEAK HOURS:
 ${peakHours?.map((h: any) => `- ${h.hour}:00: ${h.avgSales} avg sales`).join('\n') || 'No data'}
 
 SALES PATTERNS:
-${salesPatterns?.map((p: any) => `- ${p.day}: $${p.revenue}`).join('\n') || 'No data'}
+${salesPatterns?.map((p: any) => `- ${p.day}: €${p.revenue}`).join('\n') || 'No data'}
 
 Generate a schedule that:
 1. Has more staff during peak hours
