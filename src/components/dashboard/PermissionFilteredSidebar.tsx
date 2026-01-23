@@ -148,6 +148,7 @@ const navSections: NavSection[] = [
     permission: 'settings',
     items: [
       { icon: Plug, label: "POS Integrations", path: "/settings/pos", permission: { resource: 'pos', action: 'view' } },
+      { icon: Euro, label: "Financial / Overheads", path: "/settings/financial/overheads", permission: { resource: 'settings', action: 'view' } },
       { icon: Shield, label: "Role Builder", path: "/settings/roles", permission: { resource: 'settings', action: 'view' } },
       { icon: FileText, label: "Audit Log", path: "/settings/audit-log", permission: { resource: 'settings', action: 'view' } },
       { icon: FlaskConical, label: "System QA", path: "/settings/system-qa", permission: { resource: 'settings', action: 'view' } },

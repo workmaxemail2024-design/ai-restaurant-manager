@@ -114,6 +114,7 @@ const navSections: NavSection[] = [
     icon: Settings,
     items: [
       { icon: Plug, label: "POS Integrations", path: "/settings/pos" },
+      { icon: Euro, label: "Financial / Overheads", path: "/settings/financial/overheads" },
       { icon: FlaskConical, label: "System QA", path: "/settings/system-qa" },
     ]
   }
