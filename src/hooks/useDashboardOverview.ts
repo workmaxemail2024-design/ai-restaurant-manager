@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { useDateRange } from "@/contexts/DateRangeContext";
+import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 
 interface HourlyRevenue {
   time: string;
@@ -24,14 +25,17 @@ interface DashboardOverview {
 
 export function useDashboardOverview(locationId?: string | null) {
   const { currentRestaurant } = useRestaurant();
+  const { startDate, endDate } = useDateRange();
   const restaurantId = currentRestaurant?.id;
+  const locationScopeKey = locationId ?? "all";
 
-  const today = format(new Date(), "yyyy-MM-dd");
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
-  const sameWeekdayLastWeek = format(subDays(new Date(), 7), "yyyy-MM-dd");
+  // For comparisons, calculate yesterday and same weekday last week relative to endDate
+  const endDateObj = parseISO(endDate);
+  const yesterday = format(subDays(endDateObj, 1), "yyyy-MM-dd");
+  const sameWeekdayLastWeek = format(subDays(endDateObj, 7), "yyyy-MM-dd");
 
   return useQuery({
-    queryKey: ["dashboard-overview", restaurantId, locationId ?? "all", today],
+    queryKey: ["dashboard-overview", restaurantId, locationScopeKey, startDate, endDate],
     queryFn: async (): Promise<DashboardOverview> => {
       if (!restaurantId) {
         return {
@@ -48,20 +52,21 @@ export function useDashboardOverview(locationId?: string | null) {
         };
       }
 
-      // Fetch today's sales
-      let todayQuery = supabase
+      // Fetch sales for selected date range
+      let rangeQuery = supabase
         .from("sales")
-        .select("total_price, quantity, created_at")
+        .select("total_price, quantity, created_at, sale_date")
         .eq("restaurant_id", restaurantId)
-        .eq("sale_date", today);
+        .gte("sale_date", startDate)
+        .lte("sale_date", endDate);
 
       if (locationId) {
-        todayQuery = todayQuery.eq("location_id", locationId);
+        rangeQuery = rangeQuery.eq("location_id", locationId);
       }
 
-      const { data: todaySales } = await todayQuery;
+      const { data: rangeSales } = await rangeQuery;
 
-      // Fetch yesterday's sales
+      // Fetch yesterday's sales (for comparison)
       let yesterdayQuery = supabase
         .from("sales")
         .select("total_price")
@@ -87,27 +92,30 @@ export function useDashboardOverview(locationId?: string | null) {
 
       const { data: lastWeekSales } = await lastWeekQuery;
 
-      // Calculate revenue totals
-      const revenueToday = todaySales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
-      const ordersToday = todaySales?.length || 0;
+      // Calculate revenue totals for the selected range
+      const revenueToday = rangeSales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
+      const ordersToday = rangeSales?.length || 0;
       const aovToday = ordersToday > 0 ? revenueToday / ordersToday : 0;
       const revenueYesterday = yesterdaySales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
       const revenueSameWeekdayLastWeek = lastWeekSales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
 
-      // Build hourly revenue series for today (6AM to 11PM)
+      // Build hourly revenue series for the end date (most recent day in range)
       const hourlyMap: Record<string, { revenue: number; orders: number }> = {};
       const hours = ["6AM", "7AM", "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM", "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM"];
       hours.forEach((h) => {
         hourlyMap[h] = { revenue: 0, orders: 0 };
       });
 
-      todaySales?.forEach((sale) => {
+      // Filter sales for the end date only for hourly chart
+      const endDateSales = rangeSales?.filter(s => s.sale_date === endDate) || [];
+      
+      endDateSales.forEach((sale) => {
         const saleDate = new Date(sale.created_at);
         const hour = saleDate.getHours();
         let label: string;
 
         if (hour < 6) {
-          label = "6AM"; // Group early hours into 6AM
+          label = "6AM";
         } else if (hour >= 23) {
           label = "11PM";
         } else if (hour === 12) {
@@ -130,16 +138,16 @@ export function useDashboardOverview(locationId?: string | null) {
         orders: hourlyMap[h].orders,
       }));
 
-      // Fetch labour data for today
-      const todayStart = startOfDay(new Date()).toISOString();
-      const todayEnd = endOfDay(new Date()).toISOString();
+      // Fetch labour data for the date range
+      const rangeStartDateTime = `${startDate}T00:00:00`;
+      const rangeEndDateTime = `${endDate}T23:59:59`;
 
       let attendanceQuery = supabase
         .from("staff_attendance")
         .select("clock_in, clock_out, staff_id, staff!inner(hourly_rate)")
         .eq("restaurant_id", restaurantId)
-        .gte("clock_in", todayStart)
-        .lte("clock_in", todayEnd);
+        .gte("clock_in", rangeStartDateTime)
+        .lte("clock_in", rangeEndDateTime);
 
       if (locationId) {
         attendanceQuery = attendanceQuery.eq("location_id", locationId);
@@ -178,5 +186,8 @@ export function useDashboardOverview(locationId?: string | null) {
       };
     },
     enabled: !!restaurantId,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }
