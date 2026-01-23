@@ -93,12 +93,12 @@ serve(async (req) => {
             content: `Generate a daily operations summary:
 
 YESTERDAY'S METRICS:
-- Revenue: $${revenue?.toFixed(2) || 0}
+- Revenue: €${revenue?.toFixed(2) || 0}
 - Food Cost %: ${foodCost?.toFixed(1) || 0}%
 - Profit Margin: ${profitMargin?.toFixed(1) || 0}%
 
 TOP PERFORMERS:
-${topDishes?.map((d: any) => `- ${d.name}: ${d.quantity} sold, $${d.revenue?.toFixed(2) || 0}`).join('\n') || 'No data'}
+${topDishes?.map((d: any) => `- ${d.name}: ${d.quantity} sold, €${d.revenue?.toFixed(2) || 0}`).join('\n') || 'No data'}
 
 UNDERPERFORMERS:
 ${bottomDishes?.map((d: any) => `- ${d.name}: ${d.quantity} sold`).join('\n') || 'No data'}

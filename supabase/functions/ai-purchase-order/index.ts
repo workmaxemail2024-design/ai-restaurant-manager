@@ -142,9 +142,9 @@ serve(async (req) => {
               },
               {
                 role: "user",
-                content: `Review this purchase order:
+              content: `Review this purchase order:
                 Total items: ${needs.length}
-                Total cost: $${totalCost.toFixed(2)}
+                Total cost: €${totalCost.toFixed(2)}
                 Critical items: ${criticalItems.length}
                 Suppliers: ${orders.length}
                 
@@ -173,7 +173,7 @@ serve(async (req) => {
         normalItems: needs.filter((n: any) => n.urgency === "normal").length,
         supplierCount: orders.length
       },
-      insights: aiInsights || `Generated ${orders.length} purchase orders totaling $${totalCost.toFixed(2)} for ${needs.length} items.`
+      insights: aiInsights || `Generated ${orders.length} purchase orders totaling €${totalCost.toFixed(2)} for ${needs.length} items.`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

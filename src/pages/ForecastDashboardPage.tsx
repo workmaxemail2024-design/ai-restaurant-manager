@@ -28,7 +28,7 @@ export default function ForecastDashboardPage() {
       : sales?.filter(s => s.location_id === selectedLocation);
     
     const totalHistorical = filteredSales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
-    const avgDaily = filteredSales?.length ? totalHistorical / 30 : 500; // Default to $500/day
+    const avgDaily = filteredSales?.length ? totalHistorical / 30 : 500; // Default to €500/day
     
     const data = [];
     for (let i = 0; i < days; i++) {

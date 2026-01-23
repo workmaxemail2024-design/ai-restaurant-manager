@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDishes } from "@/hooks/useDishes";
 import { useSales } from "@/hooks/useSales";
+import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { Star, TrendingUp, TrendingDown, HelpCircle, Dog, Sparkles, Loader2 } from "lucide-react";
@@ -26,14 +27,15 @@ interface DishAnalysis {
 }
 
 export default function MenuEngineeringPage() {
-  const { data: dishes = [] } = useDishes();
-  const { data: sales = [] } = useSales();
+  const { selectedLocationId } = useLocation();
+  const { data: dishes = [] } = useDishes(selectedLocationId);
+  const { data: sales = [] } = useSales(undefined, undefined, selectedLocationId);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
 
   // Calculate dish analysis with costs
   const { data: dishAnalysis = [], isLoading } = useQuery({
-    queryKey: ["menu-engineering", dishes, sales],
+    queryKey: ["menu-engineering", dishes, sales, selectedLocationId],
     queryFn: async () => {
       if (dishes.length === 0) return [];
 
