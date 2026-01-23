@@ -6,11 +6,12 @@ import { LocationCard } from "@/components/dashboard/LocationCard";
 import { AlertItem } from "@/components/dashboard/AlertItem";
 import { AIInsightPanel } from "@/components/dashboard/AIInsightPanel";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
-import { Euro, ShoppingBag, Users, TrendingUp, Percent, Wallet } from "lucide-react";
+import { Euro, ShoppingBag, Users, TrendingUp, Percent, Wallet, BarChart3, Clock } from "lucide-react";
 import { useLocation } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
 import { useStaff } from "@/hooks/useStaff";
 import { useProfitMetrics } from "@/hooks/useProfitMetrics";
+import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 import { formatCurrency } from "@/lib/currency";
 
 const alerts = [
@@ -26,11 +27,19 @@ const Index = () => {
   const { data: locations = [] } = useLocations();
   const { data: staff = [] } = useStaff(selectedLocationId);
   
-  // Use profit metrics for today and 7-day periods
-  const { data: metricsToday, isLoading: todayLoading } = useProfitMetrics('today', selectedLocationId);
+  // Dashboard overview with real revenue data
+  const { data: overview, isLoading: overviewLoading } = useDashboardOverview(selectedLocationId);
+  
+  // Use profit metrics for 7-day period (food cost, net profit)
   const { data: metrics7d, isLoading: weekLoading } = useProfitMetrics('7d', selectedLocationId);
 
   const activeStaffCount = staff.filter(s => s.status === "active").length;
+
+  // Calculate sales vs last week
+  const salesVsLastWeek = (overview?.revenueToday || 0) - (overview?.revenueSameWeekdayLastWeek || 0);
+  const salesVsLastWeekPct = overview?.revenueSameWeekdayLastWeek && overview.revenueSameWeekdayLastWeek > 0
+    ? ((salesVsLastWeek / overview.revenueSameWeekdayLastWeek) * 100)
+    : null;
 
   // Helper to format percentage with fallback message
   const formatPct = (value: number | null, fallbackMsg: string): { display: string; isPlaceholder: boolean } => {
@@ -54,6 +63,12 @@ const Index = () => {
   const netProfitValue = metrics7d?.netProfit ?? 0;
   const netProfitPct = metrics7d?.netProfitPct;
 
+  // Location label for chart
+  const selectedLocation = locations.find(l => l.id === selectedLocationId);
+  const locationLabel = selectedLocationId && selectedLocation 
+    ? selectedLocation.name 
+    : "All locations combined";
+
   return (
     <div className="min-h-screen bg-background">
       {/* Background glow effect */}
@@ -72,37 +87,72 @@ const Index = () => {
           </span>
         </div>
         
-        {/* Metrics Grid - 6 KPIs in 2 rows */}
-        <div className="grid grid-cols-3 gap-4 mt-4">
-          {/* Row 1: Revenue, Orders, Active Staff */}
+        {/* Metrics Grid - Row 1: Today's key metrics */}
+        <div className="grid grid-cols-4 gap-4 mt-4">
           <MetricCard 
             title="Revenue (Today)" 
-            value={todayLoading ? "..." : formatCurrency(metricsToday?.revenue || 0)} 
-            change={metricsToday?.hasSales ? `${metricsToday?.orders || 0} orders` : "No sales yet"} 
-            changeType={metricsToday?.hasSales ? "neutral" : "neutral"} 
+            value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)} 
+            change={overview?.ordersToday ? `${overview.ordersToday} orders` : "No sales yet"} 
+            changeType={(overview?.ordersToday || 0) > 0 ? "neutral" : "neutral"} 
             icon={Euro} 
             delay={0} 
           />
           <MetricCard 
             title="Orders (Today)" 
-            value={todayLoading ? "..." : String(metricsToday?.orders || 0)} 
-            change={`Avg ${formatCurrency(metricsToday?.aov || 0)}`} 
+            value={overviewLoading ? "..." : String(overview?.ordersToday || 0)} 
+            change={`AOV ${formatCurrency(overview?.aovToday || 0)}`} 
             changeType="neutral" 
             icon={ShoppingBag} 
             delay={100} 
           />
+          <MetricCard 
+            title="vs Last Week" 
+            value={overviewLoading ? "..." : `${salesVsLastWeek >= 0 ? '+' : ''}${formatCurrency(salesVsLastWeek)}`} 
+            change={
+              salesVsLastWeekPct !== null 
+                ? `${salesVsLastWeekPct >= 0 ? '+' : ''}${salesVsLastWeekPct.toFixed(1)}%` 
+                : (overview?.revenueSameWeekdayLastWeek === 0 ? "No data last week" : "")
+            } 
+            changeType={salesVsLastWeek >= 0 ? "positive" : "negative"} 
+            icon={BarChart3} 
+            delay={200} 
+          />
+          <MetricCard 
+            title="Labour (Today)" 
+            value={
+              overviewLoading 
+                ? "..." 
+                : (overview?.hasLabourToday 
+                    ? formatCurrency(overview.labourTodayCost) 
+                    : "—")
+            } 
+            change={
+              overview?.hasLabourToday 
+                ? (overview.labourTodayPct !== null 
+                    ? `${overview.labourTodayPct.toFixed(1)}% of revenue` 
+                    : "No revenue yet")
+                : "Log attendance"
+            } 
+            changeType={
+              overview?.hasLabourToday && overview.labourTodayPct !== null && overview.labourTodayPct < 30 
+                ? "positive" 
+                : "neutral"
+            } 
+            icon={Clock} 
+            delay={300} 
+          />
+        </div>
+
+        {/* Metrics Grid - Row 2: 7-day cost/profit metrics */}
+        <div className="grid grid-cols-4 gap-4 mt-4">
           <MetricCard 
             title="Active Staff" 
             value={String(activeStaffCount)} 
             change={selectedLocationId ? "At this location" : "All locations"} 
             changeType="neutral" 
             icon={Users} 
-            delay={200} 
+            delay={400} 
           />
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 mt-4">
-          {/* Row 2: Food Cost %, Labour %, Net Profit */}
           <MetricCard 
             title="Food Cost % (7d)" 
             value={weekLoading ? "..." : foodCostDisplay.display} 
@@ -117,7 +167,7 @@ const Index = () => {
                 : (metrics7d?.foodCostPct && metrics7d.foodCostPct < 30 ? "positive" : "neutral")
             } 
             icon={TrendingUp} 
-            delay={300} 
+            delay={500} 
           />
           <MetricCard 
             title="Labour % (7d)" 
@@ -133,7 +183,7 @@ const Index = () => {
                 : (metrics7d?.labourPct && metrics7d.labourPct < 30 ? "positive" : "neutral")
             } 
             icon={Percent} 
-            delay={400} 
+            delay={600} 
           />
           <MetricCard 
             title="Net Profit (7d)" 
@@ -145,7 +195,7 @@ const Index = () => {
             } 
             changeType={netProfitValue > 0 ? "positive" : netProfitValue < 0 ? "negative" : "neutral"} 
             icon={Wallet} 
-            delay={500} 
+            delay={700} 
           />
         </div>
 
@@ -153,7 +203,13 @@ const Index = () => {
           {/* Main Content - 2 columns */}
           <div className="col-span-2 space-y-6">
             {/* Revenue Chart */}
-            <RevenueChart />
+            <RevenueChart 
+              data={overview?.revenueSeries || []}
+              totalRevenue={overview?.revenueToday || 0}
+              revenueYesterday={overview?.revenueYesterday || 0}
+              isLoading={overviewLoading}
+              locationLabel={locationLabel}
+            />
             
             {/* Locations Grid */}
             <div>
