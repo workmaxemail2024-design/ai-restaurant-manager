@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
-  Settings2, List, MapPin, Brain, Clock, Trash2, Play, Zap, Radio, Eye, EyeOff, ShieldAlert
+  Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
@@ -40,8 +39,6 @@ interface CaptivaSettings {
   api_key?: string;
   username?: string;
   password?: string;
-  simulate?: boolean;
-  last_sync_mode?: string;
 }
 
 export default function POSIntegrationsPage() {
@@ -63,7 +60,6 @@ export default function POSIntegrationsPage() {
   const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = usePOSIntegrations(selectedLocation || undefined);
   const { data: syncLogs, refetch: refetchLogs } = usePOSSyncLogs(selectedLocation || undefined);
   const { data: mappings } = usePOSMappings(selectedLocation || undefined);
-  const { data: salesImports } = usePOSSalesImports(selectedLocation || undefined, "pending");
   const { data: dishes } = useDishes();
 
   const createIntegration = useCreatePOSIntegration();
@@ -80,23 +76,8 @@ export default function POSIntegrationsPage() {
     mapping_suggestions?: Array<{ import_id: string; external_name: string; suggested_matches: Array<{ dish_id: string; dish_name: string; confidence: number }> }>;
   } | null>(null);
   const [syncingIntegrationId, setSyncingIntegrationId] = useState<string | null>(null);
-  const [simulationRunning, setSimulationRunning] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
-  const [liveModeConfirmOpen, setLiveModeConfirmOpen] = useState(false);
-  const [pendingLiveModeIntegration, setPendingLiveModeIntegration] = useState<POSIntegration | null>(null);
-
-  // Simulation Mode state
-  const [simulationMode, setSimulationMode] = useState<boolean>(true);
-
-  // Load simulation mode from first Captiva integration settings
-  useEffect(() => {
-    const captivaIntegration = integrations?.find(i => i.pos_provider === "captiva");
-    if (captivaIntegration) {
-      const settings = captivaIntegration.settings as CaptivaSettings | null;
-      setSimulationMode(settings?.simulate !== false);
-    }
-  }, [integrations]);
 
   const hasValidCredentials = useCallback((integration: POSIntegration): boolean => {
     if (integration.pos_provider !== "captiva") return true;
@@ -110,15 +91,11 @@ export default function POSIntegrationsPage() {
     );
   }, []);
 
-  const handleCaptivaSync = useCallback(async (integration: POSIntegration, forceSimulate: boolean = false) => {
-    // Check if trying to do live sync without credentials
-    const settings = (integration.settings || {}) as CaptivaSettings;
-    const shouldSimulate = forceSimulate || settings.simulate !== false;
-    
-    if (!shouldSimulate && !hasValidCredentials(integration)) {
+  const handleCaptivaSync = useCallback(async (integration: POSIntegration) => {
+    if (!hasValidCredentials(integration)) {
       toast({ 
         title: "Missing Credentials", 
-        description: "Please configure all Captiva credentials before using Live Mode", 
+        description: "Please configure all Captiva credentials before syncing", 
         variant: "destructive" 
       });
       return;
@@ -131,13 +108,12 @@ export default function POSIntegrationsPage() {
           integration_id: integration.id,
           location_id: integration.location_id,
           restaurant_id: (integration as any).restaurant_id,
-          simulate: shouldSimulate,
         },
       });
       if (error) throw error;
       if (data?.success) {
         toast({ 
-          title: shouldSimulate ? "Simulation sync completed" : "Sync Complete", 
+          title: "Sync Complete", 
           description: data.message || "Captiva sync completed successfully" 
         });
         refetchIntegrations();
@@ -152,78 +128,6 @@ export default function POSIntegrationsPage() {
     }
   }, [toast, refetchIntegrations, refetchLogs, hasValidCredentials]);
 
-  const handleLiveSyncClick = useCallback((integration: POSIntegration) => {
-    const settings = integration.settings as CaptivaSettings | null;
-    if (settings?.simulate !== false) {
-      // Currently in simulation mode, ask for confirmation
-      setPendingLiveModeIntegration(integration);
-      setLiveModeConfirmOpen(true);
-    } else {
-      // Already in live mode, proceed with sync
-      handleCaptivaSync(integration, false);
-    }
-  }, [handleCaptivaSync]);
-
-  const confirmLiveMode = useCallback(async () => {
-    if (!pendingLiveModeIntegration) return;
-    
-    // Update the integration to disable simulation
-    try {
-      const currentSettings = (pendingLiveModeIntegration.settings || {}) as CaptivaSettings;
-      await supabase
-        .from("pos_integrations")
-        .update({ 
-          settings: { ...currentSettings, simulate: false } 
-        })
-        .eq("id", pendingLiveModeIntegration.id);
-      
-      setSimulationMode(false);
-      refetchIntegrations();
-      toast({ title: "Live Mode Enabled", description: "Captiva integration is now using real API" });
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to enable live mode", variant: "destructive" });
-    }
-    
-    setLiveModeConfirmOpen(false);
-    setPendingLiveModeIntegration(null);
-  }, [pendingLiveModeIntegration, refetchIntegrations, toast]);
-
-  const handleRunSimulationTest = useCallback(async () => {
-    const captivaIntegration = integrations?.find(i => i.pos_provider === "captiva");
-    if (!captivaIntegration) {
-      toast({ title: "No Captiva Integration", description: "Please add a Captiva integration first", variant: "destructive" });
-      return;
-    }
-
-    setSimulationRunning(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("captiva-sync", {
-        body: { 
-          integration_id: captivaIntegration.id,
-          location_id: captivaIntegration.location_id,
-          restaurant_id: (captivaIntegration as any).restaurant_id,
-          simulate: true,
-        },
-      });
-      if (error) throw error;
-      
-      if (data?.success) {
-        toast({ 
-          title: "Simulation sync completed", 
-          description: data.message || `Simulation completed with ${data.data?.orders_processed || 0} orders` 
-        });
-        refetchIntegrations();
-        refetchLogs();
-      } else {
-        toast({ title: "Simulation Failed", description: data?.error || "Unknown error", variant: "destructive" });
-      }
-    } catch (err) {
-      toast({ title: "Simulation Failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
-    } finally {
-      setSimulationRunning(false);
-    }
-  }, [integrations, toast, refetchIntegrations, refetchLogs]);
-
   const handleSubmit = async () => {
     const submitData = {
       location_id: formData.location_id,
@@ -237,7 +141,6 @@ export default function POSIntegrationsPage() {
         api_key: formData.api_key,
         username: formData.captiva_username,
         password: formData.captiva_password,
-        simulate: true, // Default to simulation mode
       } : undefined,
     };
     
@@ -259,7 +162,6 @@ export default function POSIntegrationsPage() {
         store_id: settings.store_id || "",
         username: settings.username || "",
         password: settings.password || "",
-        simulate: settings.simulate !== false,
       });
     } else {
       testConnection.mutate({
@@ -277,7 +179,6 @@ export default function POSIntegrationsPage() {
     store_id: string; 
     username?: string;
     password?: string;
-    simulate?: boolean 
   }) => {
     try {
       const { data, error } = await supabase.functions.invoke("captiva-test", {
@@ -286,7 +187,7 @@ export default function POSIntegrationsPage() {
       if (error) throw error;
       if (data?.success) {
         toast({ 
-          title: data.simulation ? "🎮 Simulated Connection" : "Connection Successful", 
+          title: "Connection Successful", 
           description: data.message || "Captiva connection validated" 
         });
       } else {
@@ -310,7 +211,7 @@ export default function POSIntegrationsPage() {
   const getLatestCaptivaStats = (integrationId: string) => {
     const latestLog = syncLogs?.find(
       log => log.pos_provider === "captiva" && 
-      (log.event_type === "sync_completed" || log.event_type === "simulation_sync" || log.event_type === "test_sync")
+      (log.event_type === "sync_completed" || log.event_type === "test_sync")
     );
     if (!latestLog?.details) return null;
     const details = latestLog.details as Record<string, unknown>;
@@ -318,35 +219,7 @@ export default function POSIntegrationsPage() {
       orders: details.orders_count as number || 0,
       sales: details.sales_created as number || 0,
       attendance: details.attendance_created as number || 0,
-      simulation: details.simulation_mode as boolean || false,
     };
-  };
-
-  const toggleSimulationMode = async (integration: POSIntegration, enable: boolean) => {
-    if (!enable && !hasValidCredentials(integration)) {
-      toast({ 
-        title: "Missing Credentials", 
-        description: "Please configure all credentials before disabling simulation mode", 
-        variant: "destructive" 
-      });
-      return;
-    }
-    
-    if (!enable) {
-      setPendingLiveModeIntegration(integration);
-      setLiveModeConfirmOpen(true);
-      return;
-    }
-    
-    const currentSettings = (integration.settings || {}) as CaptivaSettings;
-    await supabase
-      .from("pos_integrations")
-      .update({ settings: { ...currentSettings, simulate: enable } })
-      .eq("id", integration.id);
-    
-    setSimulationMode(enable);
-    refetchIntegrations();
-    toast({ title: enable ? "Simulation Mode Enabled" : "Live Mode Enabled" });
   };
 
   return (
@@ -385,12 +258,6 @@ export default function POSIntegrationsPage() {
               
               {formData.pos_provider === "captiva" && (
                 <>
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      <AlertTriangle className="h-4 w-4 inline mr-1" />
-                      New integrations start in Simulation Mode for testing.
-                    </p>
-                  </div>
                   <div>
                     <Label>Captiva Cloud Base URL *</Label>
                     <Input 
@@ -477,37 +344,8 @@ export default function POSIntegrationsPage() {
         </Dialog>
       }
     >
-      {/* Live Mode Confirmation Dialog */}
-      <AlertDialog open={liveModeConfirmOpen} onOpenChange={setLiveModeConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-amber-500" />
-              Switch to Live Mode?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>You are switching to <strong>LIVE POS data</strong>. This will:</p>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Import real sales and staff activity from Captiva</li>
-                <li>Create actual records in your database</li>
-                <li>Use your configured API credentials</li>
-              </ul>
-              <p className="text-amber-600 dark:text-amber-400 font-medium mt-2">
-                Ensure your Captiva API credentials are correct before proceeding.
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmLiveMode} className="bg-amber-600 hover:bg-amber-700">
-              Enable Live Mode
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <div className="space-y-6">
-        {/* Location Filter + Simulation Controls */}
+        {/* Location Filter */}
         <Card>
           <CardContent className="pt-4">
             <div className="flex flex-wrap items-center gap-4">
@@ -521,16 +359,6 @@ export default function POSIntegrationsPage() {
               </Select>
               <Button variant="outline" onClick={handleRunReconciliation} disabled={!selectedLocation || reconciliation.isPending}>
                 <Brain className="h-4 w-4 mr-2" />AI Reconciliation
-              </Button>
-              
-              <Button 
-                variant="secondary" 
-                onClick={handleRunSimulationTest}
-                disabled={simulationRunning || !integrations?.some(i => i.pos_provider === "captiva")}
-                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 border-amber-500/50"
-              >
-                <Play className="h-4 w-4 mr-2" />
-                {simulationRunning ? "Running..." : "Run Simulation Test"}
               </Button>
             </div>
           </CardContent>
@@ -553,8 +381,6 @@ export default function POSIntegrationsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 {integrations?.map(integration => {
                   const settings = integration.settings as CaptivaSettings | null;
-                  const lastSyncMode = settings?.last_sync_mode;
-                  const isSimulation = settings?.simulate !== false;
                   const stats = getLatestCaptivaStats(integration.id);
                   const credentialsValid = hasValidCredentials(integration);
                   
@@ -573,33 +399,6 @@ export default function POSIntegrationsPage() {
                         <CardDescription>{integration.locations?.name}</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        {/* Simulation Mode Banner */}
-                        {integration.pos_provider === "captiva" && (
-                          <div className={`p-3 rounded-lg ${isSimulation ? "bg-amber-500/10 border border-amber-500/30" : "bg-green-500/10 border border-green-500/30"}`}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Radio className={`h-4 w-4 ${isSimulation ? "text-amber-500" : "text-green-500"}`} />
-                                <span className="text-sm font-medium">
-                                  {isSimulation ? "Simulation Mode" : "Live Mode"}
-                                </span>
-                              </div>
-                              <Switch
-                                checked={isSimulation}
-                                onCheckedChange={(checked) => toggleSimulationMode(integration, checked)}
-                              />
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {isSimulation ? "Using fake data for testing" : "Using real Captiva API"}
-                            </p>
-                            {!isSimulation && !credentialsValid && (
-                              <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                                <AlertTriangle className="h-3 w-3" />
-                                Missing credentials - Live sync disabled
-                              </p>
-                            )}
-                          </div>
-                        )}
-
                         {/* Credentials Display for Captiva */}
                         {integration.pos_provider === "captiva" && settings && (
                           <div className="text-xs space-y-1 p-2 rounded bg-muted/50">
@@ -623,6 +422,12 @@ export default function POSIntegrationsPage() {
                               <span className="text-muted-foreground">Password:</span>
                               <span className="font-mono">{settings.password ? "••••••••" : "Not set"}</span>
                             </div>
+                            {!credentialsValid && (
+                              <p className="text-xs text-destructive mt-2 flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Missing credentials - Sync disabled
+                              </p>
+                            )}
                           </div>
                         )}
 
@@ -630,19 +435,6 @@ export default function POSIntegrationsPage() {
                           <span className="text-muted-foreground">Last Sync</span>
                           <span>{integration.last_sync_time ? format(new Date(integration.last_sync_time), "MMM d, HH:mm") : "Never"}</span>
                         </div>
-                        
-                        {integration.pos_provider === "captiva" && lastSyncMode && (
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Last Sync Mode</span>
-                            <Badge variant={lastSyncMode === "simulation" ? "secondary" : "default"}>
-                              {lastSyncMode === "simulation" ? (
-                                <><Zap className="h-3 w-3 mr-1" />Simulation</>
-                              ) : (
-                                <><CheckCircle2 className="h-3 w-3 mr-1" />Live</>
-                              )}
-                            </Badge>
-                          </div>
-                        )}
                         
                         {integration.pos_provider === "captiva" && stats && (
                           <div className="grid grid-cols-3 gap-2 text-center text-xs">
@@ -673,27 +465,16 @@ export default function POSIntegrationsPage() {
                             <RefreshCw className="h-4 w-4 mr-1" />Test
                           </Button>
                           {integration.pos_provider === "captiva" && (
-                            <>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => handleLiveSyncClick(integration)}
-                                disabled={syncingIntegrationId === integration.id || (settings?.simulate === false && !credentialsValid)}
-                                title={!credentialsValid && settings?.simulate === false ? "Configure credentials to enable" : ""}
-                              >
-                                <RefreshCw className={`h-4 w-4 mr-1 ${syncingIntegrationId === integration.id ? "animate-spin" : ""}`} />
-                                {syncingIntegrationId === integration.id ? "Syncing..." : "Live Sync"}
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="secondary"
-                                onClick={() => handleCaptivaSync(integration, true)}
-                                disabled={syncingIntegrationId === integration.id}
-                                className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300"
-                              >
-                                <Play className="h-4 w-4 mr-1" />Simulate
-                              </Button>
-                            </>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              onClick={() => handleCaptivaSync(integration)}
+                              disabled={syncingIntegrationId === integration.id || !credentialsValid}
+                              title={!credentialsValid ? "Configure credentials to enable" : ""}
+                            >
+                              <RefreshCw className={`h-4 w-4 mr-1 ${syncingIntegrationId === integration.id ? "animate-spin" : ""}`} />
+                              {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
+                            </Button>
                           )}
                           <Button size="sm" variant="destructive" onClick={() => deleteIntegration.mutate(integration.id)}>
                             <Trash2 className="h-4 w-4" />
@@ -758,33 +539,27 @@ export default function POSIntegrationsPage() {
                   <p className="text-muted-foreground text-center py-4">No sync logs yet</p>
                 ) : (
                   <div className="space-y-2">
-                    {syncLogs?.map(log => {
-                      const isSimulation = log.event_type?.includes("simulation");
-                      return (
-                        <div key={log.id} className={`flex items-center justify-between p-3 border rounded-lg ${isSimulation ? "border-amber-500/30 bg-amber-500/5" : ""}`}>
-                          <div className="flex items-center gap-3">
-                            {log.status === "success" ? (
-                              <CheckCircle2 className={`h-5 w-5 ${isSimulation ? "text-amber-500" : "text-green-500"}`} />
-                            ) : log.status === "fail" ? (
-                              <XCircle className="h-5 w-5 text-destructive" />
-                            ) : (
-                              <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                            )}
-                            <div>
-                              <p className="font-medium flex items-center gap-2">
-                                {log.event_type}
-                                {isSimulation && <Badge variant="secondary" className="text-xs">Simulation</Badge>}
-                              </p>
-                              <p className="text-sm text-muted-foreground">{log.message}</p>
-                            </div>
-                          </div>
-                          <div className="text-right text-sm text-muted-foreground">
-                            <p>{log.pos_provider}</p>
-                            <p className="flex items-center gap-1"><Clock className="h-3 w-3" />{format(new Date(log.created_at), "MMM d, HH:mm")}</p>
+                    {syncLogs?.map(log => (
+                      <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          {log.status === "success" ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-500" />
+                          ) : log.status === "fail" ? (
+                            <XCircle className="h-5 w-5 text-destructive" />
+                          ) : (
+                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                          )}
+                          <div>
+                            <p className="font-medium">{log.event_type}</p>
+                            <p className="text-sm text-muted-foreground">{log.message}</p>
                           </div>
                         </div>
-                      );
-                    })}
+                        <div className="text-right text-sm text-muted-foreground">
+                          <p>{log.pos_provider}</p>
+                          <p className="flex items-center gap-1"><Clock className="h-3 w-3" />{format(new Date(log.created_at), "MMM d, HH:mm")}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>

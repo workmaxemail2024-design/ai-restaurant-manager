@@ -61,9 +61,20 @@ export function useCreateSale() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-      queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+      // Invalidate all queries that depend on sales data
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && [
+            'sales',
+            'dashboard-overview',
+            'dashboard-metrics', 
+            'profit-metrics',
+            'dish-costs',
+            'stock-levels'
+          ].includes(key);
+        }
+      });
       toast({ title: "Sale recorded successfully" });
     },
     onError: (error) => {

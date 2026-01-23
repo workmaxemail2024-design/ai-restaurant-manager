@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { PermissionFilteredSidebar } from "@/components/dashboard/PermissionFilteredSidebar";
 import { Header } from "@/components/dashboard/Header";
 import { MetricCard } from "@/components/dashboard/MetricCard";
@@ -23,9 +25,16 @@ const alerts = [
 
 const Index = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { selectedLocationId } = useLocation();
   const { data: locations = [] } = useLocations();
   const { data: staff = [] } = useStaff(selectedLocationId);
+  
+  // Refresh dashboard data on mount (ensures fresh data after navigating from other pages)
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+    queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
+  }, [queryClient]);
   
   // Dashboard overview with real revenue data
   const { data: overview, isLoading: overviewLoading } = useDashboardOverview(selectedLocationId);
