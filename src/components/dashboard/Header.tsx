@@ -2,6 +2,7 @@ import { Search, Calendar, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
 import { LocationSelector } from "@/components/LocationSelector";
+import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
 import { RealtimeIndicator } from "@/components/dashboard/RealtimeIndicator";
 import { Button } from "@/components/ui/button";
@@ -59,10 +60,13 @@ export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
         {/* Location Selector with Scope Label */}
         <div className="flex items-center gap-2">
           <LocationSelector />
-          <Badge variant="outline" className="text-xs whitespace-nowrap">
+          <Badge variant="outline" className="text-xs whitespace-nowrap hidden lg:flex">
             Scope: {selectedLocationName || "All Locations"}
           </Badge>
         </div>
+
+        {/* Date Range Selector */}
+        <DateRangeSelector />
 
         {/* Search */}
         <div className="relative">

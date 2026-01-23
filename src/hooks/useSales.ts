@@ -61,20 +61,13 @@ export function useCreateSale() {
       return data;
     },
     onSuccess: () => {
-      // Invalidate all queries that depend on sales data
-      queryClient.invalidateQueries({ 
-        predicate: (query) => {
-          const key = query.queryKey[0];
-          return typeof key === 'string' && [
-            'sales',
-            'dashboard-overview',
-            'dashboard-metrics', 
-            'profit-metrics',
-            'dish-costs',
-            'stock-levels'
-          ].includes(key);
-        }
-      });
+      // Broad invalidation to catch all dashboard/sales related queries regardless of scope
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["dish-costs"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
       toast({ title: "Sale recorded successfully" });
     },
     onError: (error) => {
@@ -91,7 +84,11 @@ export function useDeleteSale() {
       if (error) throw error;
     },
     onSuccess: () => {
+      // Broad invalidation to catch all dashboard/sales related queries
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
       toast({ title: "Sale deleted successfully" });
     },
     onError: (error) => {

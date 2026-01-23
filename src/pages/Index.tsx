@@ -10,6 +10,7 @@ import { AIInsightPanel } from "@/components/dashboard/AIInsightPanel";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { Euro, ShoppingBag, Users, TrendingUp, Percent, Wallet, BarChart3, Clock } from "lucide-react";
 import { useLocation } from "@/contexts/LocationContext";
+import { useDateRange } from "@/contexts/DateRangeContext";
 import { useLocations } from "@/hooks/useLocations";
 import { useStaff } from "@/hooks/useStaff";
 import { useProfitMetrics } from "@/hooks/useProfitMetrics";
@@ -27,20 +28,29 @@ const Index = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { selectedLocationId } = useLocation();
+  const { presetLabel, startDate, endDate } = useDateRange();
   const { data: locations = [] } = useLocations();
   const { data: staff = [] } = useStaff(selectedLocationId);
   
   // Refresh dashboard data on mount (ensures fresh data after navigating from other pages)
   useEffect(() => {
-    queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
-    queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
+    queryClient.invalidateQueries({ 
+      predicate: (query) => {
+        const key = query.queryKey[0];
+        return typeof key === 'string' && [
+          'dashboard-overview',
+          'profit-metrics',
+          'sales'
+        ].includes(key);
+      }
+    });
   }, [queryClient]);
   
   // Dashboard overview with real revenue data
   const { data: overview, isLoading: overviewLoading } = useDashboardOverview(selectedLocationId);
   
-  // Use profit metrics for 7-day period (food cost, net profit)
-  const { data: metrics7d, isLoading: weekLoading } = useProfitMetrics('7d', selectedLocationId);
+  // Use profit metrics for the selected date range
+  const { data: metrics, isLoading: metricsLoading } = useProfitMetrics(selectedLocationId);
 
   const activeStaffCount = staff.filter(s => s.status === "active").length;
 
@@ -60,23 +70,26 @@ const Index = () => {
 
   // Get display values for KPIs
   const foodCostDisplay = formatPct(
-    metrics7d?.foodCostPct ?? null,
-    metrics7d?.hasSales ? "Add recipes" : "No sales yet"
+    metrics?.foodCostPct ?? null,
+    metrics?.hasSales ? "Add recipes" : "No sales yet"
   );
 
   const labourDisplay = formatPct(
-    metrics7d?.labourPct ?? null,
-    metrics7d?.hasSales ? "Track attendance" : "No sales yet"
+    metrics?.labourPct ?? null,
+    metrics?.hasSales ? "Track attendance" : "No sales yet"
   );
 
-  const netProfitValue = metrics7d?.netProfit ?? 0;
-  const netProfitPct = metrics7d?.netProfitPct;
+  const netProfitValue = metrics?.netProfit ?? 0;
+  const netProfitPct = metrics?.netProfitPct;
 
   // Location label for chart
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
   const locationLabel = selectedLocationId && selectedLocation 
     ? selectedLocation.name 
     : "All locations combined";
+
+  // Date range label for display
+  const rangeLabel = presetLabel;
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,14 +105,14 @@ const Index = () => {
         <div className="flex items-center justify-between mt-6">
           <h2 className="text-lg font-semibold">Performance Overview</h2>
           <span className="text-xs text-muted-foreground">
-            {selectedLocationId ? "Filtered by location" : "All locations"}
+            {selectedLocationId ? "Filtered by location" : "All locations"} • {rangeLabel}
           </span>
         </div>
         
         {/* Metrics Grid - Row 1: Today's key metrics */}
         <div className="grid grid-cols-4 gap-4 mt-4">
           <MetricCard 
-            title="Revenue (Today)" 
+            title={`Revenue (${rangeLabel})`}
             value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)} 
             change={overview?.ordersToday ? `${overview.ordersToday} orders` : "No sales yet"} 
             changeType={(overview?.ordersToday || 0) > 0 ? "neutral" : "neutral"} 
@@ -107,7 +120,7 @@ const Index = () => {
             delay={0} 
           />
           <MetricCard 
-            title="Orders (Today)" 
+            title={`Orders (${rangeLabel})`}
             value={overviewLoading ? "..." : String(overview?.ordersToday || 0)} 
             change={`AOV ${formatCurrency(overview?.aovToday || 0)}`} 
             changeType="neutral" 
@@ -127,7 +140,7 @@ const Index = () => {
             delay={200} 
           />
           <MetricCard 
-            title="Labour (Today)" 
+            title={`Labour (${rangeLabel})`}
             value={
               overviewLoading 
                 ? "..." 
@@ -152,7 +165,7 @@ const Index = () => {
           />
         </div>
 
-        {/* Metrics Grid - Row 2: 7-day cost/profit metrics */}
+        {/* Metrics Grid - Row 2: Period cost/profit metrics */}
         <div className="grid grid-cols-4 gap-4 mt-4">
           <MetricCard 
             title="Active Staff" 
@@ -163,44 +176,44 @@ const Index = () => {
             delay={400} 
           />
           <MetricCard 
-            title="Food Cost % (7d)" 
-            value={weekLoading ? "..." : foodCostDisplay.display} 
+            title={`Food Cost % (${rangeLabel})`}
+            value={metricsLoading ? "..." : foodCostDisplay.display} 
             change={
               foodCostDisplay.isPlaceholder 
-                ? (metrics7d?.hasRecipes === false ? "Add recipes to dishes" : "")
-                : `Cost: ${formatCurrency(metrics7d?.foodCost || 0)}`
+                ? (metrics?.hasRecipes === false ? "Add recipes to dishes" : "")
+                : `Cost: ${formatCurrency(metrics?.foodCost || 0)}`
             } 
             changeType={
               foodCostDisplay.isPlaceholder 
                 ? "neutral" 
-                : (metrics7d?.foodCostPct && metrics7d.foodCostPct < 30 ? "positive" : "neutral")
+                : (metrics?.foodCostPct && metrics.foodCostPct < 30 ? "positive" : "neutral")
             } 
             icon={TrendingUp} 
             delay={500} 
           />
           <MetricCard 
-            title="Labour % (7d)" 
-            value={weekLoading ? "..." : labourDisplay.display} 
+            title={`Labour % (${rangeLabel})`}
+            value={metricsLoading ? "..." : labourDisplay.display} 
             change={
               labourDisplay.isPlaceholder 
-                ? (metrics7d?.hasLabour === false ? "Log attendance" : "")
-                : `Cost: ${formatCurrency(metrics7d?.labourCost || 0)}`
+                ? (metrics?.hasLabour === false ? "Log attendance" : "")
+                : `Cost: ${formatCurrency(metrics?.labourCost || 0)}`
             } 
             changeType={
               labourDisplay.isPlaceholder 
                 ? "neutral" 
-                : (metrics7d?.labourPct && metrics7d.labourPct < 30 ? "positive" : "neutral")
+                : (metrics?.labourPct && metrics.labourPct < 30 ? "positive" : "neutral")
             } 
             icon={Percent} 
             delay={600} 
           />
           <MetricCard 
-            title="Net Profit (7d)" 
-            value={weekLoading ? "..." : formatCurrency(netProfitValue)} 
+            title={`Net Profit (${rangeLabel})`}
+            value={metricsLoading ? "..." : formatCurrency(netProfitValue)} 
             change={
-              metrics7d?.hasSales 
+              metrics?.hasSales 
                 ? (netProfitPct !== null ? `${netProfitPct.toFixed(1)}% margin` : "Missing cost data")
-                : (metrics7d?.hasOverheads === false ? "Add overheads in Settings" : "No sales yet")
+                : (metrics?.hasOverheads === false ? "Add overheads in Settings" : "No sales yet")
             } 
             changeType={netProfitValue > 0 ? "positive" : netProfitValue < 0 ? "negative" : "neutral"} 
             icon={Wallet} 

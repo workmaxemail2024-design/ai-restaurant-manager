@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useDateRange } from "@/contexts/DateRangeContext";
 import { OverheadFrequency } from "./useOverheads";
+import { differenceInDays, parseISO } from "date-fns";
 
 export type DateRange = 'today' | '7d' | '30d';
 
@@ -22,38 +24,6 @@ export interface ProfitMetrics {
   hasOverheads: boolean;
 }
 
-function getDateRange(range: DateRange): { startDate: string; endDate: string; days: number } {
-  const today = new Date();
-  const endDate = today.toISOString().split('T')[0];
-  
-  let startDate: string;
-  let days: number;
-  
-  switch (range) {
-    case 'today':
-      startDate = endDate;
-      days = 1;
-      break;
-    case '7d':
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(today.getDate() - 6);
-      startDate = sevenDaysAgo.toISOString().split('T')[0];
-      days = 7;
-      break;
-    case '30d':
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 29);
-      startDate = thirtyDaysAgo.toISOString().split('T')[0];
-      days = 30;
-      break;
-    default:
-      startDate = endDate;
-      days = 1;
-  }
-  
-  return { startDate, endDate, days };
-}
-
 function allocateOverheadDaily(amount: number, frequency: OverheadFrequency): number {
   switch (frequency) {
     case 'daily':
@@ -67,13 +37,17 @@ function allocateOverheadDaily(amount: number, frequency: OverheadFrequency): nu
   }
 }
 
-export function useProfitMetrics(range: DateRange = 'today', locationId?: string | null) {
+export function useProfitMetrics(locationId?: string | null) {
   const { currentRestaurant } = useRestaurant();
+  const { startDate, endDate } = useDateRange();
   const restaurantId = currentRestaurant?.id;
-  const { startDate, endDate, days } = getDateRange(range);
+  const locationScopeKey = locationId ?? "all";
+
+  // Calculate number of days in range
+  const days = differenceInDays(parseISO(endDate), parseISO(startDate)) + 1;
 
   return useQuery({
-    queryKey: ["profit-metrics", restaurantId, locationId, range, startDate],
+    queryKey: ["profit-metrics", restaurantId, locationScopeKey, startDate, endDate],
     queryFn: async (): Promise<ProfitMetrics> => {
       if (!restaurantId) {
         return {
@@ -98,6 +72,7 @@ export function useProfitMetrics(range: DateRange = 'today', locationId?: string
       let salesQuery = supabase
         .from("sales")
         .select("id, dish_id, quantity, total_price, sale_date")
+        .eq("restaurant_id", restaurantId)
         .gte("sale_date", startDate)
         .lte("sale_date", endDate);
 
@@ -154,6 +129,7 @@ export function useProfitMetrics(range: DateRange = 'today', locationId?: string
       let attendanceQuery = supabase
         .from("staff_attendance")
         .select("clock_in, clock_out, staff_id, location_id, staff(hourly_rate)")
+        .eq("restaurant_id", restaurantId)
         .gte("clock_in", startDateTime)
         .lte("clock_in", endDateTime)
         .not("clock_out", "is", null);
@@ -228,6 +204,8 @@ export function useProfitMetrics(range: DateRange = 'today', locationId?: string
       };
     },
     enabled: !!restaurantId,
-    staleTime: 30000, // 30 seconds
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 }

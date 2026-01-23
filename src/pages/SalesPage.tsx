@@ -11,11 +11,13 @@ import { useSales, useCreateSale, useDeleteSale, Sale, SaleInsert } from "@/hook
 import { useDishes } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
+import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency } from "@/lib/currency";
 
 export default function SalesPage() {
   const { selectedLocationId } = useLocation();
-  const { data: sales = [], isLoading } = useSales(undefined, undefined, selectedLocationId);
+  const { startDate, endDate } = useDateRange();
+  const { data: sales = [], isLoading } = useSales(startDate, endDate, selectedLocationId);
   const { data: dishes = [] } = useDishes(selectedLocationId);
   const { data: locations = [] } = useLocations();
   const createSale = useCreateSale();

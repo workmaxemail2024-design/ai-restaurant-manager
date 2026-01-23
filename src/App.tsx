@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { RestaurantProvider } from "@/contexts/RestaurantContext";
 import { LocationProvider } from "@/contexts/LocationContext";
+import { DateRangeProvider } from "@/contexts/DateRangeContext";
 import { AuthGuard } from "@/components/AuthGuard";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -55,7 +56,8 @@ const App = () => (
     <ThemeProvider>
       <RestaurantProvider>
         <LocationProvider>
-          <TooltipProvider>
+          <DateRangeProvider>
+            <TooltipProvider>
             <Toaster />
             <Sonner />
           <BrowserRouter>
@@ -108,8 +110,9 @@ const App = () => (
               <Route path="/tools/margin-calculator" element={<ProtectedRoute><MarginCalculatorPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+            </BrowserRouter>
+          </TooltipProvider>
+          </DateRangeProvider>
         </LocationProvider>
       </RestaurantProvider>
     </ThemeProvider>
