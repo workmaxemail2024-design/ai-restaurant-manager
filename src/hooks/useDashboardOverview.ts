@@ -31,7 +31,7 @@ export function useDashboardOverview(locationId?: string | null) {
   const sameWeekdayLastWeek = format(subDays(new Date(), 7), "yyyy-MM-dd");
 
   return useQuery({
-    queryKey: ["dashboard-overview", restaurantId, locationId, today],
+    queryKey: ["dashboard-overview", restaurantId, locationId ?? "all", today],
     queryFn: async (): Promise<DashboardOverview> => {
       if (!restaurantId) {
         return {
