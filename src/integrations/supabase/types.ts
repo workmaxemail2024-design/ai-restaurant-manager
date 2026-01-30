@@ -1018,6 +1018,7 @@ export type Database = {
       staff: {
         Row: {
           captiva_operator_code: string | null
+          contract_type: Database["public"]["Enums"]["contract_type"]
           created_at: string
           email: string | null
           first_name: string
@@ -1025,6 +1026,8 @@ export type Database = {
           id: string
           last_name: string
           location_id: string | null
+          max_hours_per_week: number
+          min_hours_per_week: number | null
           phone: string | null
           restaurant_id: string | null
           role: Database["public"]["Enums"]["staff_role"]
@@ -1033,6 +1036,7 @@ export type Database = {
         }
         Insert: {
           captiva_operator_code?: string | null
+          contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
           email?: string | null
           first_name: string
@@ -1040,6 +1044,8 @@ export type Database = {
           id?: string
           last_name: string
           location_id?: string | null
+          max_hours_per_week?: number
+          min_hours_per_week?: number | null
           phone?: string | null
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"]
@@ -1048,6 +1054,7 @@ export type Database = {
         }
         Update: {
           captiva_operator_code?: string | null
+          contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
           email?: string | null
           first_name?: string
@@ -1055,6 +1062,8 @@ export type Database = {
           id?: string
           last_name?: string
           location_id?: string | null
+          max_hours_per_week?: number
+          min_hours_per_week?: number | null
           phone?: string | null
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"]
@@ -1202,6 +1211,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_draft: boolean
           location_id: string
           notes: string | null
           restaurant_id: string | null
@@ -1213,6 +1223,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_draft?: boolean
           location_id: string
           notes?: string | null
           restaurant_id?: string | null
@@ -1224,6 +1235,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_draft?: boolean
           location_id?: string
           notes?: string | null
           restaurant_id?: string | null
@@ -1582,6 +1594,7 @@ export type Database = {
     }
     Enums: {
       attendance_source: "manual" | "pos" | "auto"
+      contract_type: "full_time" | "part_time" | "casual"
       staff_role:
         | "chef"
         | "waiter"
@@ -1721,6 +1734,7 @@ export const Constants = {
   public: {
     Enums: {
       attendance_source: ["manual", "pos", "auto"],
+      contract_type: ["full_time", "part_time", "casual"],
       staff_role: [
         "chef",
         "waiter",
