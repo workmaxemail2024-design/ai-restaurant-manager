@@ -112,6 +112,10 @@ export function useStaff(locationId?: string | null) {
       
       return data?.map(s => ({
         ...s,
+        // Provide defaults for new fields until types regenerate
+        contract_type: (s as any).contract_type || 'full_time',
+        max_hours_per_week: (s as any).max_hours_per_week ?? 40,
+        min_hours_per_week: (s as any).min_hours_per_week ?? null,
         locations: s.location_id ? locationsMap[s.location_id] || null : null
       })) as Staff[];
     },
