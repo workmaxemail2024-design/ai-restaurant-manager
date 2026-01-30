@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 export type StaffRole = "chef" | "waiter" | "manager" | "host" | "bartender" | "kitchen_assistant" | "cleaner";
 export type StaffStatus = "active" | "inactive" | "on_leave";
 export type AttendanceSource = "manual" | "pos" | "auto";
+export type ContractType = "full_time" | "part_time" | "casual";
 
 export interface Staff {
   id: string;
@@ -17,6 +18,9 @@ export interface Staff {
   email: string | null;
   phone: string | null;
   captiva_operator_code?: string | null;
+  contract_type: ContractType;
+  max_hours_per_week: number;
+  min_hours_per_week: number | null;
   created_at: string;
   updated_at: string;
   locations?: { name: string } | null;
@@ -29,6 +33,7 @@ export interface StaffShift {
   shift_start: string;
   shift_end: string;
   notes: string | null;
+  is_draft: boolean;
   created_at: string;
   staff?: { first_name: string; last_name: string };
   locations?: { name: string };
@@ -68,6 +73,9 @@ export type StaffInsert = {
   email?: string | null;
   phone?: string | null;
   captiva_operator_code?: string | null;
+  contract_type?: ContractType;
+  max_hours_per_week?: number;
+  min_hours_per_week?: number | null;
 };
 
 export function useStaff(locationId?: string | null) {
