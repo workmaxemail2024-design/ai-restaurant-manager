@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Plus, Link2, AlertCircle } from "lucide-react";
-import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInsert, StaffRole, StaffStatus } from "@/hooks/useStaff";
+import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInsert, StaffRole, StaffStatus, ContractType } from "@/hooks/useStaff";
 import { useLocations } from "@/hooks/useLocations";
 import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,11 @@ import { formatCurrency, currencySymbol } from "@/lib/currency";
 
 const roles: StaffRole[] = ["chef", "waiter", "manager", "host", "bartender", "kitchen_assistant", "cleaner"];
 const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
+const contractTypes: { value: ContractType; label: string }[] = [
+  { value: "full_time", label: "Full-time" },
+  { value: "part_time", label: "Part-time" },
+  { value: "casual", label: "Casual" },
+];
 
 export default function StaffPage() {
   const { selectedLocationId } = useLocation();
@@ -45,14 +50,33 @@ export default function StaffPage() {
     email: null,
     phone: null,
     captiva_operator_code: null,
+    contract_type: "part_time",
+    max_hours_per_week: undefined,
+    min_hours_per_week: undefined,
   });
+
+  // Derived contracted hours for the form (uses max_hours as the single "contracted hours" value)
+  const contractedHours = form.max_hours_per_week ?? "";
 
   // Get unmapped staff from POS
   const staffMappings = posMappings.filter(m => m.mapping_type === "staff");
   const unmappedStaffMappings = staffMappings.filter(m => !m.is_verified);
 
   const resetForm = () => {
-    setForm({ first_name: "", last_name: "", role: "waiter", hourly_rate: 0, status: "active", location_id: null, email: null, phone: null, captiva_operator_code: null });
+    setForm({ 
+      first_name: "", 
+      last_name: "", 
+      role: "waiter", 
+      hourly_rate: 0, 
+      status: "active", 
+      location_id: null, 
+      email: null, 
+      phone: null, 
+      captiva_operator_code: null,
+      contract_type: "part_time",
+      max_hours_per_week: undefined,
+      min_hours_per_week: undefined,
+    });
     setEditingStaff(null);
   };
 
@@ -79,8 +103,20 @@ export default function StaffPage() {
       email: item.email,
       phone: item.phone,
       captiva_operator_code: item.captiva_operator_code,
+      contract_type: item.contract_type || "part_time",
+      max_hours_per_week: item.max_hours_per_week ?? undefined,
+      min_hours_per_week: item.min_hours_per_week ?? undefined,
     });
     setOpen(true);
+  };
+
+  const handleContractedHoursChange = (value: string) => {
+    const hours = value === "" ? undefined : parseFloat(value);
+    setForm({ 
+      ...form, 
+      max_hours_per_week: hours,
+      min_hours_per_week: hours,
+    });
   };
 
   const handleMapStaff = (mappingId: string, staffId: string) => {
@@ -183,6 +219,29 @@ export default function StaffPage() {
                       {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employment Type</Label>
+                  <Select value={form.contract_type || "part_time"} onValueChange={(v) => setForm({ ...form, contract_type: v as ContractType })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {contractTypes.map((ct) => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Contracted Hours (per week)</Label>
+                  <Input 
+                    type="number" 
+                    step="1" 
+                    min="0"
+                    max="168"
+                    placeholder="e.g., 40"
+                    value={contractedHours} 
+                    onChange={(e) => handleContractedHoursChange(e.target.value)} 
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
