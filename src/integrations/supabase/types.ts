@@ -1475,6 +1475,7 @@ export type Database = {
       staff_safe: {
         Row: {
           captiva_operator_code: string | null
+          contract_type: Database["public"]["Enums"]["contract_type"] | null
           created_at: string | null
           email: string | null
           first_name: string | null
@@ -1482,6 +1483,8 @@ export type Database = {
           id: string | null
           last_name: string | null
           location_id: string | null
+          max_hours_per_week: number | null
+          min_hours_per_week: number | null
           phone: string | null
           restaurant_id: string | null
           role: Database["public"]["Enums"]["staff_role"] | null
@@ -1490,6 +1493,7 @@ export type Database = {
         }
         Insert: {
           captiva_operator_code?: string | null
+          contract_type?: Database["public"]["Enums"]["contract_type"] | null
           created_at?: string | null
           email?: never
           first_name?: string | null
@@ -1497,6 +1501,8 @@ export type Database = {
           id?: string | null
           last_name?: string | null
           location_id?: string | null
+          max_hours_per_week?: number | null
+          min_hours_per_week?: number | null
           phone?: never
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
@@ -1505,6 +1511,7 @@ export type Database = {
         }
         Update: {
           captiva_operator_code?: string | null
+          contract_type?: Database["public"]["Enums"]["contract_type"] | null
           created_at?: string | null
           email?: never
           first_name?: string | null
@@ -1512,6 +1519,8 @@ export type Database = {
           id?: string | null
           last_name?: string | null
           location_id?: string | null
+          max_hours_per_week?: number | null
+          min_hours_per_week?: number | null
           phone?: never
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
