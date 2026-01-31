@@ -42,6 +42,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import SystemQAPage from "./pages/SystemQAPage";
 import OverheadsPage from "./pages/settings/OverheadsPage";
+import DocumentsPage from "./pages/DocumentsPage";
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,7 @@ const App = () => (
               <Route path="/dishes" element={<ProtectedRoute><DishesPage /></ProtectedRoute>} />
               <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrdersPage /></ProtectedRoute>} />
               <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
+              <Route path="/operations/documents" element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
               <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
               {/* Staff Routes */}
               <Route path="/staff" element={<ProtectedRoute><StaffPage /></ProtectedRoute>} />
