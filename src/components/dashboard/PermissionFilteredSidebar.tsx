@@ -186,8 +186,8 @@ export function PermissionFilteredSidebar() {
     }
   };
 
-  // Hydrate persisted state when restaurant changes (sidebar remounts on route changes)
-  useEffect(() => {
+  // Hydrate persisted state before paint (prevents sidebar jumping to top on navigation)
+  useLayoutEffect(() => {
     if (restaurantKey === "none") return;
 
     try {
@@ -307,7 +307,7 @@ export function PermissionFilteredSidebar() {
               <CollapsibleTrigger asChild>
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
-                  onMouseDown={persistScrollNow}
+                  onPointerDown={persistScrollNow}
                 >
                 <section.icon className="h-3.5 w-3.5" />
                 <span className="flex-1 text-left">{section.title}</span>
@@ -371,7 +371,7 @@ export function PermissionFilteredSidebar() {
 
 function NavButton({ icon: Icon, label, path, active, badge, onNavigate }: NavItem & { active: boolean; onNavigate?: () => void }) {
   return (
-    <Link to={path} onMouseDown={onNavigate}>
+    <Link to={path} onPointerDown={onNavigate} onClick={onNavigate}>
       <button
         className={cn(
           "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
