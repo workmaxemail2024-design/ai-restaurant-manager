@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.captiva-schedule-sync]
 verify_jwt = false
+
+[functions.document-extract]
+verify_jwt = true

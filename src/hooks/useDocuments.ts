@@ -17,6 +17,10 @@ export interface Document {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // OCR extraction fields
+  extracted_text: string | null;
+  extracted_data: Record<string, unknown> | null;
+  processing_status: string;
   // Joined fields
   location?: { id: string; name: string } | null;
   supplier?: { id: string; name: string } | null;

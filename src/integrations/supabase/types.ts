@@ -255,11 +255,14 @@ export type Database = {
           category: string
           created_at: string
           document_date: string | null
+          extracted_data: Json | null
+          extracted_text: string | null
           filename: string
           id: string
           location_id: string | null
           mime_type: string
           notes: string | null
+          processing_status: string
           restaurant_id: string
           storage_path: string
           supplier_id: string | null
@@ -269,11 +272,14 @@ export type Database = {
           category: string
           created_at?: string
           document_date?: string | null
+          extracted_data?: Json | null
+          extracted_text?: string | null
           filename: string
           id?: string
           location_id?: string | null
           mime_type: string
           notes?: string | null
+          processing_status?: string
           restaurant_id: string
           storage_path: string
           supplier_id?: string | null
@@ -283,11 +289,14 @@ export type Database = {
           category?: string
           created_at?: string
           document_date?: string | null
+          extracted_data?: Json | null
+          extracted_text?: string | null
           filename?: string
           id?: string
           location_id?: string | null
           mime_type?: string
           notes?: string | null
+          processing_status?: string
           restaurant_id?: string
           storage_path?: string
           supplier_id?: string | null
