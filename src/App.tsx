@@ -40,7 +40,6 @@ import RoleBuilderPage from "./pages/RoleBuilderPage";
 import AutomationRulesPage from "./pages/AutomationRulesPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import AuditLogPage from "./pages/AuditLogPage";
-import MarginCalculatorPage from "./pages/MarginCalculatorPage";
 import SystemQAPage from "./pages/SystemQAPage";
 import OverheadsPage from "./pages/settings/OverheadsPage";
 
@@ -106,8 +105,6 @@ const App = () => (
               <Route path="/settings/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
               <Route path="/settings/system-qa" element={<ProtectedRoute><SystemQAPage /></ProtectedRoute>} />
               <Route path="/settings/financial/overheads" element={<ProtectedRoute><OverheadsPage /></ProtectedRoute>} />
-              {/* Tools Routes */}
-              <Route path="/tools/margin-calculator" element={<ProtectedRoute><MarginCalculatorPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </BrowserRouter>

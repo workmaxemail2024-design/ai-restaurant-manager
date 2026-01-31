@@ -94,6 +94,7 @@ export function useCreateOverhead() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["overheads"] });
+      queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
       toast.success("Overhead created successfully");
     },
     onError: (error: Error) => {
@@ -119,6 +120,7 @@ export function useUpdateOverhead() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["overheads"] });
+      queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
       toast.success("Overhead updated successfully");
     },
     onError: (error: Error) => {
@@ -141,6 +143,7 @@ export function useDeleteOverhead() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["overheads"] });
+      queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
       toast.success("Overhead deleted successfully");
     },
     onError: (error: Error) => {
