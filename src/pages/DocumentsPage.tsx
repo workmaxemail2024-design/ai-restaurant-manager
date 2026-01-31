@@ -40,6 +40,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { Upload, Search, Trash2, ExternalLink, CalendarIcon, FileText, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+const DOCUMENT_TYPES = ["Invoice", "Receipt", "Statement", "Payroll", "Other"] as const;
+type DocumentType = typeof DOCUMENT_TYPES[number];
 import { cn } from "@/lib/utils";
 import {
   useDocuments,
@@ -142,9 +146,11 @@ export default function DocumentsPage() {
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Supplier</TableHead>
               <TableHead>Location</TableHead>
               <TableHead>File</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Uploaded</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
@@ -152,13 +158,13 @@ export default function DocumentsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8">
+                <TableCell colSpan={9} className="text-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : documents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                   No documents found
                 </TableCell>
               </TableRow>
@@ -213,6 +219,14 @@ function DocumentRow({ document, onDelete }: { document: Document; onDelete: () 
     }
   };
 
+  // Extract document_type from notes (stored as JSON prefix)
+  const docType = document.notes?.startsWith("{\"type\":")
+    ? JSON.parse(document.notes.split("\n")[0])?.type || "Other"
+    : "Other";
+  const displayNotes = document.notes?.startsWith("{\"type\":")
+    ? document.notes.split("\n").slice(1).join("\n").trim()
+    : document.notes;
+
   return (
     <TableRow>
       <TableCell>
@@ -221,6 +235,7 @@ function DocumentRow({ document, onDelete }: { document: Document; onDelete: () 
           : "—"}
       </TableCell>
       <TableCell>{document.category}</TableCell>
+      <TableCell className="text-sm">{docType}</TableCell>
       <TableCell>{document.supplier?.name || "—"}</TableCell>
       <TableCell>{document.location?.name || "All Locations"}</TableCell>
       <TableCell>
@@ -233,6 +248,9 @@ function DocumentRow({ document, onDelete }: { document: Document; onDelete: () 
           {document.filename}
           {loading && <Loader2 className="h-3 w-3 animate-spin" />}
         </button>
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary" className="text-xs">Uploaded</Badge>
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">
         {format(new Date(document.created_at), "dd MMM yyyy")}
@@ -281,6 +299,7 @@ function UploadForm({ locations, suppliers, defaultLocationId, onSuccess }: Uplo
   const uploadDocument = useUploadDocument();
   const [file, setFile] = useState<File | null>(null);
   const [category, setCategory] = useState<string>("");
+  const [docType, setDocType] = useState<DocumentType>("Invoice");
   const [locationId, setLocationId] = useState<string>(defaultLocationId || "all");
   const [supplierId, setSupplierId] = useState<string>("none");
   const [documentDate, setDocumentDate] = useState<Date | undefined>();
@@ -290,13 +309,16 @@ function UploadForm({ locations, suppliers, defaultLocationId, onSuccess }: Uplo
     e.preventDefault();
     if (!file || !category) return;
 
+    // Store docType as JSON prefix in notes field
+    const notesWithType = `{"type":"${docType}"}\n${notes.trim()}`;
+
     await uploadDocument.mutateAsync({
       file,
       category,
       locationId: locationId === "all" ? null : locationId,
       supplierId: supplierId === "none" ? null : supplierId,
       documentDate: documentDate ? format(documentDate, "yyyy-MM-dd") : null,
-      notes: notes.trim() || null,
+      notes: notesWithType,
     });
 
     onSuccess();
@@ -327,6 +349,23 @@ function UploadForm({ locations, suppliers, defaultLocationId, onSuccess }: Uplo
             {DOCUMENT_CATEGORIES.map((cat) => (
               <SelectItem key={cat} value={cat}>
                 {cat}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Document Type */}
+      <div className="space-y-2">
+        <Label>Document Type *</Label>
+        <Select value={docType} onValueChange={(v) => setDocType(v as DocumentType)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select type" />
+          </SelectTrigger>
+          <SelectContent>
+            {DOCUMENT_TYPES.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
               </SelectItem>
             ))}
           </SelectContent>
