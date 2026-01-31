@@ -250,6 +250,73 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          category: string
+          created_at: string
+          document_date: string | null
+          filename: string
+          id: string
+          location_id: string | null
+          mime_type: string
+          notes: string | null
+          restaurant_id: string
+          storage_path: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          document_date?: string | null
+          filename: string
+          id?: string
+          location_id?: string | null
+          mime_type: string
+          notes?: string | null
+          restaurant_id: string
+          storage_path: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          document_date?: string | null
+          filename?: string
+          id?: string
+          location_id?: string | null
+          mime_type?: string
+          notes?: string | null
+          restaurant_id?: string
+          storage_path?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ingredient_prices: {
         Row: {
           cost_price: number

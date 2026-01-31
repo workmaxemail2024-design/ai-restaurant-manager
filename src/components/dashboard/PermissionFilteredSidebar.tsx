@@ -100,6 +100,7 @@ const navSections: NavSection[] = [
     items: [
       { icon: Truck, label: "Suppliers", path: "/suppliers", permission: { resource: 'purchase_orders', action: 'view' } },
       { icon: ShoppingCart, label: "Purchase Orders", path: "/purchase-orders", permission: { resource: 'purchase_orders', action: 'view' } },
+      { icon: FileText, label: "Documents", path: "/operations/documents", permission: { resource: 'purchase_orders', action: 'view' } },
       { icon: Receipt, label: "Sales", path: "/sales", permission: { resource: 'finance', action: 'view' } },
       { icon: BarChart3, label: "Reports", path: "/reports", permission: { resource: 'reports', action: 'view' } },
     ]
