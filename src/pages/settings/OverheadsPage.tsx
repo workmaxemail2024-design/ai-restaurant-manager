@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Euro, Building2 } from "lucide-react";
+import { format } from "date-fns";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
 import {
@@ -77,6 +78,47 @@ const defaultFormData: OverheadFormData = {
   end_date: "",
   is_active: true,
 };
+
+// Calculate monthly equivalent for an overhead
+function toMonthlyAmount(amount: number, frequency: OverheadFrequency): number {
+  switch (frequency) {
+    case "daily":
+      return amount * 30;
+    case "weekly":
+      return amount * 4.33;
+    case "monthly":
+      return amount;
+    default:
+      return amount;
+  }
+}
+
+function SummaryTotals({ overheads }: { overheads: Overhead[] }) {
+  const activeOverheads = overheads.filter((o) => o.is_active);
+  
+  const monthlyTotal = activeOverheads.reduce((sum, o) => {
+    return sum + toMonthlyAmount(o.amount, o.frequency);
+  }, 0);
+  
+  const dailyEquivalent = monthlyTotal / 30;
+
+  return (
+    <div className="flex items-center gap-6 p-4 bg-muted/50 rounded-lg border">
+      <div>
+        <p className="text-sm text-muted-foreground">Monthly Total</p>
+        <p className="text-xl font-semibold">{formatCurrency(monthlyTotal)}</p>
+      </div>
+      <div className="h-8 w-px bg-border" />
+      <div>
+        <p className="text-sm text-muted-foreground">Daily Equivalent</p>
+        <p className="text-xl font-semibold">{formatCurrency(dailyEquivalent)}</p>
+      </div>
+      <div className="ml-auto text-sm text-muted-foreground">
+        Based on {activeOverheads.length} active overhead{activeOverheads.length !== 1 ? "s" : ""}
+      </div>
+    </div>
+  );
+}
 
 function OverheadsContent() {
   const { selectedLocationId } = useLocationContext();
@@ -191,6 +233,11 @@ function OverheadsContent() {
           </Button>
         </div>
 
+        {/* Summary Totals */}
+        {!isLoading && overheads && overheads.length > 0 && (
+          <SummaryTotals overheads={overheads} />
+        )}
+
         {/* Table */}
         {isLoading ? (
           <div className="space-y-3">
@@ -218,9 +265,10 @@ function OverheadsContent() {
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Frequency</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Amount (€)</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Active</TableHead>
+                  <TableHead>Updated</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -250,6 +298,9 @@ function OverheadsContent() {
                       <Badge variant={overhead.is_active ? "default" : "secondary"}>
                         {overhead.is_active ? "Active" : "Inactive"}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {format(new Date(overhead.updated_at), "dd MMM yyyy")}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
