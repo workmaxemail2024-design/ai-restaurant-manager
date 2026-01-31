@@ -39,8 +39,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { Upload, Search, Trash2, ExternalLink, CalendarIcon, FileText, Loader2 } from "lucide-react";
+import { Upload, Search, Trash2, ExternalLink, CalendarIcon, FileText, Loader2, Sparkles, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const DOCUMENT_TYPES = ["Invoice", "Receipt", "Statement", "Payroll", "Other"] as const;
 type DocumentType = typeof DOCUMENT_TYPES[number];
@@ -57,12 +59,14 @@ import { useSuppliers } from "@/hooks/useSuppliers";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function DocumentsPage() {
   const { selectedLocationId } = useLocation();
   const [filters, setFilters] = useState<DocumentFilters>({});
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [deleteDoc, setDeleteDoc] = useState<Document | null>(null);
+  const [viewTextDoc, setViewTextDoc] = useState<Document | null>(null);
 
   const { data: documents = [], isLoading } = useDocuments(filters);
   const { data: suppliers = [] } = useSuppliers();
@@ -152,7 +156,7 @@ export default function DocumentsPage() {
               <TableHead>File</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Uploaded</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead className="w-[150px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -174,6 +178,7 @@ export default function DocumentsPage() {
                   key={doc.id}
                   document={doc}
                   onDelete={() => setDeleteDoc(doc)}
+                  onViewText={() => setViewTextDoc(doc)}
                 />
               ))
             )}
@@ -196,12 +201,54 @@ export default function DocumentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* View Extracted Text Modal */}
+      <Dialog open={!!viewTextDoc} onOpenChange={(o) => !o && setViewTextDoc(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Extracted Text - {viewTextDoc?.filename}</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-4">
+              {viewTextDoc?.extracted_data && Object.keys(viewTextDoc.extracted_data as Record<string, string>).length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Extracted Data</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm bg-muted/50 p-3 rounded-md">
+                    {Object.entries(viewTextDoc.extracted_data as Record<string, string>).map(([key, value]) => (
+                      <div key={key} className="flex">
+                        <span className="font-medium text-muted-foreground mr-2">{key}:</span>
+                        <span>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <h4 className="text-sm font-medium mb-2">Full Text</h4>
+                <pre className="text-sm whitespace-pre-wrap bg-muted/50 p-3 rounded-md font-mono">
+                  {viewTextDoc?.extracted_text || "No text extracted"}
+                </pre>
+              </div>
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   );
 }
 
-function DocumentRow({ document, onDelete }: { document: Document; onDelete: () => void }) {
+function DocumentRow({ 
+  document, 
+  onDelete,
+  onViewText 
+}: { 
+  document: Document; 
+  onDelete: () => void;
+  onViewText: () => void;
+}) {
   const [loading, setLoading] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const queryClient = useQueryClient();
 
   const handleView = async () => {
     setLoading(true);
@@ -219,13 +266,63 @@ function DocumentRow({ document, onDelete }: { document: Document; onDelete: () 
     }
   };
 
+  const handleExtract = async () => {
+    setExtracting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("document-extract", {
+        body: { documentId: document.id },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast({
+          title: "Extraction failed",
+          description: data.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Extraction complete",
+          description: "Text has been extracted from the document",
+        });
+      }
+
+      // Refresh documents list
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    } catch (err) {
+      console.error("Extraction error:", err);
+      toast({
+        title: "Extraction failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   // Extract document_type from notes (stored as JSON prefix)
   const docType = document.notes?.startsWith("{\"type\":")
     ? JSON.parse(document.notes.split("\n")[0])?.type || "Other"
     : "Other";
-  const displayNotes = document.notes?.startsWith("{\"type\":")
-    ? document.notes.split("\n").slice(1).join("\n").trim()
-    : document.notes;
+
+  // Get processing status
+  const status = document.processing_status || "uploaded";
+
+  const getStatusBadge = () => {
+    switch (status) {
+      case "processing":
+        return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">Processing...</Badge>;
+      case "processed":
+        return <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Processed</Badge>;
+      case "failed":
+        return <Badge variant="destructive" className="text-xs">Failed</Badge>;
+      default:
+        return <Badge variant="secondary" className="text-xs">Uploaded</Badge>;
+    }
+  };
 
   return (
     <TableRow>
@@ -250,13 +347,31 @@ function DocumentRow({ document, onDelete }: { document: Document; onDelete: () 
         </button>
       </TableCell>
       <TableCell>
-        <Badge variant="secondary" className="text-xs">Uploaded</Badge>
+        {getStatusBadge()}
       </TableCell>
       <TableCell className="text-muted-foreground text-sm">
         {format(new Date(document.created_at), "dd MMM yyyy")}
       </TableCell>
       <TableCell>
         <div className="flex gap-1">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={handleExtract} 
+            disabled={extracting || status === "processing"}
+            title="Extract text (OCR)"
+          >
+            {extracting || status === "processing" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 text-amber-500" />
+            )}
+          </Button>
+          {status === "processed" && document.extracted_text && (
+            <Button variant="ghost" size="icon" onClick={onViewText} title="View extracted text">
+              <Eye className="h-4 w-4 text-blue-500" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={handleView} disabled={loading}>
             <ExternalLink className="h-4 w-4" />
           </Button>
