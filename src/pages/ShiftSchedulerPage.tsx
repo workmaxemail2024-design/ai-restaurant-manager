@@ -20,6 +20,7 @@ import {
   StaffShift 
 } from "@/hooks/useShifts";
 import { useLocations } from "@/hooks/useLocations";
+import { StaffWeeklyHoursSummary } from "@/components/shifts/StaffWeeklyHoursSummary";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, isSameDay } from "date-fns";
 
 export default function ShiftSchedulerPage() {
@@ -178,6 +179,13 @@ export default function ShiftSchedulerPage() {
       }
     >
       <div className="space-y-6">
+        {/* Staff Weekly Hours Summary */}
+        <StaffWeeklyHoursSummary 
+          shifts={shifts} 
+          staff={staff} 
+          selectedLocation={selectedLocation} 
+        />
+
         {/* Draft Roster Controls */}
         <Card className="border-dashed">
           <CardHeader className="pb-3">
