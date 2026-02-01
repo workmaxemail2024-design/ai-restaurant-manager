@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -18,7 +19,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Paperclip, FileText, Sparkles, ExternalLink, Loader2, X, AlertTriangle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Paperclip, FileText, Sparkles, ExternalLink, Loader2, X, AlertTriangle, PlusCircle } from "lucide-react";
 import { format } from "date-fns";
 import {
   useLinkedDocument,
@@ -26,9 +28,11 @@ import {
   useLinkDocumentToPO,
   Document,
 } from "@/hooks/useDocuments";
+import { useCreateIngredient, UnitType } from "@/hooks/useIngredients";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
 
 interface Ingredient {
   id: string;
@@ -45,6 +49,7 @@ interface POInvoiceSectionProps {
   hasExistingItems: boolean;
   ingredients: Ingredient[];
   onAutoFillItems: (items: { ingredient_id: string; quantity: number; cost_price: number }[]) => Promise<void>;
+  onTotalExtracted?: (total: number) => void;
 }
 
 interface ExtractedLineItem {
@@ -55,6 +60,51 @@ interface ExtractedLineItem {
   total?: number;
 }
 
+interface UnmatchedItemWithSelection extends ExtractedLineItem {
+  selected: boolean;
+}
+
+// Parse item_*_description, item_*_quantity, item_*_unit_price fields from extracted_data
+function parseItemFields(extractedData: Record<string, unknown>): ExtractedLineItem[] {
+  const items: ExtractedLineItem[] = [];
+  
+  // First check for line_items or items array (preferred format)
+  if (extractedData.line_items && Array.isArray(extractedData.line_items)) {
+    return extractedData.line_items as ExtractedLineItem[];
+  }
+  if (extractedData.items && Array.isArray(extractedData.items)) {
+    return extractedData.items as ExtractedLineItem[];
+  }
+  
+  // Parse item_*_description, item_*_quantity, item_*_unit_price fields
+  const itemIndices = new Set<string>();
+  for (const key of Object.keys(extractedData)) {
+    const match = key.match(/^item_(\d+)_/);
+    if (match) {
+      itemIndices.add(match[1]);
+    }
+  }
+  
+  for (const idx of Array.from(itemIndices).sort((a, b) => parseInt(a) - parseInt(b))) {
+    const description = extractedData[`item_${idx}_description`] as string | undefined;
+    const quantity = extractedData[`item_${idx}_quantity`] as number | undefined;
+    const unitPrice = extractedData[`item_${idx}_unit_price`] as number | undefined;
+    const total = extractedData[`item_${idx}_total`] as number | undefined;
+    
+    if (description || quantity || unitPrice) {
+      items.push({
+        name: description,
+        description: description,
+        quantity: quantity,
+        unit_price: unitPrice,
+        total: total,
+      });
+    }
+  }
+  
+  return items;
+}
+
 export function POInvoiceSection({
   purchaseOrderId,
   locationId,
@@ -63,16 +113,20 @@ export function POInvoiceSection({
   hasExistingItems,
   ingredients,
   onAutoFillItems,
+  onTotalExtracted,
 }: POInvoiceSectionProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmReplaceOpen, setConfirmReplaceOpen] = useState(false);
-  const [unmatchedItems, setUnmatchedItems] = useState<ExtractedLineItem[]>([]);
+  const [unmatchedItems, setUnmatchedItems] = useState<UnmatchedItemWithSelection[]>([]);
   const [unmatchedOpen, setUnmatchedOpen] = useState(false);
   const [autoFilling, setAutoFilling] = useState(false);
+  const [creatingIngredients, setCreatingIngredients] = useState(false);
 
   const { data: linkedDoc, isLoading: loadingLinked } = useLinkedDocument(purchaseOrderId);
+  // Use PO's location_id for document scoping (not global header location)
   const { data: unlinkedDocs = [], isLoading: loadingUnlinked } = useUnlinkedDocuments(locationId, supplierId);
   const linkDocument = useLinkDocumentToPO();
+  const createIngredient = useCreateIngredient();
 
   const handleAttach = async (doc: Document) => {
     await linkDocument.mutateAsync({ documentId: doc.id, purchaseOrderId });
@@ -106,13 +160,21 @@ export function POInvoiceSection({
     setAutoFilling(true);
     try {
       const extractedData = linkedDoc.extracted_data as Record<string, unknown>;
-      const lineItems = (extractedData.line_items || extractedData.items || []) as ExtractedLineItem[];
+      
+      // Extract total and notify parent
+      const extractedTotal = extractedData.total as number | undefined;
+      if (extractedTotal && onTotalExtracted) {
+        onTotalExtracted(extractedTotal);
+      }
+      
+      // Parse line items from various formats
+      const lineItems = parseItemFields(extractedData);
       
       const matchedItems: { ingredient_id: string; quantity: number; cost_price: number }[] = [];
       const unmatched: ExtractedLineItem[] = [];
 
       for (const item of lineItems) {
-        const itemName = (item.name || item.description || "").toLowerCase();
+        const itemName = (item.name || item.description || "").toLowerCase().trim();
         if (!itemName) continue;
 
         // Case-insensitive "contains" matching
@@ -140,14 +202,19 @@ export function POInvoiceSection({
       }
 
       if (unmatched.length > 0) {
-        setUnmatchedItems(unmatched);
+        // Add selection state to unmatched items
+        setUnmatchedItems(unmatched.map(item => ({ ...item, selected: true })));
         setUnmatchedOpen(true);
-      } else if (matchedItems.length === 0) {
+      } else if (matchedItems.length === 0 && lineItems.length === 0) {
         toast({
-          title: "No items matched",
-          description: "Could not match any invoice line items to ingredients",
+          title: "No items found",
+          description: "Could not find any line items in the invoice data",
           variant: "destructive",
         });
+      } else if (matchedItems.length === 0) {
+        // All items unmatched but we have line items
+        setUnmatchedItems(unmatched.map(item => ({ ...item, selected: true })));
+        setUnmatchedOpen(true);
       }
     } catch (err) {
       console.error("Auto-fill error:", err);
@@ -169,12 +236,72 @@ export function POInvoiceSection({
     }
   };
 
+  const toggleUnmatchedItem = (index: number) => {
+    setUnmatchedItems(prev => 
+      prev.map((item, i) => i === index ? { ...item, selected: !item.selected } : item)
+    );
+  };
+
+  const handleCreateIngredients = async () => {
+    const selectedItems = unmatchedItems.filter(item => item.selected);
+    if (selectedItems.length === 0) {
+      setUnmatchedOpen(false);
+      return;
+    }
+
+    setCreatingIngredients(true);
+    try {
+      const newPOItems: { ingredient_id: string; quantity: number; cost_price: number }[] = [];
+
+      for (const item of selectedItems) {
+        const name = (item.name || item.description || "").trim();
+        if (!name) continue;
+
+        // Create new ingredient with default unit "each" and cost from invoice
+        const costPrice = item.unit_price || item.total || 0;
+        const newIngredient = await createIngredient.mutateAsync({
+          name,
+          unit: "each" as UnitType,
+          storage_type: "dry",
+          default_cost_price: costPrice,
+        });
+
+        // Add to PO items
+        newPOItems.push({
+          ingredient_id: newIngredient.id,
+          quantity: item.quantity || 1,
+          cost_price: costPrice,
+        });
+      }
+
+      if (newPOItems.length > 0) {
+        await onAutoFillItems(newPOItems);
+        toast({
+          title: "Ingredients created",
+          description: `${newPOItems.length} new ingredient(s) created and added to the order`,
+        });
+      }
+
+      setUnmatchedOpen(false);
+      setUnmatchedItems([]);
+    } catch (err) {
+      console.error("Error creating ingredients:", err);
+      toast({
+        title: "Error creating ingredients",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingIngredients(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "processing":
-        return <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">Processing</Badge>;
+        return <Badge variant="secondary" className="text-xs bg-warning/20 text-warning">Processing</Badge>;
       case "processed":
-        return <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Processed</Badge>;
+        return <Badge variant="secondary" className="text-xs bg-success/20 text-success">Processed</Badge>;
       case "failed":
         return <Badge variant="destructive" className="text-xs">Failed</Badge>;
       default:
@@ -223,7 +350,7 @@ export function POInvoiceSection({
             {autoFilling ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <Sparkles className="h-4 w-4 mr-2 text-amber-500" />
+              <Sparkles className="h-4 w-4 mr-2 text-warning" />
             )}
             Auto-fill from Invoice
           </Button>
@@ -270,7 +397,7 @@ export function POInvoiceSection({
                       <div>
                         <p className="text-sm font-medium">{doc.filename}</p>
                         <p className="text-xs text-muted-foreground">
-                          {doc.supplier?.name || "No supplier"} • {format(new Date(doc.created_at), "dd MMM yyyy")}
+                          {doc.supplier?.name || "No supplier"} • {doc.location?.name || "All locations"} • {format(new Date(doc.created_at), "dd MMM yyyy")}
                         </p>
                       </div>
                     </div>
@@ -301,9 +428,9 @@ export function POInvoiceSection({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Unmatched Items Dialog */}
+      {/* Unmatched Items Dialog - with option to create ingredients */}
       <Dialog open={unmatchedOpen} onOpenChange={setUnmatchedOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-warning" />
@@ -311,23 +438,54 @@ export function POInvoiceSection({
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground mb-3">
-            The following invoice items could not be matched to existing ingredients:
+            The following invoice items could not be matched to existing ingredients. Select items to create as new ingredients:
           </p>
           <ScrollArea className="max-h-[300px]">
             <div className="space-y-2">
               {unmatchedItems.map((item, idx) => (
-                <div key={idx} className="p-3 rounded-lg bg-muted/50 text-sm">
-                  <p className="font-medium">{item.name || item.description || "Unknown item"}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Qty: {item.quantity ?? "?"} • Price: €{item.unit_price ?? item.total ?? "?"}
-                  </p>
+                <div 
+                  key={idx} 
+                  className={cn(
+                    "p-3 rounded-lg border transition-colors cursor-pointer",
+                    item.selected 
+                      ? "border-primary bg-primary/5" 
+                      : "border-border bg-muted/50"
+                  )}
+                  onClick={() => toggleUnmatchedItem(idx)}
+                >
+                  <div className="flex items-start gap-3">
+                    <Checkbox 
+                      checked={item.selected} 
+                      onCheckedChange={() => toggleUnmatchedItem(idx)}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{item.name || item.description || "Unknown item"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Qty: {item.quantity ?? "1"} • Price: {formatCurrency(item.unit_price ?? item.total ?? 0)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           </ScrollArea>
-          <p className="text-xs text-muted-foreground mt-2">
-            Add these ingredients to your inventory first, then re-run auto-fill.
-          </p>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setUnmatchedOpen(false)}>
+              Skip
+            </Button>
+            <Button 
+              onClick={handleCreateIngredients} 
+              disabled={creatingIngredients || unmatchedItems.filter(i => i.selected).length === 0}
+            >
+              {creatingIngredients ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <PlusCircle className="h-4 w-4 mr-2" />
+              )}
+              Create {unmatchedItems.filter(i => i.selected).length} Ingredient(s)
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
