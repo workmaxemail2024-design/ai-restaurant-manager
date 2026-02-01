@@ -8,13 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, ChevronRight, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
+import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
 import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
+import { POInvoiceSection } from "@/components/purchase-orders/POInvoiceSection";
 
 export default function PurchaseOrdersPage() {
   const { selectedLocationId } = useLocation();
@@ -26,6 +27,7 @@ export default function PurchaseOrdersPage() {
   const updateStatus = useUpdatePurchaseOrderStatus();
   const deleteOrder = useDeletePurchaseOrder();
   const addItem = useAddPurchaseOrderItem();
+  const addItems = useAddPurchaseOrderItems();
   
   const [isOpen, setIsOpen] = useState(false);
   const [isItemsOpen, setIsItemsOpen] = useState(false);
@@ -175,6 +177,26 @@ export default function PurchaseOrdersPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Invoice Section */}
+            {selectedOrder && (
+              <POInvoiceSection
+                purchaseOrderId={selectedOrder.id}
+                locationId={selectedOrder.location_id}
+                supplierId={selectedOrder.supplier_id}
+                isPending={selectedOrder.status === "pending"}
+                hasExistingItems={orderItems.length > 0}
+                ingredients={ingredients.map(ing => ({
+                  id: ing.id,
+                  name: ing.name,
+                  unit: ing.unit,
+                  default_cost_price: Number(ing.default_cost_price),
+                }))}
+                onAutoFillItems={async (items) => {
+                  await addItems.mutateAsync({ purchaseOrderId: selectedOrder.id, items });
+                }}
+              />
+            )}
+
             {selectedOrder?.status === "pending" && (
               <form onSubmit={handleAddItem} className="flex gap-2 items-end">
                 <div className="flex-1">

@@ -9,6 +9,7 @@ export interface Document {
   restaurant_id: string;
   location_id: string | null;
   supplier_id: string | null;
+  purchase_order_id: string | null;
   category: string;
   filename: string;
   mime_type: string;
@@ -24,6 +25,7 @@ export interface Document {
   // Joined fields
   location?: { id: string; name: string } | null;
   supplier?: { id: string; name: string } | null;
+  purchase_order?: { id: string; order_date: string } | null;
 }
 
 export const DOCUMENT_CATEGORIES = [
@@ -68,7 +70,8 @@ export function useDocuments(filters: DocumentFilters = {}) {
         .select(`
           *,
           location:locations(id, name),
-          supplier:suppliers(id, name)
+          supplier:suppliers(id, name),
+          purchase_order:purchase_orders(id, order_date)
         `)
         .eq("restaurant_id", restaurantId)
         .order("created_at", { ascending: false });
@@ -217,5 +220,102 @@ export function useDocumentUrl(storagePath: string | null) {
     },
     enabled: !!storagePath,
     staleTime: 1000 * 60 * 50, // 50 minutes (before 1hr expiry)
+  });
+}
+
+// Fetch documents available for linking to a PO (unlinked, same location, optionally same supplier)
+export function useUnlinkedDocuments(locationId: string | null, supplierId: string | null) {
+  const { currentRestaurant } = useRestaurant();
+  const restaurantId = currentRestaurant?.id;
+
+  return useQuery({
+    queryKey: ["unlinked-documents", restaurantId, locationId, supplierId],
+    queryFn: async () => {
+      if (!restaurantId || !locationId) return [];
+
+      let query = supabase
+        .from("documents")
+        .select(`
+          *,
+          location:locations(id, name),
+          supplier:suppliers(id, name)
+        `)
+        .eq("restaurant_id", restaurantId)
+        .is("purchase_order_id", null)
+        .or(`location_id.eq.${locationId},location_id.is.null`)
+        .order("created_at", { ascending: false });
+
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      // Sort to prefer matching supplier if provided
+      const docs = data as Document[];
+      if (supplierId) {
+        docs.sort((a, b) => {
+          const aMatch = a.supplier_id === supplierId ? 0 : 1;
+          const bMatch = b.supplier_id === supplierId ? 0 : 1;
+          return aMatch - bMatch;
+        });
+      }
+      
+      return docs;
+    },
+    enabled: !!restaurantId && !!locationId,
+  });
+}
+
+// Fetch a single document linked to a PO
+export function useLinkedDocument(purchaseOrderId: string | null) {
+  const { currentRestaurant } = useRestaurant();
+  const restaurantId = currentRestaurant?.id;
+
+  return useQuery({
+    queryKey: ["linked-document", purchaseOrderId],
+    queryFn: async () => {
+      if (!restaurantId || !purchaseOrderId) return null;
+
+      const { data, error } = await supabase
+        .from("documents")
+        .select(`
+          *,
+          location:locations(id, name),
+          supplier:suppliers(id, name)
+        `)
+        .eq("restaurant_id", restaurantId)
+        .eq("purchase_order_id", purchaseOrderId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data as Document | null;
+    },
+    enabled: !!restaurantId && !!purchaseOrderId,
+  });
+}
+
+// Link/unlink a document to a PO
+export function useLinkDocumentToPO() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ documentId, purchaseOrderId }: { documentId: string; purchaseOrderId: string | null }) => {
+      const { error } = await supabase
+        .from("documents")
+        .update({ purchase_order_id: purchaseOrderId })
+        .eq("id", documentId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["linked-document"] });
+      queryClient.invalidateQueries({ queryKey: ["unlinked-documents"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error linking document",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 }

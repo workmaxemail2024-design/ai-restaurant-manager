@@ -145,6 +145,24 @@ export function useAddPurchaseOrderItem() {
   });
 }
 
+export function useAddPurchaseOrderItems() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ purchaseOrderId, items }: { purchaseOrderId: string; items: { ingredient_id: string; quantity: number; cost_price: number }[] }) => {
+      const itemsWithPO = items.map(item => ({ ...item, purchase_order_id: purchaseOrderId }));
+      const { error } = await supabase.from("purchase_order_items").insert(itemsWithPO);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-order-items", variables.purchaseOrderId] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+    },
+    onError: (error) => {
+      toast({ title: "Error adding items", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeletePurchaseOrder() {
   const queryClient = useQueryClient();
   return useMutation({
