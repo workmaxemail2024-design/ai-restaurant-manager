@@ -1,4 +1,4 @@
-import { Search, Calendar, LogOut } from "lucide-react";
+import { Calendar, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
 import { LocationSelector } from "@/components/LocationSelector";
@@ -67,16 +67,6 @@ export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
 
         {/* Date Range Selector */}
         <DateRangeSelector />
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input 
-            type="text"
-            placeholder="Search locations, staff..."
-            className="h-10 w-64 pl-10 pr-4 rounded-lg bg-secondary border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
-          />
-        </div>
 
         {/* Notifications */}
         <NotificationDrawer />
