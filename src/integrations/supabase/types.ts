@@ -263,6 +263,7 @@ export type Database = {
           mime_type: string
           notes: string | null
           processing_status: string
+          purchase_order_id: string | null
           restaurant_id: string
           storage_path: string
           supplier_id: string | null
@@ -280,6 +281,7 @@ export type Database = {
           mime_type: string
           notes?: string | null
           processing_status?: string
+          purchase_order_id?: string | null
           restaurant_id: string
           storage_path: string
           supplier_id?: string | null
@@ -297,6 +299,7 @@ export type Database = {
           mime_type?: string
           notes?: string | null
           processing_status?: string
+          purchase_order_id?: string | null
           restaurant_id?: string
           storage_path?: string
           supplier_id?: string | null
@@ -308,6 +311,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
             referencedColumns: ["id"]
           },
           {

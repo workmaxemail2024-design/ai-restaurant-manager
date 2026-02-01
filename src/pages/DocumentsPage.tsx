@@ -39,10 +39,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
-import { Upload, Search, Trash2, ExternalLink, CalendarIcon, FileText, Loader2, Sparkles, Eye } from "lucide-react";
+import { Upload, Search, Trash2, ExternalLink, CalendarIcon, FileText, Loader2, Sparkles, Eye, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useNavigate } from "react-router-dom";
 
 const DOCUMENT_TYPES = ["Invoice", "Receipt", "Statement", "Payroll", "Other"] as const;
 type DocumentType = typeof DOCUMENT_TYPES[number];
@@ -153,6 +154,7 @@ export default function DocumentsPage() {
               <TableHead>Type</TableHead>
               <TableHead>Supplier</TableHead>
               <TableHead>Location</TableHead>
+              <TableHead>Linked PO</TableHead>
               <TableHead>File</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Uploaded</TableHead>
@@ -162,13 +164,13 @@ export default function DocumentsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8">
+                <TableCell colSpan={10} className="text-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : documents.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                   No documents found
                 </TableCell>
               </TableRow>
@@ -246,6 +248,7 @@ function DocumentRow({
   onDelete: () => void;
   onViewText: () => void;
 }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const queryClient = useQueryClient();
@@ -335,6 +338,21 @@ function DocumentRow({
       <TableCell className="text-sm">{docType}</TableCell>
       <TableCell>{document.supplier?.name || "—"}</TableCell>
       <TableCell>{document.location?.name || "All Locations"}</TableCell>
+      <TableCell>
+        {document.purchase_order_id && document.purchase_order ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto py-1 px-2 text-xs"
+            onClick={() => navigate("/purchase-orders")}
+          >
+            <Link2 className="h-3 w-3 mr-1" />
+            PO {format(new Date(document.purchase_order.order_date), "dd MMM")}
+          </Button>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        )}
+      </TableCell>
       <TableCell>
         <button
           onClick={handleView}
