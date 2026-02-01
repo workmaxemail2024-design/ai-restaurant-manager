@@ -223,7 +223,8 @@ export function useDocumentUrl(storagePath: string | null) {
   });
 }
 
-// Fetch documents available for linking to a PO (unlinked, same location, optionally same supplier)
+// Fetch documents available for linking to a PO (unlinked, scoped to PO's location)
+// This uses the PO's own location_id, NOT the global header location
 export function useUnlinkedDocuments(locationId: string | null, supplierId: string | null) {
   const { currentRestaurant } = useRestaurant();
   const restaurantId = currentRestaurant?.id;
@@ -231,7 +232,7 @@ export function useUnlinkedDocuments(locationId: string | null, supplierId: stri
   return useQuery({
     queryKey: ["unlinked-documents", restaurantId, locationId, supplierId],
     queryFn: async () => {
-      if (!restaurantId || !locationId) return [];
+      if (!restaurantId) return [];
 
       let query = supabase
         .from("documents")
@@ -242,8 +243,15 @@ export function useUnlinkedDocuments(locationId: string | null, supplierId: stri
         `)
         .eq("restaurant_id", restaurantId)
         .is("purchase_order_id", null)
-        .or(`location_id.eq.${locationId},location_id.is.null`)
         .order("created_at", { ascending: false });
+
+      // Scope by PO's location_id:
+      // - If PO has a location_id: show docs for that location OR docs with null location (uploaded for "All locations")
+      // - If PO location is null: show all documents for the restaurant
+      if (locationId) {
+        query = query.or(`location_id.eq.${locationId},location_id.is.null`);
+      }
+      // else: no location filter, show all documents for the restaurant
 
       const { data, error } = await query;
       if (error) throw error;
@@ -260,7 +268,7 @@ export function useUnlinkedDocuments(locationId: string | null, supplierId: stri
       
       return docs;
     },
-    enabled: !!restaurantId && !!locationId,
+    enabled: !!restaurantId,
   });
 }
 
