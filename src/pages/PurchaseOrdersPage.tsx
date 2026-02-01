@@ -6,9 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ChevronRight, Check } from "lucide-react";
+import { Plus, ChevronRight, Check, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
+import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, useReceiveDelivery, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
@@ -16,6 +16,7 @@ import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { POInvoiceSection } from "@/components/purchase-orders/POInvoiceSection";
+import { ReceiveDeliveryModal } from "@/components/purchase-orders/ReceiveDeliveryModal";
 
 export default function PurchaseOrdersPage() {
   const { selectedLocationId } = useLocation();
@@ -28,9 +29,11 @@ export default function PurchaseOrdersPage() {
   const deleteOrder = useDeletePurchaseOrder();
   const addItem = useAddPurchaseOrderItem();
   const addItems = useAddPurchaseOrderItems();
+  const receiveDelivery = useReceiveDelivery();
   
   const [isOpen, setIsOpen] = useState(false);
   const [isItemsOpen, setIsItemsOpen] = useState(false);
+  const [isReceiveOpen, setIsReceiveOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [formData, setFormData] = useState<PurchaseOrderInsert>({ supplier_id: "", location_id: "" });
   const [itemForm, setItemForm] = useState({ ingredient_id: "", quantity: 0, cost_price: 0 });
@@ -40,6 +43,7 @@ export default function PurchaseOrdersPage() {
   const statusColors: Record<string, string> = {
     pending: "bg-warning/20 text-warning",
     completed: "bg-success/20 text-success",
+    received: "bg-primary/20 text-primary",
     cancelled: "bg-destructive/20 text-destructive",
   };
 
@@ -77,15 +81,38 @@ export default function PurchaseOrdersPage() {
     {
       key: "actions",
       header: "",
-      render: (item: PurchaseOrder) => item.status === "pending" && (
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={() => updateStatus.mutate({ id: item.id, status: "completed" })}
-        >
-          <Check className="h-4 w-4 mr-1" /> Complete
-        </Button>
-      )
+      render: (item: PurchaseOrder) => {
+        // Already received - show nothing
+        if (item.received_at) return null;
+        
+        // Pending - show Complete button
+        if (item.status === "pending") {
+          return (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => updateStatus.mutate({ id: item.id, status: "completed" })}
+            >
+              <Check className="h-4 w-4 mr-1" /> Complete
+            </Button>
+          );
+        }
+        
+        // Completed but not received - show Receive Delivery button
+        if (item.status === "completed") {
+          return (
+            <Button 
+              variant="default" 
+              size="sm" 
+              onClick={() => { setSelectedOrder(item); setIsReceiveOpen(true); }}
+            >
+              <Package className="h-4 w-4 mr-1" /> Receive
+            </Button>
+          );
+        }
+        
+        return null;
+      }
     }
   ];
 
@@ -261,6 +288,27 @@ export default function PurchaseOrdersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Receive Delivery Modal */}
+      <ReceiveDeliveryModal
+        open={isReceiveOpen}
+        onOpenChange={setIsReceiveOpen}
+        orderItems={orderItems}
+        isProcessing={receiveDelivery.isPending}
+        onConfirm={async (items) => {
+          if (!selectedOrder) return;
+          await receiveDelivery.mutateAsync({
+            orderId: selectedOrder.id,
+            locationId: selectedOrder.location_id,
+            items: items.map((item) => ({
+              ingredient_id: item.ingredient_id,
+              delivered_quantity: item.delivered_quantity,
+            })),
+          });
+          setIsReceiveOpen(false);
+          setSelectedOrder(null);
+        }}
+      />
     </PageLayout>
   );
 }

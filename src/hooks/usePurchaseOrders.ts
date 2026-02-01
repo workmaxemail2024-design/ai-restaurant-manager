@@ -10,6 +10,7 @@ export interface PurchaseOrder {
   status: string;
   created_at: string;
   updated_at: string;
+  received_at: string | null;
   suppliers?: { name: string };
   locations?: { name: string };
   total?: number;
@@ -176,6 +177,84 @@ export function useDeletePurchaseOrder() {
     },
     onError: (error) => {
       toast({ title: "Error deleting purchase order", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export interface ReceiveDeliveryItem {
+  ingredient_id: string;
+  delivered_quantity: number;
+}
+
+export function useReceiveDelivery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ 
+      orderId, 
+      locationId,
+      items 
+    }: { 
+      orderId: string; 
+      locationId: string;
+      items: ReceiveDeliveryItem[] 
+    }) => {
+      // 1. Update PO status to received and set received_at timestamp
+      const { error: updateError } = await supabase
+        .from("purchase_orders")
+        .update({ 
+          status: "received", 
+          received_at: new Date().toISOString() 
+        })
+        .eq("id", orderId);
+      
+      if (updateError) throw updateError;
+
+      // 2. Update stock levels for each item
+      for (const item of items) {
+        if (item.delivered_quantity <= 0) continue;
+
+        // Get current stock level
+        const { data: existing } = await supabase
+          .from("stock_levels")
+          .select("id, quantity")
+          .eq("ingredient_id", item.ingredient_id)
+          .eq("location_id", locationId)
+          .maybeSingle();
+
+        if (existing) {
+          // Update existing stock level
+          const newQuantity = Number(existing.quantity) + item.delivered_quantity;
+          const { error } = await supabase
+            .from("stock_levels")
+            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+            .eq("id", existing.id);
+          if (error) throw error;
+        } else {
+          // Insert new stock level
+          const { error } = await supabase
+            .from("stock_levels")
+            .insert({
+              ingredient_id: item.ingredient_id,
+              location_id: locationId,
+              quantity: item.delivered_quantity,
+            });
+          if (error) throw error;
+        }
+      }
+
+      return { orderId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
+      toast({ title: "Delivery received", description: "Stock levels have been updated" });
+    },
+    onError: (error) => {
+      toast({ 
+        title: "Error receiving delivery", 
+        description: error.message, 
+        variant: "destructive" 
+      });
     },
   });
 }

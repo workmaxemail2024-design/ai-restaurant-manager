@@ -932,6 +932,7 @@ export type Database = {
           id: string
           location_id: string
           order_date: string
+          received_at: string | null
           restaurant_id: string | null
           status: string
           supplier_id: string
@@ -942,6 +943,7 @@ export type Database = {
           id?: string
           location_id: string
           order_date?: string
+          received_at?: string | null
           restaurant_id?: string | null
           status?: string
           supplier_id: string
@@ -952,6 +954,7 @@ export type Database = {
           id?: string
           location_id?: string
           order_date?: string
+          received_at?: string | null
           restaurant_id?: string | null
           status?: string
           supplier_id?: string
