@@ -16,6 +16,9 @@ export interface POSIntegration {
   created_at: string;
   updated_at: string;
   locations?: { name: string };
+  last_tested_at: string | null;
+  last_test_status: "success" | "failed" | null;
+  last_test_error: string | null;
 }
 
 export interface POSSalesImport {
@@ -255,13 +258,25 @@ export function useUpdatePOSMapping() {
 }
 
 export function useTestPOSConnection() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { pos_provider: string; api_key: string; api_secret?: string; custom_endpoint?: string }) => {
+    mutationFn: async (params: { 
+      pos_provider: string; 
+      integration_id?: string;
+      api_key?: string; 
+      api_secret?: string; 
+      custom_endpoint?: string;
+      base_url?: string;
+      store_id?: string;
+      username?: string;
+      password?: string;
+    }) => {
       const { data, error } = await supabase.functions.invoke("pos-test-connection", { body: params });
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["pos-integrations"] });
       if (data.success) {
         toast({ title: "Connection successful", description: data.message });
       } else {

@@ -6,15 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// POS Provider API endpoints for testing
-const POS_ENDPOINTS: Record<string, string> = {
-  square: "https://connect.squareup.com/v2/locations",
-  lightspeed: "https://api.lightspeedapp.com/API/V3/Account.json",
-  clover: "https://api.clover.com/v3/merchants",
-  toast: "https://api.toasttab.com/authentication/v1/authentication/check",
-  custom: "",
-};
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -46,7 +37,8 @@ serve(async (req) => {
       );
     }
 
-    const { pos_provider, api_key, api_secret, custom_endpoint } = await req.json();
+    const body = await req.json();
+    const { pos_provider, integration_id } = body;
 
     if (!pos_provider) {
       return new Response(
@@ -55,83 +47,112 @@ serve(async (req) => {
       );
     }
 
-    // For custom providers, test the custom endpoint
-    if (pos_provider === "custom") {
-      if (!custom_endpoint) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Custom provider requires custom_endpoint" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    // Use admin client for updating integration record
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    let testResult: { success: boolean; message?: string; error?: string };
+
+    // Handle Captiva POS specifically
+    if (pos_provider === "captiva") {
+      const { base_url, store_id, api_key, username, password } = body;
+
+      if (!base_url || !store_id || !api_key || !username || !password) {
+        testResult = { success: false, error: "Missing required Captiva credentials (base_url, store_id, api_key, username, password)" };
+      } else {
+        try {
+          // Call the lightest Captiva endpoint to test connectivity
+          const statusUrl = `${base_url.replace(/\/$/, "")}/outlet/${store_id}/status`;
+          console.log("Testing Captiva connection to:", statusUrl);
+
+          const response = await fetch(statusUrl, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${api_key}`,
+              "X-API-Key": api_key,
+              "X-Username": username,
+              "X-Password": password,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (response.ok) {
+            testResult = { success: true, message: "Captiva connection validated successfully" };
+          } else {
+            const errorText = await response.text();
+            console.error("Captiva test failed:", response.status, errorText);
+            testResult = { 
+              success: false, 
+              error: `Captiva returned ${response.status}: ${errorText.substring(0, 200)}` 
+            };
+          }
+        } catch (err) {
+          console.error("Captiva connection error:", err);
+          testResult = { 
+            success: false, 
+            error: `Failed to reach Captiva: ${err instanceof Error ? err.message : "Network error"}` 
+          };
+        }
       }
+    } else {
+      // Handle other POS providers (existing logic)
+      const { api_key, api_secret, custom_endpoint } = body;
 
-      try {
-        const response = await fetch(custom_endpoint, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${api_key}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        return new Response(
-          JSON.stringify({
-            success: response.ok,
-            status: response.status,
-            message: response.ok ? "Connection successful" : "Connection failed",
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Failed to reach custom endpoint" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    const endpoint = POS_ENDPOINTS[pos_provider.toLowerCase()];
-    if (!endpoint) {
-      return new Response(
-        JSON.stringify({ success: false, error: `Unknown POS provider: ${pos_provider}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Build headers based on provider
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-
-    switch (pos_provider.toLowerCase()) {
-      case "square":
-        headers["Authorization"] = `Bearer ${api_key}`;
-        headers["Square-Version"] = "2024-01-18";
-        break;
-      case "lightspeed":
-        headers["Authorization"] = `Bearer ${api_key}`;
-        break;
-      case "clover":
-        headers["Authorization"] = `Bearer ${api_key}`;
-        break;
-      case "toast":
-        headers["Authorization"] = `Bearer ${api_key}`;
-        break;
-    }
-
-    // Note: In production, you'd actually test the connection
-    // For demo purposes, we'll simulate success if API key is provided
-    if (api_key) {
-      return new Response(
-        JSON.stringify({
+      if (pos_provider === "custom") {
+        if (!custom_endpoint) {
+          testResult = { success: false, error: "Custom provider requires custom_endpoint" };
+        } else {
+          try {
+            const response = await fetch(custom_endpoint, {
+              method: "GET",
+              headers: {
+                "Authorization": `Bearer ${api_key}`,
+                "Content-Type": "application/json",
+              },
+            });
+            testResult = {
+              success: response.ok,
+              message: response.ok ? "Connection successful" : "Connection failed",
+              error: response.ok ? undefined : `Status: ${response.status}`,
+            };
+          } catch (err) {
+            testResult = { success: false, error: "Failed to reach custom endpoint" };
+          }
+        }
+      } else if (api_key) {
+        // For demo purposes with other providers, simulate success if API key is provided
+        testResult = {
           success: true,
           message: `${pos_provider} connection validated`,
-          provider: pos_provider,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        };
+      } else {
+        testResult = { success: false, error: "API key required" };
+      }
+    }
+
+    // Update integration record with test results if integration_id is provided
+    if (integration_id) {
+      const updateData = {
+        last_tested_at: new Date().toISOString(),
+        last_test_status: testResult.success ? "success" : "failed",
+        last_test_error: testResult.success ? null : testResult.error,
+      };
+
+      const { error: updateError } = await adminClient
+        .from("pos_integrations")
+        .update(updateData)
+        .eq("id", integration_id);
+
+      if (updateError) {
+        console.error("Failed to update integration test status:", updateError);
+      }
     }
 
     return new Response(
-      JSON.stringify({ success: false, error: "API key required" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify(testResult),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("POS test connection error:", error);

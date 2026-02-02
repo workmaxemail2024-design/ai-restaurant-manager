@@ -152,49 +152,32 @@ export default function POSIntegrationsPage() {
     });
   };
 
-  const handleTestConnection = (integration: POSIntegration) => {
-    if (integration.pos_provider === "captiva") {
-      const settings = integration.settings as CaptivaSettings || {};
-      testCaptivaConnection({
-        base_url: settings.base_url || "",
-        api_key: settings.api_key || integration.api_key || "",
-        api_secret: integration.api_secret || "",
-        store_id: settings.store_id || "",
-        username: settings.username || "",
-        password: settings.password || "",
-      });
-    } else {
-      testConnection.mutate({
-        pos_provider: integration.pos_provider,
-        api_key: integration.api_key || "",
-        api_secret: integration.api_secret || undefined,
-      });
-    }
-  };
-  
-  const testCaptivaConnection = async (params: { 
-    base_url: string; 
-    api_key: string; 
-    api_secret: string; 
-    store_id: string; 
-    username?: string;
-    password?: string;
-  }) => {
+  const [testingIntegrationId, setTestingIntegrationId] = useState<string | null>(null);
+
+  const handleTestConnection = async (integration: POSIntegration) => {
+    setTestingIntegrationId(integration.id);
     try {
-      const { data, error } = await supabase.functions.invoke("captiva-test", {
-        body: params,
-      });
-      if (error) throw error;
-      if (data?.success) {
-        toast({ 
-          title: "Connection Successful", 
-          description: data.message || "Captiva connection validated" 
+      if (integration.pos_provider === "captiva") {
+        const settings = integration.settings as CaptivaSettings || {};
+        await testConnection.mutateAsync({
+          pos_provider: "captiva",
+          integration_id: integration.id,
+          base_url: settings.base_url || "",
+          api_key: settings.api_key || integration.api_key || "",
+          store_id: settings.store_id || "",
+          username: settings.username || "",
+          password: settings.password || "",
         });
       } else {
-        toast({ title: "Connection Failed", description: data?.error || "Unknown error", variant: "destructive" });
+        await testConnection.mutateAsync({
+          pos_provider: integration.pos_provider,
+          integration_id: integration.id,
+          api_key: integration.api_key || "",
+          api_secret: integration.api_secret || undefined,
+        });
       }
-    } catch (err) {
-      toast({ title: "Connection Failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setTestingIntegrationId(null);
     }
   };
 
@@ -431,6 +414,26 @@ export default function POSIntegrationsPage() {
                           </div>
                         )}
 
+                        {/* Test Status */}
+                        {integration.last_tested_at && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Last Test</span>
+                            <div className="flex items-center gap-2">
+                              {integration.last_test_status === "success" ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-destructive" />
+                              )}
+                              <span>{format(new Date(integration.last_tested_at), "MMM d, HH:mm")}</span>
+                            </div>
+                          </div>
+                        )}
+                        {integration.last_test_status === "failed" && integration.last_test_error && (
+                          <p className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+                            {integration.last_test_error}
+                          </p>
+                        )}
+
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Last Sync</span>
                           <span>{integration.last_sync_time ? format(new Date(integration.last_sync_time), "MMM d, HH:mm") : "Never"}</span>
@@ -461,8 +464,14 @@ export default function POSIntegrationsPage() {
                           />
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                          <Button size="sm" variant="outline" onClick={() => handleTestConnection(integration)}>
-                            <RefreshCw className="h-4 w-4 mr-1" />Test
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => handleTestConnection(integration)}
+                            disabled={testingIntegrationId === integration.id || !credentialsValid}
+                          >
+                            <RefreshCw className={`h-4 w-4 mr-1 ${testingIntegrationId === integration.id ? "animate-spin" : ""}`} />
+                            {testingIntegrationId === integration.id ? "Testing..." : "Test Connection"}
                           </Button>
                           {integration.pos_provider === "captiva" && (
                             <Button 
