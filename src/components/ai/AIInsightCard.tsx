@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { AICardSkeleton } from "./AISkeleton";
-import { RefreshCw, Clock, AlertTriangle, CheckCircle, Info, Sparkles } from "lucide-react";
+import { RefreshCw, Clock, AlertTriangle, CheckCircle, Info, Sparkles, Lightbulb } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export type InsightType = "success" | "warning" | "error" | "info";
+export type ConfidenceLevel = "low" | "medium" | "high";
 
 export interface AIInsightCardProps {
   title: string;
@@ -20,7 +22,15 @@ export interface AIInsightCardProps {
   lastUpdated?: Date | null;
   onRefresh?: () => void;
   className?: string;
+  confidence?: ConfidenceLevel;
+  whyItMatters?: string;
 }
+
+const confidenceStyles: Record<ConfidenceLevel, { label: string; className: string }> = {
+  low: { label: "Low Confidence", className: "bg-muted text-muted-foreground border-muted" },
+  medium: { label: "Medium Confidence", className: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20" },
+  high: { label: "High Confidence", className: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20" },
+};
 
 const typeStyles: Record<InsightType, { badge: string; border: string; glow: string }> = {
   success: { 
@@ -57,6 +67,8 @@ export function AIInsightCard({
   lastUpdated,
   onRefresh,
   className,
+  confidence,
+  whyItMatters,
 }: AIInsightCardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const style = typeStyles[type];
@@ -89,10 +101,20 @@ export function AIInsightCard({
             )}>
               <Icon className="h-5 w-5" />
             </div>
-            <div>
-              <CardTitle className="text-base font-semibold">{title}</CardTitle>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <CardTitle className="text-base font-semibold">{title}</CardTitle>
+                {confidence && (
+                  <Badge 
+                    variant="outline" 
+                    className={cn("text-[10px] px-1.5 py-0 h-5", confidenceStyles[confidence].className)}
+                  >
+                    {confidenceStyles[confidence].label}
+                  </Badge>
+                )}
+              </div>
               {description && (
-                <CardDescription className="text-xs mt-0.5">{description}</CardDescription>
+                <CardDescription className="text-xs">{description}</CardDescription>
               )}
             </div>
           </div>
@@ -100,7 +122,7 @@ export function AIInsightCard({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 hover:bg-background/50"
+              className="h-8 w-8 hover:bg-background/50 shrink-0"
               onClick={handleRefresh}
               disabled={isRefreshing}
             >
@@ -109,7 +131,18 @@ export function AIInsightCard({
           )}
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
+      <CardContent className="pt-0 space-y-3">
+        {/* Why It Matters section */}
+        {whyItMatters && !error && (
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/50 border border-border/50">
+            <Lightbulb className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-medium text-foreground">Why this matters</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{whyItMatters}</p>
+            </div>
+          </div>
+        )}
+
         {error ? (
           <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
             <p className="text-sm text-destructive">{error}</p>

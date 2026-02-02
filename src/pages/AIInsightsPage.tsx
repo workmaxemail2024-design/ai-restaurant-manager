@@ -89,6 +89,8 @@ export default function AIInsightsPage() {
               error={dailySummary?.error}
               lastUpdated={dailySummaryUpdated}
               onRefresh={generateDailySummary}
+              confidence="high"
+              whyItMatters="Reviewing daily performance helps identify trends early, allowing you to adjust operations before small issues become costly problems."
             />
             <AIInsightCard
               title="Tomorrow's Sales Forecast"
@@ -100,6 +102,8 @@ export default function AIInsightsPage() {
               error={staffForecast?.error}
               lastUpdated={staffForecastUpdated}
               onRefresh={generateStaffForecast}
+              confidence="medium"
+              whyItMatters="Accurate sales forecasts let you schedule the right staff and prep the right inventory, reducing waste and overtime costs."
             />
           </AIInsightSection>
 
@@ -119,6 +123,8 @@ export default function AIInsightsPage() {
               error={stockForecast?.error}
               lastUpdated={stockForecastUpdated}
               onRefresh={generateStockForecast}
+              confidence="high"
+              whyItMatters="Running out of key ingredients causes 86'd menu items, lost sales, and disappointed customers—stock alerts help you reorder before it happens."
             />
             <AIInsightCard
               title="AI Purchase Suggestions"
@@ -130,6 +136,8 @@ export default function AIInsightsPage() {
               error={purchaseSuggestions?.error}
               lastUpdated={purchaseSuggestionsUpdated}
               onRefresh={generatePurchaseSuggestions}
+              confidence="medium"
+              whyItMatters="Optimized ordering reduces food waste and ensures you always have what you need without tying up cash in excess inventory."
             />
           </AIInsightSection>
 
@@ -149,6 +157,8 @@ export default function AIInsightsPage() {
               error={menuInsights?.error}
               lastUpdated={menuInsightsUpdated}
               onRefresh={generateMenuInsights}
+              confidence="medium"
+              whyItMatters="Underpriced items erode margins silently—small price adjustments on popular dishes can significantly boost profitability."
             />
             <AIInsightCard
               title="Top Margin Winners"
@@ -160,6 +170,8 @@ export default function AIInsightsPage() {
               error={costAnalysis?.error}
               lastUpdated={costAnalysisUpdated}
               onRefresh={generateCostAnalysis}
+              confidence="high"
+              whyItMatters="Knowing your profit leaders lets you promote them strategically and train staff to upsell high-margin items."
             />
             <AIInsightCard
               title="Profit Leak Detection"
@@ -171,6 +183,8 @@ export default function AIInsightsPage() {
               error={costAnalysis?.error}
               lastUpdated={costAnalysisUpdated}
               onRefresh={generateCostAnalysis}
+              confidence="high"
+              whyItMatters="Undetected profit leaks—portion creep, waste, or mispricing—can drain thousands monthly. Early detection saves money."
             />
           </AIInsightSection>
 
@@ -190,6 +204,8 @@ export default function AIInsightsPage() {
               error={staffForecast?.error}
               lastUpdated={staffForecastUpdated}
               onRefresh={generateStaffForecast}
+              confidence="medium"
+              whyItMatters="Right-sizing staff to demand cuts labor costs without hurting service quality—labor is typically 25-35% of revenue."
             />
             <AIInsightCard
               title="High Waste Risk Ingredients"
@@ -201,6 +217,8 @@ export default function AIInsightsPage() {
               error={stockForecast?.error}
               lastUpdated={stockForecastUpdated}
               onRefresh={generateStockForecast}
+              confidence="low"
+              whyItMatters="Reducing food waste directly improves your bottom line and helps you meet sustainability goals valued by customers."
             />
           </AIInsightSection>
         </div>
