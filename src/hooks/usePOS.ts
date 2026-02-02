@@ -340,3 +340,50 @@ export function useCaptivaSyncNow() {
     },
   });
 }
+
+export interface ApplyImportParams {
+  integration_id: string;
+  date_from: string;
+  date_to: string;
+  preview_only?: boolean;
+}
+
+export interface ApplyImportResult {
+  success: boolean;
+  applied_count: number;
+  skipped_unmapped: number;
+  skipped_existing: number;
+  total_revenue: number;
+  error?: string;
+}
+
+export function useApplyPOSImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: ApplyImportParams): Promise<ApplyImportResult> => {
+      const { data, error } = await supabase.functions.invoke("pos-apply-import", { body: params });
+      if (error) throw error;
+      return data as ApplyImportResult;
+    },
+    onSuccess: (data, variables) => {
+      if (!variables.preview_only) {
+        queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
+        queryClient.invalidateQueries({ queryKey: ["pos-sync-logs"] });
+        queryClient.invalidateQueries({ queryKey: ["sales"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+        queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
+        if (data.success) {
+          toast({ 
+            title: "Applied to Dashboard", 
+            description: `${data.applied_count} sales applied${data.skipped_unmapped > 0 ? `, ${data.skipped_unmapped} unmapped` : ""}` 
+          });
+        } else {
+          toast({ title: "Apply Failed", description: data.error, variant: "destructive" });
+        }
+      }
+    },
+    onError: (error) => {
+      toast({ title: "Apply Failed", description: error.message, variant: "destructive" });
+    },
+  });
+}

@@ -13,11 +13,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
-  Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download
+  Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
-  useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, POSIntegration } from "@/hooks/usePOS";
+  useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
+  useApplyPOSImport, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
 import { useDishes } from "@/hooks/useDishes";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
@@ -88,7 +89,17 @@ export default function POSIntegrationsPage() {
   const [syncCustomStart, setSyncCustomStart] = useState<Date | undefined>(subDays(new Date(), 7));
   const [syncCustomEnd, setSyncCustomEnd] = useState<Date | undefined>(new Date());
   
+  // Apply to Dashboard modal state
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [applyModalIntegration, setApplyModalIntegration] = useState<POSIntegration | null>(null);
+  const [applyDatePreset, setApplyDatePreset] = useState<"yesterday" | "last7" | "custom">("yesterday");
+  const [applyCustomStart, setApplyCustomStart] = useState<Date | undefined>(subDays(new Date(), 7));
+  const [applyCustomEnd, setApplyCustomEnd] = useState<Date | undefined>(new Date());
+  const [applyPreview, setApplyPreview] = useState<ApplyImportResult | null>(null);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  
   const captivaSyncNow = useCaptivaSyncNow();
+  const applyImport = useApplyPOSImport();
 
   const hasValidCredentials = useCallback((integration: POSIntegration): boolean => {
     if (integration.pos_provider !== "captiva") return true;
@@ -153,6 +164,76 @@ export default function POSIntegrationsPage() {
       setSyncingIntegrationId(null);
     }
   }, [syncModalIntegration, syncDatePreset, syncCustomStart, syncCustomEnd, captivaSyncNow, toast]);
+
+  const getApplyDateRange = useCallback(() => {
+    const today = new Date();
+    if (applyDatePreset === "yesterday") {
+      const yesterday = subDays(today, 1);
+      return {
+        dateFrom: format(startOfDay(yesterday), "yyyy-MM-dd"),
+        dateTo: format(endOfDay(yesterday), "yyyy-MM-dd"),
+      };
+    } else if (applyDatePreset === "last7") {
+      return {
+        dateFrom: format(startOfDay(subDays(today, 7)), "yyyy-MM-dd"),
+        dateTo: format(endOfDay(subDays(today, 1)), "yyyy-MM-dd"),
+      };
+    } else {
+      return {
+        dateFrom: applyCustomStart ? format(applyCustomStart, "yyyy-MM-dd") : "",
+        dateTo: applyCustomEnd ? format(applyCustomEnd, "yyyy-MM-dd") : "",
+      };
+    }
+  }, [applyDatePreset, applyCustomStart, applyCustomEnd]);
+
+  const handleOpenApplyModal = useCallback(async (integration: POSIntegration) => {
+    setApplyModalIntegration(integration);
+    setApplyDatePreset("yesterday");
+    setApplyPreview(null);
+    setApplyModalOpen(true);
+  }, []);
+
+  const handlePreviewApply = useCallback(async () => {
+    if (!applyModalIntegration) return;
+    const { dateFrom, dateTo } = getApplyDateRange();
+    if (!dateFrom || !dateTo) {
+      toast({ title: "Select Dates", description: "Please select a date range", variant: "destructive" });
+      return;
+    }
+    
+    try {
+      const result = await applyImport.mutateAsync({
+        integration_id: applyModalIntegration.id,
+        date_from: dateFrom,
+        date_to: dateTo,
+        preview_only: true,
+      });
+      setApplyPreview(result);
+    } catch (err) {
+      // Error handled by mutation
+    }
+  }, [applyModalIntegration, getApplyDateRange, applyImport, toast]);
+
+  const handleExecuteApply = useCallback(async () => {
+    if (!applyModalIntegration) return;
+    const { dateFrom, dateTo } = getApplyDateRange();
+    if (!dateFrom || !dateTo) return;
+
+    setApplyModalOpen(false);
+    setApplyingId(applyModalIntegration.id);
+    
+    try {
+      await applyImport.mutateAsync({
+        integration_id: applyModalIntegration.id,
+        date_from: dateFrom,
+        date_to: dateTo,
+        preview_only: false,
+      });
+    } finally {
+      setApplyingId(null);
+      setApplyPreview(null);
+    }
+  }, [applyModalIntegration, getApplyDateRange, applyImport]);
 
   const handleSubmit = async () => {
     const submitData = {
@@ -500,20 +581,36 @@ export default function POSIntegrationsPage() {
                             {testingIntegrationId === integration.id ? "Testing..." : "Test Connection"}
                           </Button>
                           {integration.pos_provider === "captiva" && (
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => handleOpenSyncModal(integration)}
-                              disabled={syncingIntegrationId === integration.id || !credentialsValid}
-                              title={!credentialsValid ? "Configure credentials to enable" : ""}
-                            >
-                              {syncingIntegrationId === integration.id ? (
-                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <Download className="h-4 w-4 mr-1" />
-                              )}
-                              {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
-                            </Button>
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => handleOpenSyncModal(integration)}
+                                disabled={syncingIntegrationId === integration.id || !credentialsValid}
+                                title={!credentialsValid ? "Configure credentials to enable" : ""}
+                              >
+                                {syncingIntegrationId === integration.id ? (
+                                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4 mr-1" />
+                                )}
+                                {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="default" 
+                                onClick={() => handleOpenApplyModal(integration)}
+                                disabled={applyingId === integration.id}
+                                title="Apply imported sales to dashboard"
+                              >
+                                {applyingId === integration.id ? (
+                                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                                ) : (
+                                  <BarChart3 className="h-4 w-4 mr-1" />
+                                )}
+                                {applyingId === integration.id ? "Applying..." : "Apply to Dashboard"}
+                              </Button>
+                            </>
                           )}
                           <Button size="sm" variant="destructive" onClick={() => deleteIntegration.mutate(integration.id)}>
                             <Trash2 className="h-4 w-4" />
@@ -755,6 +852,125 @@ export default function POSIntegrationsPage() {
                   </>
                 )}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Apply to Dashboard Modal */}
+        <Dialog open={applyModalOpen} onOpenChange={(open) => {
+          setApplyModalOpen(open);
+          if (!open) setApplyPreview(null);
+        }}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Apply Imports to Dashboard
+              </DialogTitle>
+              <DialogDescription>
+                Convert imported POS sales into dashboard data for {applyModalIntegration?.locations?.name || "this location"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <RadioGroup value={applyDatePreset} onValueChange={(v) => {
+                setApplyDatePreset(v as typeof applyDatePreset);
+                setApplyPreview(null);
+              }}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="yesterday" id="apply-yesterday" />
+                  <Label htmlFor="apply-yesterday">Yesterday</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="last7" id="apply-last7" />
+                  <Label htmlFor="apply-last7">Last 7 days</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="custom" id="apply-custom" />
+                  <Label htmlFor="apply-custom">Custom range</Label>
+                </div>
+              </RadioGroup>
+
+              {applyDatePreset === "custom" && (
+                <div className="flex gap-4">
+                  <div className="space-y-2 flex-1">
+                    <Label className="text-xs text-muted-foreground">Start Date</Label>
+                    <Calendar
+                      mode="single"
+                      selected={applyCustomStart}
+                      onSelect={(d) => { setApplyCustomStart(d); setApplyPreview(null); }}
+                      className="rounded-md border pointer-events-auto"
+                      disabled={(date) => date > new Date()}
+                    />
+                  </div>
+                  <div className="space-y-2 flex-1">
+                    <Label className="text-xs text-muted-foreground">End Date</Label>
+                    <Calendar
+                      mode="single"
+                      selected={applyCustomEnd}
+                      onSelect={(d) => { setApplyCustomEnd(d); setApplyPreview(null); }}
+                      className="rounded-md border pointer-events-auto"
+                      disabled={(date) => date > new Date() || (applyCustomStart && date < applyCustomStart)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Preview Section */}
+              {applyPreview && (
+                <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+                  <h4 className="font-medium text-sm">Preview Summary</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ready to apply:</span>
+                      <span className="font-medium">{applyPreview.applied_count} sales</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total revenue:</span>
+                      <span className="font-medium">{formatCurrency(applyPreview.total_revenue)}</span>
+                    </div>
+                  </div>
+                  {applyPreview.skipped_unmapped > 0 && (
+                    <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>{applyPreview.skipped_unmapped} items unmapped (will skip, map in Mappings tab)</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setApplyModalOpen(false)}>
+                Cancel
+              </Button>
+              {!applyPreview ? (
+                <Button onClick={handlePreviewApply} disabled={applyImport.isPending}>
+                  {applyImport.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Preview
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button onClick={handleExecuteApply} disabled={applyImport.isPending || applyPreview.applied_count === 0}>
+                  {applyImport.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Applying...
+                    </>
+                  ) : (
+                    <>
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      Apply {applyPreview.applied_count} Sales
+                    </>
+                  )}
+                </Button>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
