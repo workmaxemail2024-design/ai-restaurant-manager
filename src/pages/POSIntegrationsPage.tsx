@@ -10,19 +10,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
-  Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff
+  Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
-  useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, POSIntegration } from "@/hooks/usePOS";
+  useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, POSIntegration } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
 import { useDishes } from "@/hooks/useDishes";
-import { format } from "date-fns";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
+import { Calendar } from "@/components/ui/calendar";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -78,6 +80,15 @@ export default function POSIntegrationsPage() {
   const [syncingIntegrationId, setSyncingIntegrationId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  
+  // Sync Now modal state
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncModalIntegration, setSyncModalIntegration] = useState<POSIntegration | null>(null);
+  const [syncDatePreset, setSyncDatePreset] = useState<"yesterday" | "last7" | "custom">("yesterday");
+  const [syncCustomStart, setSyncCustomStart] = useState<Date | undefined>(subDays(new Date(), 7));
+  const [syncCustomEnd, setSyncCustomEnd] = useState<Date | undefined>(new Date());
+  
+  const captivaSyncNow = useCaptivaSyncNow();
 
   const hasValidCredentials = useCallback((integration: POSIntegration): boolean => {
     if (integration.pos_provider !== "captiva") return true;
@@ -91,7 +102,7 @@ export default function POSIntegrationsPage() {
     );
   }, []);
 
-  const handleCaptivaSync = useCallback(async (integration: POSIntegration) => {
+  const handleOpenSyncModal = useCallback((integration: POSIntegration) => {
     if (!hasValidCredentials(integration)) {
       toast({ 
         title: "Missing Credentials", 
@@ -100,33 +111,48 @@ export default function POSIntegrationsPage() {
       });
       return;
     }
+    setSyncModalIntegration(integration);
+    setSyncDatePreset("yesterday");
+    setSyncModalOpen(true);
+  }, [hasValidCredentials, toast]);
 
-    setSyncingIntegrationId(integration.id);
-    try {
-      const { data, error } = await supabase.functions.invoke("captiva-sync", {
-        body: { 
-          integration_id: integration.id,
-          location_id: integration.location_id,
-          restaurant_id: (integration as any).restaurant_id,
-        },
-      });
-      if (error) throw error;
-      if (data?.success) {
-        toast({ 
-          title: "Sync Complete", 
-          description: data.message || "Captiva sync completed successfully" 
-        });
-        refetchIntegrations();
-        refetchLogs();
-      } else {
-        toast({ title: "Sync Failed", description: data?.error || "Unknown error", variant: "destructive" });
+  const handleExecuteSync = useCallback(async () => {
+    if (!syncModalIntegration) return;
+    
+    let dateFrom: string;
+    let dateTo: string;
+    const today = new Date();
+    
+    if (syncDatePreset === "yesterday") {
+      const yesterday = subDays(today, 1);
+      dateFrom = format(startOfDay(yesterday), "yyyy-MM-dd");
+      dateTo = format(endOfDay(yesterday), "yyyy-MM-dd");
+    } else if (syncDatePreset === "last7") {
+      dateFrom = format(startOfDay(subDays(today, 7)), "yyyy-MM-dd");
+      dateTo = format(endOfDay(subDays(today, 1)), "yyyy-MM-dd");
+    } else {
+      if (!syncCustomStart || !syncCustomEnd) {
+        toast({ title: "Select Dates", description: "Please select a date range", variant: "destructive" });
+        return;
       }
-    } catch (err) {
-      toast({ title: "Sync Failed", description: `Captiva sync failed: ${err instanceof Error ? err.message : "Unknown error"}`, variant: "destructive" });
+      dateFrom = format(syncCustomStart, "yyyy-MM-dd");
+      dateTo = format(syncCustomEnd, "yyyy-MM-dd");
+    }
+
+    setSyncModalOpen(false);
+    setSyncingIntegrationId(syncModalIntegration.id);
+    
+    try {
+      await captivaSyncNow.mutateAsync({
+        integration_id: syncModalIntegration.id,
+        location_id: syncModalIntegration.location_id,
+        date_from: dateFrom,
+        date_to: dateTo,
+      });
     } finally {
       setSyncingIntegrationId(null);
     }
-  }, [toast, refetchIntegrations, refetchLogs, hasValidCredentials]);
+  }, [syncModalIntegration, syncDatePreset, syncCustomStart, syncCustomEnd, captivaSyncNow, toast]);
 
   const handleSubmit = async () => {
     const submitData = {
@@ -477,11 +503,15 @@ export default function POSIntegrationsPage() {
                             <Button 
                               size="sm" 
                               variant="outline" 
-                              onClick={() => handleCaptivaSync(integration)}
+                              onClick={() => handleOpenSyncModal(integration)}
                               disabled={syncingIntegrationId === integration.id || !credentialsValid}
                               title={!credentialsValid ? "Configure credentials to enable" : ""}
                             >
-                              <RefreshCw className={`h-4 w-4 mr-1 ${syncingIntegrationId === integration.id ? "animate-spin" : ""}`} />
+                              {syncingIntegrationId === integration.id ? (
+                                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <Download className="h-4 w-4 mr-1" />
+                              )}
                               {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
                             </Button>
                           )}
@@ -654,6 +684,80 @@ export default function POSIntegrationsPage() {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Sync Now Modal */}
+        <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5" />
+                Import Sales from Captiva
+              </DialogTitle>
+              <DialogDescription>
+                Select a date range to import sales data from {syncModalIntegration?.locations?.name || "this location"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <RadioGroup value={syncDatePreset} onValueChange={(v) => setSyncDatePreset(v as typeof syncDatePreset)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="yesterday" id="yesterday" />
+                  <Label htmlFor="yesterday">Yesterday</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="last7" id="last7" />
+                  <Label htmlFor="last7">Last 7 days</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="custom" id="custom" />
+                  <Label htmlFor="custom">Custom range</Label>
+                </div>
+              </RadioGroup>
+
+              {syncDatePreset === "custom" && (
+                <div className="flex gap-4">
+                  <div className="space-y-2 flex-1">
+                    <Label className="text-xs text-muted-foreground">Start Date</Label>
+                    <Calendar
+                      mode="single"
+                      selected={syncCustomStart}
+                      onSelect={setSyncCustomStart}
+                      className="rounded-md border pointer-events-auto"
+                      disabled={(date) => date > new Date()}
+                    />
+                  </div>
+                  <div className="space-y-2 flex-1">
+                    <Label className="text-xs text-muted-foreground">End Date</Label>
+                    <Calendar
+                      mode="single"
+                      selected={syncCustomEnd}
+                      onSelect={setSyncCustomEnd}
+                      className="rounded-md border pointer-events-auto"
+                      disabled={(date) => date > new Date() || (syncCustomStart && date < syncCustomStart)}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSyncModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleExecuteSync} disabled={captivaSyncNow.isPending}>
+                {captivaSyncNow.isPending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Import Sales
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </PageLayout>
   );

@@ -298,3 +298,45 @@ export function usePOSReconciliation() {
     },
   });
 }
+
+export interface CaptivaSyncParams {
+  integration_id: string;
+  location_id: string;
+  date_from: string;
+  date_to: string;
+}
+
+export interface CaptivaSyncResult {
+  success: boolean;
+  sales_imported: number;
+  line_items_imported: number;
+  skipped_duplicates: number;
+  error?: string;
+}
+
+export function useCaptivaSyncNow() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: CaptivaSyncParams): Promise<CaptivaSyncResult> => {
+      const { data, error } = await supabase.functions.invoke("pos-sync-captiva", { body: params });
+      if (error) throw error;
+      return data as CaptivaSyncResult;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["pos-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["pos-sync-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
+      if (data.success) {
+        toast({ 
+          title: "Sync Complete", 
+          description: `Imported ${data.sales_imported} sales, ${data.line_items_imported} line items${data.skipped_duplicates > 0 ? `, skipped ${data.skipped_duplicates} duplicates` : ""}` 
+        });
+      } else {
+        toast({ title: "Sync Failed", description: data.error, variant: "destructive" });
+      }
+    },
+    onError: (error) => {
+      toast({ title: "Sync Failed", description: error.message, variant: "destructive" });
+    },
+  });
+}
