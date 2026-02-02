@@ -22,17 +22,21 @@ export function SupplierAnalytics() {
     ? deliveryPerformance.find((d) => d.supplier_id === selectedSupplier)
     : null;
 
+  const handleSupplierChange = (value: string) => {
+    setSelectedSupplier(value === "_all" ? "" : value);
+  };
+
   return (
     <div className="space-y-6">
       {/* Supplier Filter */}
       <div className="flex items-center gap-4">
         <label className="text-sm font-medium">Filter by Supplier:</label>
-        <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
+        <Select value={selectedSupplier || "_all"} onValueChange={handleSupplierChange}>
           <SelectTrigger className="w-[250px]">
             <SelectValue placeholder="All Suppliers" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All Suppliers</SelectItem>
+            <SelectItem value="_all">All Suppliers</SelectItem>
             {suppliers.map((s) => (
               <SelectItem key={s.id} value={s.id}>
                 {s.name}
