@@ -572,6 +572,9 @@ export type Database = {
           created_at: string
           id: string
           last_sync_time: string | null
+          last_test_error: string | null
+          last_test_status: string | null
+          last_tested_at: string | null
           location_id: string
           pos_provider: string
           restaurant_id: string | null
@@ -586,6 +589,9 @@ export type Database = {
           created_at?: string
           id?: string
           last_sync_time?: string | null
+          last_test_error?: string | null
+          last_test_status?: string | null
+          last_tested_at?: string | null
           location_id: string
           pos_provider: string
           restaurant_id?: string | null
@@ -600,6 +606,9 @@ export type Database = {
           created_at?: string
           id?: string
           last_sync_time?: string | null
+          last_test_error?: string | null
+          last_test_status?: string | null
+          last_tested_at?: string | null
           location_id?: string
           pos_provider?: string
           restaurant_id?: string | null
