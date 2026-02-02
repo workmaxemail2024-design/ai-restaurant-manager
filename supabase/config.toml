@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.document-extract]
 verify_jwt = true
+
+[functions.pos-sync-captiva]
+verify_jwt = false
