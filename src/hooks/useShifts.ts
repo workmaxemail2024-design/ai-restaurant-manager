@@ -13,6 +13,7 @@ export interface StaffWithContract {
   contract_type: "full_time" | "part_time" | "casual";
   max_hours_per_week: number;
   min_hours_per_week: number | null;
+  hourly_rate: number;
 }
 
 export interface StaffShift {
@@ -64,7 +65,7 @@ export function useStaffWithContracts() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("staff")
-        .select("id, first_name, last_name, role, status, location_id, contract_type, max_hours_per_week, min_hours_per_week")
+        .select("id, first_name, last_name, role, status, location_id, contract_type, max_hours_per_week, min_hours_per_week, hourly_rate")
         .eq("status", "active")
         .order("last_name");
 
