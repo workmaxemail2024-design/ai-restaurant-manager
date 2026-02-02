@@ -6,12 +6,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Package, ClipboardList, BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useStockLevels, useUpdateStock, StockLevel } from "@/hooks/useStock";
 import { useIngredients } from "@/hooks/useIngredients";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
+import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
+import { VarianceReport } from "@/components/inventory/VarianceReport";
 
 export default function StockPage() {
   const { selectedLocationId } = useLocation();
@@ -76,72 +79,99 @@ export default function StockPage() {
   };
 
   return (
-    <PageLayout title="Inventory / Stock" subtitle="Monitor stock levels across locations">
-      <div className="flex justify-end mb-4">
-        <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setIsOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" /> Update Stock
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Update Stock Level</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label>Ingredient</Label>
-                <Select value={formData.ingredient_id} onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select ingredient" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ingredients.map((ing) => (
-                      <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Location</Label>
-                <Select value={formData.location_id} onValueChange={(v) => setFormData({ ...formData, location_id: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.quantity}
-                  onChange={(e) => setFormData({ ...formData, quantity: parseFloat(e.target.value) || 0 })}
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-                <Button type="submit" disabled={updateStock.isPending}>Update</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+    <PageLayout title="Inventory / Stock" subtitle="Monitor stock levels, adjustments, and variances">
+      <Tabs defaultValue="levels" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="levels" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Stock Levels
+          </TabsTrigger>
+          <TabsTrigger value="adjustments" className="flex items-center gap-2">
+            <ClipboardList className="h-4 w-4" />
+            Adjustments
+          </TabsTrigger>
+          <TabsTrigger value="variance" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Variance Report
+          </TabsTrigger>
+        </TabsList>
 
-      <DataTable
-        data={stockLevels}
-        columns={columns}
-        isLoading={isLoading}
-        onEdit={handleEdit}
-      />
+        <TabsContent value="levels" className="space-y-4">
+          <div className="flex justify-end">
+            <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+              <DialogTrigger asChild>
+                <Button onClick={() => setIsOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" /> Update Stock
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Update Stock Level</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <Label>Ingredient</Label>
+                    <Select value={formData.ingredient_id} onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select ingredient" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ingredients.map((ing) => (
+                          <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Location</Label>
+                    <Select value={formData.location_id} onValueChange={(v) => setFormData({ ...formData, location_id: v })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select location" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {locations.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="quantity">Quantity</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.quantity}
+                      onChange={(e) => setFormData({ ...formData, quantity: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
+                    <Button type="submit" disabled={updateStock.isPending}>Update</Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <DataTable
+            data={stockLevels}
+            columns={columns}
+            isLoading={isLoading}
+            onEdit={handleEdit}
+          />
+        </TabsContent>
+
+        <TabsContent value="adjustments">
+          <StockAdjustmentLog />
+        </TabsContent>
+
+        <TabsContent value="variance">
+          <VarianceReport />
+        </TabsContent>
+      </Tabs>
     </PageLayout>
   );
 }
