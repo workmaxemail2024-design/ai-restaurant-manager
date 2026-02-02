@@ -190,12 +190,13 @@ export function useCreatePOSIntegration() {
 export function useUpdatePOSIntegration() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, api_key, api_secret, webhook_url }: { id: string; status?: string; api_key?: string; api_secret?: string; webhook_url?: string }) => {
+    mutationFn: async ({ id, status, api_key, api_secret, webhook_url, settings }: { id: string; status?: string; api_key?: string; api_secret?: string; webhook_url?: string; settings?: Record<string, unknown> }) => {
       const updateData: Record<string, unknown> = {};
       if (status !== undefined) updateData.status = status;
       if (api_key !== undefined) updateData.api_key = api_key;
       if (api_secret !== undefined) updateData.api_secret = api_secret;
       if (webhook_url !== undefined) updateData.webhook_url = webhook_url;
+      if (settings !== undefined) updateData.settings = settings;
       
       const { data, error } = await supabase
         .from("pos_integrations")
@@ -212,6 +213,37 @@ export function useUpdatePOSIntegration() {
     },
     onError: (error) => {
       toast({ title: "Error updating integration", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useToggleAutoSync() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ integrationId, enabled, currentSettings }: { integrationId: string; enabled: boolean; currentSettings: Record<string, unknown> | null }) => {
+      const newSettings = {
+        ...(currentSettings || {}),
+        auto_sync_daily: enabled,
+      };
+      
+      const { data, error } = await supabase
+        .from("pos_integrations")
+        .update({ settings: newSettings })
+        .eq("id", integrationId)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["pos-integrations"] });
+      toast({ 
+        title: variables.enabled ? "Auto Sync Enabled" : "Auto Sync Disabled",
+        description: variables.enabled ? "Daily sync will run automatically at midnight" : "Automatic syncing has been turned off"
+      });
+    },
+    onError: (error) => {
+      toast({ title: "Error updating auto sync", description: error.message, variant: "destructive" });
     },
   });
 }
