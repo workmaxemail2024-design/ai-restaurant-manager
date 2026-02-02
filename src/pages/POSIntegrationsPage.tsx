@@ -18,7 +18,7 @@ import {
 import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
-  useApplyPOSImport, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
+  useApplyPOSImport, useToggleAutoSync, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
 import { useDishes } from "@/hooks/useDishes";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
@@ -42,6 +42,7 @@ interface CaptivaSettings {
   api_key?: string;
   username?: string;
   password?: string;
+  auto_sync_daily?: boolean;
 }
 
 export default function POSIntegrationsPage() {
@@ -100,6 +101,7 @@ export default function POSIntegrationsPage() {
   
   const captivaSyncNow = useCaptivaSyncNow();
   const applyImport = useApplyPOSImport();
+  const toggleAutoSync = useToggleAutoSync();
 
   const hasValidCredentials = useCallback((integration: POSIntegration): boolean => {
     if (integration.pos_provider !== "captiva") return true;
@@ -570,6 +572,25 @@ export default function POSIntegrationsPage() {
                             onCheckedChange={checked => updateIntegration.mutate({ id: integration.id, status: checked ? "active" : "inactive" })}
                           />
                         </div>
+                        
+                        {/* Auto Sync Daily toggle for Captiva */}
+                        {integration.pos_provider === "captiva" && credentialsValid && integration.status === "active" && (
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span className="text-sm text-muted-foreground">Auto Sync Daily</span>
+                              <span className="text-xs text-muted-foreground">Syncs yesterday's data at midnight</span>
+                            </div>
+                            <Switch 
+                              checked={settings?.auto_sync_daily === true}
+                              onCheckedChange={checked => toggleAutoSync.mutate({ 
+                                integrationId: integration.id, 
+                                enabled: checked, 
+                                currentSettings: integration.settings 
+                              })}
+                              disabled={toggleAutoSync.isPending}
+                            />
+                          </div>
+                        )}
                         <div className="flex gap-2 flex-wrap">
                           <Button 
                             size="sm" 
