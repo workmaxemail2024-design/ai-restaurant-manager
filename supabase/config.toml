@@ -71,3 +71,6 @@ verify_jwt = true
 
 [functions.pos-sync-captiva]
 verify_jwt = false
+
+[functions.pos-apply-import]
+verify_jwt = false
