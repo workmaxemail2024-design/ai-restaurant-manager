@@ -7,6 +7,7 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { LocationCard } from "@/components/dashboard/LocationCard";
 import { AlertItem } from "@/components/dashboard/AlertItem";
 import { AIInsightPanel } from "@/components/dashboard/AIInsightPanel";
+import { ActionRequiredPanel } from "@/components/dashboard/ActionRequiredPanel";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { Euro, ShoppingBag, Users, TrendingUp, Percent, Wallet, BarChart3, Clock } from "lucide-react";
 import { useLocation } from "@/contexts/LocationContext";
@@ -258,6 +259,9 @@ const Index = () => {
 
           {/* Sidebar Content - 1 column */}
           <div className="space-y-6">
+            {/* Action Required */}
+            <ActionRequiredPanel locationId={selectedLocationId} />
+            
             {/* AI Insights */}
             <AIInsightPanel />
             
