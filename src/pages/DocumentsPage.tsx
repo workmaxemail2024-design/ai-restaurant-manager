@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useNavigate } from "react-router-dom";
+import { DocumentConversionActions } from "@/components/documents/DocumentConversionActions";
 
 const DOCUMENT_TYPES = ["Invoice", "Receipt", "Statement", "Payroll", "Other"] as const;
 type DocumentType = typeof DOCUMENT_TYPES[number];
@@ -390,6 +391,7 @@ function DocumentRow({
               <Eye className="h-4 w-4 text-blue-500" />
             </Button>
           )}
+          <DocumentConversionActions document={document} />
           <Button variant="ghost" size="icon" onClick={handleView} disabled={loading}>
             <ExternalLink className="h-4 w-4" />
           </Button>
