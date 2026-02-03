@@ -24,7 +24,8 @@ import {
   ChevronDown,
   ChevronRight,
   Plug,
-  FlaskConical
+  FlaskConical,
+  PlayCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
@@ -115,6 +116,7 @@ const navSections: NavSection[] = [
     items: [
       { icon: Plug, label: "POS Integrations", path: "/settings/pos" },
       { icon: Euro, label: "Financial / Overheads", path: "/settings/financial/overheads" },
+      { icon: PlayCircle, label: "Demo Mode", path: "/settings/demo" },
       { icon: FlaskConical, label: "System QA", path: "/settings/system-qa" },
     ]
   }

@@ -74,3 +74,6 @@ verify_jwt = false
 
 [functions.pos-apply-import]
 verify_jwt = false
+
+[functions.demo-data]
+verify_jwt = true
