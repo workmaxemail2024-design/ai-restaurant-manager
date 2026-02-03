@@ -16,17 +16,17 @@ import {
   Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3,
   Pencil
 } from "lucide-react";
-import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
+import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
   useApplyPOSImport, useToggleAutoSync, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
-import { useDishes } from "@/hooks/useDishes";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
 import { Calendar } from "@/components/ui/calendar";
+import { POSDishMappingTab } from "@/components/pos/POSDishMappingTab";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -66,8 +66,6 @@ export default function POSIntegrationsPage() {
   const { data: locations } = useLocations();
   const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = usePOSIntegrations(selectedLocation || undefined);
   const { data: syncLogs, refetch: refetchLogs } = usePOSSyncLogs(selectedLocation || undefined);
-  const { data: mappings } = usePOSMappings(selectedLocation || undefined);
-  const { data: dishes } = useDishes();
 
   const createIntegration = useCreatePOSIntegration();
   const updateIntegration = useUpdatePOSIntegration();
@@ -786,44 +784,36 @@ export default function POSIntegrationsPage() {
           </TabsContent>
 
           <TabsContent value="mappings" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Item Mappings</CardTitle>
-                <CardDescription>Map POS items to your menu dishes</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {mappings?.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">No mappings found. Import sales data first.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {mappings?.slice(0, 20).map(mapping => (
-                      <div key={mapping.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="font-medium">{mapping.external_name || mapping.external_id}</p>
-                          <p className="text-sm text-muted-foreground">{mapping.pos_provider} • {mapping.mapping_type}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {mapping.is_verified ? (
-                            <Badge variant="default"><CheckCircle2 className="h-3 w-3 mr-1" />Verified</Badge>
-                          ) : (
-                            <Badge variant="secondary">Pending</Badge>
-                          )}
-                          <Select 
-                            value={mapping.internal_id || ""} 
-                            onValueChange={v => updateMapping.mutate({ id: mapping.id, internal_id: v })}
-                          >
-                            <SelectTrigger className="w-40"><SelectValue placeholder="Map to dish" /></SelectTrigger>
-                            <SelectContent>
-                              {dishes?.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {!selectedLocation ? (
+              <Card>
+                <CardContent className="py-8 text-center">
+                  <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">Select a location to manage POS item mappings</p>
+                </CardContent>
+              </Card>
+            ) : (
+              (() => {
+                // Find the first integration for this location to get provider and restaurant_id
+                const integration = integrations?.find(i => i.location_id === selectedLocation);
+                if (!integration) {
+                  return (
+                    <Card>
+                      <CardContent className="py-8 text-center">
+                        <Plug className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                        <p className="text-muted-foreground">No POS integration found for this location. Add an integration first.</p>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+                return (
+                  <POSDishMappingTab
+                    locationId={selectedLocation}
+                    posProvider={integration.pos_provider}
+                    restaurantId={integration.restaurant_id || ""}
+                  />
+                );
+              })()
+            )}
           </TabsContent>
 
           <TabsContent value="logs" className="space-y-4">

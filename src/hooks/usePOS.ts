@@ -4,6 +4,16 @@ import { toast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
 import type { Json } from "@/integrations/supabase/types";
 
+// ========== Types ==========
+
+export interface UnmappedPOSItem {
+  item_name: string;
+  sale_count: number;
+  total_quantity: number;
+  total_revenue: number;
+  avg_price: number;
+}
+
 export interface POSIntegration {
   id: string;
   location_id: string;
@@ -330,6 +340,125 @@ export function useUpdatePOSMapping() {
     },
     onError: (error) => {
       toast({ title: "Error updating mapping", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+// Fetch unmapped POS items - aggregates line items from pos_sales_import that don't have a mapping
+export function useUnmappedPOSItems(locationId?: string, posProvider?: string) {
+  return useQuery({
+    queryKey: ["unmapped-pos-items", locationId, posProvider],
+    queryFn: async () => {
+      if (!locationId) return [];
+      
+      // Get existing dish mappings for this location/provider
+      let mappingsQuery = supabase
+        .from("pos_mappings")
+        .select("external_id, external_name")
+        .eq("mapping_type", "dish")
+        .eq("location_id", locationId);
+      
+      if (posProvider) {
+        mappingsQuery = mappingsQuery.eq("pos_provider", posProvider);
+      }
+      
+      const { data: mappings } = await mappingsQuery;
+      const mappedNames = new Set(mappings?.map(m => m.external_name || m.external_id) || []);
+      
+      // Get all sales imports and extract item names
+      let salesQuery = supabase
+        .from("pos_sales_import")
+        .select("data")
+        .eq("location_id", locationId);
+      
+      if (posProvider) {
+        salesQuery = salesQuery.eq("pos_provider", posProvider);
+      }
+      
+      const { data: sales, error } = await salesQuery;
+      if (error) throw error;
+      
+      // Aggregate items by name
+      const itemStats = new Map<string, { count: number; qty: number; revenue: number; prices: number[] }>();
+      
+      for (const sale of sales || []) {
+        const items = (sale.data as Record<string, unknown>)?.items as Array<{ name: string; price: string | number; qty: number }> | undefined;
+        if (!items) continue;
+        
+        for (const item of items) {
+          const name = item.name || "Unknown";
+          // Skip if already mapped
+          if (mappedNames.has(name)) continue;
+          
+          const price = typeof item.price === "string" ? parseFloat(item.price) : (item.price || 0);
+          const qty = item.qty || 1;
+          
+          const existing = itemStats.get(name) || { count: 0, qty: 0, revenue: 0, prices: [] };
+          existing.count += 1;
+          existing.qty += qty;
+          existing.revenue += price * qty;
+          existing.prices.push(price);
+          itemStats.set(name, existing);
+        }
+      }
+      
+      // Convert to array and calculate average price
+      const result: UnmappedPOSItem[] = Array.from(itemStats.entries()).map(([name, stats]) => ({
+        item_name: name,
+        sale_count: stats.count,
+        total_quantity: stats.qty,
+        total_revenue: stats.revenue,
+        avg_price: stats.prices.length > 0 ? stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length : 0,
+      }));
+      
+      // Sort by revenue descending
+      result.sort((a, b) => b.total_revenue - a.total_revenue);
+      
+      return result;
+    },
+    enabled: !!locationId,
+  });
+}
+
+// Create a new POS mapping
+export function useCreatePOSMapping() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (mapping: {
+      location_id: string;
+      restaurant_id: string;
+      pos_provider: string;
+      mapping_type: string;
+      external_id: string;
+      external_name?: string;
+      internal_id: string;
+      is_verified?: boolean;
+    }) => {
+      const { data, error } = await supabase
+        .from("pos_mappings")
+        .insert({
+          location_id: mapping.location_id,
+          restaurant_id: mapping.restaurant_id,
+          pos_provider: mapping.pos_provider,
+          mapping_type: mapping.mapping_type,
+          external_id: mapping.external_id,
+          external_name: mapping.external_name || null,
+          internal_id: mapping.internal_id,
+          is_verified: mapping.is_verified ?? true,
+          confidence_score: 100,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pos-mappings"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-items"] });
+      toast({ title: "Mapping created successfully" });
+    },
+    onError: (error) => {
+      toast({ title: "Error creating mapping", description: error.message, variant: "destructive" });
     },
   });
 }
