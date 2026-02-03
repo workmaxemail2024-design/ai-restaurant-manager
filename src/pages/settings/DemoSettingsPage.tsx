@@ -3,7 +3,7 @@ import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   AlertDialog, 
@@ -18,11 +18,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { 
   RefreshCw, Trash2, Database, Users, ShoppingCart, Package, 
-  AlertTriangle, CheckCircle2, Sparkles 
+  AlertTriangle, CheckCircle2, Sparkles, Zap
 } from "lucide-react";
-import { useDemoStatus, useResetDemoData, useSeedDemoData, useDemoModeToggle, useIsDemoMode } from "@/hooks/useDemoMode";
+import { useDemoStatus, useResetDemoData, useSeedDemoData, useDemoModeToggle, useIsDemoMode, usePrepareLivePos } from "@/hooks/useDemoMode";
 import { useRestaurant } from "@/contexts/RestaurantContext";
-import { RequirePermission } from "@/components/RequirePermission";
 
 export default function DemoSettingsPage() {
   const { currentRestaurant, permissions } = useRestaurant();
@@ -31,9 +30,12 @@ export default function DemoSettingsPage() {
   const resetData = useResetDemoData();
   const seedData = useSeedDemoData();
   const toggleDemoMode = useDemoModeToggle();
+  const prepareLivePos = usePrepareLivePos();
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [seedConfirmOpen, setSeedConfirmOpen] = useState(false);
+  const [livePosConfirmOpen, setLivePosConfirmOpen] = useState(false);
+  const [livePosConfirmText, setLivePosConfirmText] = useState("");
 
   const isAdmin = permissions?.full_access === true || permissions?.settings?.admin === true;
 
@@ -46,6 +48,13 @@ export default function DemoSettingsPage() {
   const handleSeed = async () => {
     setSeedConfirmOpen(false);
     await seedData.mutateAsync();
+    refetchStatus();
+  };
+
+  const handlePrepareLivePos = async () => {
+    setLivePosConfirmOpen(false);
+    setLivePosConfirmText("");
+    await prepareLivePos.mutateAsync();
     refetchStatus();
   };
 
@@ -264,6 +273,118 @@ export default function DemoSettingsPage() {
                 <li>• Seeding adds new data without removing existing data</li>
               </ul>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Prepare for Live POS */}
+        <Card className="border-destructive/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-destructive" />
+              Prepare for Live POS
+            </CardTitle>
+            <CardDescription>
+              Clear all demo/test data to start fresh with real POS data from Captiva
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+              <h4 className="font-medium mb-3 flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                This will permanently delete:
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <ul className="space-y-1 text-muted-foreground">
+                  <li>• All sales records</li>
+                  <li>• POS import staging tables</li>
+                  <li>• POS sync logs</li>
+                  <li>• Purchase orders & items</li>
+                  <li>• Documents & invoices</li>
+                  <li>• Stock levels & adjustments</li>
+                </ul>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li>• Dishes & recipes</li>
+                  <li>• Ingredients & prices</li>
+                  <li>• Suppliers</li>
+                  <li>• Staff & shifts</li>
+                  <li>• Attendance records</li>
+                  <li>• Overheads</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg border bg-muted/30">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                What will be preserved:
+              </h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Restaurant & locations</li>
+                <li>• User accounts & roles</li>
+                <li>• POS integration settings & credentials</li>
+                <li>• Automation rules</li>
+              </ul>
+            </div>
+
+            <AlertDialog open={livePosConfirmOpen} onOpenChange={(open) => {
+              setLivePosConfirmOpen(open);
+              if (!open) setLivePosConfirmText("");
+            }}>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="destructive" 
+                  className="w-full"
+                  disabled={prepareLivePos.isPending}
+                >
+                  {prepareLivePos.isPending ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Zap className="h-4 w-4 mr-2" />
+                  )}
+                  Prepare for Live POS
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    Confirm: Prepare for Live POS
+                  </AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-4">
+                      <p>
+                        You are about to <strong className="text-destructive">permanently delete all operational data</strong> for <strong>{currentRestaurant?.name}</strong>.
+                      </p>
+                      <p>
+                        This action <strong>cannot be undone</strong>. After completion, your restaurant will be empty and ready to receive real data from your POS system.
+                      </p>
+                      <div className="pt-2">
+                        <label className="text-sm font-medium text-foreground">
+                          Type <span className="font-mono bg-muted px-1.5 py-0.5 rounded">LIVE</span> to confirm:
+                        </label>
+                        <Input
+                          value={livePosConfirmText}
+                          onChange={(e) => setLivePosConfirmText(e.target.value)}
+                          placeholder="Type LIVE to confirm"
+                          className="mt-2"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handlePrepareLivePos}
+                    disabled={livePosConfirmText !== "LIVE"}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Confirm & Wipe Data
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
       </div>
