@@ -7,8 +7,34 @@ const corsHeaders = {
 };
 
 interface DemoDataRequest {
-  action: "reset" | "seed" | "get_status";
+  action: "reset" | "seed" | "get_status" | "prepare_live_pos";
   restaurant_id: string;
+}
+
+interface DeletedCounts {
+  sales: number;
+  pos_sales_import: number;
+  pos_staff_import: number;
+  pos_sync_logs: number;
+  pos_mappings: number;
+  purchase_orders: number;
+  purchase_order_items: number;
+  documents: number;
+  stock_levels: number;
+  stock_adjustments: number;
+  dishes: number;
+  dish_ingredients: number;
+  ingredients: number;
+  ingredient_prices: number;
+  suppliers: number;
+  overheads: number;
+  staff: number;
+  staff_shifts: number;
+  staff_attendance: number;
+  staff_performance: number;
+  notifications: number;
+  audit_logs: number;
+  automation_rule_runs: number;
 }
 
 serve(async (req) => {
@@ -321,6 +347,156 @@ serve(async (req) => {
             staff: staff?.length || 0,
             purchase_orders: pos?.length || 0,
           }
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "prepare_live_pos") {
+      console.log("Preparing for live POS - comprehensive data wipe...");
+      
+      // Get location IDs for this restaurant
+      const { data: locations } = await adminClient
+        .from("locations")
+        .select("id")
+        .eq("restaurant_id", restaurant_id);
+      
+      const locationIds = locations?.map(l => l.id) || [];
+      
+      const deletedCounts: DeletedCounts = {
+        sales: 0,
+        pos_sales_import: 0,
+        pos_staff_import: 0,
+        pos_sync_logs: 0,
+        pos_mappings: 0,
+        purchase_orders: 0,
+        purchase_order_items: 0,
+        documents: 0,
+        stock_levels: 0,
+        stock_adjustments: 0,
+        dishes: 0,
+        dish_ingredients: 0,
+        ingredients: 0,
+        ingredient_prices: 0,
+        suppliers: 0,
+        overheads: 0,
+        staff: 0,
+        staff_shifts: 0,
+        staff_attendance: 0,
+        staff_performance: 0,
+        notifications: 0,
+        audit_logs: 0,
+        automation_rule_runs: 0,
+      };
+
+      // Helper to delete and count
+      async function deleteAndCount(table: string, filter: { column: string; value: string | string[]; operator?: "eq" | "in" }): Promise<number> {
+        let query = adminClient.from(table).delete({ count: "exact" });
+        if (filter.operator === "in" && Array.isArray(filter.value)) {
+          if (filter.value.length === 0) return 0;
+          query = query.in(filter.column, filter.value);
+        } else {
+          query = query.eq(filter.column, filter.value as string);
+        }
+        const { count } = await query;
+        return count || 0;
+      }
+
+      // 1. Delete sales (core sales table)
+      deletedCounts.sales = await deleteAndCount("sales", { column: "restaurant_id", value: restaurant_id });
+      
+      // 2. Delete POS imports and sync data
+      if (locationIds.length > 0) {
+        deletedCounts.pos_sales_import = await deleteAndCount("pos_sales_import", { column: "location_id", value: locationIds, operator: "in" });
+        deletedCounts.pos_staff_import = await deleteAndCount("pos_staff_import", { column: "location_id", value: locationIds, operator: "in" });
+        deletedCounts.pos_sync_logs = await deleteAndCount("pos_sync_logs", { column: "location_id", value: locationIds, operator: "in" });
+        // Keep pos_mappings as they may contain real mappings the user wants to preserve
+        // deletedCounts.pos_mappings = await deleteAndCount("pos_mappings", { column: "location_id", value: locationIds, operator: "in" });
+      }
+      
+      // 3. Delete staff-related operational data first (before deleting staff)
+      const { data: staffIds } = await adminClient.from("staff").select("id").eq("restaurant_id", restaurant_id);
+      if (staffIds && staffIds.length > 0) {
+        const ids = staffIds.map(s => s.id);
+        deletedCounts.staff_attendance = await deleteAndCount("staff_attendance", { column: "staff_id", value: ids, operator: "in" });
+        deletedCounts.staff_shifts = await deleteAndCount("staff_shifts", { column: "staff_id", value: ids, operator: "in" });
+        deletedCounts.staff_performance = await deleteAndCount("staff_performance", { column: "staff_id", value: ids, operator: "in" });
+      }
+      
+      // 4. Delete staff records
+      deletedCounts.staff = await deleteAndCount("staff", { column: "restaurant_id", value: restaurant_id });
+      
+      // 5. Delete purchase order items first (FK constraint)
+      const { data: poIds } = await adminClient.from("purchase_orders").select("id").eq("restaurant_id", restaurant_id);
+      if (poIds && poIds.length > 0) {
+        const ids = poIds.map(p => p.id);
+        deletedCounts.purchase_order_items = await deleteAndCount("purchase_order_items", { column: "purchase_order_id", value: ids, operator: "in" });
+        // Also delete documents linked to POs
+        await adminClient.from("documents").delete().in("purchase_order_id", ids);
+      }
+      
+      // 6. Delete purchase orders
+      deletedCounts.purchase_orders = await deleteAndCount("purchase_orders", { column: "restaurant_id", value: restaurant_id });
+      
+      // 7. Delete remaining documents (not linked to POs) and their storage objects
+      const { data: docs } = await adminClient
+        .from("documents")
+        .select("id, storage_path")
+        .eq("restaurant_id", restaurant_id);
+      
+      if (docs && docs.length > 0) {
+        // Try to delete storage objects (non-critical if fails)
+        const storagePaths = docs.map(d => d.storage_path).filter(Boolean);
+        if (storagePaths.length > 0) {
+          try {
+            await adminClient.storage.from("documents").remove(storagePaths);
+          } catch (storageErr) {
+            console.warn("Storage cleanup warning:", storageErr);
+          }
+        }
+      }
+      deletedCounts.documents = await deleteAndCount("documents", { column: "restaurant_id", value: restaurant_id });
+      
+      // 8. Delete stock data
+      if (locationIds.length > 0) {
+        deletedCounts.stock_adjustments = await deleteAndCount("stock_adjustments", { column: "location_id", value: locationIds, operator: "in" });
+        deletedCounts.stock_levels = await deleteAndCount("stock_levels", { column: "location_id", value: locationIds, operator: "in" });
+      }
+      
+      // 9. Delete dish ingredients (before dishes)
+      deletedCounts.dish_ingredients = await deleteAndCount("dish_ingredients", { column: "restaurant_id", value: restaurant_id });
+      
+      // 10. Delete dishes
+      deletedCounts.dishes = await deleteAndCount("dishes", { column: "restaurant_id", value: restaurant_id });
+      
+      // 11. Delete ingredient prices (before ingredients)
+      deletedCounts.ingredient_prices = await deleteAndCount("ingredient_prices", { column: "restaurant_id", value: restaurant_id });
+      
+      // 12. Delete ingredients
+      deletedCounts.ingredients = await deleteAndCount("ingredients", { column: "restaurant_id", value: restaurant_id });
+      
+      // 13. Delete suppliers
+      deletedCounts.suppliers = await deleteAndCount("suppliers", { column: "restaurant_id", value: restaurant_id });
+      
+      // 14. Delete overheads
+      deletedCounts.overheads = await deleteAndCount("overheads", { column: "restaurant_id", value: restaurant_id });
+      
+      // 15. Delete notifications
+      deletedCounts.notifications = await deleteAndCount("notifications", { column: "restaurant_id", value: restaurant_id });
+      
+      // 16. Delete audit logs
+      deletedCounts.audit_logs = await deleteAndCount("audit_logs", { column: "restaurant_id", value: restaurant_id });
+      
+      // 17. Delete automation rule runs (keep the rules themselves)
+      deletedCounts.automation_rule_runs = await deleteAndCount("automation_rule_runs", { column: "restaurant_id", value: restaurant_id });
+
+      console.log("Prepare for live POS complete:", deletedCounts);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: "All operational data has been wiped. Ready for live POS sync.",
+          deletedCounts
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
