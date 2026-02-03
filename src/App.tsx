@@ -8,6 +8,7 @@ import { RestaurantProvider } from "@/contexts/RestaurantContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import { DateRangeProvider } from "@/contexts/DateRangeContext";
 import { AuthGuard } from "@/components/AuthGuard";
+import { DemoBanner } from "@/components/demo/DemoBanner";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import LoginPage from "./pages/LoginPage";
@@ -42,6 +43,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import SystemQAPage from "./pages/SystemQAPage";
 import OverheadsPage from "./pages/settings/OverheadsPage";
+import DemoSettingsPage from "./pages/settings/DemoSettingsPage";
 import DocumentsPage from "./pages/DocumentsPage";
 
 const queryClient = new QueryClient();
@@ -60,6 +62,7 @@ const App = () => (
             <TooltipProvider>
             <Toaster />
             <Sonner />
+            <DemoBanner />
           <BrowserRouter>
             <Routes>
               {/* Public routes */}
@@ -107,6 +110,7 @@ const App = () => (
               <Route path="/settings/audit-log" element={<ProtectedRoute><AuditLogPage /></ProtectedRoute>} />
               <Route path="/settings/system-qa" element={<ProtectedRoute><SystemQAPage /></ProtectedRoute>} />
               <Route path="/settings/financial/overheads" element={<ProtectedRoute><OverheadsPage /></ProtectedRoute>} />
+              <Route path="/settings/demo" element={<ProtectedRoute><DemoSettingsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </BrowserRouter>
