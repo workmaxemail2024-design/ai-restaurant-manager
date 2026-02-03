@@ -23,6 +23,7 @@ interface RestaurantContextType {
   isSwitching: boolean;
   switchRestaurant: (restaurantId: string) => Promise<void>;
   createRestaurant: (name: string) => Promise<Restaurant | null>;
+  updateRestaurant: (restaurantId: string, name: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   refreshPermissions: () => Promise<void>;
 }
@@ -303,6 +304,30 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
     }
   }, [user, userRestaurants, refreshPermissions]);
 
+  const updateRestaurant = useCallback(async (restaurantId: string, name: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from('restaurants')
+        .update({ name })
+        .eq('id', restaurantId);
+
+      if (error) throw error;
+
+      // Update local state
+      setUserRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, name } : r));
+      if (currentRestaurant?.id === restaurantId) {
+        setCurrentRestaurant(prev => prev ? { ...prev, name } : null);
+      }
+
+      toast({ title: `Restaurant renamed to "${name}"` });
+      return true;
+    } catch (error) {
+      console.error('[RestaurantContext] Error updating restaurant:', error);
+      toast({ title: 'Failed to rename restaurant', variant: 'destructive' });
+      return false;
+    }
+  }, [currentRestaurant]);
+
   const signOut = useCallback(async () => {
     console.log('[RestaurantContext] Signing out...');
     await supabase.auth.signOut();
@@ -320,6 +345,7 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       isSwitching,
       switchRestaurant,
       createRestaurant,
+      updateRestaurant,
       signOut,
       refreshPermissions
     }}>
