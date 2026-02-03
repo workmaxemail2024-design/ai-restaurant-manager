@@ -18,14 +18,17 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building2, ChevronDown, Plus, Check, Loader2 } from 'lucide-react';
+import { Building2, ChevronDown, Plus, Check, Loader2, Pencil } from 'lucide-react';
 
 export function RestaurantSwitcher() {
-  const { currentRestaurant, userRestaurants, switchRestaurant, createRestaurant, isSwitching } = useRestaurant();
+  const { currentRestaurant, userRestaurants, switchRestaurant, createRestaurant, updateRestaurant, isSwitching } = useRestaurant();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [newName, setNewName] = useState('');
+  const [editName, setEditName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const handleSwitch = async (restaurantId: string) => {
     if (restaurantId === currentRestaurant?.id) return;
@@ -41,6 +44,23 @@ export function RestaurantSwitcher() {
     setNewName('');
     setIsCreateOpen(false);
     setIsCreating(false);
+  };
+
+  const handleEdit = async () => {
+    if (!editName.trim() || !currentRestaurant) return;
+    setIsUpdating(true);
+    const success = await updateRestaurant(currentRestaurant.id, editName.trim());
+    if (success) {
+      setIsEditOpen(false);
+    }
+    setIsUpdating(false);
+  };
+
+  const openEditDialog = () => {
+    if (currentRestaurant) {
+      setEditName(currentRestaurant.name);
+      setIsEditOpen(true);
+    }
   };
 
   if (!currentRestaurant) {
@@ -75,60 +95,88 @@ export function RestaurantSwitcher() {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2" disabled={isSwitching}>
-          {isSwitching ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Building2 className="h-4 w-4" />
-          )}
-          <span className="max-w-[150px] truncate">{currentRestaurant.name}</span>
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 bg-popover z-[100]">
-        {userRestaurants.map((restaurant) => (
-          <DropdownMenuItem
-            key={restaurant.id}
-            onClick={() => handleSwitch(restaurant.id)}
-            className="flex items-center justify-between"
-            disabled={isSwitching}
-          >
-            <span className="truncate">{restaurant.name}</span>
-            {restaurant.id === currentRestaurant.id && (
-              <Check className="h-4 w-4 text-primary" />
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2" disabled={isSwitching}>
+            {isSwitching ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Building2 className="h-4 w-4" />
             )}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Restaurant
+            <span className="max-w-[150px] truncate">{currentRestaurant.name}</span>
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56 bg-popover z-[100]">
+          {userRestaurants.map((restaurant) => (
+            <DropdownMenuItem
+              key={restaurant.id}
+              onClick={() => handleSwitch(restaurant.id)}
+              className="flex items-center justify-between"
+              disabled={isSwitching}
+            >
+              <span className="truncate">{restaurant.name}</span>
+              {restaurant.id === currentRestaurant.id && (
+                <Check className="h-4 w-4 text-primary" />
+              )}
             </DropdownMenuItem>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Restaurant</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Restaurant Name</Label>
-                <Input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="New Restaurant"
-                />
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={(e) => { e.preventDefault(); openEditDialog(); }}>
+            <Pencil className="h-4 w-4 mr-2" />
+            Rename Restaurant
+          </DropdownMenuItem>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Restaurant
+              </DropdownMenuItem>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Restaurant</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Restaurant Name</Label>
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="New Restaurant"
+                  />
+                </div>
+                <Button onClick={handleCreate} disabled={isCreating || !newName.trim()}>
+                  {isCreating ? 'Creating...' : 'Create'}
+                </Button>
               </div>
-              <Button onClick={handleCreate} disabled={isCreating || !newName.trim()}>
-                {isCreating ? 'Creating...' : 'Create'}
-              </Button>
+            </DialogContent>
+          </Dialog>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Edit Restaurant Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Restaurant</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Restaurant Name</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Restaurant name"
+              />
             </div>
-          </DialogContent>
-        </Dialog>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <Button onClick={handleEdit} disabled={isUpdating || !editName.trim()}>
+              {isUpdating ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
