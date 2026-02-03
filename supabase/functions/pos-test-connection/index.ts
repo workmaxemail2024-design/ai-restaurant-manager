@@ -55,7 +55,7 @@ serve(async (req) => {
 
     let testResult: { success: boolean; message?: string; error?: string };
 
-    // Handle Captiva POS specifically
+    // Handle Captiva POS specifically using Captiva Cloud Journals API v1.2
     if (pos_provider === "captiva") {
       const { base_url, store_id, api_key, username, password } = body;
 
@@ -63,36 +63,108 @@ serve(async (req) => {
         testResult = { success: false, error: "Missing required Captiva credentials (base_url, store_id, api_key, username, password)" };
       } else {
         try {
-          // Call the lightest Captiva endpoint to test connectivity
-          const statusUrl = `${base_url.replace(/\/$/, "")}/outlet/${store_id}/status`;
-          console.log("Testing Captiva connection to:", statusUrl);
+          // Build Captiva Cloud API endpoint - append /CaptivaCloudAPIRequest.ashx
+          const cleanBaseUrl = base_url.replace(/\/$/, "").replace(/\/CaptivaCloudAPIRequest\.ashx$/i, "");
+          const captivaEndpoint = `${cleanBaseUrl}/CaptivaCloudAPIRequest.ashx`;
+          console.log("Testing Captiva Cloud connection to:", captivaEndpoint);
 
-          const response = await fetch(statusUrl, {
-            method: "GET",
-            headers: {
-              "Authorization": `Bearer ${api_key}`,
-              "X-API-Key": api_key,
-              "X-Username": username,
-              "X-Password": password,
-              "Content-Type": "application/json",
-            },
+          // Use the lightest possible request - GetOutletDetails or similar
+          // Per Captiva Cloud Journals API v1.2, we use a minimal request to validate credentials
+          const requestPayload = {
+            APIKey: api_key,
+            UserName: username,
+            Password: password,
+            OutletCode: store_id,
+            // Request outlet validation - lightest operation
+            RequestType: "GetOutletDetails"
+          };
+
+          console.log("Captiva request payload (sanitized):", {
+            ...requestPayload,
+            APIKey: "***",
+            Password: "***"
           });
 
-          if (response.ok) {
-            testResult = { success: true, message: "Captiva connection validated successfully" };
+          const response = await fetch(captivaEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+            },
+            body: JSON.stringify(requestPayload),
+          });
+
+          const responseText = await response.text();
+          console.log("Captiva response status:", response.status);
+          console.log("Captiva response body (first 500 chars):", responseText.substring(0, 500));
+
+          // Try to parse response as JSON
+          let responseData: Record<string, unknown> | null = null;
+          try {
+            responseData = JSON.parse(responseText);
+          } catch {
+            // Response might not be JSON
+            console.log("Response is not JSON, treating as text");
+          }
+
+          // Check for Captiva-specific error responses
+          if (responseData) {
+            // Captiva API typically returns Success: true/false or ErrorMessage
+            const success = responseData.Success === true || 
+                           responseData.success === true ||
+                           responseData.Status === "OK" ||
+                           responseData.status === "OK" ||
+                           (response.ok && !responseData.ErrorMessage && !responseData.errorMessage);
+
+            const errorMessage = responseData.ErrorMessage || 
+                                responseData.errorMessage || 
+                                responseData.Error || 
+                                responseData.error ||
+                                responseData.Message ||
+                                responseData.message;
+
+            if (success) {
+              testResult = { 
+                success: true, 
+                message: `Captiva Cloud connection validated for outlet ${store_id}` 
+              };
+            } else if (errorMessage) {
+              testResult = { 
+                success: false, 
+                error: `Captiva error: ${String(errorMessage)}` 
+              };
+            } else if (response.ok) {
+              // Response OK but no explicit success flag - treat as success
+              testResult = { 
+                success: true, 
+                message: "Captiva Cloud connection validated" 
+              };
+            } else {
+              testResult = { 
+                success: false, 
+                error: `Captiva returned HTTP ${response.status}` 
+              };
+            }
           } else {
-            const errorText = await response.text();
-            console.error("Captiva test failed:", response.status, errorText);
-            testResult = { 
-              success: false, 
-              error: `Captiva returned ${response.status}: ${errorText.substring(0, 200)}` 
-            };
+            // Non-JSON response
+            if (response.ok) {
+              testResult = { 
+                success: true, 
+                message: "Captiva Cloud connection validated" 
+              };
+            } else {
+              testResult = { 
+                success: false, 
+                error: `Captiva returned HTTP ${response.status}: ${responseText.substring(0, 200)}` 
+              };
+            }
           }
         } catch (err) {
           console.error("Captiva connection error:", err);
+          const errorMsg = err instanceof Error ? err.message : "Network error";
           testResult = { 
             success: false, 
-            error: `Failed to reach Captiva: ${err instanceof Error ? err.message : "Network error"}` 
+            error: `Failed to reach Captiva Cloud: ${errorMsg}` 
           };
         }
       }
