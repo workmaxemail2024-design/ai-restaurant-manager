@@ -8,11 +8,29 @@ const corsHeaders = {
 
 interface ApplyResult {
   success: boolean;
-  applied_count: number;
-  skipped_unmapped: number;
-  skipped_existing: number;
+  sales_to_apply: number;       // Number of unique sales (receipts) to apply
+  applied_count: number;        // Sales successfully applied
+  line_items_mapped: number;    // Line items that are mapped
+  line_items_unmapped: number;  // Line items that are unmapped (skipped)
+  skipped_existing: number;     // Already applied
   total_revenue: number;
   error?: string;
+  // Legacy fields for backward compatibility
+  skipped_unmapped: number;
+}
+
+interface ImportRecord {
+  id: string;
+  external_sale_id: string | null;
+  location_id: string;
+  restaurant_id: string | null;
+  pos_provider: string;
+  data: Record<string, unknown>;
+  mapped_dish_id: string | null;
+  mapped_total_price: number | null;
+  mapped_quantity: number | null;
+  mapped_sale_date: string | null;
+  sync_status: string;
 }
 
 serve(async (req) => {
@@ -64,7 +82,7 @@ serve(async (req) => {
     // Fetch integration details
     const { data: integration, error: intError } = await adminClient
       .from("pos_integrations")
-      .select("*")
+      .select("*, locations(restaurant_id)")
       .eq("id", integration_id)
       .single();
 
@@ -75,7 +93,20 @@ serve(async (req) => {
       );
     }
 
+    // Get restaurant_id from integration or from the linked location
+    const restaurantId = integration.restaurant_id || 
+      (integration.locations as { restaurant_id: string } | null)?.restaurant_id;
+
+    if (!restaurantId) {
+      console.error("No restaurant_id found for integration or its location");
+      return new Response(
+        JSON.stringify({ success: false, error: "Integration is not linked to a restaurant. Please check location setup." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Fetch pending imports for the date range
+    // Use sync_status NOT in ['applied'] to include both 'pending' and 'unmapped'
     const { data: imports, error: importError } = await adminClient
       .from("pos_sales_import")
       .select("*")
@@ -83,7 +114,7 @@ serve(async (req) => {
       .eq("pos_provider", integration.pos_provider)
       .gte("mapped_sale_date", date_from)
       .lte("mapped_sale_date", date_to)
-      .in("sync_status", ["pending", "unmapped"]);
+      .neq("sync_status", "applied");
 
     if (importError) {
       console.error("Error fetching imports:", importError);
@@ -93,105 +124,205 @@ serve(async (req) => {
       );
     }
 
+    const importRecords = (imports || []) as ImportRecord[];
+
+    // Group imports by external_sale_id (each represents a receipt/transaction)
+    // Each import row in the current system represents one sale/receipt with total
+    // If external_sale_id is null, treat each row as its own sale
+    const salesMap = new Map<string, ImportRecord[]>();
+    
+    for (const imp of importRecords) {
+      const saleKey = imp.external_sale_id || imp.id; // Use id as fallback
+      if (!salesMap.has(saleKey)) {
+        salesMap.set(saleKey, []);
+      }
+      salesMap.get(saleKey)!.push(imp);
+    }
+
     const result: ApplyResult = {
       success: true,
+      sales_to_apply: salesMap.size,
       applied_count: 0,
-      skipped_unmapped: 0,
+      line_items_mapped: 0,
+      line_items_unmapped: 0,
       skipped_existing: 0,
       total_revenue: 0,
+      skipped_unmapped: 0, // For backward compatibility
     };
 
-    // If preview_only, just return counts without applying
-    if (preview_only) {
-      for (const imp of imports || []) {
+    // Calculate preview stats
+    for (const [saleKey, saleImports] of salesMap) {
+      // Get the sale total from the first import (they should all have the same total for the sale)
+      const saleTotal = Number(saleImports[0]?.mapped_total_price || 0);
+      result.total_revenue += saleTotal;
+      
+      // Count mapped vs unmapped line items
+      for (const imp of saleImports) {
         if (imp.mapped_dish_id) {
-          result.applied_count++;
-          result.total_revenue += Number(imp.mapped_total_price || 0);
+          result.line_items_mapped++;
         } else {
-          result.skipped_unmapped++;
+          result.line_items_unmapped++;
         }
       }
+    }
+
+    // Backward compat: skipped_unmapped = line_items_unmapped for old UI
+    result.skipped_unmapped = result.line_items_unmapped;
+
+    // If preview_only, return counts without applying
+    if (preview_only) {
+      console.log(`Preview: ${result.sales_to_apply} sales to apply, ${formatCurrency(result.total_revenue)} revenue`);
       return new Response(
         JSON.stringify(result),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Processing ${imports?.length || 0} imports for application`);
+    console.log(`Processing ${result.sales_to_apply} sales for application`);
 
-    // Process each import
-    for (const imp of imports || []) {
-      // Skip if no mapped dish (mark as unmapped)
-      if (!imp.mapped_dish_id) {
-        result.skipped_unmapped++;
-        
-        // Update status to unmapped if not already
-        if (imp.sync_status !== "unmapped") {
-          await adminClient
-            .from("pos_sales_import")
-            .update({ sync_status: "unmapped" })
-            .eq("id", imp.id);
-        }
-        continue;
-      }
+    // Check existing sales to prevent duplicates
+    const externalSaleIds = Array.from(salesMap.keys()).filter(id => id !== null);
+    
+    // We need to track which sales were already applied
+    // Check the sales table or rely on sync_status being 'applied'
+    const alreadyAppliedImports = importRecords.filter(imp => imp.sync_status === "applied");
+    const alreadyAppliedSaleIds = new Set(alreadyAppliedImports.map(imp => imp.external_sale_id || imp.id));
 
-      // Check if this sale already exists (idempotency via external_sale_id lookup in import)
-      // We'll use a composite check: same dish, same date, same location, similar total
-      const saleDate = imp.mapped_sale_date;
-      const quantity = imp.mapped_quantity || 1;
-      const totalPrice = Number(imp.mapped_total_price || 0);
-
-      // Check if already applied by looking at sync_status
-      if (imp.sync_status === "applied") {
+    // Process each sale (receipt)
+    for (const [saleKey, saleImports] of salesMap) {
+      // Skip if already applied
+      if (alreadyAppliedSaleIds.has(saleKey)) {
         result.skipped_existing++;
         continue;
       }
 
-      // Insert into sales table
-      const { error: insertError } = await adminClient
-        .from("sales")
-        .insert({
-          location_id: integration.location_id,
-          restaurant_id: integration.restaurant_id,
-          dish_id: imp.mapped_dish_id,
-          quantity: quantity,
-          total_price: totalPrice,
-          sale_date: saleDate,
-        });
+      // Get sale metadata from first import
+      const primaryImport = saleImports[0];
+      const saleDate = primaryImport.mapped_sale_date;
+      const saleTotal = Number(primaryImport.mapped_total_price || 0);
+      
+      // If no mapped_dish_id, we need to create a "POS Import" placeholder dish or skip line items
+      // For now, we'll insert the sale with the total even if no individual items are mapped
+      // This ensures revenue shows on dashboard even without complete mappings
+      
+      // Check if there's at least one mapped item for detailed insertion
+      const mappedItems = saleImports.filter(imp => imp.mapped_dish_id);
+      
+      if (mappedItems.length > 0) {
+        // Insert individual line items as sales
+        for (const imp of mappedItems) {
+          const quantity = imp.mapped_quantity || 1;
+          const itemPrice = Number(imp.mapped_total_price || 0);
+          
+          const { error: insertError } = await adminClient
+            .from("sales")
+            .insert({
+              location_id: integration.location_id,
+              restaurant_id: restaurantId,
+              dish_id: imp.mapped_dish_id,
+              quantity: quantity,
+              total_price: itemPrice,
+              sale_date: saleDate,
+            });
 
-      if (insertError) {
-        console.error("Failed to insert sale:", insertError);
-        // Continue processing other records
-        continue;
+          if (insertError) {
+            console.error("Failed to insert mapped sale item:", insertError);
+          }
+        }
+      } else {
+        // No mapped items - we still want to record the sale total for revenue tracking
+        // We need a "fallback" dish for unmapped sales
+        // First, check if we have an "Unmapped POS Sale" dish for this restaurant
+        let fallbackDishId: string | null = null;
+        
+        const { data: fallbackDish } = await adminClient
+          .from("dishes")
+          .select("id")
+          .eq("restaurant_id", restaurantId)
+          .eq("name", "Unmapped POS Sale")
+          .single();
+        
+        if (fallbackDish) {
+          fallbackDishId = fallbackDish.id;
+        } else {
+          // Create the fallback dish
+          const { data: newDish, error: dishError } = await adminClient
+            .from("dishes")
+            .insert({
+              restaurant_id: restaurantId,
+              name: "Unmapped POS Sale",
+              selling_price: 0,
+              category: "POS Imports",
+            })
+            .select("id")
+            .single();
+          
+          if (!dishError && newDish) {
+            fallbackDishId = newDish.id;
+            console.log(`Created fallback dish for unmapped sales: ${fallbackDishId}`);
+          } else {
+            console.error("Failed to create fallback dish:", dishError);
+          }
+        }
+        
+        // Insert sale with fallback dish (or skip if we couldn't create one)
+        if (fallbackDishId) {
+          const { error: insertError } = await adminClient
+            .from("sales")
+            .insert({
+              location_id: integration.location_id,
+              restaurant_id: restaurantId,
+              dish_id: fallbackDishId,
+              quantity: 1,
+              total_price: saleTotal,
+              sale_date: saleDate,
+            });
+
+          if (insertError) {
+            console.error("Failed to insert unmapped sale:", insertError);
+          }
+        }
       }
 
-      // Update import status to applied
+      // Update all import records for this sale to 'applied'
+      const importIds = saleImports.map(imp => imp.id);
       await adminClient
         .from("pos_sales_import")
         .update({ sync_status: "applied" })
-        .eq("id", imp.id);
+        .in("id", importIds);
 
       result.applied_count++;
-      result.total_revenue += totalPrice;
+    }
+
+    // Recalculate total_revenue based on actual applied sales
+    result.total_revenue = 0;
+    for (const [saleKey, saleImports] of salesMap) {
+      if (!alreadyAppliedSaleIds.has(saleKey)) {
+        result.total_revenue += Number(saleImports[0]?.mapped_total_price || 0);
+      }
     }
 
     // Log the apply result
     await adminClient.from("pos_sync_logs").insert({
       location_id: integration.location_id,
-      restaurant_id: integration.restaurant_id,
+      restaurant_id: restaurantId,
       pos_provider: integration.pos_provider,
       event_type: "apply_completed",
       status: "success",
-      message: `Applied ${result.applied_count} sales (${formatCurrency(result.total_revenue)}), ${result.skipped_unmapped} unmapped`,
+      message: `Applied ${result.applied_count} sales (${formatCurrency(result.total_revenue)}), ${result.line_items_unmapped} line items unmapped`,
       details: {
         date_from,
         date_to,
+        sales_to_apply: result.sales_to_apply,
         applied_count: result.applied_count,
-        skipped_unmapped: result.skipped_unmapped,
+        line_items_mapped: result.line_items_mapped,
+        line_items_unmapped: result.line_items_unmapped,
         skipped_existing: result.skipped_existing,
         total_revenue: result.total_revenue,
       },
     });
+
+    console.log(`Apply complete: ${result.applied_count} sales, ${formatCurrency(result.total_revenue)}`);
 
     return new Response(
       JSON.stringify(result),
@@ -207,5 +338,5 @@ serve(async (req) => {
 });
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(amount);
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR' }).format(amount);
 }

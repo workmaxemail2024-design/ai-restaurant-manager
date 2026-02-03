@@ -1082,18 +1082,33 @@ export default function POSIntegrationsPage() {
                   <h4 className="font-medium text-sm">Preview Summary</h4>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Ready to apply:</span>
-                      <span className="font-medium">{applyPreview.applied_count} sales</span>
+                      <span className="text-muted-foreground">Sales to apply:</span>
+                      <span className="font-medium">{applyPreview.sales_to_apply ?? applyPreview.applied_count} sales</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Total revenue:</span>
-                      <span className="font-medium">{formatCurrency(applyPreview.total_revenue)}</span>
+                      <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(applyPreview.total_revenue)}</span>
                     </div>
+                    {applyPreview.line_items_mapped !== undefined && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Line items mapped:</span>
+                          <span className="font-medium">{applyPreview.line_items_mapped}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Line items unmapped:</span>
+                          <span className="font-medium">{applyPreview.line_items_unmapped}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  {applyPreview.skipped_unmapped > 0 && (
-                    <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span>{applyPreview.skipped_unmapped} items unmapped (will skip, map in Mappings tab)</span>
+                  {(applyPreview.line_items_unmapped ?? applyPreview.skipped_unmapped) > 0 && (
+                    <div className="flex items-start gap-2 text-sm text-amber-600 dark:text-amber-400 mt-2 pt-2 border-t border-amber-200 dark:border-amber-800">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <span>
+                        {applyPreview.line_items_unmapped ?? applyPreview.skipped_unmapped} line items unmapped. 
+                        Revenue will still be applied to dashboard. Map items in Mappings tab for detailed dish breakdown.
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1118,7 +1133,10 @@ export default function POSIntegrationsPage() {
                   )}
                 </Button>
               ) : (
-                <Button onClick={handleExecuteApply} disabled={applyImport.isPending || applyPreview.applied_count === 0}>
+                <Button 
+                  onClick={handleExecuteApply} 
+                  disabled={applyImport.isPending || (applyPreview.sales_to_apply ?? applyPreview.applied_count) === 0}
+                >
                   {applyImport.isPending ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -1127,7 +1145,7 @@ export default function POSIntegrationsPage() {
                   ) : (
                     <>
                       <BarChart3 className="h-4 w-4 mr-2" />
-                      Apply {applyPreview.applied_count} Sales
+                      Apply {applyPreview.sales_to_apply ?? applyPreview.applied_count} Sales ({formatCurrency(applyPreview.total_revenue)})
                     </>
                   )}
                 </Button>

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/currency";
 import type { Json } from "@/integrations/supabase/types";
 
 export interface POSIntegration {
@@ -171,10 +172,22 @@ export function useCreatePOSIntegration() {
       webhook_url?: string;
       settings?: Record<string, unknown>;
     }) => {
+      // Fetch the location to get its restaurant_id
+      const { data: location, error: locError } = await supabase
+        .from("locations")
+        .select("restaurant_id")
+        .eq("id", integration.location_id)
+        .single();
+      
+      if (locError || !location?.restaurant_id) {
+        throw new Error("Could not find restaurant for the selected location");
+      }
+
       const { data, error } = await supabase
         .from("pos_integrations")
         .insert([{
           location_id: integration.location_id,
+          restaurant_id: location.restaurant_id,
           pos_provider: integration.pos_provider,
           api_key: integration.api_key || null,
           api_secret: integration.api_secret || null,
@@ -414,8 +427,11 @@ export interface ApplyImportParams {
 
 export interface ApplyImportResult {
   success: boolean;
-  applied_count: number;
-  skipped_unmapped: number;
+  sales_to_apply: number;       // Number of unique sales (receipts) to apply
+  applied_count: number;        // Sales successfully applied
+  line_items_mapped: number;    // Line items that are mapped
+  line_items_unmapped: number;  // Line items that are unmapped
+  skipped_unmapped: number;     // Legacy: same as line_items_unmapped
   skipped_existing: number;
   total_revenue: number;
   error?: string;
@@ -431,15 +447,22 @@ export function useApplyPOSImport() {
     },
     onSuccess: (data, variables) => {
       if (!variables.preview_only) {
+        // Invalidate all dashboard-related queries to refresh KPIs immediately
         queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
         queryClient.invalidateQueries({ queryKey: ["pos-sync-logs"] });
         queryClient.invalidateQueries({ queryKey: ["sales"] });
         queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
         queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
+        queryClient.invalidateQueries({ queryKey: ["dishes"] }); // Fallback dish may be created
         if (data.success) {
-          toast({ 
+          const unmappedNote = data.line_items_unmapped > 0 
+            ? `, ${data.line_items_unmapped} line items unmapped` 
+            : "";
+          const revenueStr = formatCurrency(data.total_revenue);
+          toast({
             title: "Applied to Dashboard", 
-            description: `${data.applied_count} sales applied${data.skipped_unmapped > 0 ? `, ${data.skipped_unmapped} unmapped` : ""}` 
+            description: `${data.applied_count} sales applied (${revenueStr})${unmappedNote}`
           });
         } else {
           toast({ title: "Apply Failed", description: data.error, variant: "destructive" });
