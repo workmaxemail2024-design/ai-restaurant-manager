@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface POSIntegration {
   id: string;
@@ -162,16 +163,24 @@ export function usePOSMappings(locationId?: string, posProvider?: string) {
 export function useCreatePOSIntegration() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (integration: { location_id: string; pos_provider: string; api_key?: string; api_secret?: string; webhook_url?: string }) => {
+    mutationFn: async (integration: { 
+      location_id: string; 
+      pos_provider: string; 
+      api_key?: string; 
+      api_secret?: string; 
+      webhook_url?: string;
+      settings?: Record<string, unknown>;
+    }) => {
       const { data, error } = await supabase
         .from("pos_integrations")
-        .insert({
+        .insert([{
           location_id: integration.location_id,
           pos_provider: integration.pos_provider,
-          api_key: integration.api_key,
-          api_secret: integration.api_secret,
-          webhook_url: integration.webhook_url,
-        })
+          api_key: integration.api_key || null,
+          api_secret: integration.api_secret || null,
+          webhook_url: integration.webhook_url || null,
+          settings: (integration.settings || null) as Json,
+        }])
         .select()
         .single();
       if (error) throw error;
@@ -190,8 +199,28 @@ export function useCreatePOSIntegration() {
 export function useUpdatePOSIntegration() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, status, api_key, api_secret, webhook_url, settings }: { id: string; status?: string; api_key?: string; api_secret?: string; webhook_url?: string; settings?: Record<string, unknown> }) => {
+    mutationFn: async ({ 
+      id, 
+      location_id,
+      pos_provider,
+      status, 
+      api_key, 
+      api_secret, 
+      webhook_url, 
+      settings 
+    }: { 
+      id: string; 
+      location_id?: string;
+      pos_provider?: string;
+      status?: string; 
+      api_key?: string; 
+      api_secret?: string; 
+      webhook_url?: string; 
+      settings?: Record<string, unknown>;
+    }) => {
       const updateData: Record<string, unknown> = {};
+      if (location_id !== undefined) updateData.location_id = location_id;
+      if (pos_provider !== undefined) updateData.pos_provider = pos_provider;
       if (status !== undefined) updateData.status = status;
       if (api_key !== undefined) updateData.api_key = api_key;
       if (api_secret !== undefined) updateData.api_secret = api_secret;
@@ -207,9 +236,12 @@ export function useUpdatePOSIntegration() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["pos-integrations"] });
-      toast({ title: "Integration updated successfully" });
+      // Only show toast for explicit saves, not toggle updates
+      if (variables.settings !== undefined || variables.api_key !== undefined || variables.location_id !== undefined) {
+        toast({ title: "Integration updated successfully" });
+      }
     },
     onError: (error) => {
       toast({ title: "Error updating integration", description: error.message, variant: "destructive" });

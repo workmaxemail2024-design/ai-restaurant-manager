@@ -13,7 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
-  Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3
+  Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3,
+  Pencil
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSMappings, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
@@ -48,6 +49,7 @@ interface CaptivaSettings {
 export default function POSIntegrationsPage() {
   const [selectedLocation, setSelectedLocation] = useState<string>("");
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingIntegration, setEditingIntegration] = useState<POSIntegration | null>(null);
   const [formData, setFormData] = useState({
     location_id: "",
     pos_provider: "",
@@ -59,6 +61,7 @@ export default function POSIntegrationsPage() {
     captiva_username: "",
     captiva_password: "",
   });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const { data: locations } = useLocations();
   const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = usePOSIntegrations(selectedLocation || undefined);
@@ -102,6 +105,65 @@ export default function POSIntegrationsPage() {
   const captivaSyncNow = useCaptivaSyncNow();
   const applyImport = useApplyPOSImport();
   const toggleAutoSync = useToggleAutoSync();
+
+  const [testingIntegrationId, setTestingIntegrationId] = useState<string | null>(null);
+
+  // Reset form when modal closes
+  const resetForm = useCallback(() => {
+    setFormData({ 
+      location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "", 
+      captiva_base_url: "", captiva_store_id: "", captiva_username: "", captiva_password: "" 
+    });
+    setFormErrors({});
+    setShowPassword(false);
+    setShowApiKey(false);
+    setEditingIntegration(null);
+  }, []);
+
+  // Open modal for editing
+  const handleOpenEditModal = useCallback((integration: POSIntegration) => {
+    const settings = integration.settings as CaptivaSettings | null;
+    setEditingIntegration(integration);
+    setFormData({
+      location_id: integration.location_id,
+      pos_provider: integration.pos_provider,
+      api_key: settings?.api_key || integration.api_key || "",
+      api_secret: integration.api_secret || "",
+      webhook_url: integration.webhook_url || "",
+      captiva_base_url: settings?.base_url || "",
+      captiva_store_id: settings?.store_id || "",
+      captiva_username: settings?.username || "",
+      captiva_password: settings?.password || "",
+    });
+    setFormErrors({});
+    setIsAddOpen(true);
+  }, []);
+
+  // Validate Captiva fields
+  const validateCaptivaForm = useCallback(() => {
+    if (formData.pos_provider !== "captiva") return true;
+    const errors: Record<string, string> = {};
+    if (!formData.captiva_base_url.trim()) errors.captiva_base_url = "Base URL is required";
+    if (!formData.captiva_store_id.trim()) errors.captiva_store_id = "Store ID is required";
+    if (!formData.api_key.trim() && !editingIntegration) errors.api_key = "API Key is required";
+    if (!formData.captiva_username.trim()) errors.captiva_username = "Username is required";
+    if (!formData.captiva_password.trim() && !editingIntegration) errors.captiva_password = "Password is required";
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [formData, editingIntegration]);
+
+  // Get missing credentials for display
+  const getMissingCredentials = useCallback((integration: POSIntegration): string[] => {
+    if (integration.pos_provider !== "captiva") return [];
+    const settings = integration.settings as CaptivaSettings | null;
+    const missing: string[] = [];
+    if (!settings?.base_url) missing.push("base_url");
+    if (!settings?.store_id) missing.push("store_id");
+    if (!settings?.api_key && !integration.api_key) missing.push("api_key");
+    if (!settings?.username) missing.push("username");
+    if (!settings?.password) missing.push("password");
+    return missing;
+  }, []);
 
   const hasValidCredentials = useCallback((integration: POSIntegration): boolean => {
     if (integration.pos_provider !== "captiva") return true;
@@ -238,30 +300,59 @@ export default function POSIntegrationsPage() {
   }, [applyModalIntegration, getApplyDateRange, applyImport]);
 
   const handleSubmit = async () => {
-    const submitData = {
-      location_id: formData.location_id,
-      pos_provider: formData.pos_provider,
-      api_key: formData.api_key,
-      api_secret: formData.api_secret,
-      webhook_url: formData.webhook_url,
-      settings: formData.pos_provider === "captiva" ? {
-        base_url: formData.captiva_base_url,
-        store_id: formData.captiva_store_id,
+    // Validate for Captiva
+    if (formData.pos_provider === "captiva" && !validateCaptivaForm()) {
+      return;
+    }
+
+    const captivaSettings = formData.pos_provider === "captiva" ? {
+      base_url: formData.captiva_base_url,
+      store_id: formData.captiva_store_id,
+      api_key: formData.api_key || (editingIntegration?.settings as CaptivaSettings)?.api_key,
+      username: formData.captiva_username,
+      password: formData.captiva_password || (editingIntegration?.settings as CaptivaSettings)?.password,
+    } : undefined;
+
+    if (editingIntegration) {
+      // Update existing integration
+      await updateIntegration.mutateAsync({
+        id: editingIntegration.id,
+        location_id: formData.location_id,
+        pos_provider: formData.pos_provider,
+        api_key: formData.api_key || undefined,
+        api_secret: formData.api_secret || undefined,
+        webhook_url: formData.webhook_url || undefined,
+        settings: captivaSettings,
+      });
+    } else {
+      // Create new integration
+      await createIntegration.mutateAsync({
+        location_id: formData.location_id,
+        pos_provider: formData.pos_provider,
         api_key: formData.api_key,
-        username: formData.captiva_username,
-        password: formData.captiva_password,
-      } : undefined,
-    };
+        api_secret: formData.api_secret,
+        webhook_url: formData.webhook_url,
+        settings: captivaSettings,
+      });
+    }
     
-    await createIntegration.mutateAsync(submitData);
     setIsAddOpen(false);
-    setFormData({ 
-      location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "", 
-      captiva_base_url: "", captiva_store_id: "", captiva_username: "", captiva_password: "" 
-    });
+    resetForm();
   };
 
-  const [testingIntegrationId, setTestingIntegrationId] = useState<string | null>(null);
+  // Check if form is valid for submit button
+  const isFormValid = useCallback(() => {
+    if (!formData.location_id || !formData.pos_provider) return false;
+    if (formData.pos_provider === "captiva") {
+      const hasBaseUrl = formData.captiva_base_url.trim().length > 0;
+      const hasStoreId = formData.captiva_store_id.trim().length > 0;
+      const hasApiKey = formData.api_key.trim().length > 0 || !!editingIntegration;
+      const hasUsername = formData.captiva_username.trim().length > 0;
+      const hasPassword = formData.captiva_password.trim().length > 0 || !!editingIntegration;
+      return hasBaseUrl && hasStoreId && hasApiKey && hasUsername && hasPassword;
+    }
+    return true;
+  }, [formData, editingIntegration]);
 
   const handleTestConnection = async (integration: POSIntegration) => {
     setTestingIntegrationId(integration.id);
@@ -319,14 +410,22 @@ export default function POSIntegrationsPage() {
       title="POS Integrations" 
       description="Connect and manage your Point of Sale systems"
       action={
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <Dialog open={isAddOpen} onOpenChange={(open) => {
+          setIsAddOpen(open);
+          if (!open) resetForm();
+        }}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" />Add Integration</Button>
+            <Button onClick={() => resetForm()}><Plus className="h-4 w-4 mr-2" />Add Integration</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Add POS Integration</DialogTitle>
-              <DialogDescription>Configure a new POS system connection</DialogDescription>
+              <DialogTitle>{editingIntegration ? "Edit POS Integration" : "Add POS Integration"}</DialogTitle>
+              <DialogDescription>
+                {editingIntegration 
+                  ? "Update the integration settings. Leave password fields empty to keep existing values."
+                  : "Configure a new POS system connection"
+                }
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
               <div>
@@ -340,7 +439,7 @@ export default function POSIntegrationsPage() {
               </div>
               <div>
                 <Label>POS Provider</Label>
-                <Select value={formData.pos_provider} onValueChange={v => setFormData(p => ({ ...p, pos_provider: v }))}>
+                <Select value={formData.pos_provider} onValueChange={v => setFormData(p => ({ ...p, pos_provider: v }))} disabled={!!editingIntegration}>
                   <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
                   <SelectContent>
                     {POS_PROVIDERS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
@@ -355,24 +454,30 @@ export default function POSIntegrationsPage() {
                     <Input 
                       placeholder="https://your-captiva-cloud.com" 
                       value={formData.captiva_base_url} 
-                      onChange={e => setFormData(p => ({ ...p, captiva_base_url: e.target.value }))} 
+                      onChange={e => { setFormData(p => ({ ...p, captiva_base_url: e.target.value })); setFormErrors(p => ({ ...p, captiva_base_url: "" })); }} 
+                      className={formErrors.captiva_base_url ? "border-destructive" : ""}
                     />
+                    {formErrors.captiva_base_url && <p className="text-xs text-destructive mt-1">{formErrors.captiva_base_url}</p>}
                   </div>
                   <div>
                     <Label>Store / Outlet ID *</Label>
                     <Input 
                       placeholder="Store ID" 
                       value={formData.captiva_store_id} 
-                      onChange={e => setFormData(p => ({ ...p, captiva_store_id: e.target.value }))} 
+                      onChange={e => { setFormData(p => ({ ...p, captiva_store_id: e.target.value })); setFormErrors(p => ({ ...p, captiva_store_id: "" })); }} 
+                      className={formErrors.captiva_store_id ? "border-destructive" : ""}
                     />
+                    {formErrors.captiva_store_id && <p className="text-xs text-destructive mt-1">{formErrors.captiva_store_id}</p>}
                   </div>
                   <div>
-                    <Label>API Key *</Label>
+                    <Label>API Key *{editingIntegration ? " (leave empty to keep existing)" : ""}</Label>
                     <div className="relative">
                       <Input 
                         type={showApiKey ? "text" : "password"} 
                         value={formData.api_key} 
-                        onChange={e => setFormData(p => ({ ...p, api_key: e.target.value }))} 
+                        onChange={e => { setFormData(p => ({ ...p, api_key: e.target.value })); setFormErrors(p => ({ ...p, api_key: "" })); }} 
+                        placeholder={editingIntegration ? "••••••••" : ""}
+                        className={formErrors.api_key ? "border-destructive" : ""}
                       />
                       <Button 
                         type="button" 
@@ -384,21 +489,26 @@ export default function POSIntegrationsPage() {
                         {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    {formErrors.api_key && <p className="text-xs text-destructive mt-1">{formErrors.api_key}</p>}
                   </div>
                   <div>
                     <Label>Username *</Label>
                     <Input 
                       value={formData.captiva_username} 
-                      onChange={e => setFormData(p => ({ ...p, captiva_username: e.target.value }))} 
+                      onChange={e => { setFormData(p => ({ ...p, captiva_username: e.target.value })); setFormErrors(p => ({ ...p, captiva_username: "" })); }} 
+                      className={formErrors.captiva_username ? "border-destructive" : ""}
                     />
+                    {formErrors.captiva_username && <p className="text-xs text-destructive mt-1">{formErrors.captiva_username}</p>}
                   </div>
                   <div>
-                    <Label>Password *</Label>
+                    <Label>Password *{editingIntegration ? " (leave empty to keep existing)" : ""}</Label>
                     <div className="relative">
                       <Input 
                         type={showPassword ? "text" : "password"} 
                         value={formData.captiva_password} 
-                        onChange={e => setFormData(p => ({ ...p, captiva_password: e.target.value }))} 
+                        onChange={e => { setFormData(p => ({ ...p, captiva_password: e.target.value })); setFormErrors(p => ({ ...p, captiva_password: "" })); }} 
+                        placeholder={editingIntegration ? "••••••••" : ""}
+                        className={formErrors.captiva_password ? "border-destructive" : ""}
                       />
                       <Button 
                         type="button" 
@@ -410,11 +520,12 @@ export default function POSIntegrationsPage() {
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    {formErrors.captiva_password && <p className="text-xs text-destructive mt-1">{formErrors.captiva_password}</p>}
                   </div>
                 </>
               )}
               
-              {formData.pos_provider !== "captiva" && (
+              {formData.pos_provider !== "captiva" && formData.pos_provider && (
                 <>
                   <div>
                     <Label>API Key</Label>
@@ -428,8 +539,17 @@ export default function POSIntegrationsPage() {
               )}
             </div>
             <DialogFooter>
-              <Button onClick={handleSubmit} disabled={!formData.location_id || !formData.pos_provider}>
-                Create Integration
+              <Button variant="outline" onClick={() => { setIsAddOpen(false); resetForm(); }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSubmit} 
+                disabled={!isFormValid() || createIntegration.isPending || updateIntegration.isPending}
+              >
+                {(createIntegration.isPending || updateIntegration.isPending) && (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                {editingIntegration ? "Save Changes" : "Create Integration"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -475,6 +595,7 @@ export default function POSIntegrationsPage() {
                   const settings = integration.settings as CaptivaSettings | null;
                   const stats = getLatestCaptivaStats(integration.id);
                   const credentialsValid = hasValidCredentials(integration);
+                  const missingCreds = getMissingCredentials(integration);
                   
                   return (
                     <Card key={integration.id}>
@@ -484,42 +605,61 @@ export default function POSIntegrationsPage() {
                             <Plug className="h-5 w-5" />
                             {POS_PROVIDERS.find(p => p.value === integration.pos_provider)?.label || integration.pos_provider}
                           </CardTitle>
-                          <Badge variant={integration.status === "active" ? "default" : "secondary"}>
-                            {integration.status}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleOpenEditModal(integration)}
+                              title="Edit integration"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Badge variant={integration.status === "active" ? "default" : "secondary"}>
+                              {integration.status}
+                            </Badge>
+                          </div>
                         </div>
                         <CardDescription>{integration.locations?.name}</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {/* Credentials Display for Captiva */}
-                        {integration.pos_provider === "captiva" && settings && (
+                        {integration.pos_provider === "captiva" && (
                           <div className="text-xs space-y-1 p-2 rounded bg-muted/50">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Base URL:</span>
-                              <span className="font-mono">{settings.base_url || "Not set"}</span>
+                              <span className="font-mono">{settings?.base_url || "Not set"}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Store ID:</span>
-                              <span className="font-mono">{settings.store_id || "Not set"}</span>
+                              <span className="font-mono">{settings?.store_id || "Not set"}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">API Key:</span>
-                              <span className="font-mono">{settings.api_key || integration.api_key ? "••••••••" : "Not set"}</span>
+                              <span className="font-mono">{settings?.api_key || integration.api_key ? "••••••••" : "Not set"}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Username:</span>
-                              <span className="font-mono">{settings.username || "Not set"}</span>
+                              <span className="font-mono">{settings?.username || "Not set"}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Password:</span>
-                              <span className="font-mono">{settings.password ? "••••••••" : "Not set"}</span>
+                              <span className="font-mono">{settings?.password ? "••••••••" : "Not set"}</span>
                             </div>
-                            {!credentialsValid && (
-                              <p className="text-xs text-destructive mt-2 flex items-center gap-1">
-                                <AlertTriangle className="h-3 w-3" />
-                                Missing credentials - Sync disabled
-                              </p>
-                            )}
+                            {/* Credentials Status Debug Line */}
+                            <div className="flex justify-between pt-1 border-t mt-1">
+                              <span className="text-muted-foreground">Credentials:</span>
+                              {credentialsValid ? (
+                                <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Complete
+                                </span>
+                              ) : (
+                                <span className="text-destructive flex items-center gap-1">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Missing: {missingCreds.join(", ")}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
 
