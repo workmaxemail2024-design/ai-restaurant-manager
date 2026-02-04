@@ -420,6 +420,90 @@ export function useUnmappedPOSItems(locationId?: string, posProvider?: string) {
   });
 }
 
+// Types for unmapped staff
+export interface UnmappedPOSStaff {
+  operator_code: string;
+  operator_name: string;
+  shift_count: number;
+  total_hours: number;
+}
+
+// Fetch unmapped POS staff - aggregates operators from pos_staff_import that don't have a mapping
+export function useUnmappedPOSStaff(locationId?: string, posProvider?: string) {
+  return useQuery({
+    queryKey: ["unmapped-pos-staff", locationId, posProvider],
+    queryFn: async () => {
+      if (!locationId) return [];
+      
+      // Get existing staff mappings for this location/provider
+      let mappingsQuery = supabase
+        .from("pos_mappings")
+        .select("external_id")
+        .eq("mapping_type", "staff")
+        .eq("location_id", locationId);
+      
+      if (posProvider) {
+        mappingsQuery = mappingsQuery.eq("pos_provider", posProvider);
+      }
+      
+      const { data: mappings } = await mappingsQuery;
+      const mappedCodes = new Set(mappings?.map(m => m.external_id) || []);
+      
+      // Get all staff imports 
+      let staffQuery = supabase
+        .from("pos_staff_import")
+        .select("external_staff_id, data, clock_in, clock_out")
+        .eq("location_id", locationId);
+      
+      if (posProvider) {
+        staffQuery = staffQuery.eq("pos_provider", posProvider);
+      }
+      
+      const { data: staffImports, error } = await staffQuery;
+      if (error) throw error;
+      
+      // Aggregate by operator code
+      const operatorStats = new Map<string, { name: string; shiftCount: number; totalHours: number }>();
+      
+      for (const record of staffImports || []) {
+        const code = record.external_staff_id;
+        // Skip if already mapped
+        if (mappedCodes.has(code)) continue;
+        
+        const data = record.data as Record<string, unknown>;
+        const name = (data?.name as string) || code;
+        
+        // Calculate hours for this shift
+        let hours = 0;
+        if (record.clock_in && record.clock_out) {
+          const clockIn = new Date(record.clock_in);
+          const clockOut = new Date(record.clock_out);
+          hours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+        }
+        
+        const existing = operatorStats.get(code) || { name, shiftCount: 0, totalHours: 0 };
+        existing.shiftCount += 1;
+        existing.totalHours += hours;
+        operatorStats.set(code, existing);
+      }
+      
+      // Convert to array
+      const result: UnmappedPOSStaff[] = Array.from(operatorStats.entries()).map(([code, stats]) => ({
+        operator_code: code,
+        operator_name: stats.name,
+        shift_count: stats.shiftCount,
+        total_hours: stats.totalHours,
+      }));
+      
+      // Sort by hours descending
+      result.sort((a, b) => b.total_hours - a.total_hours);
+      
+      return result;
+    },
+    enabled: !!locationId,
+  });
+}
+
 // Create a new POS mapping
 export function useCreatePOSMapping() {
   const queryClient = useQueryClient();
