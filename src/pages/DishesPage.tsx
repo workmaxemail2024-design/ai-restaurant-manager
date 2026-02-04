@@ -298,6 +298,36 @@ export default function DishesPage() {
             <DialogTitle>Recipe: {selectedDish?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Cost Summary Card */}
+            {selectedDish && (
+              <Card className="bg-muted/30">
+                <CardContent className="pt-4">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Selling Price</p>
+                      <p className="text-lg font-semibold">{formatCurrency(Number(selectedDish.selling_price))}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Food Cost</p>
+                      <p className="text-lg font-semibold">{formatCurrency(Number(selectedDish.dish_cost || 0))}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Food Cost %</p>
+                      <Badge className={cn(
+                        "text-base px-3",
+                        (selectedDish.profit_margin || 0) >= 60 ? "bg-success/20 text-success" : 
+                        (selectedDish.profit_margin || 0) >= 40 ? "bg-warning/20 text-warning" : 
+                        "bg-destructive/20 text-destructive"
+                      )}>
+                        {(100 - (selectedDish.profit_margin || 0)).toFixed(1)}%
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
+            {/* Add Ingredient Form */}
             <form onSubmit={handleAddIngredient} className="flex gap-2 items-end">
               <div className="flex-1">
                 <Label>Ingredient</Label>
@@ -307,7 +337,9 @@ export default function DishesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {ingredients.map((ing) => (
-                      <SelectItem key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</SelectItem>
+                      <SelectItem key={ing.id} value={ing.id}>
+                        {ing.name} ({ing.unit}) - {formatCurrency(Number(ing.default_cost_price))}/{ing.unit}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -326,26 +358,45 @@ export default function DishesPage() {
                 Add
               </Button>
             </form>
+            
+            {/* Ingredients List */}
             <div className="border border-border rounded-lg divide-y divide-border">
+              <div className="grid grid-cols-4 gap-4 p-3 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <span>Ingredient</span>
+                <span className="text-right">Quantity</span>
+                <span className="text-right">Unit Cost</span>
+                <span className="text-right">Line Cost</span>
+              </div>
               {dishIngredients.length === 0 ? (
-                <p className="p-4 text-muted-foreground text-center">No ingredients added yet</p>
+                <p className="p-4 text-muted-foreground text-center">No ingredients added yet. Add ingredients to calculate food cost.</p>
               ) : (
-                dishIngredients.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3">
-                    <span>{item.ingredients?.name}</span>
-                    <div className="flex items-center gap-4">
-                      <span className="text-muted-foreground">{Number(item.quantity).toFixed(2)} {item.ingredients?.unit}</span>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-destructive"
-                        onClick={() => removeIngredient.mutate({ id: item.id, dish_id: selectedDish!.id })}
-                      >
-                        Remove
-                      </Button>
+                dishIngredients.map((item) => {
+                  const ingredientData = ingredients.find(i => i.id === item.ingredient_id);
+                  const unitCost = Number(ingredientData?.default_cost_price || 0);
+                  const lineCost = unitCost * Number(item.quantity);
+                  return (
+                    <div key={item.id} className="grid grid-cols-4 gap-4 p-3 items-center">
+                      <span className="font-medium">{item.ingredients?.name}</span>
+                      <span className="text-right text-muted-foreground">
+                        {Number(item.quantity).toFixed(2)} {item.ingredients?.unit}
+                      </span>
+                      <span className="text-right text-muted-foreground">
+                        {formatCurrency(unitCost)}
+                      </span>
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="font-medium">{formatCurrency(lineCost)}</span>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive h-7 w-7 p-0"
+                          onClick={() => removeIngredient.mutate({ id: item.id, dish_id: selectedDish!.id })}
+                        >
+                          ×
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
