@@ -18,9 +18,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { 
   RefreshCw, Trash2, Database, Users, ShoppingCart, Package, 
-  AlertTriangle, CheckCircle2, Sparkles, Zap
+  AlertTriangle, CheckCircle2, Sparkles, Zap, Link2
 } from "lucide-react";
 import { useDemoStatus, useResetDemoData, useSeedDemoData, useDemoModeToggle, useIsDemoMode, usePrepareLivePos } from "@/hooks/useDemoMode";
+import { useClearDemoPOSData } from "@/hooks/usePOS";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 
 export default function DemoSettingsPage() {
@@ -31,11 +32,13 @@ export default function DemoSettingsPage() {
   const seedData = useSeedDemoData();
   const toggleDemoMode = useDemoModeToggle();
   const prepareLivePos = usePrepareLivePos();
+  const clearDemoPOS = useClearDemoPOSData();
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [seedConfirmOpen, setSeedConfirmOpen] = useState(false);
   const [livePosConfirmOpen, setLivePosConfirmOpen] = useState(false);
   const [livePosConfirmText, setLivePosConfirmText] = useState("");
+  const [clearDemoPosConfirmOpen, setClearDemoPosConfirmOpen] = useState(false);
 
   const isAdmin = permissions?.full_access === true || permissions?.settings?.admin === true;
 
@@ -55,6 +58,13 @@ export default function DemoSettingsPage() {
     setLivePosConfirmOpen(false);
     setLivePosConfirmText("");
     await prepareLivePos.mutateAsync();
+    refetchStatus();
+  };
+
+  const handleClearDemoPos = async () => {
+    if (!currentRestaurant?.id) return;
+    setClearDemoPosConfirmOpen(false);
+    await clearDemoPOS.mutateAsync(currentRestaurant.id);
     refetchStatus();
   };
 
@@ -273,6 +283,75 @@ export default function DemoSettingsPage() {
                 <li>• Seeding adds new data without removing existing data</li>
               </ul>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Clear Demo POS Mappings - Safe Cleanup */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              Clear Demo POS Mappings
+            </CardTitle>
+            <CardDescription>
+              Safely remove only simulated/demo POS data (SIM- prefixed items) — live Captiva data will not be affected
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="p-4 rounded-lg border bg-muted/30">
+              <h4 className="font-medium mb-2">This will delete:</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• POS mappings with external IDs starting with <span className="font-mono bg-muted px-1 rounded">SIM-</span></li>
+                <li>• POS sales imports from simulation sources</li>
+                <li>• POS staff imports from simulation sources</li>
+                <li>• Simulation sync logs</li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-lg border bg-primary/5">
+              <h4 className="font-medium mb-2 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-primary" />
+                What will NOT be affected:
+              </h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Live Captiva POS mappings and imports</li>
+                <li>• Applied sales data in the dashboard</li>
+                <li>• Restaurant, locations, and user accounts</li>
+                <li>• POS integration credentials and settings</li>
+              </ul>
+            </div>
+
+            <AlertDialog open={clearDemoPosConfirmOpen} onOpenChange={setClearDemoPosConfirmOpen}>
+              <AlertDialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  disabled={clearDemoPOS.isPending}
+                >
+                  {clearDemoPOS.isPending ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Clear Demo POS Mappings
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear Demo POS Data?</AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-2">
+                    <p>This will delete all POS mappings, imports, and logs with SIM- prefix or simulation source for <strong>{currentRestaurant?.name}</strong>.</p>
+                    <p>Live Captiva data and applied sales will not be affected.</p>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearDemoPos}>
+                    Clear Demo Data
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
 

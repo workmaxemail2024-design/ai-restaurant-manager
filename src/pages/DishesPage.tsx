@@ -8,17 +8,20 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, ChevronRight, Link2, AlertCircle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Plus, ChevronRight, Link2, AlertCircle, Search, X, Trash2, Filter } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, Dish, DishInsert } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
-import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
+import { usePOSMappings, useUpdatePOSMapping, useDeletePOSMapping, useBulkDeletePOSMappings } from "@/hooks/usePOS";
 import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 
 const categories = ["Appetizers", "Mains", "Desserts", "Beverages", "Sides", "Other"];
+
+type MappingStatusFilter = "all" | "mapped" | "unmapped";
 
 export default function DishesPage() {
   const { selectedLocationId } = useLocation();
@@ -32,6 +35,8 @@ export default function DishesPage() {
   const addIngredient = useAddDishIngredient();
   const removeIngredient = useRemoveDishIngredient();
   const updateMapping = useUpdatePOSMapping();
+  const deleteMapping = useDeletePOSMapping();
+  const bulkDeleteMappings = useBulkDeletePOSMappings();
   
   const [isOpen, setIsOpen] = useState(false);
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
@@ -39,12 +44,26 @@ export default function DishesPage() {
   const [editingItem, setEditingItem] = useState<Dish | null>(null);
   const [formData, setFormData] = useState<DishInsert>({ name: "", category: "", selling_price: 0 });
   const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0 });
+  const [mappingSearch, setMappingSearch] = useState("");
+  const [mappingStatusFilter, setMappingStatusFilter] = useState<MappingStatusFilter>("all");
+  const [showSimOnlyMappings, setShowSimOnlyMappings] = useState(false);
   
   const { data: dishIngredients = [] } = useDishIngredients(selectedDish?.id || null);
 
-  // Get unmapped dishes from POS
+  // Get dish mappings from POS
   const dishMappings = posMappings.filter(m => m.mapping_type === "dish");
-  const unmappedDishMappings = dishMappings.filter(m => !m.is_verified);
+  const unmappedDishMappings = dishMappings.filter(m => !m.is_verified || !m.internal_id);
+  const simMappingsCount = dishMappings.filter(m => m.external_id.startsWith("SIM-")).length;
+
+  // Filter mappings
+  const filteredDishMappings = dishMappings.filter(mapping => {
+    const matchesSearch = mappingSearch === "" ||
+      (mapping.external_name || mapping.external_id).toLowerCase().includes(mappingSearch.toLowerCase());
+    const matchesStatus = mappingStatusFilter === "all" ||
+      (mappingStatusFilter === "mapped" ? mapping.internal_id !== null : mapping.internal_id === null);
+    const matchesSim = !showSimOnlyMappings || mapping.external_id.startsWith("SIM-");
+    return matchesSearch && matchesStatus && matchesSim;
+  });
 
   const columns = [
     { key: "name", header: "Name" },
@@ -141,6 +160,14 @@ export default function DishesPage() {
 
   const handleMapDish = (mappingId: string, dishId: string) => {
     updateMapping.mutate({ id: mappingId, internal_id: dishId, is_verified: true });
+  };
+
+  const handleClearDishMapping = (mappingId: string) => {
+    updateMapping.mutate({ id: mappingId, internal_id: null, is_verified: false });
+  };
+
+  const handleDeleteDishMapping = (mappingId: string) => {
+    deleteMapping.mutate(mappingId);
   };
 
   return (
@@ -245,45 +272,182 @@ export default function DishesPage() {
               <CardTitle>Dish POS Mapping</CardTitle>
               <CardDescription>Map Captiva external IDs to your menu dishes</CardDescription>
             </CardHeader>
-            <CardContent>
-              {dishMappings.length === 0 ? (
+            <CardContent className="space-y-4">
+              {/* Filters & Search */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search mappings..."
+                    value={mappingSearch}
+                    onChange={(e) => setMappingSearch(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  <Badge 
+                    variant={mappingStatusFilter === "all" ? "default" : "outline"} 
+                    className="cursor-pointer"
+                    onClick={() => setMappingStatusFilter("all")}
+                  >
+                    All
+                  </Badge>
+                  <Badge 
+                    variant={mappingStatusFilter === "mapped" ? "default" : "outline"} 
+                    className="cursor-pointer"
+                    onClick={() => setMappingStatusFilter("mapped")}
+                  >
+                    Mapped
+                  </Badge>
+                  <Badge 
+                    variant={mappingStatusFilter === "unmapped" ? "default" : "outline"} 
+                    className="cursor-pointer"
+                    onClick={() => setMappingStatusFilter("unmapped")}
+                  >
+                    Unmapped
+                  </Badge>
+                  <span className="text-muted-foreground mx-1">|</span>
+                  <Badge 
+                    variant={showSimOnlyMappings ? "destructive" : "outline"} 
+                    className="cursor-pointer"
+                    onClick={() => setShowSimOnlyMappings(!showSimOnlyMappings)}
+                  >
+                    SIM- only {simMappingsCount > 0 && `(${simMappingsCount})`}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Bulk Actions */}
+              {dishMappings.length > 0 && (
+                <div className="flex gap-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Clear All Mappings
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear All Dish Mappings?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will delete all {dishMappings.length} dish mappings. Items will need to be remapped.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => dishMappings.forEach(m => deleteMapping.mutate(m.id))}
+                          className="bg-destructive text-destructive-foreground"
+                        >
+                          Clear All
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
+                  {simMappingsCount > 0 && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Clear SIM- Mappings ({simMappingsCount})
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Clear Demo/Simulation Mappings?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will delete {simMappingsCount} mappings with SIM- prefix (demo/simulation data). Live mappings will not be affected.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => dishMappings.filter(m => m.external_id.startsWith("SIM-")).forEach(m => deleteMapping.mutate(m.id))}
+                          >
+                            Clear SIM- Only
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
+              )}
+
+              {/* Mapping List */}
+              {filteredDishMappings.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground">
-                  No dishes imported from POS yet. Run a sync first.
+                  {dishMappings.length === 0 
+                    ? "No dishes imported from POS yet. Run a sync first."
+                    : "No mappings match your filters."
+                  }
                 </p>
               ) : (
-                <div className="space-y-3">
-                  {dishMappings.map(mapping => (
-                    <div key={mapping.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div>
-                        <p className="font-medium">{mapping.external_name || mapping.external_id}</p>
-                        <p className="text-sm text-muted-foreground font-mono">ID: {mapping.external_id}</p>
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {filteredDishMappings.map(mapping => {
+                    const linkedDish = dishes.find(d => d.id === mapping.internal_id);
+                    return (
+                      <div key={mapping.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{mapping.external_name || mapping.external_id}</p>
+                            {mapping.external_id.startsWith("SIM-") && (
+                              <Badge variant="secondary" className="text-xs">SIM</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground font-mono">
+                            ID: {mapping.external_id} → {linkedDish?.name || <span className="text-warning">Not mapped</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {mapping.internal_id ? (
+                            <Badge variant="default">Mapped</Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-warning">
+                              <AlertCircle className="h-3 w-3 mr-1" />Unmapped
+                            </Badge>
+                          )}
+                          <Select 
+                            value={mapping.internal_id || ""} 
+                            onValueChange={v => handleMapDish(mapping.id, v)}
+                          >
+                            <SelectTrigger className="w-48">
+                              <SelectValue placeholder="Select dish" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {dishes.map(d => (
+                                <SelectItem key={d.id} value={d.id}>
+                                  {d.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {mapping.internal_id && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8"
+                              onClick={() => handleClearDishMapping(mapping.id)}
+                              title="Clear mapping"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteDishMapping(mapping.id)}
+                            title="Delete mapping"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        {mapping.is_verified ? (
-                          <Badge variant="default" className="bg-green-500">Mapped</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-amber-600">
-                            <AlertCircle className="h-3 w-3 mr-1" />Unmapped
-                          </Badge>
-                        )}
-                        <Select 
-                          value={mapping.internal_id || ""} 
-                          onValueChange={v => handleMapDish(mapping.id, v)}
-                        >
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Select dish" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {dishes.map(d => (
-                              <SelectItem key={d.id} value={d.id}>
-                                {d.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

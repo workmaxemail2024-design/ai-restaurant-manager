@@ -323,10 +323,10 @@ export function useDeletePOSIntegration() {
 export function useUpdatePOSMapping() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, internal_id, is_verified }: { id: string; internal_id: string; is_verified?: boolean }) => {
+    mutationFn: async ({ id, internal_id, is_verified }: { id: string; internal_id: string | null; is_verified?: boolean }) => {
       const { data, error } = await supabase
         .from("pos_mappings")
-        .update({ internal_id, is_verified: is_verified ?? true })
+        .update({ internal_id, is_verified: is_verified ?? (internal_id !== null) })
         .eq("id", id)
         .select()
         .single();
@@ -336,10 +336,144 @@ export function useUpdatePOSMapping() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pos-mappings"] });
       queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
-      toast({ title: "Mapping updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-items"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-staff"] });
+      toast({ title: "Mapping updated" });
     },
     onError: (error) => {
       toast({ title: "Error updating mapping", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+// Delete a single POS mapping
+export function useDeletePOSMapping() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("pos_mappings")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pos-mappings"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-items"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-staff"] });
+      toast({ title: "Mapping deleted" });
+    },
+    onError: (error) => {
+      toast({ title: "Error deleting mapping", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+// Bulk delete POS mappings
+export function useBulkDeletePOSMappings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { 
+      locationId: string; 
+      posProvider?: string;
+      mappingType?: "dish" | "staff";
+      simOnly?: boolean;
+    }): Promise<{ deleted: number }> => {
+      let query = supabase
+        .from("pos_mappings")
+        .delete()
+        .eq("location_id", params.locationId);
+      
+      if (params.posProvider) {
+        query = query.eq("pos_provider", params.posProvider);
+      }
+      if (params.mappingType) {
+        query = query.eq("mapping_type", params.mappingType);
+      }
+      if (params.simOnly) {
+        query = query.ilike("external_id", "SIM-%");
+      }
+      
+      const { data, error, count } = await query.select("id");
+      if (error) throw error;
+      
+      return { deleted: data?.length || 0 };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["pos-mappings"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-items"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-staff"] });
+      toast({ title: `Deleted ${data.deleted} mappings` });
+    },
+    onError: (error) => {
+      toast({ title: "Error deleting mappings", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+// Clear demo POS data (mappings, imports, logs with SIM- prefix)
+export function useClearDemoPOSData() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (restaurantId: string): Promise<{ 
+      mappingsDeleted: number;
+      salesImportsDeleted: number;
+      staffImportsDeleted: number;
+      syncLogsDeleted: number;
+    }> => {
+      // Delete SIM- mappings
+      const { data: mappingsData } = await supabase
+        .from("pos_mappings")
+        .delete()
+        .eq("restaurant_id", restaurantId)
+        .ilike("external_id", "SIM-%")
+        .select("id");
+      
+      // Delete SIM- sales imports
+      const { data: salesData } = await supabase
+        .from("pos_sales_import")
+        .delete()
+        .eq("restaurant_id", restaurantId)
+        .or("external_sale_id.ilike.SIM-%,pos_provider.eq.simulation")
+        .select("id");
+      
+      // Delete SIM- staff imports  
+      const { data: staffData } = await supabase
+        .from("pos_staff_import")
+        .delete()
+        .eq("restaurant_id", restaurantId)
+        .or("external_staff_id.ilike.SIM-%,pos_provider.eq.simulation")
+        .select("id");
+      
+      // Delete simulation sync logs
+      const { data: logsData } = await supabase
+        .from("pos_sync_logs")
+        .delete()
+        .eq("restaurant_id", restaurantId)
+        .or("event_type.eq.simulation_sync,pos_provider.eq.simulation")
+        .select("id");
+      
+      return {
+        mappingsDeleted: mappingsData?.length || 0,
+        salesImportsDeleted: salesData?.length || 0,
+        staffImportsDeleted: staffData?.length || 0,
+        syncLogsDeleted: logsData?.length || 0,
+      };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["pos-mappings"] });
+      queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["pos-sync-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-items"] });
+      queryClient.invalidateQueries({ queryKey: ["unmapped-pos-staff"] });
+      const total = data.mappingsDeleted + data.salesImportsDeleted + data.staffImportsDeleted + data.syncLogsDeleted;
+      toast({ 
+        title: "Demo POS Data Cleared", 
+        description: `Removed ${data.mappingsDeleted} mappings, ${data.salesImportsDeleted} sales imports, ${data.staffImportsDeleted} staff imports, ${data.syncLogsDeleted} sync logs`
+      });
+    },
+    onError: (error) => {
+      toast({ title: "Error clearing demo data", description: error.message, variant: "destructive" });
     },
   });
 }
