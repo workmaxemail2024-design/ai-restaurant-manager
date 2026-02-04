@@ -27,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
 import { Calendar } from "@/components/ui/calendar";
 import { POSDishMappingTab } from "@/components/pos/POSDishMappingTab";
+import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -788,7 +789,7 @@ export default function POSIntegrationsPage() {
               <Card>
                 <CardContent className="py-8 text-center">
                   <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">Select a location to manage POS item mappings</p>
+                  <p className="text-muted-foreground">Select a location to manage POS mappings</p>
                 </CardContent>
               </Card>
             ) : (
@@ -806,11 +807,28 @@ export default function POSIntegrationsPage() {
                   );
                 }
                 return (
-                  <POSDishMappingTab
-                    locationId={selectedLocation}
-                    posProvider={integration.pos_provider}
-                    restaurantId={integration.restaurant_id || ""}
-                  />
+                  <Tabs defaultValue="dishes" className="space-y-4">
+                    <TabsList>
+                      <TabsTrigger value="dishes">Dish Mappings</TabsTrigger>
+                      <TabsTrigger value="staff">Staff Mappings</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="dishes">
+                      <POSDishMappingTab
+                        locationId={selectedLocation}
+                        posProvider={integration.pos_provider}
+                        restaurantId={integration.restaurant_id || ""}
+                      />
+                    </TabsContent>
+                    
+                    <TabsContent value="staff">
+                      <POSStaffMappingTab
+                        locationId={selectedLocation}
+                        posProvider={integration.pos_provider}
+                        restaurantId={integration.restaurant_id || ""}
+                      />
+                    </TabsContent>
+                  </Tabs>
                 );
               })()
             )}
