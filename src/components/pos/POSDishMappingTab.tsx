@@ -151,34 +151,34 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
   const simMappingsCount = dishMappings.filter(m => m.external_id.startsWith("SIM-")).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="py-3">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              <p className="text-sm text-muted-foreground">Unmapped Items</p>
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <p className="text-xs text-muted-foreground">Unmapped Items</p>
             </div>
-            <p className="text-2xl font-bold mt-1">{unmappedItems?.length || 0}</p>
+            <p className="text-xl font-bold mt-1">{unmappedItems?.length || 0}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="py-3">
             <div className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-primary" />
-              <p className="text-sm text-muted-foreground">Mapped Items</p>
+              <Link2 className="h-4 w-4 text-primary" />
+              <p className="text-xs text-muted-foreground">Mapped Items</p>
             </div>
-            <p className="text-2xl font-bold mt-1">{dishMappings.filter(m => m.internal_id).length}</p>
+            <p className="text-xl font-bold mt-1">{dishMappings.filter(m => m.internal_id).length}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="py-3">
             <div className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-secondary-foreground" />
-              <p className="text-sm text-muted-foreground">Unmapped Revenue</p>
+              <Package className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Unmapped Revenue</p>
             </div>
-            <p className="text-2xl font-bold mt-1">
+            <p className="text-xl font-bold mt-1">
               {formatCurrency(unmappedItems?.reduce((sum, i) => sum + i.total_revenue, 0) || 0)}
             </p>
           </CardContent>
@@ -187,54 +187,57 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
 
       {/* Filters & Search */}
       <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap items-center gap-3">
+        <CardContent className="py-3">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-8 h-8 text-sm"
               />
             </div>
 
             {/* Filter Chips */}
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-1.5">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
               
               <Badge 
                 variant={statusFilter === "all" ? "default" : "outline"} 
-                className="cursor-pointer"
+                className="cursor-pointer text-xs h-6"
                 onClick={() => setStatusFilter("all")}
               >
                 All
               </Badge>
               <Badge 
                 variant={statusFilter === "mapped" ? "default" : "outline"} 
-                className="cursor-pointer"
+                className="cursor-pointer text-xs h-6"
                 onClick={() => setStatusFilter("mapped")}
               >
                 Mapped
               </Badge>
               <Badge 
                 variant={statusFilter === "unmapped" ? "default" : "outline"} 
-                className="cursor-pointer"
+                className="cursor-pointer text-xs h-6"
                 onClick={() => setStatusFilter("unmapped")}
               >
                 Unmapped
               </Badge>
               
-              <span className="text-muted-foreground mx-1">|</span>
-              
-              <Badge 
-                variant={showSimOnly ? "destructive" : "outline"} 
-                className="cursor-pointer"
-                onClick={() => setShowSimOnly(!showSimOnly)}
-              >
-                SIM- only {simMappingsCount > 0 && `(${simMappingsCount})`}
-              </Badge>
+              {simMappingsCount > 0 && (
+                <>
+                  <span className="text-muted-foreground mx-0.5">|</span>
+                  <Badge 
+                    variant={showSimOnly ? "destructive" : "outline"} 
+                    className="cursor-pointer text-xs h-6"
+                    onClick={() => setShowSimOnly(!showSimOnly)}
+                  >
+                    SIM- ({simMappingsCount})
+                  </Badge>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
@@ -245,16 +248,16 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
         <div className="flex gap-2">
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={bulkDeleteMappings.isPending}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                Clear All Mappings
+              <Button variant="outline" size="sm" className="h-8 text-xs" disabled={bulkDeleteMappings.isPending}>
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Clear All
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent className="max-w-md">
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear All Dish Mappings?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will delete all {dishMappings.length} dish mappings for this integration. Items will need to be remapped.
+                  This will delete all {dishMappings.length} dish mappings. Items will need to be remapped.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -269,16 +272,16 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
           {simMappingsCount > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" disabled={bulkDeleteMappings.isPending}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear SIM- Mappings ({simMappingsCount})
+                <Button variant="outline" size="sm" className="h-8 text-xs" disabled={bulkDeleteMappings.isPending}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Clear SIM- ({simMappingsCount})
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent className="max-w-md">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Clear Demo/Simulation Mappings?</AlertDialogTitle>
+                  <AlertDialogTitle>Clear Demo Mappings?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will delete {simMappingsCount} mappings with SIM- prefix (demo/simulation data). Live Captiva mappings will not be affected.
+                    This will delete {simMappingsCount} demo/simulation mappings. Live data not affected.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -296,56 +299,55 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
       {/* Unmapped Items Section */}
       {(statusFilter === "all" || statusFilter === "unmapped") && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
+          <CardHeader className="py-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <AlertTriangle className="h-4 w-4 text-warning" />
               Unmapped POS Items
             </CardTitle>
-            <CardDescription>
-              Map POS items to system dishes to track sales per dish. Many POS items can map to one dish.
+            <CardDescription className="text-xs">
+              Map POS items to dishes for sales tracking. Many items can map to one dish.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {isLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map(i => (
-                  <Skeleton key={i} className="h-16 w-full" />
+                  <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
             ) : filteredUnmapped.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-primary" />
-                <p>All POS items are mapped!</p>
+              <div className="text-center py-6 text-muted-foreground">
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-primary" />
+                <p className="text-sm">All items mapped!</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
                 {filteredUnmapped.map((item) => (
                   <div
                     key={item.item_name}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-2.5 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">{item.item_name}</p>
+                        <p className="font-medium text-sm truncate">{item.item_name}</p>
                         {item.item_name.startsWith("SIM-") && (
-                          <Badge variant="secondary" className="text-xs">SIM</Badge>
+                          <Badge variant="secondary" className="text-[10px] h-4">SIM</Badge>
                         )}
                       </div>
-                      <div className="flex gap-4 text-sm text-muted-foreground mt-1">
+                      <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
                         <span>{item.sale_count} sales</span>
-                        <span>{item.total_quantity} qty</span>
-                        <span>{formatCurrency(item.total_revenue)} revenue</span>
+                        <span>{formatCurrency(item.total_revenue)}</span>
                         <span>Avg: {formatCurrency(item.avg_price)}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <Select onValueChange={(dishId) => handleMapToDish(item, dishId)}>
-                        <SelectTrigger className="w-48">
+                        <SelectTrigger className="w-36 h-8 text-xs">
                           <SelectValue placeholder="Map to dish..." />
                         </SelectTrigger>
                         <SelectContent>
                           {dishes?.map((dish) => (
-                            <SelectItem key={dish.id} value={dish.id}>
+                            <SelectItem key={dish.id} value={dish.id} className="text-xs">
                               {dish.name}
                             </SelectItem>
                           ))}
@@ -354,10 +356,11 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
                       <Button
                         size="sm"
                         variant="outline"
+                        className="h-8 text-xs"
                         onClick={() => openCreateDishModal(item)}
                       >
-                        <Plus className="h-4 w-4 mr-1" />
-                        New Dish
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        New
                       </Button>
                     </div>
                   </div>
@@ -371,53 +374,48 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
       {/* Existing Mappings Section */}
       {(statusFilter === "all" || statusFilter === "mapped") && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-primary" />
+          <CardHeader className="py-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Link2 className="h-4 w-4 text-primary" />
               Current Dish Mappings
             </CardTitle>
-            <CardDescription>
-              Mapped POS items will appear in dashboard reports under their linked dish.
+            <CardDescription className="text-xs">
+              Mapped items appear in reports under their linked dish.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {filteredMappings.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">
-                No dish mappings yet. Map items above to see them here.
+              <p className="text-muted-foreground text-center py-4 text-sm">
+                No dish mappings yet.
               </p>
             ) : (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
                 {filteredMappings.map((mapping) => {
                   const linkedDish = dishes?.find(d => d.id === mapping.internal_id);
                   return (
                     <div
                       key={mapping.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-2.5 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <Utensils className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{mapping.external_name || mapping.external_id}</p>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Utensils className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-sm truncate">{mapping.external_name || mapping.external_id}</p>
                             {mapping.external_id.startsWith("SIM-") && (
-                              <Badge variant="secondary" className="text-xs">SIM</Badge>
+                              <Badge variant="secondary" className="text-[10px] h-4">SIM</Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            ID: {mapping.external_id} → {linkedDish?.name || <span className="text-warning">Not mapped</span>}
+                          <p className="text-xs text-muted-foreground truncate">
+                            → {linkedDish?.name || <span className="text-warning">Unmapped</span>}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {mapping.internal_id ? (
-                          <Badge variant="default">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Mapped
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-warning">
-                            <AlertTriangle className="h-3 w-3 mr-1" />
-                            Unmapped
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {mapping.internal_id && (
+                          <Badge variant="default" className="text-[10px] h-5">
+                            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                            Linked
                           </Badge>
                         )}
                         <Select
@@ -426,12 +424,12 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
                             updateMapping.mutate({ id: mapping.id, internal_id: v, is_verified: true })
                           }
                         >
-                          <SelectTrigger className="w-40">
-                            <SelectValue placeholder="Select dish" />
+                          <SelectTrigger className="w-32 h-7 text-xs">
+                            <SelectValue placeholder="Select" />
                           </SelectTrigger>
                           <SelectContent>
                             {dishes?.map((d) => (
-                              <SelectItem key={d.id} value={d.id}>
+                              <SelectItem key={d.id} value={d.id} className="text-xs">
                                 {d.name}
                               </SelectItem>
                             ))}
@@ -441,21 +439,21 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8"
+                            className="h-7 w-7 hover:bg-secondary"
                             onClick={() => handleClearMapping(mapping.id)}
                             title="Clear mapping"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className="h-7 w-7 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteMapping(mapping.id)}
                           title="Delete mapping"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
@@ -469,25 +467,28 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
 
       {/* Create Dish Modal */}
       <Dialog open={createDishModalOpen} onOpenChange={setCreateDishModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Create New Dish & Map</DialogTitle>
-            <DialogDescription>
-              Create a new dish and automatically map "{selectedItem?.item_name}" to it.
+            <DialogTitle>Create & Map Dish</DialogTitle>
+            <DialogDescription className="text-xs">
+              Create a new dish and map "{selectedItem?.item_name}" to it.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Dish Name</Label>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Dish Name</Label>
               <Input
+                className="h-9"
                 value={newDishName}
                 onChange={(e) => setNewDishName(e.target.value)}
                 placeholder="Enter dish name"
+                autoFocus
               />
             </div>
-            <div>
-              <Label>Selling Price</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Selling Price</Label>
               <Input
+                className="h-9"
                 type="number"
                 step="0.01"
                 value={newDishPrice}
@@ -495,20 +496,22 @@ export function POSDishMappingTab({ locationId, posProvider, restaurantId }: POS
                 placeholder="0.00"
               />
             </div>
-            <div>
-              <Label>Category (optional)</Label>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Category (optional)</Label>
               <Input
+                className="h-9"
                 value={newDishCategory}
                 onChange={(e) => setNewDishCategory(e.target.value)}
-                placeholder="e.g., Main Course, Drinks"
+                placeholder="e.g., Main, Drinks"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDishModalOpen(false)}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCreateDishModalOpen(false)}>
               Cancel
             </Button>
             <Button
+              size="sm"
               onClick={handleCreateAndMapDish}
               disabled={!newDishName.trim() || createDish.isPending || createMapping.isPending}
             >

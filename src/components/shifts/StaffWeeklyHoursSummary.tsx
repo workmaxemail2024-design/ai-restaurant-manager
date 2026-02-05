@@ -113,18 +113,18 @@ export function StaffWeeklyHoursSummary({ shifts, staff, selectedLocation }: Sta
   const overtimeStaff = summaries.filter(s => s.status === "overtime");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Overtime Warning Banner */}
       {hasOvertimeIssues && (
         <Card className="border-destructive/50 bg-destructive/5">
-          <CardContent className="py-3">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <CardContent className="py-2.5">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-destructive">
-                  Overtime Warning: {overtimeStaff.length} staff member{overtimeStaff.length > 1 ? 's' : ''} exceed{overtimeStaff.length === 1 ? 's' : ''} contracted hours by more than {OVERTIME_THRESHOLD}h
+                <p className="text-xs font-medium text-destructive">
+                  Overtime: {overtimeStaff.length} staff exceed{overtimeStaff.length === 1 ? 's' : ''} contracted hours by &gt;{OVERTIME_THRESHOLD}h
                 </p>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-[11px] text-muted-foreground mt-0.5">
                   {overtimeStaff.map(s => `${s.name} (+${s.overtimeHours}h)`).join(", ")}
                 </p>
               </div>
@@ -135,35 +135,35 @@ export function StaffWeeklyHoursSummary({ shifts, staff, selectedLocation }: Sta
 
       {/* Main Summary Card */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Staff Weekly Hours Summary
+        <CardHeader className="py-2.5 px-4">
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Clock className="h-3.5 w-3.5" />
+              Weekly Hours Summary
             </CardTitle>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 text-xs">
               {totalOvertimeHours > 0 && (
-                <Badge variant="outline" className="bg-destructive/10 border-destructive/30 text-destructive">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  {totalOvertimeHours}h overtime
+                <Badge variant="outline" className="h-5 bg-destructive/10 border-destructive/30 text-destructive text-[10px]">
+                  <AlertTriangle className="h-2.5 w-2.5 mr-1" />
+                  {totalOvertimeHours}h OT
                 </Badge>
               )}
-              <div className="flex items-center gap-1.5 text-sm">
-                <Euro className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">{formatCurrency(totalWageCost)}</span>
-                <span className="text-muted-foreground">weekly wage cost</span>
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <Euro className="h-3.5 w-3.5" />
+                <span className="font-medium text-foreground">{formatCurrency(totalWageCost)}</span>
+                <span>/week</span>
               </div>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
+        <CardContent className="py-2.5 px-4 pt-0">
+          <div className="flex flex-wrap gap-1.5">
             {summaries.map(summary => (
               <Badge
                 key={summary.staffId}
                 variant="outline"
                 className={`
-                  px-3 py-1.5 text-sm font-medium
+                  px-2 py-1 text-xs font-medium
                   ${summary.status === "ok" 
                     ? "bg-green-50 border-green-300 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-400" 
                     : summary.status === "overtime"
@@ -175,34 +175,34 @@ export function StaffWeeklyHoursSummary({ shifts, staff, selectedLocation }: Sta
                 `}
                 title={`${summary.name}: ${formatCurrency(summary.wageCost)} (${summary.scheduledHours}h × ${formatCurrency(summary.hourlyRate)}/h)`}
               >
-                {summary.name} — {summary.scheduledHours} / {summary.contractedHours}h
+                {summary.name.split(' ')[0]} — {summary.scheduledHours}/{summary.contractedHours}h
                 {summary.status === "ok" && " ✓"}
-                {summary.status === "overtime" && ` 🚨 +${summary.overtimeHours}h`}
-                {summary.status === "over" && ` ⚠️ +${summary.overtimeHours}h`}
-                {summary.status === "under" && " ⚠️ under"}
+                {summary.status === "overtime" && ` 🚨`}
+                {summary.status === "over" && ` ⚠️`}
+                {summary.status === "under" && " ⚠️"}
               </Badge>
             ))}
           </div>
           
           {/* Wage Cost Breakdown */}
-          <div className="mt-4 pt-4 border-t border-border">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div className="mt-3 pt-3 border-t border-border">
+            <div className="grid grid-cols-4 gap-3 text-xs">
               <div>
                 <p className="text-muted-foreground">Total Hours</p>
                 <p className="font-medium">{summaries.reduce((sum, s) => sum + s.scheduledHours, 0).toFixed(1)}h</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Contracted Hours</p>
+                <p className="text-muted-foreground">Contracted</p>
                 <p className="font-medium">{summaries.reduce((sum, s) => sum + s.contractedHours, 0)}h</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Overtime Hours</p>
+                <p className="text-muted-foreground">Overtime</p>
                 <p className={`font-medium ${totalOvertimeHours > 0 ? "text-destructive" : ""}`}>
                   {totalOvertimeHours}h
                 </p>
               </div>
               <div>
-                <p className="text-muted-foreground">Weekly Wage Cost</p>
+                <p className="text-muted-foreground">Wage Cost</p>
                 <p className="font-medium">{formatCurrency(totalWageCost)}</p>
               </div>
             </div>

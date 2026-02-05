@@ -60,7 +60,7 @@ const navSections: NavSection[] = [
     icon: Users,
     items: [
       { icon: Users, label: "Staff List", path: "/staff" },
-      { icon: Calendar, label: "Shifts", path: "/staff/shifts" },
+      { icon: Calendar, label: "Timesheets", path: "/staff/shifts" },
       { icon: Clock, label: "Attendance", path: "/staff/attendance" },
       { icon: Target, label: "KPIs", path: "/staff/kpis" },
     ]

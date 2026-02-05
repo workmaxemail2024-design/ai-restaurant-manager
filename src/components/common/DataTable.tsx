@@ -35,27 +35,27 @@ export function DataTable<T extends { id?: string }>({
 }: DataTableProps<T>) {
   if (isLoading) {
     return (
-      <div className="rounded-xl border border-border bg-card">
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="hover:bg-transparent">
               {columns.map((col) => (
-                <TableHead key={String(col.key)}>{col.header}</TableHead>
+                <TableHead key={String(col.key)} className="h-10 text-xs font-medium uppercase tracking-wide">{col.header}</TableHead>
               ))}
-              {(onEdit || onDelete) && <TableHead className="w-24">Actions</TableHead>}
+              {(onEdit || onDelete) && <TableHead className="w-20 h-10">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {Array.from({ length: 5 }).map((_, i) => (
-              <TableRow key={i}>
+              <TableRow key={i} className="border-border">
                 {columns.map((col) => (
-                  <TableCell key={String(col.key)}>
-                    <Skeleton className="h-4 w-24" />
+                  <TableCell key={String(col.key)} className="py-2.5">
+                    <Skeleton className="h-4 w-20" />
                   </TableCell>
                 ))}
                 {(onEdit || onDelete) && (
-                  <TableCell>
-                    <Skeleton className="h-4 w-16" />
+                  <TableCell className="py-2.5">
+                    <Skeleton className="h-4 w-12" />
                   </TableCell>
                 )}
               </TableRow>
@@ -67,44 +67,44 @@ export function DataTable<T extends { id?: string }>({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent border-border">
             {columns.map((col) => (
-              <TableHead key={String(col.key)} className="text-muted-foreground font-medium">
+              <TableHead key={String(col.key)} className="h-10 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {col.header}
               </TableHead>
             ))}
-            {(onEdit || onDelete) && <TableHead className="w-24">Actions</TableHead>}
+            {(onEdit || onDelete) && <TableHead className="w-20 h-10">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length + (onEdit || onDelete ? 1 : 0)} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={columns.length + (onEdit || onDelete ? 1 : 0)} className="text-center text-muted-foreground py-6 text-sm">
                 No data available
               </TableCell>
             </TableRow>
           ) : (
             data.map((item) => (
-              <TableRow key={String(item[keyField])} className="border-border hover:bg-secondary/50">
+              <TableRow key={String(item[keyField])} className="border-border transition-colors hover:bg-muted/50">
                 {columns.map((col) => (
-                  <TableCell key={String(col.key)}>
+                  <TableCell key={String(col.key)} className="py-2.5 text-sm">
                     {col.render ? col.render(item) : String(item[col.key as keyof T] ?? "-")}
                   </TableCell>
                 ))}
                 {(onEdit || onDelete) && (
-                  <TableCell>
-                    <div className="flex gap-2">
+                  <TableCell className="py-2.5">
+                    <div className="flex gap-1">
                       {onEdit && (
-                        <Button variant="ghost" size="icon" onClick={() => onEdit(item)}>
-                          <Pencil className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-secondary" onClick={() => onEdit(item)}>
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
                       )}
                       {onDelete && (
-                        <Button variant="ghost" size="icon" onClick={() => onDelete(item)} className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => onDelete(item)}>
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </div>
