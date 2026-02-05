@@ -555,21 +555,21 @@ export default function POSIntegrationsPage() {
         </Dialog>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Location Filter */}
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <MapPin className="h-5 w-5 text-muted-foreground" />
+          <CardContent className="py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedLocation} onValueChange={v => setSelectedLocation(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-64"><SelectValue placeholder="All locations" /></SelectTrigger>
+                <SelectTrigger className="w-56 h-8 text-sm"><SelectValue placeholder="All locations" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Locations</SelectItem>
                   {locations?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" onClick={handleRunReconciliation} disabled={!selectedLocation || reconciliation.isPending}>
-                <Brain className="h-4 w-4 mr-2" />AI Reconciliation
+              <Button variant="outline" size="sm" className="h-8" onClick={handleRunReconciliation} disabled={!selectedLocation || reconciliation.isPending}>
+                <Brain className="h-3.5 w-3.5 mr-1.5" />AI Reconciliation
               </Button>
             </div>
           </CardContent>
@@ -623,37 +623,43 @@ export default function POSIntegrationsPage() {
                       <CardContent className="space-y-4">
                         {/* Credentials Display for Captiva */}
                         {integration.pos_provider === "captiva" && (
-                          <div className="text-xs space-y-1 p-2 rounded bg-muted/50">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Base URL:</span>
-                              <span className="font-mono">{settings?.base_url || "Not set"}</span>
+                          <div className="text-xs p-2.5 rounded-md bg-muted/50 border border-border/50 overflow-hidden">
+                            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+                              <span className="text-muted-foreground whitespace-nowrap">Base URL</span>
+                              <span className="font-mono text-[11px] truncate text-right" title={settings?.base_url || "Not set"}>
+                                {settings?.base_url || <span className="text-muted-foreground/60">Not set</span>}
+                              </span>
+                              
+                              <span className="text-muted-foreground whitespace-nowrap">Store ID</span>
+                              <span className="font-mono text-[11px] truncate text-right" title={settings?.store_id || "Not set"}>
+                                {settings?.store_id || <span className="text-muted-foreground/60">Not set</span>}
+                              </span>
+                              
+                              <span className="text-muted-foreground whitespace-nowrap">API Key</span>
+                              <span className="font-mono text-[11px] text-right">
+                                {settings?.api_key || integration.api_key ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
+                              </span>
+                              
+                              <span className="text-muted-foreground whitespace-nowrap">Username</span>
+                              <span className="font-mono text-[11px] truncate text-right" title={settings?.username || "Not set"}>
+                                {settings?.username || <span className="text-muted-foreground/60">Not set</span>}
+                              </span>
+                              
+                              <span className="text-muted-foreground whitespace-nowrap">Password</span>
+                              <span className="font-mono text-[11px] text-right">
+                                {settings?.password ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
+                              </span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Store ID:</span>
-                              <span className="font-mono">{settings?.store_id || "Not set"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">API Key:</span>
-                              <span className="font-mono">{settings?.api_key || integration.api_key ? "••••••••" : "Not set"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Username:</span>
-                              <span className="font-mono">{settings?.username || "Not set"}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Password:</span>
-                              <span className="font-mono">{settings?.password ? "••••••••" : "Not set"}</span>
-                            </div>
-                            {/* Credentials Status Debug Line */}
-                            <div className="flex justify-between pt-1 border-t mt-1">
-                              <span className="text-muted-foreground">Credentials:</span>
+                            {/* Credentials Status */}
+                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/50">
+                              <span className="text-muted-foreground">Status</span>
                               {credentialsValid ? (
-                                <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                                <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-[11px] font-medium">
                                   <CheckCircle2 className="h-3 w-3" />
                                   Complete
                                 </span>
                               ) : (
-                                <span className="text-destructive flex items-center gap-1">
+                                <span className="text-destructive flex items-center gap-1 text-[11px]">
                                   <AlertTriangle className="h-3 w-3" />
                                   Missing: {missingCreds.join(", ")}
                                 </span>

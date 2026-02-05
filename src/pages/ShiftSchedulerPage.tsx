@@ -121,65 +121,65 @@ export default function ShiftSchedulerPage() {
   return (
     <PageLayout
       title="Timesheets"
-      description="Schedule and manage staff shifts — the source of truth for labour hours"
+      description="Source of truth for labour hours — all scheduling managed here"
       action={
         <Dialog open={open} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
-            <Button size="sm"><Plus className="mr-2 h-4 w-4" /> Add Shift</Button>
+            <Button size="sm" className="h-8"><Plus className="mr-1.5 h-3.5 w-3.5" /> Add Shift</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editingShift ? "Edit Shift" : "Create New Shift"}</DialogTitle>
+          <DialogContent className="max-w-sm">
+            <DialogHeader className="pb-2">
+              <DialogTitle className="text-base">{editingShift ? "Edit Shift" : "New Shift"}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Staff Member</Label>
+            <form onSubmit={handleSubmit} className="space-y-2.5">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Staff Member</Label>
                 <Select value={form.staff_id} onValueChange={(v) => setForm({ ...form, staff_id: v })}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Select staff" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select staff" /></SelectTrigger>
                   <SelectContent>
                     {staff.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
+                      <SelectItem key={s.id} value={s.id} className="text-sm">
                         {s.first_name} {s.last_name}
-                        <span className="ml-2 text-muted-foreground text-xs">
-                          ({s.contract_type.replace("_", " ")}, max {s.max_hours_per_week}h/wk)
+                        <span className="ml-1.5 text-muted-foreground text-[10px]">
+                          (max {s.max_hours_per_week}h)
                         </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Location</Label>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Location</Label>
                 <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Select location" /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select location" /></SelectTrigger>
                   <SelectContent>
-                    {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                    {locations.map((l) => <SelectItem key={l.id} value={l.id} className="text-sm">{l.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Shift Start</Label>
-                  <Input type="datetime-local" className="h-9" value={form.shift_start} onChange={(e) => setForm({ ...form, shift_start: e.target.value })} required autoFocus />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Start</Label>
+                  <Input type="datetime-local" className="h-8 text-sm" value={form.shift_start} onChange={(e) => setForm({ ...form, shift_start: e.target.value })} required autoFocus />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Shift End</Label>
-                  <Input type="datetime-local" className="h-9" value={form.shift_end} onChange={(e) => setForm({ ...form, shift_end: e.target.value })} required />
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">End</Label>
+                  <Input type="datetime-local" className="h-8 text-sm" value={form.shift_end} onChange={(e) => setForm({ ...form, shift_end: e.target.value })} required />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Notes</Label>
-                <Input className="h-9" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" />
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">Notes (optional)</Label>
+                <Input className="h-8 text-sm" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Shift notes..." />
               </div>
-              <Button type="submit" className="w-full h-9" disabled={createShift.isPending || updateShift.isPending}>
-                {editingShift ? "Update Shift" : "Create Shift"}
+              <Button type="submit" className="w-full h-8 text-sm" disabled={createShift.isPending || updateShift.isPending}>
+                {editingShift ? "Update" : "Create"} Shift
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Staff Weekly Hours Summary */}
         <StaffWeeklyHoursSummary 
           shifts={shifts} 
@@ -188,54 +188,55 @@ export default function ShiftSchedulerPage() {
         />
 
         {/* Draft Roster Controls */}
-        <Card className="border-dashed">
-          <CardContent className="py-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Wand2 className="h-4 w-4 text-muted-foreground" />
-                <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                  <SelectTrigger className="w-[180px] h-8 text-sm">
-                    <SelectValue placeholder="Select location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        <Card className="border-dashed border-border/60">
+          <CardContent className="py-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Wand2 className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+                <SelectTrigger className="w-40 h-7 text-xs">
+                  <SelectValue placeholder="Location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((l) => (
+                    <SelectItem key={l.id} value={l.id} className="text-xs">{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               <Button
                 variant="outline"
                 size="sm"
+                className="h-7 text-xs"
                 onClick={handleGenerateDraft}
                 disabled={!selectedLocation || generateDraft.isPending || hasDrafts}
               >
-                <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                Generate Draft
+                <Wand2 className="mr-1 h-3 w-3" />
+                Generate
               </Button>
 
               {hasDrafts && (
                 <>
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] h-5 px-1.5">
                     {draftShiftsCount} Draft
                   </Badge>
                   <Button
                     variant="default"
                     size="sm"
+                    className="h-7 text-xs"
                     onClick={handleConfirmDraft}
                     disabled={confirmDraft.isPending || !selectedLocation}
                   >
-                    <Check className="mr-1 h-3.5 w-3.5" />
+                    <Check className="mr-1 h-3 w-3" />
                     Confirm
                   </Button>
                   <Button
                     variant="destructive"
                     size="sm"
+                    className="h-7 text-xs"
                     onClick={handleDiscardDraft}
                     disabled={discardDraft.isPending || !selectedLocation}
                   >
-                    <X className="mr-1 h-3.5 w-3.5" />
+                    <X className="mr-1 h-3 w-3" />
                     Discard
                   </Button>
                 </>
@@ -245,23 +246,23 @@ export default function ShiftSchedulerPage() {
         </Card>
 
         {/* Week Navigation */}
-        <div className="flex items-center justify-between py-2">
-          <Button variant="ghost" size="sm" onClick={() => navigateWeek(-1)}>
-            Previous Week
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigateWeek(-1)}>
+            ← Previous
           </Button>
-          <div className="flex items-center gap-2 text-sm">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-1.5 text-xs">
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="font-medium">
               {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
             </span>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigateWeek(1)}>
-            Next Week
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigateWeek(1)}>
+            Next →
           </Button>
         </div>
 
         {/* Week Grid */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-1.5">
           {weekDays.map((day) => {
             const dayShifts = getShiftsForDay(day);
             const isToday = isSameDay(day, new Date());
