@@ -87,22 +87,22 @@ export default function AttendancePage() {
 
   return (
     <PageLayout
-      title="Attendance Tracking"
+      title="Attendance"
       description="Track staff clock-in and clock-out times"
       action={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button><LogIn className="mr-2 h-4 w-4" /> Clock In Staff</Button>
+            <Button size="sm"><LogIn className="mr-2 h-4 w-4" /> Clock In</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>Clock In Staff Member</DialogTitle>
+              <DialogTitle>Clock In Staff</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Staff Member</label>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Staff Member</label>
                 <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                  <SelectTrigger><SelectValue placeholder="Select staff" /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Select staff" /></SelectTrigger>
                   <SelectContent>
                     {staff.filter(s => s.status === "active").map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.first_name} {s.last_name}</SelectItem>
@@ -110,16 +110,16 @@ export default function AttendancePage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Location</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Location</label>
                 <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                  <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Select location" /></SelectTrigger>
                   <SelectContent>
                     {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleClockIn} className="w-full" disabled={!selectedStaff || !selectedLocation}>
+              <Button onClick={handleClockIn} className="w-full h-9" disabled={!selectedStaff || !selectedLocation}>
                 <LogIn className="mr-2 h-4 w-4" /> Clock In Now
               </Button>
             </div>
@@ -127,33 +127,33 @@ export default function AttendancePage() {
         </Dialog>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Active Sessions */}
         {activeSessions.length > 0 && (
           <Card className="border-primary/50 bg-primary/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Clock className="h-5 w-5 text-primary" />
+            <CardHeader className="py-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Clock className="h-4 w-4 text-primary" />
                 Currently Working ({activeSessions.length})
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {activeSessions.map((session) => (
-                  <div key={session.id} className="p-3 rounded-lg bg-background border">
-                    <p className="font-medium">{session.staff?.first_name} {session.staff?.last_name}</p>
-                    <p className="text-sm text-muted-foreground">{session.locations?.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                  <div key={session.id} className="p-2.5 rounded-lg bg-background border text-sm">
+                    <p className="font-medium truncate">{session.staff?.first_name} {session.staff?.last_name}</p>
+                    <p className="text-xs text-muted-foreground">{session.locations?.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       Since {format(parseISO(session.clock_in), "HH:mm")}
                     </p>
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      className="mt-2 w-full"
+                      className="mt-2 w-full h-7 text-xs"
                       onClick={() => clockOut.mutate(session.id)}
                       disabled={clockOut.isPending}
                     >
-                      <LogOut className="mr-2 h-3 w-3" /> Clock Out
+                      <LogOut className="mr-1 h-3 w-3" /> Clock Out
                     </Button>
                   </div>
                 ))}

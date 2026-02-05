@@ -200,6 +200,19 @@
   .glass {
     @apply bg-card/80 backdrop-blur-xl border border-border/50;
   }
+
+  /* Tight spacing utilities */
+  .space-tight {
+    @apply space-y-3;
+  }
+
+  .space-normal {
+    @apply space-y-4;
+  }
+
+  .space-relaxed {
+    @apply space-y-6;
+  }
 }
 
 /* Custom scrollbar */

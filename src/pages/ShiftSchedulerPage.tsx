@@ -21,7 +21,8 @@ import {
 } from "@/hooks/useShifts";
 import { useLocations } from "@/hooks/useLocations";
 import { StaffWeeklyHoursSummary } from "@/components/shifts/StaffWeeklyHoursSummary";
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, isSameDay } from "date-fns";
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, isSameDay, differenceInMinutes } from "date-fns";
+import { formatCurrency } from "@/lib/currency";
 
 export default function ShiftSchedulerPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -119,22 +120,22 @@ export default function ShiftSchedulerPage() {
 
   return (
     <PageLayout
-      title="Shift Scheduler"
-      description="Plan and manage staff schedules"
+      title="Timesheets"
+      description="Schedule and manage staff shifts — the source of truth for labour hours"
       action={
         <Dialog open={open} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" /> Add Shift</Button>
+            <Button size="sm"><Plus className="mr-2 h-4 w-4" /> Add Shift</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>{editingShift ? "Edit Shift" : "Create New Shift"}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Staff Member</Label>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Staff Member</Label>
                 <Select value={form.staff_id} onValueChange={(v) => setForm({ ...form, staff_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select staff" /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Select staff" /></SelectTrigger>
                   <SelectContent>
                     {staff.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
@@ -147,30 +148,30 @@ export default function ShiftSchedulerPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Location</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Location</Label>
                 <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Select location" /></SelectTrigger>
                   <SelectContent>
                     {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Shift Start</Label>
-                  <Input type="datetime-local" value={form.shift_start} onChange={(e) => setForm({ ...form, shift_start: e.target.value })} required />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Shift Start</Label>
+                  <Input type="datetime-local" className="h-9" value={form.shift_start} onChange={(e) => setForm({ ...form, shift_start: e.target.value })} required autoFocus />
                 </div>
-                <div className="space-y-2">
-                  <Label>Shift End</Label>
-                  <Input type="datetime-local" value={form.shift_end} onChange={(e) => setForm({ ...form, shift_end: e.target.value })} required />
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Shift End</Label>
+                  <Input type="datetime-local" className="h-9" value={form.shift_end} onChange={(e) => setForm({ ...form, shift_end: e.target.value })} required />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Notes</Label>
+                <Input className="h-9" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" />
               </div>
-              <Button type="submit" className="w-full" disabled={createShift.isPending || updateShift.isPending}>
+              <Button type="submit" className="w-full h-9" disabled={createShift.isPending || updateShift.isPending}>
                 {editingShift ? "Update Shift" : "Create Shift"}
               </Button>
             </form>
@@ -178,7 +179,7 @@ export default function ShiftSchedulerPage() {
         </Dialog>
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Staff Weekly Hours Summary */}
         <StaffWeeklyHoursSummary 
           shifts={shifts} 
@@ -188,18 +189,12 @@ export default function ShiftSchedulerPage() {
 
         {/* Draft Roster Controls */}
         <Card className="border-dashed">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Wand2 className="h-4 w-4" />
-              Draft Roster Generator
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap items-center gap-4">
+          <CardContent className="py-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <Label className="text-sm text-muted-foreground">Location:</Label>
+                <Wand2 className="h-4 w-4 text-muted-foreground" />
                 <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-[180px] h-8 text-sm">
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -212,17 +207,18 @@ export default function ShiftSchedulerPage() {
 
               <Button
                 variant="outline"
+                size="sm"
                 onClick={handleGenerateDraft}
                 disabled={!selectedLocation || generateDraft.isPending || hasDrafts}
               >
-                <Wand2 className="mr-2 h-4 w-4" />
-                Generate Draft Roster
+                <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+                Generate Draft
               </Button>
 
               {hasDrafts && (
                 <>
-                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                    {draftShiftsCount} Draft Shifts
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs">
+                    {draftShiftsCount} Draft
                   </Badge>
                   <Button
                     variant="default"
@@ -230,8 +226,8 @@ export default function ShiftSchedulerPage() {
                     onClick={handleConfirmDraft}
                     disabled={confirmDraft.isPending || !selectedLocation}
                   >
-                    <Check className="mr-1 h-4 w-4" />
-                    Confirm Draft
+                    <Check className="mr-1 h-3.5 w-3.5" />
+                    Confirm
                   </Button>
                   <Button
                     variant="destructive"
@@ -239,8 +235,8 @@ export default function ShiftSchedulerPage() {
                     onClick={handleDiscardDraft}
                     disabled={discardDraft.isPending || !selectedLocation}
                   >
-                    <X className="mr-1 h-4 w-4" />
-                    Discard Draft
+                    <X className="mr-1 h-3.5 w-3.5" />
+                    Discard
                   </Button>
                 </>
               )}
@@ -249,85 +245,103 @@ export default function ShiftSchedulerPage() {
         </Card>
 
         {/* Week Navigation */}
-        <div className="flex items-center justify-between">
-          <Button variant="outline" onClick={() => navigateWeek(-1)}>
+        <div className="flex items-center justify-between py-2">
+          <Button variant="ghost" size="sm" onClick={() => navigateWeek(-1)}>
             Previous Week
           </Button>
-          <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-muted-foreground" />
+          <div className="flex items-center gap-2 text-sm">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="font-medium">
-              {format(weekStart, "MMM d")} - {format(weekEnd, "MMM d, yyyy")}
+              {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
             </span>
           </div>
-          <Button variant="outline" onClick={() => navigateWeek(1)}>
+          <Button variant="ghost" size="sm" onClick={() => navigateWeek(1)}>
             Next Week
           </Button>
         </div>
 
         {/* Week Grid */}
-        <div className="grid grid-cols-7 gap-4">
+        <div className="grid grid-cols-7 gap-2">
           {weekDays.map((day) => {
             const dayShifts = getShiftsForDay(day);
             const isToday = isSameDay(day, new Date());
+            const dayHours = dayShifts.reduce((sum, s) => {
+              const start = parseISO(s.shift_start);
+              const end = parseISO(s.shift_end);
+              return sum + differenceInMinutes(end, start) / 60;
+            }, 0);
+            const dayCost = dayShifts.reduce((sum, s) => {
+              const staffMember = staff.find(st => st.id === s.staff_id);
+              const start = parseISO(s.shift_start);
+              const end = parseISO(s.shift_end);
+              const hours = differenceInMinutes(end, start) / 60;
+              return sum + hours * (staffMember?.hourly_rate || 0);
+            }, 0);
             
             return (
-              <Card key={day.toISOString()} className={isToday ? "border-primary" : ""}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    <span className={isToday ? "text-primary" : "text-muted-foreground"}>{format(day, "EEE")}</span>
-                    <br />
-                    <span className={isToday ? "text-primary font-bold" : ""}>{format(day, "d")}</span>
-                  </CardTitle>
+              <Card key={day.toISOString()} className={`${isToday ? "border-primary ring-1 ring-primary/20" : ""}`}>
+                <CardHeader className="p-2 pb-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className={`text-[10px] uppercase tracking-wider ${isToday ? "text-primary" : "text-muted-foreground"}`}>{format(day, "EEE")}</span>
+                      <p className={`text-lg font-semibold leading-none ${isToday ? "text-primary" : ""}`}>{format(day, "d")}</p>
+                    </div>
+                    {dayShifts.length > 0 && (
+                      <div className="text-right">
+                        <p className="text-[10px] text-muted-foreground">{dayHours.toFixed(1)}h</p>
+                        <p className="text-[10px] font-medium text-primary">{formatCurrency(dayCost)}</p>
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="p-2 pt-0 space-y-1">
                   {isLoading ? (
-                    <div className="h-16 animate-pulse bg-muted rounded" />
+                    <div className="h-12 animate-pulse bg-muted rounded" />
                   ) : dayShifts.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No shifts</p>
+                    <p className="text-[10px] text-muted-foreground py-2">No shifts</p>
                   ) : (
                     dayShifts.map((shift) => (
                       <div 
                         key={shift.id} 
-                        className={`p-2 rounded border text-xs space-y-1 ${
+                        className={`p-1.5 rounded border text-xs ${
                           shift.is_draft 
                             ? "bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700" 
-                            : "bg-primary/10 border-primary/20"
+                            : "bg-primary/5 border-primary/20"
                         }`}
                       >
                         <div className="flex justify-between items-start gap-1">
                           <div className="flex-1 min-w-0">
                             {shift.is_draft && (
-                              <Badge variant="outline" className="text-[10px] px-1 py-0 mb-1 bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 mb-0.5 bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
                                 DRAFT
                               </Badge>
                             )}
-                            <div className="font-medium truncate">{shift.staff?.first_name} {shift.staff?.last_name}</div>
+                            <div className="font-medium text-[11px] truncate">{shift.staff?.first_name} {shift.staff?.last_name}</div>
                           </div>
                           <div className="flex gap-0.5 shrink-0">
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                              className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-secondary"
                               onClick={() => handleEdit(shift)}
                             >
-                              <Edit2 className="h-3 w-3" />
+                              <Edit2 className="h-2.5 w-2.5" />
                             </Button>
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-5 w-5 text-destructive hover:text-destructive"
+                              className="h-5 w-5 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
                               onClick={() => deleteShift.mutate(shift.id)}
                               disabled={deleteShift.isPending}
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="h-2.5 w-2.5" />
                             </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {format(parseISO(shift.shift_start), "HH:mm")} - {format(parseISO(shift.shift_end), "HH:mm")}
+                        <div className="flex items-center gap-1 text-muted-foreground mt-0.5">
+                          <Clock className="h-2.5 w-2.5" />
+                          <span className="text-[10px]">{format(parseISO(shift.shift_start), "HH:mm")}–{format(parseISO(shift.shift_end), "HH:mm")}</span>
                         </div>
-                        <p className="text-muted-foreground truncate">{shift.locations?.name}</p>
                       </div>
                     ))
                   )}

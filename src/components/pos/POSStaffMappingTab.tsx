@@ -103,88 +103,107 @@ export function POSStaffMappingTab({ locationId, posProvider, restaurantId }: PO
   const simMappingsCount = staffMappings.filter(m => m.external_id.startsWith("SIM-")).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Clarification Banner */}
+      <Card className="border-muted bg-muted/30">
+        <CardContent className="py-3">
+          <div className="flex items-start gap-3">
+            <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-foreground">Staff Identity Mapping (Optional)</p>
+              <p className="text-muted-foreground mt-0.5">
+                Captiva does not provide staff clock-in/out times. Labour hours are managed in <span className="font-medium text-foreground">Timesheets</span>. 
+                This mapping links POS operator names for reporting consistency only.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="py-3">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
-              <p className="text-sm text-muted-foreground">Unmapped Operators</p>
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <p className="text-xs text-muted-foreground">Unmapped Operators</p>
             </div>
-            <p className="text-2xl font-bold mt-1">{unmappedStaff?.length || 0}</p>
+            <p className="text-xl font-bold mt-1">{unmappedStaff?.length || 0}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="py-3">
             <div className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-primary" />
-              <p className="text-sm text-muted-foreground">Mapped Staff</p>
+              <Link2 className="h-4 w-4 text-primary" />
+              <p className="text-xs text-muted-foreground">Mapped Staff</p>
             </div>
-            <p className="text-2xl font-bold mt-1">{staffMappings.filter(m => m.internal_id).length}</p>
+            <p className="text-xl font-bold mt-1">{staffMappings.filter(m => m.internal_id).length}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
+          <CardContent className="py-3">
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-secondary-foreground" />
-              <p className="text-sm text-muted-foreground">Unmapped Hours</p>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">Unmapped Shifts</p>
             </div>
-            <p className="text-2xl font-bold mt-1">{totalUnmappedHours.toFixed(1)}h</p>
+            <p className="text-xl font-bold mt-1">{unmappedStaff?.reduce((sum, s) => sum + s.shift_count, 0) || 0}</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters & Search */}
       <Card>
-        <CardContent className="pt-4">
-          <div className="flex flex-wrap items-center gap-3">
+        <CardContent className="py-3">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search by name or operator code..."
+                placeholder="Search operator..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-8 h-8 text-sm"
               />
             </div>
 
             {/* Filter Chips */}
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-1.5">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
               
               <Badge 
                 variant={statusFilter === "all" ? "default" : "outline"} 
-                className="cursor-pointer"
+                className="cursor-pointer text-xs h-6"
                 onClick={() => setStatusFilter("all")}
               >
                 All
               </Badge>
               <Badge 
                 variant={statusFilter === "mapped" ? "default" : "outline"} 
-                className="cursor-pointer"
+                className="cursor-pointer text-xs h-6"
                 onClick={() => setStatusFilter("mapped")}
               >
                 Mapped
               </Badge>
               <Badge 
                 variant={statusFilter === "unmapped" ? "default" : "outline"} 
-                className="cursor-pointer"
+                className="cursor-pointer text-xs h-6"
                 onClick={() => setStatusFilter("unmapped")}
               >
                 Unmapped
               </Badge>
               
-              <span className="text-muted-foreground mx-1">|</span>
-              
-              <Badge 
-                variant={showSimOnly ? "destructive" : "outline"} 
-                className="cursor-pointer"
-                onClick={() => setShowSimOnly(!showSimOnly)}
-              >
-                SIM- only {simMappingsCount > 0 && `(${simMappingsCount})`}
-              </Badge>
+              {simMappingsCount > 0 && (
+                <>
+                  <span className="text-muted-foreground mx-0.5">|</span>
+                  <Badge 
+                    variant={showSimOnly ? "destructive" : "outline"} 
+                    className="cursor-pointer text-xs h-6"
+                    onClick={() => setShowSimOnly(!showSimOnly)}
+                  >
+                    SIM- ({simMappingsCount})
+                  </Badge>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
@@ -195,16 +214,16 @@ export function POSStaffMappingTab({ locationId, posProvider, restaurantId }: PO
         <div className="flex gap-2">
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={bulkDeleteMappings.isPending}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                Clear All Mappings
+              <Button variant="outline" size="sm" className="h-8 text-xs" disabled={bulkDeleteMappings.isPending}>
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                Clear All
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent className="max-w-md">
               <AlertDialogHeader>
                 <AlertDialogTitle>Clear All Staff Mappings?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will delete all {staffMappings.length} staff mappings for this integration. Operators will need to be remapped.
+                  This will delete all {staffMappings.length} staff identity mappings. Operators will need to be remapped.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -219,16 +238,16 @@ export function POSStaffMappingTab({ locationId, posProvider, restaurantId }: PO
           {simMappingsCount > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" disabled={bulkDeleteMappings.isPending}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear SIM- Mappings ({simMappingsCount})
+                <Button variant="outline" size="sm" className="h-8 text-xs" disabled={bulkDeleteMappings.isPending}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                  Clear SIM- ({simMappingsCount})
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent className="max-w-md">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Clear Demo/Simulation Mappings?</AlertDialogTitle>
+                  <AlertDialogTitle>Clear Demo Mappings?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will delete {simMappingsCount} mappings with SIM- prefix (demo/simulation data). Live Captiva mappings will not be affected.
+                    This will delete {simMappingsCount} demo/simulation mappings. Live Captiva mappings will not be affected.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -246,62 +265,58 @@ export function POSStaffMappingTab({ locationId, posProvider, restaurantId }: PO
       {/* Unmapped Operators Section */}
       {(statusFilter === "all" || statusFilter === "unmapped") && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-warning" />
+          <CardHeader className="py-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <AlertTriangle className="h-4 w-4 text-warning" />
               Unmapped POS Operators
             </CardTitle>
-            <CardDescription>
-              Map POS operator codes to staff members for labour cost tracking. 
-              Unmapped operators won't block attendance imports but their wages won't be calculated.
+            <CardDescription className="text-xs">
+              Map operator codes to staff for name consistency in reports.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {isLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map(i => (
-                  <Skeleton key={i} className="h-16 w-full" />
+                  <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
             ) : filteredUnmapped.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <CheckCircle2 className="h-12 w-12 mx-auto mb-2 text-primary" />
-                <p>All POS operators are mapped!</p>
+              <div className="text-center py-6 text-muted-foreground">
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-primary" />
+                <p className="text-sm">All operators mapped!</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
                 {filteredUnmapped.map((item) => (
                   <div
                     key={item.operator_code}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-2.5 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">{item.operator_name}</p>
+                        <p className="font-medium text-sm truncate">{item.operator_name}</p>
                         {item.operator_code.startsWith("SIM-") && (
-                          <Badge variant="secondary" className="text-xs">SIM</Badge>
+                          <Badge variant="secondary" className="text-[10px] h-4">SIM</Badge>
                         )}
                       </div>
-                      <div className="flex gap-4 text-sm text-muted-foreground mt-1">
-                        <span className="font-mono">Code: {item.operator_code}</span>
+                      <div className="flex gap-3 text-xs text-muted-foreground mt-0.5">
+                        <span className="font-mono">{item.operator_code}</span>
                         <span>{item.shift_count} shifts</span>
-                        <span>{item.total_hours.toFixed(1)} hours</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Select onValueChange={(staffId) => handleMapToStaff(item.operator_code, item.operator_name, staffId)}>
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Map to staff..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {staff?.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.first_name} {s.last_name} - {formatCurrency(s.hourly_rate)}/hr
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <Select onValueChange={(staffId) => handleMapToStaff(item.operator_code, item.operator_name, staffId)}>
+                      <SelectTrigger className="w-40 h-8 text-xs">
+                        <SelectValue placeholder="Map to staff..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {staff?.map((s) => (
+                          <SelectItem key={s.id} value={s.id} className="text-xs">
+                            {s.first_name} {s.last_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 ))}
               </div>
@@ -313,58 +328,48 @@ export function POSStaffMappingTab({ locationId, posProvider, restaurantId }: PO
       {/* Existing Mappings Section */}
       {(statusFilter === "all" || statusFilter === "mapped") && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Link2 className="h-5 w-5 text-primary" />
+          <CardHeader className="py-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Link2 className="h-4 w-4 text-primary" />
               Current Staff Mappings
             </CardTitle>
-            <CardDescription>
-              Mapped operators will have their attendance automatically linked to staff for wage calculations.
+            <CardDescription className="text-xs">
+              Mapped operators show as their linked staff member in reports.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {filteredMappings.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">
-                No staff mappings yet. Map operators above to track labour costs.
+              <p className="text-muted-foreground text-center py-4 text-sm">
+                No staff mappings yet.
               </p>
             ) : (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
                 {filteredMappings.map((mapping) => {
                   const linkedStaff = staff?.find(s => s.id === mapping.internal_id);
                   return (
                     <div
                       key={mapping.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
+                      className="flex items-center justify-between p-2.5 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{mapping.external_name || mapping.external_id}</p>
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-sm truncate">{mapping.external_name || mapping.external_id}</p>
                             {mapping.external_id.startsWith("SIM-") && (
-                              <Badge variant="secondary" className="text-xs">SIM</Badge>
+                              <Badge variant="secondary" className="text-[10px] h-4">SIM</Badge>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground font-mono">
-                            Code: {mapping.external_id} → {linkedStaff ? `${linkedStaff.first_name} ${linkedStaff.last_name}` : <span className="text-warning">Not mapped</span>}
+                          <p className="text-xs text-muted-foreground font-mono truncate">
+                            {mapping.external_id} → {linkedStaff ? `${linkedStaff.first_name} ${linkedStaff.last_name}` : <span className="text-warning">Unmapped</span>}
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {linkedStaff && (
-                          <Badge variant="secondary">
-                            {formatCurrency(linkedStaff.hourly_rate)}/hr
-                          </Badge>
-                        )}
-                        {mapping.internal_id ? (
-                          <Badge variant="default">
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Mapped
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-warning">
-                            <AlertTriangle className="h-3 w-3 mr-1" />
-                            Unmapped
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {mapping.internal_id && (
+                          <Badge variant="default" className="text-[10px] h-5">
+                            <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                            Linked
                           </Badge>
                         )}
                         <Select
@@ -373,12 +378,12 @@ export function POSStaffMappingTab({ locationId, posProvider, restaurantId }: PO
                             updateMapping.mutate({ id: mapping.id, internal_id: v, is_verified: true })
                           }
                         >
-                          <SelectTrigger className="w-40">
-                            <SelectValue placeholder="Select staff" />
+                          <SelectTrigger className="w-32 h-7 text-xs">
+                            <SelectValue placeholder="Select" />
                           </SelectTrigger>
                           <SelectContent>
                             {staff?.map((s) => (
-                              <SelectItem key={s.id} value={s.id}>
+                              <SelectItem key={s.id} value={s.id} className="text-xs">
                                 {s.first_name} {s.last_name}
                               </SelectItem>
                             ))}
@@ -388,21 +393,21 @@ export function POSStaffMappingTab({ locationId, posProvider, restaurantId }: PO
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-8 w-8"
+                            className="h-7 w-7 hover:bg-secondary"
                             onClick={() => handleClearMapping(mapping.id)}
                             title="Clear mapping"
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3.5 w-3.5" />
                           </Button>
                         )}
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          className="h-7 w-7 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteMapping(mapping.id)}
                           title="Delete mapping"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>
