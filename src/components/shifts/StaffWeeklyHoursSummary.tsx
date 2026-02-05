@@ -113,21 +113,16 @@ export function StaffWeeklyHoursSummary({ shifts, staff, selectedLocation }: Sta
   const overtimeStaff = summaries.filter(s => s.status === "overtime");
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Overtime Warning Banner */}
       {hasOvertimeIssues && (
         <Card className="border-destructive/50 bg-destructive/5">
-          <CardContent className="py-2.5">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-medium text-destructive">
-                  Overtime: {overtimeStaff.length} staff exceed{overtimeStaff.length === 1 ? 's' : ''} contracted hours by &gt;{OVERTIME_THRESHOLD}h
-                </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {overtimeStaff.map(s => `${s.name} (+${s.overtimeHours}h)`).join(", ")}
-                </p>
-              </div>
+          <CardContent className="py-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />
+              <p className="text-[11px] font-medium text-destructive">
+                Overtime: {overtimeStaff.map(s => `${s.name} (+${s.overtimeHours}h)`).join(", ")}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -135,35 +130,30 @@ export function StaffWeeklyHoursSummary({ shifts, staff, selectedLocation }: Sta
 
       {/* Main Summary Card */}
       <Card>
-        <CardHeader className="py-2.5 px-4">
-          <div className="flex items-center justify-between gap-4">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Clock className="h-3.5 w-3.5" />
-              Weekly Hours Summary
-            </CardTitle>
-            <div className="flex items-center gap-3 text-xs">
+        <CardContent className="py-2 px-3">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              Weekly Hours
+            </div>
+            <div className="flex items-center gap-2 text-[11px]">
               {totalOvertimeHours > 0 && (
-                <Badge variant="outline" className="h-5 bg-destructive/10 border-destructive/30 text-destructive text-[10px]">
-                  <AlertTriangle className="h-2.5 w-2.5 mr-1" />
-                  {totalOvertimeHours}h OT
-                </Badge>
+                <span className="text-destructive font-medium">{totalOvertimeHours}h OT</span>
               )}
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <Euro className="h-3.5 w-3.5" />
-                <span className="font-medium text-foreground">{formatCurrency(totalWageCost)}</span>
-                <span>/week</span>
-              </div>
+              <span className="text-muted-foreground">
+                <Euro className="h-3 w-3 inline mr-0.5" />
+                <span className="font-medium text-foreground">{formatCurrency(totalWageCost)}</span>/wk
+              </span>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="py-2.5 px-4 pt-0">
-          <div className="flex flex-wrap gap-1.5">
+          
+          <div className="flex flex-wrap gap-1">
             {summaries.map(summary => (
               <Badge
                 key={summary.staffId}
                 variant="outline"
                 className={`
-                  px-2 py-1 text-xs font-medium
+                  px-1.5 py-0.5 text-[10px] font-medium h-5
                   ${summary.status === "ok" 
                     ? "bg-green-50 border-green-300 text-green-800 dark:bg-green-900/20 dark:border-green-700 dark:text-green-400" 
                     : summary.status === "overtime"
@@ -175,37 +165,21 @@ export function StaffWeeklyHoursSummary({ shifts, staff, selectedLocation }: Sta
                 `}
                 title={`${summary.name}: ${formatCurrency(summary.wageCost)} (${summary.scheduledHours}h × ${formatCurrency(summary.hourlyRate)}/h)`}
               >
-                {summary.name.split(' ')[0]} — {summary.scheduledHours}/{summary.contractedHours}h
+                {summary.name.split(' ')[0]} {summary.scheduledHours}/{summary.contractedHours}h
                 {summary.status === "ok" && " ✓"}
-                {summary.status === "overtime" && ` 🚨`}
-                {summary.status === "over" && ` ⚠️`}
-                {summary.status === "under" && " ⚠️"}
+                {summary.status !== "ok" && " ⚠"}
               </Badge>
             ))}
           </div>
           
-          {/* Wage Cost Breakdown */}
-          <div className="mt-3 pt-3 border-t border-border">
-            <div className="grid grid-cols-4 gap-3 text-xs">
-              <div>
-                <p className="text-muted-foreground">Total Hours</p>
-                <p className="font-medium">{summaries.reduce((sum, s) => sum + s.scheduledHours, 0).toFixed(1)}h</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Contracted</p>
-                <p className="font-medium">{summaries.reduce((sum, s) => sum + s.contractedHours, 0)}h</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Overtime</p>
-                <p className={`font-medium ${totalOvertimeHours > 0 ? "text-destructive" : ""}`}>
-                  {totalOvertimeHours}h
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Wage Cost</p>
-                <p className="font-medium">{formatCurrency(totalWageCost)}</p>
-              </div>
-            </div>
+          {/* Compact Wage Cost Breakdown */}
+          <div className="flex items-center gap-4 mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground">
+            <span>Hours: <span className="text-foreground font-medium">{summaries.reduce((sum, s) => sum + s.scheduledHours, 0).toFixed(1)}h</span></span>
+            <span>Contract: <span className="text-foreground font-medium">{summaries.reduce((sum, s) => sum + s.contractedHours, 0)}h</span></span>
+            {totalOvertimeHours > 0 && (
+              <span>OT: <span className="text-destructive font-medium">{totalOvertimeHours}h</span></span>
+            )}
+            <span>Cost: <span className="text-foreground font-medium">{formatCurrency(totalWageCost)}</span></span>
           </div>
         </CardContent>
       </Card>
