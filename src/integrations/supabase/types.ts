@@ -461,6 +461,106 @@ export type Database = {
           },
         ]
       }
+      menu_dishes: {
+        Row: {
+          created_at: string
+          dish_id: string
+          id: string
+          menu_id: string
+          restaurant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dish_id: string
+          id?: string
+          menu_id: string
+          restaurant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dish_id?: string
+          id?: string
+          menu_id?: string
+          restaurant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_dishes_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_dishes_menu_id_fkey"
+            columns: ["menu_id"]
+            isOneToOne: false
+            referencedRelation: "menus"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_dishes_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menus: {
+        Row: {
+          created_at: string
+          days: Json
+          end_time: string
+          id: string
+          location_id: string | null
+          name: string
+          restaurant_id: string | null
+          start_time: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days?: Json
+          end_time?: string
+          id?: string
+          location_id?: string | null
+          name: string
+          restaurant_id?: string | null
+          start_time?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days?: Json
+          end_time?: string
+          id?: string
+          location_id?: string | null
+          name?: string
+          restaurant_id?: string | null
+          start_time?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menus_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menus_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
