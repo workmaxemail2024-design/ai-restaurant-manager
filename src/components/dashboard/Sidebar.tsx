@@ -69,8 +69,8 @@ const navSections: NavSection[] = [
     title: "Menu",
     icon: ChefHat,
     items: [
-      { icon: ChefHat, label: "Dishes", path: "/dishes" },
       { icon: Calendar, label: "Menus", path: "/menu/menus" },
+      { icon: ChefHat, label: "Dishes", path: "/dishes" },
       { icon: Euro, label: "Cost Analysis", path: "/menu/cost-analysis" },
       { icon: Brain, label: "AI Engineering", path: "/menu/engineering" },
     ]
