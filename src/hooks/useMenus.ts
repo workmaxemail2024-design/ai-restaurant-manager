@@ -169,10 +169,6 @@ export function useCreateMenu() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["menus"] });
-      toast.success("Menu created successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to create menu: ${error.message}`);
     },
   });
 }
@@ -201,10 +197,6 @@ export function useUpdateMenu() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["menus"] });
       queryClient.invalidateQueries({ queryKey: ["menu"] });
-      toast.success("Menu updated successfully");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update menu: ${error.message}`);
     },
   });
 }
@@ -348,10 +340,7 @@ export function useSetMenuDishes() {
       queryClient.invalidateQueries({ queryKey: ["menu-dishes", variables.menuId] });
       queryClient.invalidateQueries({ queryKey: ["dish-menus"] });
       queryClient.invalidateQueries({ queryKey: ["menus"] });
-      toast.success("Menu dishes updated");
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to update dishes: ${error.message}`);
+      queryClient.invalidateQueries({ queryKey: ["menu-dish-counts"] });
     },
   });
 }
