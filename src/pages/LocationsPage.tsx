@@ -5,18 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
-import { useLocations, useCreateLocation, useUpdateLocation, useDeleteLocation, Location, LocationInsert } from "@/hooks/useLocations";
+import { Plus, Settings } from "lucide-react";
+import { useLocations, useCreateLocation, useUpdateLocation, useDeleteLocation, useUpdateOperatingHours, Location, LocationInsert } from "@/hooks/useLocations";
+import { OperatingHoursEditor, OperatingHours } from "@/components/locations/OperatingHoursEditor";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 export default function LocationsPage() {
   const { data: locations = [], isLoading } = useLocations();
   const createLocation = useCreateLocation();
   const updateLocation = useUpdateLocation();
   const deleteLocation = useDeleteLocation();
+  const updateOperatingHours = useUpdateOperatingHours();
   
   const [isOpen, setIsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Location | null>(null);
   const [formData, setFormData] = useState<LocationInsert>({ name: "", address: "" });
+  const [hoursSheetLocation, setHoursSheetLocation] = useState<Location | null>(null);
 
   const columns = [
     { key: "name", header: "Name" },
@@ -25,6 +29,23 @@ export default function LocationsPage() {
       key: "created_at", 
       header: "Created",
       render: (item: Location) => new Date(item.created_at).toLocaleDateString()
+    },
+    {
+      key: "actions",
+      header: "Hours",
+      render: (item: Location) => (
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setHoursSheetLocation(item);
+          }}
+        >
+          <Settings className="h-4 w-4 mr-1" />
+          {item.operating_hours ? "Edit" : "Set"}
+        </Button>
+      )
     },
   ];
 
@@ -48,6 +69,13 @@ export default function LocationsPage() {
     setIsOpen(false);
     setEditingItem(null);
     setFormData({ name: "", address: "" });
+  };
+
+  const handleSaveHours = async (hours: OperatingHours) => {
+    if (!hoursSheetLocation) return;
+    await updateOperatingHours.mutateAsync({ id: hoursSheetLocation.id, operating_hours: hours });
+    // Update local state to reflect changes
+    setHoursSheetLocation(prev => prev ? { ...prev, operating_hours: hours } : null);
   };
 
   return (
@@ -99,6 +127,23 @@ export default function LocationsPage() {
         onEdit={handleEdit}
         onDelete={(item) => deleteLocation.mutate(item.id)}
       />
+
+      <Sheet open={!!hoursSheetLocation} onOpenChange={(open) => !open && setHoursSheetLocation(null)}>
+        <SheetContent className="sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Operating Hours - {hoursSheetLocation?.name}</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4">
+            {hoursSheetLocation && (
+              <OperatingHoursEditor
+                value={hoursSheetLocation.operating_hours}
+                onSave={handleSaveHours}
+                isSaving={updateOperatingHours.isPending}
+              />
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </PageLayout>
   );
 }
