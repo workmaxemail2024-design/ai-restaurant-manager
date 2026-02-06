@@ -5,6 +5,7 @@ import { LocationSelector } from "@/components/LocationSelector";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
 import { RealtimeIndicator } from "@/components/dashboard/RealtimeIndicator";
+import { TodayHoursIndicator } from "@/components/dashboard/TodayHoursIndicator";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRestaurant } from "@/contexts/RestaurantContext";
@@ -12,6 +13,7 @@ import { useLocation } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
 import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 import { useNavigate } from "react-router-dom";
+import type { OperatingHours } from "@/components/locations/OperatingHoursEditor";
 
 interface HeaderProps {
   showRestaurantSwitcher?: boolean;
@@ -24,9 +26,12 @@ export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
   const navigate = useNavigate();
   const { isConnected } = useRealtimeEvents({ showToasts: true });
   
-  const selectedLocationName = selectedLocationId 
-    ? locations.find(l => l.id === selectedLocationId)?.name 
+  const selectedLocation = selectedLocationId 
+    ? locations.find(l => l.id === selectedLocationId) 
     : null;
+  
+  const selectedLocationName = selectedLocation?.name || null;
+  const selectedLocationHours = selectedLocation?.operating_hours as OperatingHours | null | undefined;
   
   const today = new Date().toLocaleDateString('en-US', { 
     weekday: 'long', 
@@ -44,9 +49,14 @@ export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
     <header className="flex items-center justify-between py-6 relative z-50">
       <div>
         <h1 className="text-2xl font-bold">Operations Dashboard</h1>
-        <div className="flex items-center gap-2 text-muted-foreground mt-1">
-          <Calendar className="h-4 w-4" />
-          <span className="text-sm">{today}</span>
+        <div className="flex items-center gap-4 mt-1">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Calendar className="h-4 w-4" />
+            <span className="text-sm">{today}</span>
+          </div>
+          {selectedLocationId && (
+            <TodayHoursIndicator operatingHours={selectedLocationHours} />
+          )}
         </div>
       </div>
 
