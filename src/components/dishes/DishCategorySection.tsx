@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DishMenuBadges } from "@/components/menus/DishMenuBadges";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import type { Dish } from "@/hooks/useDishes";
@@ -88,7 +89,10 @@ export function DishCategorySection({
   const renderDishRow = (dish: Dish, compact = false) => (
     <TableRow key={dish.id} className={cn("group", compact && "h-9")}>
       <TableCell className={cn("font-medium", compact ? "py-1.5" : "py-2")}>
-        {dish.name}
+        <div className="flex flex-col gap-1">
+          <span>{dish.name}</span>
+          <DishMenuBadges dishId={dish.id} maxShow={2} />
+        </div>
       </TableCell>
       <TableCell className={cn("text-muted-foreground", compact ? "py-1.5" : "py-2")}>
         {dish.locations?.name || "All"}
