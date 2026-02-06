@@ -11,12 +11,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, ChevronRight, Link2, AlertCircle, Search, X, Trash2, Filter, Upload, ChevronDown, ChevronUp } from "lucide-react";
 import { MenuUploadDialog } from "@/components/dishes/MenuUploadDialog";
 import { DishCategorySection } from "@/components/dishes/DishCategorySection";
+import { MenuSelector } from "@/components/menus/MenuSelector";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, Dish, DishInsert } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
 import { usePOSMappings, useUpdatePOSMapping, useDeletePOSMapping, useBulkDeletePOSMappings } from "@/hooks/usePOS";
+import { useMenuDishes } from "@/hooks/useMenus";
 import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
@@ -59,8 +61,10 @@ export default function DishesPage() {
   const [dishSearch, setDishSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [allExpanded, setAllExpanded] = useState(true);
+  const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   
   const { data: dishIngredients = [] } = useDishIngredients(selectedDish?.id || null);
+  const { data: menuDishes = [] } = useMenuDishes(selectedMenuId);
 
   // Get dish mappings from POS
   const dishMappings = posMappings.filter(m => m.mapping_type === "dish");
@@ -77,10 +81,22 @@ export default function DishesPage() {
     return matchesSearch && matchesStatus && matchesSim;
   });
 
+  // Get dish IDs in selected menu
+  const menuDishIds = useMemo(() => {
+    if (!selectedMenuId || !menuDishes.length) return null;
+    return new Set(menuDishes.map(md => md.dish_id));
+  }, [selectedMenuId, menuDishes]);
+
   // Group dishes by category
-  const { groupedDishes, availableCategories } = useMemo(() => {
+  const { groupedDishes, availableCategories, filteredCount } = useMemo(() => {
     // Filter dishes first
     let filtered = dishes;
+    
+    // Filter by selected menu
+    if (menuDishIds) {
+      filtered = filtered.filter(d => menuDishIds.has(d.id));
+    }
+    
     if (dishSearch) {
       const search = dishSearch.toLowerCase();
       filtered = filtered.filter(d => 
@@ -92,7 +108,7 @@ export default function DishesPage() {
       filtered = filtered.filter(d => d.category === categoryFilter);
     }
 
-    // Get unique categories from all dishes
+    // Get unique categories from all dishes (not filtered)
     const allCategories = [...new Set(dishes.map(d => d.category || "Uncategorized"))];
     
     // Group filtered dishes
@@ -115,9 +131,10 @@ export default function DishesPage() {
 
     return { 
       groupedDishes: sortedCategories.map(cat => ({ category: cat, dishes: grouped[cat] })),
-      availableCategories: allCategories.sort()
+      availableCategories: allCategories.sort(),
+      filteredCount: filtered.length
     };
-  }, [dishes, dishSearch, categoryFilter]);
+  }, [dishes, dishSearch, categoryFilter, menuDishIds]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -273,6 +290,12 @@ export default function DishesPage() {
         </div>
 
         <TabsContent value="dishes" className="space-y-4">
+          {/* Menu Selector */}
+          <MenuSelector
+            selectedMenuId={selectedMenuId}
+            onMenuSelect={setSelectedMenuId}
+          />
+
           {/* Search & Filters */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -323,7 +346,9 @@ export default function DishesPage() {
               )}
             </Button>
             <div className="ml-auto text-sm text-muted-foreground">
-              {dishes.length} {dishes.length === 1 ? "dish" : "dishes"} total
+              {selectedMenuId 
+                ? `${filteredCount} of ${dishes.length} dishes`
+                : `${dishes.length} ${dishes.length === 1 ? "dish" : "dishes"} total`}
             </div>
           </div>
 
