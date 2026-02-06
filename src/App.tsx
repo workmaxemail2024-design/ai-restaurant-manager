@@ -19,7 +19,7 @@ import SuppliersPage from "./pages/SuppliersPage";
 import IngredientsPage from "./pages/IngredientsPage";
 import StockPage from "./pages/StockPage";
 import DishesPage from "./pages/DishesPage";
-import MenusPage from "./pages/MenusPage";
+
 import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
 import SalesPage from "./pages/SalesPage";
 import ReportsPage from "./pages/ReportsPage";
@@ -88,7 +88,7 @@ const App = () => (
               <Route path="/staff/attendance" element={<ProtectedRoute><AttendancePage /></ProtectedRoute>} />
               <Route path="/staff/kpis" element={<ProtectedRoute><StaffKPIsPage /></ProtectedRoute>} />
               {/* Menu Routes */}
-              <Route path="/menu/menus" element={<ProtectedRoute><MenusPage /></ProtectedRoute>} />
+              
               <Route path="/menu/cost-analysis" element={<ProtectedRoute><CostAnalysisPage /></ProtectedRoute>} />
               <Route path="/menu/engineering" element={<ProtectedRoute><MenuEngineeringPage /></ProtectedRoute>} />
               {/* Inventory Routes */}
