@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, ChevronRight, Link2, AlertCircle, Search, X, Trash2, Filter } from "lucide-react";
+import { Plus, ChevronRight, Link2, AlertCircle, Search, X, Trash2, Filter, Upload } from "lucide-react";
+import { MenuUploadDialog } from "@/components/dishes/MenuUploadDialog";
 import { Badge } from "@/components/ui/badge";
 import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, Dish, DishInsert } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
@@ -40,6 +41,7 @@ export default function DishesPage() {
   
   const [isOpen, setIsOpen] = useState(false);
   const [isRecipeOpen, setIsRecipeOpen] = useState(false);
+  const [isMenuUploadOpen, setIsMenuUploadOpen] = useState(false);
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [editingItem, setEditingItem] = useState<Dish | null>(null);
   const [formData, setFormData] = useState<DishInsert>({ name: "", category: "", selling_price: 0 });
@@ -104,7 +106,7 @@ export default function DishesPage() {
       header: "POS ID",
       render: (item: Dish) => (
         item.captiva_external_id ? (
-          <Badge variant="default" className="bg-green-500/20 text-green-700 font-mono text-xs">
+          <Badge variant="default" className="bg-success/20 text-success font-mono text-xs">
             <Link2 className="h-3 w-3 mr-1" />{item.captiva_external_id}
           </Badge>
         ) : (
@@ -186,12 +188,16 @@ export default function DishesPage() {
             </TabsTrigger>
           </TabsList>
           
-          <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setIsOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" /> Add Dish
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsMenuUploadOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" /> Upload Menu
+            </Button>
+            <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+              <DialogTrigger asChild>
+                <Button onClick={() => setIsOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" /> Add Dish
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingItem ? "Edit Dish" : "Add Dish"}</DialogTitle>
@@ -254,6 +260,9 @@ export default function DishesPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
+
+          <MenuUploadDialog open={isMenuUploadOpen} onOpenChange={setIsMenuUploadOpen} />
         </div>
 
         <TabsContent value="dishes">

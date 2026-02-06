@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.demo-data]
 verify_jwt = true
+
+[functions.ai-menu-extract]
+verify_jwt = true
