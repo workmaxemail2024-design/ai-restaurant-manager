@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
-import { DataTable } from "@/components/common/DataTable";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,9 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Plus, ChevronRight, Link2, AlertCircle, Search, X, Trash2, Filter, Upload } from "lucide-react";
+import { Plus, ChevronRight, Link2, AlertCircle, Search, X, Trash2, Filter, Upload, ChevronDown, ChevronUp } from "lucide-react";
 import { MenuUploadDialog } from "@/components/dishes/MenuUploadDialog";
+import { DishCategorySection } from "@/components/dishes/DishCategorySection";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, Dish, DishInsert } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
@@ -22,7 +23,11 @@ import { formatCurrency } from "@/lib/currency";
 
 const categories = ["Appetizers", "Mains", "Desserts", "Beverages", "Sides", "Other"];
 
+// Category display order for visual hierarchy
+const categoryDisplayOrder = ["Appetizers", "Starters", "Mains", "Sides", "Desserts", "Beverages", "Drinks", "Other"];
+
 type MappingStatusFilter = "all" | "mapped" | "unmapped";
+type CategoryFilter = "all" | string;
 
 export default function DishesPage() {
   const { selectedLocationId } = useLocation();
@@ -50,6 +55,11 @@ export default function DishesPage() {
   const [mappingStatusFilter, setMappingStatusFilter] = useState<MappingStatusFilter>("all");
   const [showSimOnlyMappings, setShowSimOnlyMappings] = useState(false);
   
+  // Dishes tab filters
+  const [dishSearch, setDishSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [allExpanded, setAllExpanded] = useState(true);
+  
   const { data: dishIngredients = [] } = useDishIngredients(selectedDish?.id || null);
 
   // Get dish mappings from POS
@@ -67,63 +77,47 @@ export default function DishesPage() {
     return matchesSearch && matchesStatus && matchesSim;
   });
 
-  const columns = [
-    { key: "name", header: "Name" },
-    { key: "category", header: "Category", render: (item: Dish) => item.category || "-" },
-    { 
-      key: "locations", 
-      header: "Location",
-      render: (item: Dish) => item.locations?.name || "All"
-    },
-    { 
-      key: "selling_price", 
-      header: "Price",
-      render: (item: Dish) => formatCurrency(Number(item.selling_price))
-    },
-    { 
-      key: "dish_cost", 
-      header: "Cost",
-      render: (item: Dish) => formatCurrency(Number(item.dish_cost || 0))
-    },
-    { 
-      key: "profit_margin", 
-      header: "Margin",
-      render: (item: Dish) => {
-        const margin = item.profit_margin || 0;
-        return (
-          <Badge className={cn(
-            margin >= 60 ? "bg-success/20 text-success" : 
-            margin >= 40 ? "bg-warning/20 text-warning" : 
-            "bg-destructive/20 text-destructive"
-          )}>
-            {margin.toFixed(1)}%
-          </Badge>
-        );
-      }
-    },
-    {
-      key: "pos_mapping",
-      header: "POS ID",
-      render: (item: Dish) => (
-        item.captiva_external_id ? (
-          <Badge variant="default" className="bg-success/20 text-success font-mono text-xs">
-            <Link2 className="h-3 w-3 mr-1" />{item.captiva_external_id}
-          </Badge>
-        ) : (
-          <Badge variant="secondary" className="text-muted-foreground">-</Badge>
-        )
-      )
-    },
-    {
-      key: "recipe",
-      header: "Recipe",
-      render: (item: Dish) => (
-        <Button variant="ghost" size="sm" onClick={() => { setSelectedDish(item); setIsRecipeOpen(true); }}>
-          View <ChevronRight className="h-4 w-4" />
-        </Button>
-      )
+  // Group dishes by category
+  const { groupedDishes, availableCategories } = useMemo(() => {
+    // Filter dishes first
+    let filtered = dishes;
+    if (dishSearch) {
+      const search = dishSearch.toLowerCase();
+      filtered = filtered.filter(d => 
+        d.name.toLowerCase().includes(search) ||
+        (d.category?.toLowerCase() || "").includes(search)
+      );
     }
-  ];
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter(d => d.category === categoryFilter);
+    }
+
+    // Get unique categories from all dishes
+    const allCategories = [...new Set(dishes.map(d => d.category || "Uncategorized"))];
+    
+    // Group filtered dishes
+    const grouped = filtered.reduce((acc, dish) => {
+      const cat = dish.category || "Uncategorized";
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(dish);
+      return acc;
+    }, {} as Record<string, Dish[]>);
+
+    // Sort categories by display order
+    const sortedCategories = Object.keys(grouped).sort((a, b) => {
+      const aIdx = categoryDisplayOrder.findIndex(c => a.toLowerCase().includes(c.toLowerCase()));
+      const bIdx = categoryDisplayOrder.findIndex(c => b.toLowerCase().includes(c.toLowerCase()));
+      if (aIdx === -1 && bIdx === -1) return a.localeCompare(b);
+      if (aIdx === -1) return 1;
+      if (bIdx === -1) return -1;
+      return aIdx - bIdx;
+    });
+
+    return { 
+      groupedDishes: sortedCategories.map(cat => ({ category: cat, dishes: grouped[cat] })),
+      availableCategories: allCategories.sort()
+    };
+  }, [dishes, dishSearch, categoryFilter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,6 +166,18 @@ export default function DishesPage() {
     deleteMapping.mutate(mappingId);
   };
 
+  const handleViewRecipe = (dish: Dish) => {
+    setSelectedDish(dish);
+    setIsRecipeOpen(true);
+  };
+
+  const handleDeleteDish = (dish: Dish) => {
+    deleteDish.mutate(dish.id);
+  };
+
+  // Session key for remembering expanded state
+  const sessionKey = `${selectedLocationId || "all"}`;
+
   return (
     <PageLayout title="Menu / Dishes" subtitle="Manage your dishes and recipes">
       <Tabs defaultValue="dishes" className="space-y-4">
@@ -210,6 +216,7 @@ export default function DishesPage() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
+                    autoFocus
                   />
                 </div>
                 <div>
@@ -265,14 +272,117 @@ export default function DishesPage() {
           <MenuUploadDialog open={isMenuUploadOpen} onOpenChange={setIsMenuUploadOpen} />
         </div>
 
-        <TabsContent value="dishes">
-          <DataTable
-            data={dishes}
-            columns={columns}
-            isLoading={isLoading}
-            onEdit={handleEdit}
-            onDelete={(item) => deleteDish.mutate(item.id)}
-          />
+        <TabsContent value="dishes" className="space-y-4">
+          {/* Search & Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search dishes..."
+                value={dishSearch}
+                onChange={(e) => setDishSearch(e.target.value)}
+                className="pl-10"
+              />
+              {dishSearch && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                  onClick={() => setDishSearch("")}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as CategoryFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {availableCategories.map(cat => (
+                  <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => setAllExpanded(!allExpanded)}
+            >
+              {allExpanded ? (
+                <>
+                  <ChevronUp className="h-4 w-4 mr-1" /> Collapse All
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4 mr-1" /> Expand All
+                </>
+              )}
+            </Button>
+            <div className="ml-auto text-sm text-muted-foreground">
+              {dishes.length} {dishes.length === 1 ? "dish" : "dishes"} total
+            </div>
+          </div>
+
+          {/* Category Sections */}
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <Card key={i}>
+                  <CardHeader className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-5 w-5" />
+                      <Skeleton className="h-6 w-32" />
+                      <Skeleton className="h-5 w-16" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 pb-4">
+                    <div className="space-y-2">
+                      {[1, 2, 3].map(j => (
+                        <Skeleton key={j} className="h-10 w-full" />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : groupedDishes.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground mb-4">
+                  {dishSearch || categoryFilter !== "all" 
+                    ? "No dishes match your search criteria" 
+                    : "No dishes yet. Add your first dish to get started."}
+                </p>
+                {(dishSearch || categoryFilter !== "all") && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => { setDishSearch(""); setCategoryFilter("all"); }}
+                  >
+                    Clear Filters
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {groupedDishes.map(({ category, dishes: categoryDishes }) => (
+                <DishCategorySection
+                  key={category}
+                  category={category}
+                  dishes={categoryDishes}
+                  defaultExpanded={allExpanded}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteDish}
+                  onViewRecipe={handleViewRecipe}
+                  sessionKey={sessionKey}
+                />
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="mapping">
