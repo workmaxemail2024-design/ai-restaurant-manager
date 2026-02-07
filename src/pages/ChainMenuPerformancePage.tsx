@@ -4,15 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { useDishes } from '@/hooks/useDishes';
 import { useLocations } from '@/hooks/useLocations';
 import { useSales } from '@/hooks/useSales';
+import { useDateRange } from '@/contexts/DateRangeContext';
 import { Badge } from '@/components/ui/badge';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, AlertTriangle, Lightbulb } from 'lucide-react';
 import { formatCurrency, currencySymbol } from '@/lib/currency';
 
 export default function ChainMenuPerformancePage() {
+  const { startDate, endDate, presetLabel } = useDateRange();
   const { data: dishes } = useDishes();
   const { data: locations } = useLocations();
-  const { data: sales } = useSales();
+  const { data: sales } = useSales(startDate, endDate);
 
   const dishPerformance = useMemo(() => {
     if (!dishes || !locations || !sales) return [];
@@ -91,6 +93,14 @@ export default function ChainMenuPerformancePage() {
       description="Compare dish performance across all locations"
     >
       <div className="space-y-6">
+        {/* Period indicator */}
+        <div className="text-sm text-muted-foreground">
+          Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>
+          {startDate !== endDate && (
+            <span> ({startDate} → {endDate})</span>
+          )}
+        </div>
+
         {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-4">
           <Card>

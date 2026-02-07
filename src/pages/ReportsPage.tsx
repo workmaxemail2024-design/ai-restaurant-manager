@@ -1,20 +1,18 @@
-import { useState } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingUp, Percent, ShoppingBag, FileText, Wallet } from "lucide-react";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useLocation } from "@/contexts/LocationContext";
+import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 import { ProfitLossReport } from "@/components/reports/ProfitLossReport";
 import { CashFlowReport } from "@/components/reports/CashFlowReport";
 
 export default function ReportsPage() {
   const { selectedLocationId } = useLocation();
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const { data: metrics, isLoading } = useDashboardMetrics(date, selectedLocationId);
+  const { startDate, endDate, presetLabel } = useDateRange();
+  const { data: metrics, isLoading } = useDashboardMetrics(startDate, endDate, selectedLocationId);
 
   return (
     <PageLayout title="Reports" subtitle="View business performance metrics and financial reports">
@@ -22,7 +20,7 @@ export default function ReportsPage() {
         <TabsList>
           <TabsTrigger value="daily" className="gap-2">
             <ShoppingBag className="h-4 w-4" />
-            Daily Summary
+            Period Summary
           </TabsTrigger>
           <TabsTrigger value="pnl" className="gap-2">
             <FileText className="h-4 w-4" />
@@ -34,17 +32,13 @@ export default function ReportsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Daily Summary Tab */}
+        {/* Period Summary Tab */}
         <TabsContent value="daily" className="space-y-6">
-          <div className="mb-6">
-            <Label htmlFor="date">Select Date</Label>
-            <Input
-              id="date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-48"
-            />
+          <div className="text-sm text-muted-foreground mb-4">
+            Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>
+            {startDate !== endDate && (
+              <span> ({startDate} → {endDate})</span>
+            )}
           </div>
 
           {isLoading ? (
@@ -99,7 +93,7 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent>
                     {!metrics?.topDishes.length ? (
-                      <p className="text-muted-foreground">No sales data for this date</p>
+                      <p className="text-muted-foreground">No sales data for this period</p>
                     ) : (
                       <div className="space-y-3">
                         {metrics.topDishes.map((dish, i) => (
@@ -123,7 +117,7 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent>
                     {!metrics?.worstDishes.length ? (
-                      <p className="text-muted-foreground">No sales data for this date</p>
+                      <p className="text-muted-foreground">No sales data for this period</p>
                     ) : (
                       <div className="space-y-3">
                         {metrics.worstDishes.map((dish, i) => (
@@ -148,7 +142,7 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent>
                   {!metrics?.locationPerformance.length ? (
-                    <p className="text-muted-foreground">No sales data for this date</p>
+                    <p className="text-muted-foreground">No sales data for this period</p>
                   ) : (
                     <div className="space-y-3">
                       {metrics.locationPerformance.map((loc, i) => (

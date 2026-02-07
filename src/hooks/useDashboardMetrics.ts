@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useRestaurant } from "@/contexts/RestaurantContext";
 
 interface DishMetric { name: string; quantity: number; revenue: number }
 interface LocationMetric { name: string; revenue: number; orders: number }
@@ -15,17 +16,36 @@ export interface DashboardMetrics {
   locationPerformance: LocationMetric[];
 }
 
-export function useDashboardMetrics(date?: string, locationId?: string | null) {
-  const targetDate = date || new Date().toISOString().split("T")[0];
+export function useDashboardMetrics(startDate?: string, endDate?: string, locationId?: string | null) {
+  const { currentRestaurant } = useRestaurant();
+  const restaurantId = currentRestaurant?.id;
+  const targetStartDate = startDate || new Date().toISOString().split("T")[0];
+  const targetEndDate = endDate || targetStartDate;
+  const locationScopeKey = locationId ?? "all";
   
   return useQuery({
-    queryKey: ["dashboard-metrics", targetDate, locationId],
+    queryKey: ["dashboard-metrics", restaurantId, locationScopeKey, targetStartDate, targetEndDate],
     queryFn: async (): Promise<DashboardMetrics> => {
-      // Get sales for the date
+      if (!restaurantId) {
+        return {
+          totalRevenue: 0,
+          totalOrders: 0,
+          avgOrderValue: 0,
+          foodCostPercent: 0,
+          totalProfit: 0,
+          topDishes: [],
+          worstDishes: [],
+          locationPerformance: [],
+        };
+      }
+
+      // Get sales for the date range
       let query = supabase
         .from("sales")
         .select("*, dishes(name, selling_price), locations(name)")
-        .eq("sale_date", targetDate);
+        .eq("restaurant_id", restaurantId)
+        .gte("sale_date", targetStartDate)
+        .lte("sale_date", targetEndDate);
       
       if (locationId) {
         query = query.eq("location_id", locationId);
@@ -88,5 +108,6 @@ export function useDashboardMetrics(date?: string, locationId?: string | null) {
         locationPerformance,
       };
     },
+    enabled: !!restaurantId,
   });
 }

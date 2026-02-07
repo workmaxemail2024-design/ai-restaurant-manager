@@ -16,7 +16,7 @@ import { formatCurrency } from "@/lib/currency";
 
 export default function SalesPage() {
   const { selectedLocationId } = useLocation();
-  const { startDate, endDate } = useDateRange();
+  const { startDate, endDate, presetLabel } = useDateRange();
   const { data: sales = [], isLoading } = useSales(startDate, endDate, selectedLocationId);
   const { data: dishes = [] } = useDishes(selectedLocationId);
   const { data: locations = [] } = useLocations();
@@ -77,6 +77,14 @@ export default function SalesPage() {
 
   return (
     <PageLayout title="Sales" subtitle="Record and track sales">
+      {/* Period indicator */}
+      <div className="text-sm text-muted-foreground mb-4">
+        Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>
+        {startDate !== endDate && (
+          <span> ({startDate} → {endDate})</span>
+        )}
+      </div>
+      
       <div className="flex justify-end mb-4">
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>

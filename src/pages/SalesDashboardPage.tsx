@@ -11,7 +11,7 @@ import { useSales } from "@/hooks/useSales";
 import { useDishes } from "@/hooks/useDishes";
 import { useStaff } from "@/hooks/useStaff";
 import { useLocation } from "@/contexts/LocationContext";
-import { format, subDays } from "date-fns";
+import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency } from "@/lib/currency";
 import {
   ResponsiveContainer,
@@ -27,29 +27,24 @@ import {
 
 export default function SalesDashboardPage() {
   const { selectedLocationId } = useLocation();
-  const today = format(new Date(), "yyyy-MM-dd");
-  const weekAgo = format(subDays(new Date(), 7), "yyyy-MM-dd");
+  const { startDate, endDate, presetLabel } = useDateRange();
   
-  const { data: sales = [], isLoading: salesLoading } = useSales(weekAgo, today, selectedLocationId);
+  const { data: sales = [], isLoading: salesLoading } = useSales(startDate, endDate, selectedLocationId);
   const { data: dishes = [] } = useDishes(selectedLocationId);
   const { data: staff = [] } = useStaff(selectedLocationId);
 
-  // Calculate KPIs
-  const todaySales = useMemo(() => {
-    return sales.filter(s => s.sale_date === today);
-  }, [sales, today]);
+  // Calculate KPIs for the entire date range
+  const totalRevenue = useMemo(() => {
+    return sales.reduce((sum, s) => sum + Number(s.total_price), 0);
+  }, [sales]);
 
-  const totalRevenueToday = useMemo(() => {
-    return todaySales.reduce((sum, s) => sum + Number(s.total_price), 0);
-  }, [todaySales]);
-
-  const totalOrdersToday = useMemo(() => {
-    return todaySales.length;
-  }, [todaySales]);
+  const totalOrders = useMemo(() => {
+    return sales.length;
+  }, [sales]);
 
   const avgOrderValue = useMemo(() => {
-    return totalOrdersToday > 0 ? totalRevenueToday / totalOrdersToday : 0;
-  }, [totalRevenueToday, totalOrdersToday]);
+    return totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  }, [totalRevenue, totalOrders]);
 
   // Top 5 Dishes by revenue
   const topDishes = useMemo(() => {
@@ -78,14 +73,14 @@ export default function SalesDashboardPage() {
     }));
   }, [staff]);
 
-  // Revenue by hour (for today)
+  // Revenue by hour (aggregated across all days in range)
   const revenueByHour = useMemo(() => {
     const hours: Record<number, number> = {};
     for (let i = 6; i <= 23; i++) {
       hours[i] = 0;
     }
 
-    todaySales.forEach(s => {
+    sales.forEach(s => {
       const hour = new Date(s.created_at).getHours();
       if (hours[hour] !== undefined) {
         hours[hour] += Number(s.total_price);
@@ -96,7 +91,7 @@ export default function SalesDashboardPage() {
       hour: `${hour}:00`,
       revenue: Math.round(revenue * 100) / 100
     }));
-  }, [todaySales]);
+  }, [sales]);
 
   // Revenue by category
   const revenueByCategory = useMemo(() => {
@@ -127,14 +122,22 @@ export default function SalesDashboardPage() {
   return (
     <PageLayout title="Sales Dashboard" description="Real-time sales analytics">
       <div className="space-y-6">
+        {/* Period indicator */}
+        <div className="text-sm text-muted-foreground">
+          Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>
+          {startDate !== endDate && (
+            <span> ({startDate} → {endDate})</span>
+          )}
+        </div>
+
         {/* KPI Cards */}
         <div className="grid gap-4 md:grid-cols-4">
           <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Revenue Today</p>
-                  <p className="text-3xl font-bold text-green-600">{formatCurrency(totalRevenueToday)}</p>
+                  <p className="text-sm text-muted-foreground">Revenue</p>
+                  <p className="text-3xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-green-500/20 flex items-center justify-center">
                   <Euro className="h-6 w-6 text-green-600" />
@@ -147,8 +150,8 @@ export default function SalesDashboardPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Orders Today</p>
-                  <p className="text-3xl font-bold text-blue-600">{totalOrdersToday}</p>
+                  <p className="text-sm text-muted-foreground">Orders</p>
+                  <p className="text-3xl font-bold text-blue-600">{totalOrders}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
                   <ShoppingCart className="h-6 w-6 text-blue-600" />
@@ -193,7 +196,7 @@ export default function SalesDashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Revenue by Hour (Today)
+                Revenue by Hour
               </CardTitle>
             </CardHeader>
             <CardContent>
