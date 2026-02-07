@@ -77,7 +77,6 @@ export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
 
         {/* Date Range Selector */}
         <DateRangeSelector />
-
         {/* Notifications */}
         <NotificationDrawer />
 

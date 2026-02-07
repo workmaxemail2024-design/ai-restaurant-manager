@@ -1,8 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { useRestaurant } from './RestaurantContext';
-import { format, subDays, startOfDay } from 'date-fns';
+import { format, subDays, startOfMonth, endOfMonth, subMonths, startOfYear, parseISO, startOfDay, endOfDay } from 'date-fns';
 
-export type DatePreset = 'today' | '7d' | '30d' | 'custom';
+export type DatePreset = 
+  | 'today' 
+  | 'yesterday' 
+  | '7d' 
+  | '30d' 
+  | 'this_month' 
+  | 'last_month' 
+  | 'ytd' 
+  | 'custom';
 
 interface DateRangeContextType {
   preset: DatePreset;
@@ -10,7 +18,11 @@ interface DateRangeContextType {
   endDate: string;   // YYYY-MM-DD
   setPreset: (preset: DatePreset) => void;
   setCustomRange: (startDate: string, endDate: string) => void;
+  setDateRange: (startDate: string, endDate: string, preset: DatePreset) => void;
   presetLabel: string;
+  // Query bounds (for Supabase queries)
+  queryStartDate: string; // ISO datetime start of day
+  queryEndDate: string;   // ISO datetime end of day
 }
 
 const DateRangeContext = createContext<DateRangeContextType | undefined>(undefined);
@@ -23,6 +35,10 @@ function getPresetDates(preset: DatePreset): { startDate: string; endDate: strin
   switch (preset) {
     case 'today':
       return { startDate: today, endDate: today };
+    case 'yesterday': {
+      const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+      return { startDate: yesterday, endDate: yesterday };
+    }
     case '7d':
       return { 
         startDate: format(subDays(new Date(), 6), 'yyyy-MM-dd'), 
@@ -31,6 +47,23 @@ function getPresetDates(preset: DatePreset): { startDate: string; endDate: strin
     case '30d':
       return { 
         startDate: format(subDays(new Date(), 29), 'yyyy-MM-dd'), 
+        endDate: today 
+      };
+    case 'this_month':
+      return { 
+        startDate: format(startOfMonth(new Date()), 'yyyy-MM-dd'), 
+        endDate: today 
+      };
+    case 'last_month': {
+      const lastMonth = subMonths(new Date(), 1);
+      return { 
+        startDate: format(startOfMonth(lastMonth), 'yyyy-MM-dd'), 
+        endDate: format(endOfMonth(lastMonth), 'yyyy-MM-dd') 
+      };
+    }
+    case 'ytd':
+      return { 
+        startDate: format(startOfYear(new Date()), 'yyyy-MM-dd'), 
         endDate: today 
       };
     case 'custom':
@@ -43,14 +76,22 @@ function getPresetLabel(preset: DatePreset): string {
   switch (preset) {
     case 'today':
       return 'Today';
+    case 'yesterday':
+      return 'Yesterday';
     case '7d':
       return 'Last 7 days';
     case '30d':
       return 'Last 30 days';
+    case 'this_month':
+      return 'This month';
+    case 'last_month':
+      return 'Last month';
+    case 'ytd':
+      return 'Year to date';
     case 'custom':
       return 'Custom';
     default:
-      return 'Today';
+      return 'Last 7 days';
   }
 }
 
@@ -60,12 +101,63 @@ interface StoredDateRange {
   endDate?: string;
 }
 
+// Helper to get/set URL params
+function getUrlDateParams(): { from: string | null; to: string | null } {
+  if (typeof window === 'undefined') return { from: null, to: null };
+  const params = new URLSearchParams(window.location.search);
+  return {
+    from: params.get('from'),
+    to: params.get('to')
+  };
+}
+
+function setUrlDateParams(startDate: string, endDate: string) {
+  if (typeof window === 'undefined') return;
+  
+  const url = new URL(window.location.href);
+  url.searchParams.set('from', startDate);
+  url.searchParams.set('to', endDate);
+  
+  // Use replaceState to avoid polluting browser history
+  window.history.replaceState({}, '', url.toString());
+}
+
 export function DateRangeProvider({ children }: { children: ReactNode }) {
   const { currentRestaurant } = useRestaurant();
-  const [preset, setPresetState] = useState<DatePreset>('today');
-  const [startDate, setStartDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
-  const [endDate, setEndDate] = useState<string>(() => format(new Date(), 'yyyy-MM-dd'));
+  
+  // Default to last 7 days instead of today for better initial data view
+  const defaultDates = getPresetDates('7d');
+  const [preset, setPresetState] = useState<DatePreset>('7d');
+  const [startDate, setStartDate] = useState<string>(defaultDates.startDate);
+  const [endDate, setEndDate] = useState<string>(defaultDates.endDate);
   const previousRestaurantId = useRef<string | null>(null);
+  const initialized = useRef(false);
+
+  // Initialize from URL params on mount
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+    
+    const urlParams = getUrlDateParams();
+    if (urlParams.from && urlParams.to) {
+      // Validate dates
+      try {
+        const fromDate = parseISO(urlParams.from);
+        const toDate = parseISO(urlParams.to);
+        if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
+          setPresetState('custom');
+          setStartDate(urlParams.from);
+          setEndDate(urlParams.to);
+          return;
+        }
+      } catch {
+        // Invalid dates, fall through to defaults
+      }
+    }
+    
+    // No valid URL params, set defaults to URL
+    setUrlDateParams(defaultDates.startDate, defaultDates.endDate);
+  }, []);
 
   // Load date range from localStorage when restaurant changes
   useEffect(() => {
@@ -74,6 +166,24 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       
       // If switching restaurants, try to load stored preference for new restaurant
       if (previousRestaurantId.current !== currentRestaurant.id) {
+        // Check URL first (takes precedence)
+        const urlParams = getUrlDateParams();
+        if (urlParams.from && urlParams.to) {
+          try {
+            const fromDate = parseISO(urlParams.from);
+            const toDate = parseISO(urlParams.to);
+            if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
+              setPresetState('custom');
+              setStartDate(urlParams.from);
+              setEndDate(urlParams.to);
+              previousRestaurantId.current = currentRestaurant.id;
+              return;
+            }
+          } catch {
+            // Invalid dates
+          }
+        }
+        
         try {
           const stored = localStorage.getItem(storageKey);
           if (stored) {
@@ -83,35 +193,32 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
             if (parsed.preset === 'custom' && parsed.startDate && parsed.endDate) {
               setStartDate(parsed.startDate);
               setEndDate(parsed.endDate);
+              setUrlDateParams(parsed.startDate, parsed.endDate);
             } else {
               const dates = getPresetDates(parsed.preset);
               setStartDate(dates.startDate);
               setEndDate(dates.endDate);
+              setUrlDateParams(dates.startDate, dates.endDate);
             }
           } else {
-            // Default to 'today' for new restaurants
-            setPresetState('today');
-            const dates = getPresetDates('today');
+            // Default to 7d for new restaurants
+            setPresetState('7d');
+            const dates = getPresetDates('7d');
             setStartDate(dates.startDate);
             setEndDate(dates.endDate);
+            setUrlDateParams(dates.startDate, dates.endDate);
           }
         } catch {
           // Reset to default on parse error
-          setPresetState('today');
-          const dates = getPresetDates('today');
+          setPresetState('7d');
+          const dates = getPresetDates('7d');
           setStartDate(dates.startDate);
           setEndDate(dates.endDate);
+          setUrlDateParams(dates.startDate, dates.endDate);
         }
       }
       
       previousRestaurantId.current = currentRestaurant.id;
-    } else {
-      // No restaurant - reset to default
-      setPresetState('today');
-      const dates = getPresetDates('today');
-      setStartDate(dates.startDate);
-      setEndDate(dates.endDate);
-      previousRestaurantId.current = null;
     }
   }, [currentRestaurant?.id]);
 
@@ -134,6 +241,7 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       const dates = getPresetDates(newPreset);
       setStartDate(dates.startDate);
       setEndDate(dates.endDate);
+      setUrlDateParams(dates.startDate, dates.endDate);
       persistToStorage(newPreset);
     }
   }, [persistToStorage]);
@@ -142,10 +250,24 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
     setPresetState('custom');
     setStartDate(newStartDate);
     setEndDate(newEndDate);
+    setUrlDateParams(newStartDate, newEndDate);
     persistToStorage('custom', newStartDate, newEndDate);
   }, [persistToStorage]);
 
+  // Combined setter for DateRangePicker component
+  const setDateRange = useCallback((newStartDate: string, newEndDate: string, newPreset: DatePreset) => {
+    setPresetState(newPreset);
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+    setUrlDateParams(newStartDate, newEndDate);
+    persistToStorage(newPreset, newStartDate, newEndDate);
+  }, [persistToStorage]);
+
   const presetLabel = getPresetLabel(preset);
+
+  // Compute query bounds (start of day, end of day) for inclusive querying
+  const queryStartDate = useMemo(() => `${startDate}T00:00:00`, [startDate]);
+  const queryEndDate = useMemo(() => `${endDate}T23:59:59.999`, [endDate]);
 
   return (
     <DateRangeContext.Provider value={{ 
@@ -154,7 +276,10 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
       endDate, 
       setPreset, 
       setCustomRange,
-      presetLabel 
+      setDateRange,
+      presetLabel,
+      queryStartDate,
+      queryEndDate
     }}>
       {children}
     </DateRangeContext.Provider>

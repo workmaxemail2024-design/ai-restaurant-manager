@@ -240,9 +240,9 @@ export function useDeleteShift() {
 }
 
 // Attendance
-export function useStaffAttendance(startDate?: string, endDate?: string) {
+export function useStaffAttendance(startDate?: string, endDate?: string, locationId?: string | null) {
   return useQuery({
-    queryKey: ["staff-attendance", startDate, endDate],
+    queryKey: ["staff-attendance", startDate, endDate, locationId ?? "all"],
     queryFn: async () => {
       let query = supabase
         .from("staff_attendance")
@@ -251,6 +251,7 @@ export function useStaffAttendance(startDate?: string, endDate?: string) {
       
       if (startDate) query = query.gte("clock_in", startDate);
       if (endDate) query = query.lte("clock_in", endDate);
+      if (locationId) query = query.eq("location_id", locationId);
       
       const { data, error } = await query;
       if (error) throw error;

@@ -8,13 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, LogIn, LogOut } from "lucide-react";
 import { useStaff, useStaffAttendance, useClockIn, useClockOut, StaffAttendance } from "@/hooks/useStaff";
 import { useLocations } from "@/hooks/useLocations";
+import { useDateRange } from "@/contexts/DateRangeContext";
+import { useLocation } from "@/contexts/LocationContext";
 import { format, parseISO, differenceInMinutes } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 
 export default function AttendancePage() {
   const { data: staff = [] } = useStaff();
   const { data: locations = [] } = useLocations();
-  const { data: attendance = [], isLoading } = useStaffAttendance();
+  const { startDate, endDate, queryStartDate, queryEndDate, presetLabel } = useDateRange();
+  const { selectedLocationId } = useLocation();
+  
+  // Use query bounds for attendance (datetime-based), filter by selected location
+  const { data: attendance = [], isLoading } = useStaffAttendance(queryStartDate, queryEndDate, selectedLocationId);
   const clockIn = useClockIn();
   const clockOut = useClockOut();
 
@@ -32,6 +38,13 @@ export default function AttendancePage() {
 
   // Find active clock-ins (no clock_out)
   const activeSessions = attendance.filter(a => !a.clock_out);
+
+  // Calculate total hours in the period
+  const totalHours = attendance.reduce((sum, a) => {
+    if (!a.clock_out) return sum;
+    const mins = differenceInMinutes(parseISO(a.clock_out), parseISO(a.clock_in));
+    return sum + mins / 60;
+  }, 0);
 
   const columns = [
     { 
@@ -128,6 +141,15 @@ export default function AttendancePage() {
       }
     >
       <div className="space-y-4">
+        {/* Period indicator */}
+        <div className="text-sm text-muted-foreground">
+          Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>
+          {startDate !== endDate && (
+            <span> ({startDate} → {endDate})</span>
+          )}
+          <span className="ml-4">Total hours: <span className="font-medium text-foreground">{totalHours.toFixed(1)}h</span></span>
+        </div>
+
         {/* Active Sessions */}
         {activeSessions.length > 0 && (
           <Card className="border-primary/50 bg-primary/5">
