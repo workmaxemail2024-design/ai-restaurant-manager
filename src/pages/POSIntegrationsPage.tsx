@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
   Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3,
-  Pencil
+  Pencil, Info
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
@@ -29,6 +29,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { POSDishMappingTab } from "@/components/pos/POSDishMappingTab";
 import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
 import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
+import { useDateRangeCoverage } from "@/hooks/usePOSDateCoverage";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -229,6 +230,37 @@ export default function POSIntegrationsPage() {
     }
   }, [syncModalIntegration, syncDatePreset, syncCustomStart, syncCustomEnd, captivaSyncNow, toast]);
 
+  // Calculate sync date range for coverage check
+  const getSyncDateRange = useMemo(() => {
+    const today = new Date();
+    if (syncDatePreset === "yesterday") {
+      const yesterday = subDays(today, 1);
+      return {
+        dateFrom: format(startOfDay(yesterday), "yyyy-MM-dd"),
+        dateTo: format(endOfDay(yesterday), "yyyy-MM-dd"),
+      };
+    } else if (syncDatePreset === "last7") {
+      return {
+        dateFrom: format(startOfDay(subDays(today, 7)), "yyyy-MM-dd"),
+        dateTo: format(endOfDay(subDays(today, 1)), "yyyy-MM-dd"),
+      };
+    } else {
+      return {
+        dateFrom: syncCustomStart ? format(syncCustomStart, "yyyy-MM-dd") : "",
+        dateTo: syncCustomEnd ? format(syncCustomEnd, "yyyy-MM-dd") : "",
+      };
+    }
+  }, [syncDatePreset, syncCustomStart, syncCustomEnd]);
+
+  // Fetch coverage stats for sync modal
+  const syncCoverage = useDateRangeCoverage({
+    locationId: syncModalIntegration?.location_id ?? null,
+    posProvider: syncModalIntegration?.pos_provider ?? '',
+    dateFrom: getSyncDateRange.dateFrom,
+    dateTo: getSyncDateRange.dateTo,
+    enabled: syncModalOpen && !!syncModalIntegration,
+  });
+
   const getApplyDateRange = useCallback(() => {
     const today = new Date();
     if (applyDatePreset === "yesterday") {
@@ -249,6 +281,15 @@ export default function POSIntegrationsPage() {
       };
     }
   }, [applyDatePreset, applyCustomStart, applyCustomEnd]);
+
+  // Fetch coverage stats for apply modal
+  const applyCoverage = useDateRangeCoverage({
+    locationId: applyModalIntegration?.location_id ?? null,
+    posProvider: applyModalIntegration?.pos_provider ?? '',
+    dateFrom: getApplyDateRange().dateFrom,
+    dateTo: getApplyDateRange().dateTo,
+    enabled: applyModalOpen && !!applyModalIntegration,
+  });
 
   const handleOpenApplyModal = useCallback(async (integration: POSIntegration) => {
     setApplyModalIntegration(integration);
@@ -993,7 +1034,36 @@ export default function POSIntegrationsPage() {
                   onStartDateChange={setSyncCustomStart}
                   onEndDateChange={setSyncCustomEnd}
                   disabled={(date) => date > new Date()}
+                  locationId={syncModalIntegration?.location_id}
+                  posProvider={syncModalIntegration?.pos_provider}
+                  showCoverageMarkers={true}
                 />
+              )}
+
+              {/* Coverage Warning */}
+              {syncCoverage.data && (syncCoverage.data.allCovered || syncCoverage.data.partiallyCovered) && (
+                <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
+                  syncCoverage.data.allCovered 
+                    ? "bg-muted/50 text-muted-foreground" 
+                    : "bg-accent/50 text-accent-foreground"
+                }`}>
+                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    {syncCoverage.data.allCovered ? (
+                      <span>
+                        All {syncCoverage.data.totalDays} days in this range already have imported data.
+                        <span className="block text-xs opacity-80 mt-0.5">
+                          Import will refresh/update existing records — no duplicates will be created.
+                        </span>
+                      </span>
+                    ) : (
+                      <span>
+                        {syncCoverage.data.daysWithImports} of {syncCoverage.data.totalDays} days already imported,{" "}
+                        <strong>{syncCoverage.data.newDays} new</strong>.
+                      </span>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
             <DialogFooter>
@@ -1058,7 +1128,30 @@ export default function POSIntegrationsPage() {
                   onStartDateChange={(d) => { setApplyCustomStart(d); setApplyPreview(null); }}
                   onEndDateChange={(d) => { setApplyCustomEnd(d); setApplyPreview(null); }}
                   disabled={(date) => date > new Date()}
+                  locationId={applyModalIntegration?.location_id}
+                  posProvider={applyModalIntegration?.pos_provider}
+                  showCoverageMarkers={true}
                 />
+              )}
+
+              {/* Coverage Info (before preview) */}
+              {applyCoverage.data && !applyPreview && (applyCoverage.data.daysWithImports > 0 || applyCoverage.data.daysWithApplied > 0) && (
+                <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
+                  applyCoverage.data.daysWithApplied >= applyCoverage.data.totalDays
+                    ? "bg-muted/50 text-muted-foreground"
+                    : "bg-accent/50 text-accent-foreground"
+                }`}>
+                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    {applyCoverage.data.daysWithImports} days with imported data
+                    {applyCoverage.data.daysWithApplied > 0 && (
+                      <span className="opacity-80">, {applyCoverage.data.daysWithApplied} already applied</span>
+                    )}
+                    <span className="block text-xs opacity-80 mt-0.5">
+                      Click Preview to see exactly what will be applied.
+                    </span>
+                  </div>
+                </div>
               )}
 
               {/* Preview Section */}
