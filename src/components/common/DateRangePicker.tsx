@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { CalendarDays, Check } from "lucide-react";
 import { format, subDays, startOfMonth, endOfMonth, subMonths, startOfYear } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,7 +17,10 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { DateRange } from "react-day-picker";
+import { DateRange, DayContentProps } from "react-day-picker";
+import { useCalendarDataDays } from "@/hooks/useCalendarDataDays";
+import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useLocation } from "@/contexts/LocationContext";
 
 export type DatePreset = 
   | 'today' 
@@ -98,6 +101,20 @@ export function DateRangePicker({
     from: new Date(startDate),
     to: new Date(endDate)
   });
+  const [visibleMonth, setVisibleMonth] = useState<Date>(new Date(startDate));
+  
+  // Get restaurant and location for data days hook
+  const { currentRestaurant } = useRestaurant();
+  const { selectedLocationId } = useLocation();
+
+  // Fetch data days only when picker is open (lazy load)
+  const { data: dataDays } = useCalendarDataDays({
+    visibleMonth,
+    restaurantId: currentRestaurant?.id ?? null,
+    locationId: selectedLocationId,
+    enabled: open
+  });
+
 
   // Sync temp state when external props change
   useEffect(() => {
@@ -119,6 +136,10 @@ export function DateRangePicker({
     if (range?.from && range?.to) {
       setSelectedPreset('custom');
     }
+  };
+
+  const handleMonthChange = (month: Date) => {
+    setVisibleMonth(month);
   };
 
   const handleApply = () => {
@@ -199,10 +220,25 @@ export function DateRangePicker({
           mode="range"
           selected={tempRange}
           onSelect={handleRangeSelect}
+          onMonthChange={handleMonthChange}
           numberOfMonths={isMobile ? 1 : 2}
           disabled={(date) => date > new Date()}
           className="rounded-md border pointer-events-auto"
           showOutsideDays={false}
+          components={{
+            DayContent: ({ date, ...props }: DayContentProps) => {
+              const dateStr = format(date, 'yyyy-MM-dd');
+              const hasData = dataDays?.has(dateStr) ?? false;
+              return (
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <span>{date.getDate()}</span>
+                  {hasData && (
+                    <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary" />
+                  )}
+                </div>
+              );
+            }
+          }}
         />
         <p className="text-xs text-muted-foreground mt-2">
           {tempRange?.from && tempRange?.to ? (
