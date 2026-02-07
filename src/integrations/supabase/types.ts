@@ -377,10 +377,14 @@ export type Database = {
       }
       ingredients: {
         Row: {
+          cost_per_pack: number | null
           created_at: string
           default_cost_price: number
           id: string
           name: string
+          pack_size: number | null
+          pack_unit: string | null
+          purchase_unit: string | null
           restaurant_id: string | null
           storage_type: Database["public"]["Enums"]["storage_type"]
           supplier_id: string | null
@@ -388,10 +392,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cost_per_pack?: number | null
           created_at?: string
           default_cost_price?: number
           id?: string
           name: string
+          pack_size?: number | null
+          pack_unit?: string | null
+          purchase_unit?: string | null
           restaurant_id?: string | null
           storage_type?: Database["public"]["Enums"]["storage_type"]
           supplier_id?: string | null
@@ -399,10 +407,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cost_per_pack?: number | null
           created_at?: string
           default_cost_price?: number
           id?: string
           name?: string
+          pack_size?: number | null
+          pack_unit?: string | null
+          purchase_unit?: string | null
           restaurant_id?: string | null
           storage_type?: Database["public"]["Enums"]["storage_type"]
           supplier_id?: string | null
@@ -1831,6 +1843,10 @@ export type Database = {
         Returns: string
       }
       ensure_user_restaurant: { Args: never; Returns: Json }
+      get_ingredient_base_cost: {
+        Args: { p_ingredient_id: string }
+        Returns: number
+      }
       get_latest_ingredient_price: {
         Args: { p_ingredient_id: string }
         Returns: number

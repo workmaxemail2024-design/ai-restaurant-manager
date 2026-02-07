@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, Dish, DishInsert } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
-import { useIngredients } from "@/hooks/useIngredients";
+import { useIngredients, calculateBaseCost, getBaseUnit } from "@/hooks/useIngredients";
 import { usePOSMappings, useUpdatePOSMapping, useDeletePOSMapping, useBulkDeletePOSMappings } from "@/hooks/usePOS";
 import { useMenuDishes } from "@/hooks/useMenus";
 import { useLocation } from "@/contexts/LocationContext";
@@ -644,16 +644,20 @@ export default function DishesPage() {
                     <SelectValue placeholder="Select ingredient" />
                   </SelectTrigger>
                   <SelectContent>
-                    {ingredients.map((ing) => (
-                      <SelectItem key={ing.id} value={ing.id}>
-                        {ing.name} ({ing.unit}) - {formatCurrency(Number(ing.default_cost_price))}/{ing.unit}
-                      </SelectItem>
-                    ))}
+                    {ingredients.map((ing) => {
+                      const baseCost = calculateBaseCost(ing);
+                      const baseUnit = getBaseUnit(ing.pack_unit);
+                      return (
+                        <SelectItem key={ing.id} value={ing.id}>
+                          {ing.name} ({ing.unit}) - {formatCurrency(baseCost)}/{baseUnit}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
               <div className="w-32">
-                <Label>Quantity</Label>
+                <Label>Qty ({recipeForm.ingredient_id ? getBaseUnit(ingredients.find(i => i.id === recipeForm.ingredient_id)?.pack_unit) : "unit"})</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -667,7 +671,7 @@ export default function DishesPage() {
               </Button>
             </form>
             
-            {/* Ingredients List */}
+            {/* Ingredients List with Live Costing */}
             <div className="border border-border rounded-lg divide-y divide-border">
               <div className="grid grid-cols-4 gap-4 p-3 bg-muted/50 text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 <span>Ingredient</span>
@@ -678,33 +682,51 @@ export default function DishesPage() {
               {dishIngredients.length === 0 ? (
                 <p className="p-4 text-muted-foreground text-center">No ingredients added yet. Add ingredients to calculate food cost.</p>
               ) : (
-                dishIngredients.map((item) => {
-                  const ingredientData = ingredients.find(i => i.id === item.ingredient_id);
-                  const unitCost = Number(ingredientData?.default_cost_price || 0);
-                  const lineCost = unitCost * Number(item.quantity);
-                  return (
-                    <div key={item.id} className="grid grid-cols-4 gap-4 p-3 items-center">
-                      <span className="font-medium">{item.ingredients?.name}</span>
-                      <span className="text-right text-muted-foreground">
-                        {Number(item.quantity).toFixed(2)} {item.ingredients?.unit}
-                      </span>
-                      <span className="text-right text-muted-foreground">
-                        {formatCurrency(unitCost)}
-                      </span>
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="font-medium">{formatCurrency(lineCost)}</span>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-destructive h-7 w-7 p-0"
-                          onClick={() => removeIngredient.mutate({ id: item.id, dish_id: selectedDish!.id })}
-                        >
-                          ×
-                        </Button>
+                <>
+                  {dishIngredients.map((item) => {
+                    const ingredientData = ingredients.find(i => i.id === item.ingredient_id);
+                    const baseCost = ingredientData ? calculateBaseCost(ingredientData) : 0;
+                    const baseUnit = getBaseUnit(ingredientData?.pack_unit);
+                    const lineCost = baseCost * Number(item.quantity);
+                    return (
+                      <div key={item.id} className="grid grid-cols-4 gap-4 p-3 items-center">
+                        <span className="font-medium">{item.ingredients?.name}</span>
+                        <span className="text-right text-muted-foreground">
+                          {Number(item.quantity).toFixed(2)} {baseUnit}
+                        </span>
+                        <span className="text-right text-muted-foreground">
+                          {formatCurrency(baseCost)}/{baseUnit}
+                        </span>
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="font-medium">{formatCurrency(lineCost)}</span>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-destructive h-7 w-7 p-0"
+                            onClick={() => removeIngredient.mutate({ id: item.id, dish_id: selectedDish!.id })}
+                          >
+                            ×
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                  {/* Total Row */}
+                  <div className="grid grid-cols-4 gap-4 p-3 bg-muted/30 items-center border-t-2 border-border">
+                    <span className="font-semibold">Total Food Cost</span>
+                    <span></span>
+                    <span></span>
+                    <span className="text-right font-semibold text-lg">
+                      {formatCurrency(
+                        dishIngredients.reduce((sum, item) => {
+                          const ingredientData = ingredients.find(i => i.id === item.ingredient_id);
+                          const baseCost = ingredientData ? calculateBaseCost(ingredientData) : 0;
+                          return sum + (baseCost * Number(item.quantity));
+                        }, 0)
+                      )}
+                    </span>
+                  </div>
+                </>
               )}
             </div>
           </div>

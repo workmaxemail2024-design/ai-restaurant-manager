@@ -4,6 +4,8 @@ import { toast } from "@/hooks/use-toast";
 
 export type UnitType = "kg" | "g" | "L" | "ml" | "oz" | "each";
 export type StorageType = "freezer" | "fridge" | "dry";
+export type PackUnit = "each" | "g" | "kg" | "ml" | "L";
+export type PurchaseUnit = "each" | "g" | "kg" | "ml" | "L" | "case";
 
 export interface Ingredient {
   id: string;
@@ -12,6 +14,10 @@ export interface Ingredient {
   supplier_id: string | null;
   storage_type: StorageType;
   default_cost_price: number;
+  purchase_unit: PurchaseUnit | null;
+  pack_size: number | null;
+  pack_unit: PackUnit | null;
+  cost_per_pack: number | null;
   created_at: string;
   updated_at: string;
   suppliers?: { name: string } | null;
@@ -23,7 +29,47 @@ export type IngredientInsert = {
   supplier_id?: string | null;
   storage_type: StorageType;
   default_cost_price: number;
+  purchase_unit?: PurchaseUnit | null;
+  pack_size?: number | null;
+  pack_unit?: PackUnit | null;
+  cost_per_pack?: number | null;
 };
+
+// Calculate cost per base unit (g for weight, ml for volume, each for count)
+export function calculateBaseCost(ingredient: Ingredient): number {
+  const { pack_size, pack_unit, cost_per_pack, default_cost_price } = ingredient;
+  
+  // Fallback to default_cost_price if pack data not set (backward compatibility)
+  if (!pack_size || pack_size <= 0 || !cost_per_pack || cost_per_pack <= 0) {
+    return Number(default_cost_price) || 0;
+  }
+  
+  // Calculate multiplier to convert to base units
+  let multiplier = 1;
+  switch (pack_unit) {
+    case "kg": multiplier = 1000; break; // 1kg = 1000g
+    case "L": multiplier = 1000; break;  // 1L = 1000ml
+    case "g":
+    case "ml":
+    case "each":
+    default: multiplier = 1;
+  }
+  
+  return cost_per_pack / (pack_size * multiplier);
+}
+
+// Get display unit for base cost (g, ml, or each)
+export function getBaseUnit(packUnit: PackUnit | null | undefined): string {
+  if (!packUnit) return "unit";
+  switch (packUnit) {
+    case "kg":
+    case "g": return "g";
+    case "L":
+    case "ml": return "ml";
+    case "each":
+    default: return "each";
+  }
+}
 
 export function useIngredients() {
   return useQuery({
