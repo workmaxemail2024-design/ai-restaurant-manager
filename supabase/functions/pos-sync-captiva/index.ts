@@ -224,41 +224,43 @@ serve(async (req) => {
 
     console.log(`Processing ${salesData.length} sales records`);
 
-    // Process and insert sales with idempotency check
+    // Process and insert sales with idempotency via upsert
     for (const sale of salesData) {
       const saleRecord = sale as Record<string, unknown>;
       const externalSaleId = String(saleRecord.receipt_id || saleRecord.id || saleRecord.sale_id || `${Date.now()}-${Math.random()}`);
+      const mappedSaleDate = saleRecord.sale_date ? String(saleRecord.sale_date).split("T")[0] : null;
+      const mappedTotalPrice = typeof saleRecord.total === "number" ? saleRecord.total : parseFloat(String(saleRecord.total || 0));
 
-      // Check if this sale already exists (idempotency)
-      const { data: existing } = await adminClient
+      // Upsert the sale record (insert or update on conflict)
+      // This ensures idempotency - reimporting the same date range updates existing records
+      const { data: upserted, error: upsertError } = await adminClient
         .from("pos_sales_import")
+        .upsert(
+          {
+            location_id,
+            restaurant_id: integration.restaurant_id,
+            pos_provider: "captiva",
+            external_sale_id: externalSaleId,
+            data: saleRecord,
+            mapped_sale_date: mappedSaleDate,
+            mapped_total_price: mappedTotalPrice,
+            sync_status: "pending",
+          },
+          {
+            onConflict: "location_id,pos_provider,external_sale_id",
+            ignoreDuplicates: false,
+          }
+        )
         .select("id")
-        .eq("location_id", location_id)
-        .eq("pos_provider", "captiva")
-        .eq("external_sale_id", externalSaleId)
-        .maybeSingle();
+        .single();
 
-      if (existing) {
-        result.skipped_duplicates++;
-        continue;
-      }
-
-      // Insert the sale record
-      const { error: insertError } = await adminClient
-        .from("pos_sales_import")
-        .insert({
-          location_id,
-          restaurant_id: integration.restaurant_id,
-          pos_provider: "captiva",
-          external_sale_id: externalSaleId,
-          data: saleRecord,
-          mapped_sale_date: saleRecord.sale_date ? String(saleRecord.sale_date).split("T")[0] : null,
-          mapped_total_price: typeof saleRecord.total === "number" ? saleRecord.total : parseFloat(String(saleRecord.total || 0)),
-          sync_status: "pending",
-        });
-
-      if (insertError) {
-        console.error("Failed to insert sale:", insertError);
+      if (upsertError) {
+        // Check if it's a conflict/update (which means it was already there)
+        if (upsertError.code === "23505" || upsertError.message?.includes("duplicate")) {
+          result.skipped_duplicates++;
+        } else {
+          console.error("Failed to upsert sale:", upsertError);
+        }
       } else {
         result.sales_imported++;
         // Count line items if present
