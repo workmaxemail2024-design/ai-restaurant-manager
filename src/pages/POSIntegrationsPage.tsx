@@ -28,6 +28,7 @@ import { formatCurrency } from "@/lib/currency";
 import { Calendar } from "@/components/ui/calendar";
 import { POSDishMappingTab } from "@/components/pos/POSDishMappingTab";
 import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
+import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -959,7 +960,7 @@ export default function POSIntegrationsPage() {
 
         {/* Sync Now Modal */}
         <Dialog open={syncModalOpen} onOpenChange={setSyncModalOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Download className="h-5 w-5" />
@@ -986,28 +987,13 @@ export default function POSIntegrationsPage() {
               </RadioGroup>
 
               {syncDatePreset === "custom" && (
-                <div className="flex gap-4">
-                  <div className="space-y-2 flex-1">
-                    <Label className="text-xs text-muted-foreground">Start Date</Label>
-                    <Calendar
-                      mode="single"
-                      selected={syncCustomStart}
-                      onSelect={setSyncCustomStart}
-                      className="rounded-md border pointer-events-auto"
-                      disabled={(date) => date > new Date()}
-                    />
-                  </div>
-                  <div className="space-y-2 flex-1">
-                    <Label className="text-xs text-muted-foreground">End Date</Label>
-                    <Calendar
-                      mode="single"
-                      selected={syncCustomEnd}
-                      onSelect={setSyncCustomEnd}
-                      className="rounded-md border pointer-events-auto"
-                      disabled={(date) => date > new Date() || (syncCustomStart && date < syncCustomStart)}
-                    />
-                  </div>
-                </div>
+                <DualCalendarPicker
+                  startDate={syncCustomStart}
+                  endDate={syncCustomEnd}
+                  onStartDateChange={setSyncCustomStart}
+                  onEndDateChange={setSyncCustomEnd}
+                  disabled={(date) => date > new Date()}
+                />
               )}
             </div>
             <DialogFooter>
@@ -1036,7 +1022,7 @@ export default function POSIntegrationsPage() {
           setApplyModalOpen(open);
           if (!open) setApplyPreview(null);
         }}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5" />
@@ -1066,28 +1052,13 @@ export default function POSIntegrationsPage() {
               </RadioGroup>
 
               {applyDatePreset === "custom" && (
-                <div className="flex gap-4">
-                  <div className="space-y-2 flex-1">
-                    <Label className="text-xs text-muted-foreground">Start Date</Label>
-                    <Calendar
-                      mode="single"
-                      selected={applyCustomStart}
-                      onSelect={(d) => { setApplyCustomStart(d); setApplyPreview(null); }}
-                      className="rounded-md border pointer-events-auto"
-                      disabled={(date) => date > new Date()}
-                    />
-                  </div>
-                  <div className="space-y-2 flex-1">
-                    <Label className="text-xs text-muted-foreground">End Date</Label>
-                    <Calendar
-                      mode="single"
-                      selected={applyCustomEnd}
-                      onSelect={(d) => { setApplyCustomEnd(d); setApplyPreview(null); }}
-                      className="rounded-md border pointer-events-auto"
-                      disabled={(date) => date > new Date() || (applyCustomStart && date < applyCustomStart)}
-                    />
-                  </div>
-                </div>
+                <DualCalendarPicker
+                  startDate={applyCustomStart}
+                  endDate={applyCustomEnd}
+                  onStartDateChange={(d) => { setApplyCustomStart(d); setApplyPreview(null); }}
+                  onEndDateChange={(d) => { setApplyCustomEnd(d); setApplyPreview(null); }}
+                  disabled={(date) => date > new Date()}
+                />
               )}
 
               {/* Preview Section */}
