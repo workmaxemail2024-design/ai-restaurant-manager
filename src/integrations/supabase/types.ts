@@ -154,11 +154,15 @@ export type Database = {
         Row: {
           additional_expenses: number | null
           covers: number | null
+          covers_unknown: boolean
           created_at: string
           entry_date: string
           id: string
+          is_closed: boolean
           labour_hours: number | null
           location_id: string | null
+          manual_orders: number | null
+          manual_revenue: number | null
           notes: string | null
           restaurant_id: string
           updated_at: string
@@ -166,11 +170,15 @@ export type Database = {
         Insert: {
           additional_expenses?: number | null
           covers?: number | null
+          covers_unknown?: boolean
           created_at?: string
           entry_date: string
           id?: string
+          is_closed?: boolean
           labour_hours?: number | null
           location_id?: string | null
+          manual_orders?: number | null
+          manual_revenue?: number | null
           notes?: string | null
           restaurant_id: string
           updated_at?: string
@@ -178,11 +186,15 @@ export type Database = {
         Update: {
           additional_expenses?: number | null
           covers?: number | null
+          covers_unknown?: boolean
           created_at?: string
           entry_date?: string
           id?: string
+          is_closed?: boolean
           labour_hours?: number | null
           location_id?: string | null
+          manual_orders?: number | null
+          manual_revenue?: number | null
           notes?: string | null
           restaurant_id?: string
           updated_at?: string
