@@ -10,6 +10,43 @@ export interface LedgerEntry {
   labour_hours: number;
   additional_expenses: number;
   notes: string;
+  is_closed: boolean;
+  manual_revenue: number | null;
+  manual_orders: number | null;
+  covers_unknown: boolean;
+}
+
+export type MissingField = "SALES" | "LABOUR_HOURS" | "COVERS";
+
+export interface DayCompleteness {
+  missing: MissingField[];
+  isComplete: boolean;
+}
+
+/** Evaluate which required fields are missing for a day */
+export function evaluateMissing(
+  hasSalesData: boolean,
+  ledger?: LedgerEntry
+): DayCompleteness {
+  const missing: MissingField[] = [];
+
+  // Sales: present if actual sales exist, OR day marked closed, OR manual override provided
+  const salesOk =
+    hasSalesData ||
+    ledger?.is_closed ||
+    (ledger?.manual_revenue != null && ledger.manual_revenue > 0);
+  if (!salesOk) missing.push("SALES");
+
+  // Labour hours: present if ledger has labour_hours > 0
+  const labourOk = (ledger?.labour_hours ?? 0) > 0;
+  if (!labourOk) missing.push("LABOUR_HOURS");
+
+  // Covers: present if ledger has covers > 0 OR explicitly marked unknown
+  const coversOk =
+    (ledger?.covers ?? 0) > 0 || ledger?.covers_unknown === true;
+  if (!coversOk) missing.push("COVERS");
+
+  return { missing, isComplete: missing.length === 0 };
 }
 
 export function useDailyLedger(
@@ -53,6 +90,10 @@ export function useDailyLedger(
           labour_hours: Number(row.labour_hours) || 0,
           additional_expenses: Number(row.additional_expenses) || 0,
           notes: row.notes ?? "",
+          is_closed: (row as any).is_closed ?? false,
+          manual_revenue: (row as any).manual_revenue != null ? Number((row as any).manual_revenue) : null,
+          manual_orders: (row as any).manual_orders != null ? Number((row as any).manual_orders) : null,
+          covers_unknown: (row as any).covers_unknown ?? false,
         });
       }
       return map;
@@ -72,6 +113,10 @@ export function useDailyLedger(
         labour_hours: entry.labour_hours,
         additional_expenses: entry.additional_expenses,
         notes: entry.notes,
+        is_closed: entry.is_closed,
+        manual_revenue: entry.manual_revenue,
+        manual_orders: entry.manual_orders,
+        covers_unknown: entry.covers_unknown,
       };
 
       const { error } = await supabase

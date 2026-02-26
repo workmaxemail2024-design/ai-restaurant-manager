@@ -20,10 +20,14 @@ import {
   MapPin,
   Save,
   Users,
+  AlertTriangle,
+  XCircle,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
-import { useDailyLedger, type LedgerEntry } from "@/hooks/useDailyLedger";
+import { useDailyLedger, type LedgerEntry, type MissingField, evaluateMissing } from "@/hooks/useDailyLedger";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
@@ -44,27 +48,47 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+// ─── Missing field labels ───
+const MISSING_LABELS: Record<MissingField, string> = {
+  SALES: "Sales",
+  LABOUR_HOURS: "Labour",
+  COVERS: "Covers",
+};
+
 // ─── Health helpers ───
-function getHealthColor(day: DailyMetrics, labourPct: number): string {
-  if (!day.hasData) return "bg-muted-foreground/30";
+function getHealthColor(day: DailyMetrics, labourPct: number, ledger?: LedgerEntry): string {
+  if (!day.hasData && !ledger?.is_closed && ledger?.manual_revenue == null) return "bg-muted-foreground/30";
   const fc = day.foodCostPercent;
   if (day.profit > 0 && fc <= 35 && labourPct <= 35) return "bg-success";
   if (fc > 40 || labourPct > 40 || day.profit < 0) return "bg-destructive";
   return "bg-warning";
 }
 
-function getStatusLabel(day: DailyMetrics, ledger?: LedgerEntry): string {
-  if (!day.hasData && !ledger) return "No Data";
-  if (!day.hasData && ledger) return "Missing Data";
-  const hasMissing = !ledger || (ledger.covers === 0 && ledger.labour_hours === 0);
-  if (hasMissing) return "Missing Data";
+function getStatusLabel(missing: MissingField[], day: DailyMetrics, ledger?: LedgerEntry): string {
+  if (ledger?.is_closed) return "Closed";
+  if (!day.hasData && !ledger && ledger?.manual_revenue == null) return "No Data";
+  if (missing.length > 0) return "Missing Data";
   return "Complete";
 }
 
 function getStatusVariant(label: string): "default" | "secondary" | "outline" | "destructive" {
   if (label === "Complete") return "default";
+  if (label === "Closed") return "outline";
   if (label === "Missing Data") return "secondary";
   return "outline";
+}
+
+// ─── Missing badge (compact) ───
+function MissingBadge({ missing }: { missing: MissingField[] }) {
+  if (missing.length === 0) return null;
+  const shown = missing.slice(0, 2).map((f) => MISSING_LABELS[f]);
+  const extra = missing.length > 2 ? ` +${missing.length - 2}` : "";
+  return (
+    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
+      <AlertTriangle className="h-2.5 w-2.5" />
+      {shown.join(", ")}{extra}
+    </Badge>
+  );
 }
 
 // ─── Calendar Navigation Strip ───
@@ -73,11 +97,13 @@ function CalendarStrip({
   selectedEnd,
   onDayClick,
   dailyData,
+  ledgerEntries,
 }: {
   selectedStart: string;
   selectedEnd: string;
   onDayClick: (dateStr: string) => void;
   dailyData: DailyMetrics[];
+  ledgerEntries: Map<string, LedgerEntry>;
 }) {
   const rangeStart = parseISO(selectedStart);
   const rangeEnd = parseISO(selectedEnd);
@@ -87,7 +113,6 @@ function CalendarStrip({
   const monthEnd = endOfMonth(viewMonth);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Build coverage map from dailyData
   const coverageMap = useMemo(() => {
     const m = new Map<string, DailyMetrics>();
     dailyData.forEach((d) => m.set(d.date, d));
@@ -95,32 +120,20 @@ function CalendarStrip({
   }, [dailyData]);
 
   const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-  // Offset for first day alignment (Monday = 0)
   const firstDayOffset = (getDay(monthStart) + 6) % 7;
 
   return (
     <div className="space-y-2">
-      {/* Month nav */}
       <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setViewMonth(subMonths(viewMonth, 1))}
-        >
+        <Button variant="ghost" size="sm" onClick={() => setViewMonth(subMonths(viewMonth, 1))}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <span className="text-sm font-medium">{format(viewMonth, "MMMM yyyy")}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setViewMonth(addMonths(viewMonth, 1))}
-        >
+        <Button variant="ghost" size="sm" onClick={() => setViewMonth(addMonths(viewMonth, 1))}>
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* Weekday header */}
       <div className="grid grid-cols-7 gap-1">
         {weekDays.map((wd) => (
           <div key={wd} className="text-[10px] text-center text-muted-foreground font-medium">
@@ -129,18 +142,19 @@ function CalendarStrip({
         ))}
       </div>
 
-      {/* Day chips */}
       <div className="grid grid-cols-7 gap-1">
-        {/* Empty spacers for offset */}
         {Array.from({ length: firstDayOffset }).map((_, i) => (
           <div key={`empty-${i}`} />
         ))}
         {daysInMonth.map((day) => {
           const dateStr = format(day, "yyyy-MM-dd");
           const coverage = coverageMap.get(dateStr);
+          const ledger = ledgerEntries.get(dateStr);
           const isInRange = isWithinInterval(day, { start: rangeStart, end: rangeEnd });
-          const isSelected =
-            isSameDay(day, rangeStart) || isSameDay(day, rangeEnd);
+          const isSelected = isSameDay(day, rangeStart) || isSameDay(day, rangeEnd);
+
+          // Compute missing for dot
+          const { missing } = evaluateMissing(coverage?.hasData || false, ledger);
 
           return (
             <button
@@ -155,7 +169,6 @@ function CalendarStrip({
               )}
             >
               <span>{format(day, "d")}</span>
-              {/* Dot indicators */}
               <div className="flex gap-0.5 mt-0.5 h-1.5">
                 {coverage?.hasApplied && (
                   <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -163,7 +176,7 @@ function CalendarStrip({
                 {coverage?.hasImported && !coverage?.hasApplied && (
                   <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
                 )}
-                {coverage && !coverage.hasData && !coverage.hasImported && (
+                {missing.length > 0 && !ledger?.is_closed && (
                   <span className="w-1.5 h-1.5 rounded-full bg-warning" />
                 )}
               </div>
@@ -172,7 +185,6 @@ function CalendarStrip({
         })}
       </div>
 
-      {/* Legend */}
       <div className="flex gap-3 text-[10px] text-muted-foreground pt-1">
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Applied
@@ -211,23 +223,53 @@ function DayCard({
   const [labourHours, setLabourHours] = useState(ledger?.labour_hours ?? 0);
   const [additionalExpenses, setAdditionalExpenses] = useState(ledger?.additional_expenses ?? 0);
   const [notes, setNotes] = useState(ledger?.notes ?? "");
+  const [isClosed, setIsClosed] = useState(ledger?.is_closed ?? false);
+  const [manualRevenue, setManualRevenue] = useState<number | null>(ledger?.manual_revenue ?? null);
+  const [manualOrders, setManualOrders] = useState<number | null>(ledger?.manual_orders ?? null);
+  const [coversUnknown, setCoversUnknown] = useState(ledger?.covers_unknown ?? false);
 
-  // Sync when ledger data loads
   useEffect(() => {
     if (ledger) {
       setCovers(ledger.covers);
       setLabourHours(ledger.labour_hours);
       setAdditionalExpenses(ledger.additional_expenses);
       setNotes(ledger.notes);
+      setIsClosed(ledger.is_closed);
+      setManualRevenue(ledger.manual_revenue);
+      setManualOrders(ledger.manual_orders);
+      setCoversUnknown(ledger.covers_unknown);
     }
   }, [ledger]);
 
-  const labourCost = labourHours * avgHourlyRate;
-  const labourPct = day.revenue > 0 ? (labourCost / day.revenue) * 100 : 0;
-  const adjustedProfit = day.revenue - day.foodCost - labourCost - additionalExpenses;
+  // Effective revenue: use manual override if no actual sales data
+  const effectiveRevenue = day.hasData ? day.revenue : (manualRevenue ?? 0);
+  const effectiveOrders = day.hasData ? day.orders : (manualOrders ?? 0);
+  const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
+  const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
 
-  const statusLabel = getStatusLabel(day, ledger);
-  const healthColor = getHealthColor(day, labourPct);
+  const labourCost = labourHours * avgHourlyRate;
+  const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
+  const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
+
+  // Missing fields evaluation
+  const { missing } = evaluateMissing(day.hasData, ledger);
+  // Re-evaluate with local state for live feedback
+  const localLedger: LedgerEntry = {
+    entry_date: day.date,
+    location_id: null,
+    covers,
+    labour_hours: labourHours,
+    additional_expenses: additionalExpenses,
+    notes,
+    is_closed: isClosed,
+    manual_revenue: manualRevenue,
+    manual_orders: manualOrders,
+    covers_unknown: coversUnknown,
+  };
+  const liveMissing = evaluateMissing(day.hasData, localLedger);
+
+  const statusLabel = getStatusLabel(missing, day, ledger);
+  const healthColor = getHealthColor(day, labourPct, ledger);
 
   const handleSave = () => {
     onSaveLedger({
@@ -237,22 +279,54 @@ function DayCard({
       labour_hours: labourHours,
       additional_expenses: additionalExpenses,
       notes,
+      is_closed: isClosed,
+      manual_revenue: manualRevenue,
+      manual_orders: manualOrders,
+      covers_unknown: coversUnknown,
     });
     toast.success(`Saved ledger for ${label}`);
   };
+
+  const handleMarkClosed = () => {
+    setIsClosed(true);
+    setManualRevenue(0);
+    setManualOrders(0);
+    onSaveLedger({
+      entry_date: day.date,
+      location_id: null,
+      covers: 0,
+      labour_hours: labourHours,
+      additional_expenses: additionalExpenses,
+      notes: notes || "Closed / No trading",
+      is_closed: true,
+      manual_revenue: 0,
+      manual_orders: 0,
+      covers_unknown: true,
+    });
+    toast.success(`${label} marked as closed`);
+  };
+
+  const handleMarkCoversUnknown = () => {
+    setCoversUnknown(true);
+    onSaveLedger({
+      ...localLedger,
+      covers_unknown: true,
+    });
+    toast.success(`Covers marked as unknown for ${label}`);
+  };
+
+  const hasAnyData = day.hasData || isClosed || (manualRevenue != null && manualRevenue > 0);
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <Card className="overflow-hidden transition-colors">
         <div className="flex">
-          {/* Health bar */}
           <div className={cn("w-1 shrink-0 rounded-l-lg", healthColor)} />
-
           <div className="flex-1">
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer select-none py-3 px-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {open ? (
                       <ChevronDown className="h-4 w-4 text-muted-foreground" />
                     ) : (
@@ -262,16 +336,20 @@ function DayCard({
                     <Badge variant={getStatusVariant(statusLabel)} className="text-[10px] px-1.5 py-0">
                       {statusLabel}
                     </Badge>
+                    <MissingBadge missing={missing} />
+                    {ledger?.manual_revenue != null && !day.hasData && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">Manual</Badge>
+                    )}
                   </div>
-                  {day.hasData ? (
+                  {hasAnyData && !isClosed ? (
                     <div className="flex items-center gap-4 text-sm">
                       <div className="text-right">
                         <span className="text-muted-foreground mr-1">Rev</span>
-                        <span className="font-medium">{formatCurrency(day.revenue)}</span>
+                        <span className="font-medium">{formatCurrency(effectiveRevenue)}</span>
                       </div>
                       <div className="text-right hidden sm:block">
                         <span className="text-muted-foreground mr-1">Orders</span>
-                        <span className="font-medium">{day.orders}</span>
+                        <span className="font-medium">{effectiveOrders}</span>
                       </div>
                       <div className="text-right hidden sm:block">
                         <span className="text-muted-foreground mr-1">Profit</span>
@@ -281,13 +359,17 @@ function DayCard({
                       </div>
                       <div className="text-right hidden md:block">
                         <span className="text-muted-foreground mr-1">FC%</span>
-                        <span className="font-medium">{day.foodCostPercent.toFixed(1)}%</span>
+                        <span className="font-medium">{effectiveFoodCostPct.toFixed(1)}%</span>
                       </div>
                       <div className="text-right hidden md:block">
                         <span className="text-muted-foreground mr-1">Lab%</span>
                         <span className="font-medium">{labourPct.toFixed(1)}%</span>
                       </div>
                     </div>
+                  ) : isClosed ? (
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <XCircle className="h-3.5 w-3.5" /> No trading
+                    </span>
                   ) : (
                     <span className="text-sm text-muted-foreground">—</span>
                   )}
@@ -297,6 +379,111 @@ function DayCard({
 
             <CollapsibleContent>
               <CardContent className="pt-0 pb-4 px-4 space-y-4">
+                {/* Quick Fix Section */}
+                {liveMissing.missing.length > 0 && !isClosed && (
+                  <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-3">
+                    <h4 className="text-xs font-medium text-warning uppercase tracking-wide flex items-center gap-1.5">
+                      <AlertTriangle className="h-3 w-3" /> Quick Fix — Missing Data
+                    </h4>
+
+                    {/* SALES missing */}
+                    {liveMissing.missing.includes("SALES") && (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">No sales data for this day.</p>
+                        <div className="flex flex-wrap gap-2 items-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={handleMarkClosed}
+                          >
+                            <XCircle className="h-3 w-3" /> Mark Closed
+                          </Button>
+                          <div className="space-y-0.5">
+                            <label className="text-[10px] text-muted-foreground">Revenue {currencySymbol}</label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              value={manualRevenue ?? ""}
+                              onChange={(e) => setManualRevenue(e.target.value ? Number(e.target.value) : null)}
+                              className="h-7 text-xs w-24"
+                              placeholder="0.00"
+                            />
+                          </div>
+                          <div className="space-y-0.5">
+                            <label className="text-[10px] text-muted-foreground">Orders</label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={manualOrders ?? ""}
+                              onChange={(e) => setManualOrders(e.target.value ? Number(e.target.value) : null)}
+                              className="h-7 text-xs w-20"
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* LABOUR_HOURS missing */}
+                    {liveMissing.missing.includes("LABOUR_HOURS") && (
+                      <div className="flex items-end gap-2">
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-2.5 w-2.5" /> Labour Hours
+                          </label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            value={labourHours || ""}
+                            onChange={(e) => setLabourHours(Number(e.target.value) || 0)}
+                            className="h-7 text-xs w-24"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* COVERS missing */}
+                    {liveMissing.missing.includes("COVERS") && (
+                      <div className="flex items-end gap-2">
+                        <div className="space-y-0.5">
+                          <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <Users className="h-2.5 w-2.5" /> Covers
+                          </label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={covers || ""}
+                            onChange={(e) => setCovers(Number(e.target.value) || 0)}
+                            className="h-7 text-xs w-24"
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={handleMarkCoversUnknown}
+                        >
+                          Mark unknown
+                        </Button>
+                      </div>
+                    )}
+
+                    <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSave} disabled={isSaving}>
+                      <Save className="h-3 w-3" /> Save Quick Fix
+                    </Button>
+                  </div>
+                )}
+
+                {/* Completed indicator */}
+                {liveMissing.missing.length === 0 && (
+                  <div className="flex items-center gap-1.5 text-xs text-success">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> All required data present
+                  </div>
+                )}
+
                 {/* Inline ledger editor */}
                 <div className="rounded-md border border-border p-3 space-y-3">
                   <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -311,9 +498,12 @@ function DayCard({
                         type="number"
                         min={0}
                         value={covers || ""}
-                        onChange={(e) => setCovers(Number(e.target.value) || 0)}
+                        onChange={(e) => { setCovers(Number(e.target.value) || 0); setCoversUnknown(false); }}
                         className="h-8 text-sm"
                       />
+                      {coversUnknown && (
+                        <span className="text-[10px] text-muted-foreground">Marked unknown</span>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">Labour Hours</label>
@@ -362,8 +552,51 @@ function DayCard({
                     />
                   </div>
 
+                  {/* Manual revenue/orders if overridden */}
+                  {!day.hasData && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Manual Revenue {currencySymbol}</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={manualRevenue ?? ""}
+                          onChange={(e) => setManualRevenue(e.target.value ? Number(e.target.value) : null)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Manual Orders</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={manualOrders ?? ""}
+                          onChange={(e) => setManualOrders(e.target.value ? Number(e.target.value) : null)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Closed toggle */}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={isClosed ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 text-xs gap-1"
+                      onClick={() => setIsClosed(!isClosed)}
+                    >
+                      <XCircle className="h-3 w-3" />
+                      {isClosed ? "Marked Closed" : "Mark Closed"}
+                    </Button>
+                    {isClosed && (
+                      <span className="text-[10px] text-muted-foreground">No trading day — sales requirement waived</span>
+                    )}
+                  </div>
+
                   {/* Computed metrics from inputs */}
-                  {day.hasData && (
+                  {hasAnyData && (
                     <div className="flex flex-wrap gap-4 text-xs pt-1">
                       <span>
                         <span className="text-muted-foreground">Labour Cost:</span>{" "}
@@ -382,7 +615,7 @@ function DayCard({
                       {covers > 0 && (
                         <span>
                           <span className="text-muted-foreground">Rev/Cover:</span>{" "}
-                          <span className="font-medium">{formatCurrency(day.revenue / covers)}</span>
+                          <span className="font-medium">{formatCurrency(effectiveRevenue / covers)}</span>
                         </span>
                       )}
                     </div>
@@ -467,7 +700,7 @@ function DayCard({
                   </div>
                 )}
 
-                {!day.hasData && (
+                {!day.hasData && !isClosed && manualRevenue == null && (
                   <p className="text-sm text-muted-foreground">No sales recorded for this day.</p>
                 )}
               </CardContent>
@@ -495,10 +728,9 @@ export default function ReportsPage() {
     selectedLocationId
   );
 
-  // Approximate avg hourly rate (can be refined with staff query later)
   const avgHourlyRate = 12.5;
 
-  // Reactive period summary that accounts for ledger data
+  // Period summary with manual override support
   const periodSummary = useMemo(() => {
     if (!dailyData || dailyData.length === 0 || !metrics) {
       return {
@@ -513,29 +745,48 @@ export default function ReportsPage() {
 
     let totalLabourCost = 0;
     let totalAdditionalExpenses = 0;
+    let manualRevenueTotal = 0;
+    let manualOrdersTotal = 0;
 
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
       if (ledger) {
         totalLabourCost += ledger.labour_hours * avgHourlyRate;
         totalAdditionalExpenses += ledger.additional_expenses;
+        // Add manual revenue for days without actual sales
+        if (!day.hasData && ledger.manual_revenue != null) {
+          manualRevenueTotal += ledger.manual_revenue;
+          manualOrdersTotal += ledger.manual_orders ?? 0;
+        }
       }
     }
 
-    const revenue = metrics.totalRevenue;
+    const revenue = metrics.totalRevenue + manualRevenueTotal;
+    const orders = metrics.totalOrders + manualOrdersTotal;
     const foodCost = revenue * (metrics.foodCostPercent / 100);
     const adjustedProfit = revenue - foodCost - totalLabourCost - totalAdditionalExpenses;
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
+    const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : metrics.foodCostPercent;
 
     return {
       revenue,
-      orders: metrics.totalOrders,
-      foodCostPct: metrics.foodCostPercent,
+      orders,
+      foodCostPct,
       profit: adjustedProfit,
       totalLabourCost,
       labourPct,
     };
   }, [metrics, dailyData, ledgerEntries, avgHourlyRate]);
+
+  // Count missing days for summary
+  const missingDaysCount = useMemo(() => {
+    if (!dailyData) return 0;
+    return dailyData.filter((day) => {
+      const ledger = ledgerEntries.get(day.date);
+      const { missing } = evaluateMissing(day.hasData, ledger);
+      return missing.length > 0 && !ledger?.is_closed;
+    }).length;
+  }, [dailyData, ledgerEntries]);
 
   const handleDayClick = useCallback(
     (dateStr: string) => {
@@ -579,6 +830,12 @@ export default function ReportsPage() {
                 <MapPin className="h-3.5 w-3.5" />
                 <span>Filtered by location</span>
               </div>
+            )}
+            {missingDaysCount > 0 && (
+              <Badge variant="secondary" className="text-[10px] gap-1">
+                <AlertTriangle className="h-2.5 w-2.5" />
+                {missingDaysCount} day{missingDaysCount > 1 ? "s" : ""} need attention
+              </Badge>
             )}
           </div>
 
@@ -654,6 +911,7 @@ export default function ReportsPage() {
                     selectedEnd={endDate}
                     onDayClick={handleDayClick}
                     dailyData={dailyData || []}
+                    ledgerEntries={ledgerEntries}
                   />
                 </CardContent>
               </Card>
