@@ -150,6 +150,60 @@ export type Database = {
           },
         ]
       }
+      daily_ledger_entries: {
+        Row: {
+          additional_expenses: number | null
+          covers: number | null
+          created_at: string
+          entry_date: string
+          id: string
+          labour_hours: number | null
+          location_id: string | null
+          notes: string | null
+          restaurant_id: string
+          updated_at: string
+        }
+        Insert: {
+          additional_expenses?: number | null
+          covers?: number | null
+          created_at?: string
+          entry_date: string
+          id?: string
+          labour_hours?: number | null
+          location_id?: string | null
+          notes?: string | null
+          restaurant_id: string
+          updated_at?: string
+        }
+        Update: {
+          additional_expenses?: number | null
+          covers?: number | null
+          created_at?: string
+          entry_date?: string
+          id?: string
+          labour_hours?: number | null
+          location_id?: string | null
+          notes?: string | null
+          restaurant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_ledger_entries_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_ledger_entries_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dish_ingredients: {
         Row: {
           created_at: string
