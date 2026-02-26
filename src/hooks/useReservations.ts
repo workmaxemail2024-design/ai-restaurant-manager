@@ -239,17 +239,19 @@ export function useUpdateCustomer() {
 
 // ── Tables ─────────────────────────────────────────────
 
-export function useReservationTables() {
+export function useReservationTables(overrideLocationId?: string | null) {
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const rid = currentRestaurant?.id;
+  // If an override is provided, use it; otherwise fall back to the global context
+  const effectiveLocationId = overrideLocationId !== undefined ? overrideLocationId : selectedLocationId;
 
   return useQuery({
-    queryKey: resKeys(rid, selectedLocationId).tables,
+    queryKey: resKeys(rid, effectiveLocationId).tables,
     enabled: !!rid,
     queryFn: async () => {
       let q = supabase.from('reservation_tables').select('*').eq('restaurant_id', rid!).order('name');
-      if (selectedLocationId) q = q.eq('location_id', selectedLocationId);
+      if (effectiveLocationId) q = q.eq('location_id', effectiveLocationId);
       const { data, error } = await q;
       if (error) throw error;
       return data as ReservationTable[];
