@@ -610,9 +610,7 @@ export default function POSIntegrationsPage() {
                   {locations?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" className="h-8" onClick={handleRunReconciliation} disabled={!selectedLocation || reconciliation.isPending}>
-                <Brain className="h-3.5 w-3.5 mr-1.5" />AI Reconciliation
-              </Button>
+              {/* AI Reconciliation moved to Reports */}
             </div>
           </CardContent>
         </Card>
@@ -622,7 +620,7 @@ export default function POSIntegrationsPage() {
             <TabsTrigger value="integrations"><Plug className="h-4 w-4 mr-2" />Integrations</TabsTrigger>
             <TabsTrigger value="mappings"><Settings2 className="h-4 w-4 mr-2" />Mappings</TabsTrigger>
             <TabsTrigger value="logs"><List className="h-4 w-4 mr-2" />Sync Logs</TabsTrigger>
-            <TabsTrigger value="reconciliation"><Brain className="h-4 w-4 mr-2" />AI Reconciliation</TabsTrigger>
+            <TabsTrigger value="reconciliation"><BarChart3 className="h-4 w-4 mr-2" />Reconciliation</TabsTrigger>
           </TabsList>
 
           <TabsContent value="integrations" className="space-y-4">
@@ -920,82 +918,20 @@ export default function POSIntegrationsPage() {
           </TabsContent>
 
           <TabsContent value="reconciliation" className="space-y-4">
-            {!reconciliationData ? (
-              <Card>
-                <CardContent className="py-8 text-center">
-                  <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">Select a location and click "AI Reconciliation" to analyze POS data</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <div className="grid gap-4 md:grid-cols-4">
-                  <Card>
-                    <CardContent className="pt-4">
-                      <p className="text-sm text-muted-foreground">System Total</p>
-                      <p className="text-2xl font-bold">{formatCurrency(reconciliationData.summary?.system_total || 0)}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4">
-                      <p className="text-sm text-muted-foreground">POS Total</p>
-                      <p className="text-2xl font-bold">{formatCurrency(reconciliationData.summary?.pos_total || 0)}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4">
-                      <p className="text-sm text-muted-foreground">Difference</p>
-                      <p className="text-2xl font-bold text-destructive">{formatCurrency(reconciliationData.summary?.difference || 0)}</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="pt-4">
-                      <p className="text-sm text-muted-foreground">Unmapped Items</p>
-                      <p className="text-2xl font-bold">{reconciliationData.summary?.unmapped_count}</p>
-                    </CardContent>
-                  </Card>
+            <Card>
+              <CardContent className="py-12 text-center space-y-4">
+                <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground" />
+                <div>
+                  <h3 className="text-lg font-semibold">Reconciliation lives in Reports</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Daily reconciliation, missing-data detection, and profit tracking are managed from the Reports page.
+                  </p>
                 </div>
-
-                {reconciliationData.anomalies && reconciliationData.anomalies.length > 0 && (
-                  <Card>
-                    <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-yellow-500" />Detected Anomalies</CardTitle></CardHeader>
-                    <CardContent className="space-y-3">
-                      {reconciliationData.anomalies.map((anomaly, i) => (
-                        <div key={i} className={`p-4 rounded-lg border ${anomaly.severity === "high" ? "border-destructive bg-destructive/10" : "border-yellow-500 bg-yellow-500/10"}`}>
-                          <p className="font-medium">{anomaly.message}</p>
-                          <p className="text-sm text-muted-foreground mt-1">{anomaly.recommendation}</p>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {reconciliationData.mapping_suggestions && reconciliationData.mapping_suggestions.length > 0 && (
-                  <Card>
-                    <CardHeader><CardTitle>AI Mapping Suggestions</CardTitle></CardHeader>
-                    <CardContent className="space-y-3">
-                      {reconciliationData.mapping_suggestions.slice(0, 10).map((suggestion, i) => (
-                        <div key={i} className="p-4 border rounded-lg">
-                          <p className="font-medium">{suggestion.external_name}</p>
-                          <div className="flex gap-2 mt-2">
-                            {suggestion.suggested_matches.map((match, j) => (
-                              <Button 
-                                key={j} 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleApplyMapping(suggestion.import_id, match.dish_id)}
-                              >
-                                {match.dish_name} ({match.confidence}%)
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-              </>
-            )}
+                <Button asChild>
+                  <a href="/reports">Open Reports</a>
+                </Button>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -56,8 +56,15 @@ const MISSING_LABELS: Record<MissingField, string> = {
   COVERS: "Covers",
 };
 
+// ─── Determine if a day is "accounted for" (green) ───
+function isDayComplete(day: DailyMetrics, ledger?: LedgerEntry): boolean {
+  const { isComplete } = evaluateMissing(day.hasData, ledger);
+  return isComplete || (ledger?.is_closed ?? false);
+}
+
 // ─── Health helpers ───
 function getHealthColor(day: DailyMetrics, labourPct: number, ledger?: LedgerEntry): string {
+  if (ledger?.is_closed) return "bg-muted-foreground/30";
   if (!day.hasData && !ledger?.is_closed && ledger?.manual_revenue == null) return "bg-muted-foreground/30";
   const fc = day.foodCostPercent;
   if (day.profit > 0 && fc <= 35 && labourPct <= 35) return "bg-success";
@@ -75,7 +82,7 @@ function getStatusLabel(missing: MissingField[], day: DailyMetrics, ledger?: Led
 function getStatusVariant(label: string): "default" | "secondary" | "outline" | "destructive" {
   if (label === "Complete") return "default";
   if (label === "Closed") return "outline";
-  if (label === "Missing Data") return "secondary";
+  if (label === "Missing Data") return "destructive";
   return "outline";
 }
 
@@ -99,12 +106,14 @@ function CalendarStrip({
   onDayClick,
   dailyData,
   ledgerEntries,
+  focusedDate,
 }: {
   selectedStart: string;
   selectedEnd: string;
   onDayClick: (dateStr: string) => void;
   dailyData: DailyMetrics[];
   ledgerEntries: Map<string, LedgerEntry>;
+  focusedDate?: string;
 }) {
   const rangeStart = parseISO(selectedStart);
   const rangeEnd = parseISO(selectedEnd);
@@ -153,9 +162,22 @@ function CalendarStrip({
           const ledger = ledgerEntries.get(dateStr);
           const isInRange = isWithinInterval(day, { start: rangeStart, end: rangeEnd });
           const isSelected = isSameDay(day, rangeStart) || isSameDay(day, rangeEnd);
+          const isFocused = focusedDate === dateStr;
 
-          // Compute missing for dot
+          // Determine status: green/red/grey
+          const isClosed = ledger?.is_closed ?? false;
+          const hasAnyData = (coverage?.hasData || false) || (ledger?.manual_revenue != null && (ledger.manual_revenue ?? 0) > 0);
           const { missing } = evaluateMissing(coverage?.hasData || false, ledger);
+          const isComplete = missing.length === 0 || isClosed;
+
+          let dotClass = "bg-muted-foreground/40"; // grey default
+          if (hasAnyData || isClosed || ledger) {
+            if (isComplete) {
+              dotClass = "bg-success"; // green
+            } else {
+              dotClass = "bg-destructive"; // red
+            }
+          }
 
           return (
             <button
@@ -164,6 +186,7 @@ function CalendarStrip({
               className={cn(
                 "relative flex flex-col items-center justify-center rounded-md p-1 text-xs transition-colors",
                 "hover:bg-secondary",
+                isFocused && "ring-2 ring-primary",
                 isSelected && "bg-primary text-primary-foreground",
                 isInRange && !isSelected && "bg-secondary/60",
                 !isInRange && "text-muted-foreground"
@@ -171,15 +194,7 @@ function CalendarStrip({
             >
               <span>{format(day, "d")}</span>
               <div className="flex gap-0.5 mt-0.5 h-1.5">
-                {coverage?.hasApplied && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                )}
-                {coverage?.hasImported && !coverage?.hasApplied && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                )}
-                {missing.length > 0 && !ledger?.is_closed && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-warning" />
-                )}
+                <span className={cn("w-1.5 h-1.5 rounded-full", dotClass)} />
               </div>
             </button>
           );
@@ -188,13 +203,13 @@ function CalendarStrip({
 
       <div className="flex gap-3 text-[10px] text-muted-foreground pt-1">
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary" /> Applied
+          <span className="w-1.5 h-1.5 rounded-full bg-success" /> Accounted
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" /> Imported
+          <span className="w-1.5 h-1.5 rounded-full bg-destructive" /> Needs attention
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-warning" /> Missing
+          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" /> No data
         </span>
       </div>
     </div>
@@ -208,16 +223,25 @@ function DayCard({
   onSaveLedger,
   isSaving,
   avgHourlyRate,
+  isFocused,
+  cardRef,
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
   onSaveLedger: (entry: LedgerEntry) => void;
   isSaving: boolean;
   avgHourlyRate: number;
+  isFocused: boolean;
+  cardRef?: React.Ref<HTMLDivElement>;
 }) {
   const [open, setOpen] = useState(false);
   const dateObj = parseISO(day.date);
   const label = format(dateObj, "EEE dd MMM");
+
+  // Auto-open when focused
+  useEffect(() => {
+    if (isFocused) setOpen(true);
+  }, [isFocused]);
 
   // Local form state
   const [covers, setCovers] = useState(ledger?.covers ?? 0);
@@ -319,397 +343,399 @@ function DayCard({
   const hasAnyData = day.hasData || isClosed || (manualRevenue != null && manualRevenue > 0);
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card className="overflow-hidden transition-colors">
-        <div className="flex">
-          <div className={cn("w-1 shrink-0 rounded-l-lg", healthColor)} />
-          <div className="flex-1">
-            <CollapsibleTrigger asChild>
-              <CardHeader className="cursor-pointer select-none py-3 px-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {open ? (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className="font-medium text-sm">{label}</span>
-                    <Badge variant={getStatusVariant(statusLabel)} className="text-[10px] px-1.5 py-0">
-                      {statusLabel}
-                    </Badge>
-                    <MissingBadge missing={missing} />
-                    {ledger?.manual_revenue != null && !day.hasData && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">Manual</Badge>
-                    )}
-                  </div>
-                  {hasAnyData && !isClosed ? (
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="text-right">
-                        <span className="text-muted-foreground mr-1">Rev</span>
-                        <span className="font-medium">{formatCurrency(effectiveRevenue)}</span>
-                      </div>
-                      <div className="text-right hidden sm:block">
-                        <span className="text-muted-foreground mr-1">Orders</span>
-                        <span className="font-medium">{effectiveOrders}</span>
-                      </div>
-                      <div className="text-right hidden sm:block">
-                        <span className="text-muted-foreground mr-1">Profit</span>
-                        <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
-                          {formatCurrency(adjustedProfit)}
-                        </span>
-                      </div>
-                      <div className="text-right hidden md:block">
-                        <span className="text-muted-foreground mr-1">FC%</span>
-                        <span className="font-medium">{effectiveFoodCostPct.toFixed(1)}%</span>
-                      </div>
-                      <div className="text-right hidden md:block">
-                        <span className="text-muted-foreground mr-1">Lab%</span>
-                        <span className="font-medium">{labourPct.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                  ) : isClosed ? (
-                    <span className="text-sm text-muted-foreground flex items-center gap-1">
-                      <XCircle className="h-3.5 w-3.5" /> No trading
-                    </span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
-                  )}
-                </div>
-              </CardHeader>
-            </CollapsibleTrigger>
-
-            <CollapsibleContent>
-              <CardContent className="pt-0 pb-4 px-4 space-y-4">
-                {/* Quick Fix Section */}
-                {liveMissing.missing.length > 0 && !isClosed && (
-                  <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-3">
-                    <h4 className="text-xs font-medium text-warning uppercase tracking-wide flex items-center gap-1.5">
-                      <AlertTriangle className="h-3 w-3" /> Quick Fix — Missing Data
-                    </h4>
-
-                    {/* SALES missing */}
-                    {liveMissing.missing.includes("SALES") && (
-                      <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground">No sales data for this day.</p>
-                        <div className="flex flex-wrap gap-2 items-end">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs gap-1"
-                            onClick={handleMarkClosed}
-                          >
-                            <XCircle className="h-3 w-3" /> Mark Closed
-                          </Button>
-                          <div className="space-y-0.5">
-                            <label className="text-[10px] text-muted-foreground">Revenue {currencySymbol}</label>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={manualRevenue ?? ""}
-                              onChange={(e) => setManualRevenue(e.target.value ? Number(e.target.value) : null)}
-                              className="h-7 text-xs w-24"
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div className="space-y-0.5">
-                            <label className="text-[10px] text-muted-foreground">Orders</label>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={manualOrders ?? ""}
-                              onChange={(e) => setManualOrders(e.target.value ? Number(e.target.value) : null)}
-                              className="h-7 text-xs w-20"
-                              placeholder="0"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* LABOUR_HOURS missing */}
-                    {liveMissing.missing.includes("LABOUR_HOURS") && (
-                      <div className="flex items-end gap-2">
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-2.5 w-2.5" /> Labour Hours
-                          </label>
-                          <Input
-                            type="number"
-                            min={0}
-                            step={0.5}
-                            value={labourHours || ""}
-                            onChange={(e) => setLabourHours(Number(e.target.value) || 0)}
-                            className="h-7 text-xs w-24"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* COVERS missing */}
-                    {liveMissing.missing.includes("COVERS") && (
-                      <div className="flex items-end gap-2">
-                        <div className="space-y-0.5">
-                          <label className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <Users className="h-2.5 w-2.5" /> Covers
-                          </label>
-                          <Input
-                            type="number"
-                            min={0}
-                            value={covers || ""}
-                            onChange={(e) => setCovers(Number(e.target.value) || 0)}
-                            className="h-7 text-xs w-24"
-                          />
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={handleMarkCoversUnknown}
-                        >
-                          Mark unknown
-                        </Button>
-                      </div>
-                    )}
-
-                    <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSave} disabled={isSaving}>
-                      <Save className="h-3 w-3" /> Save Quick Fix
-                    </Button>
-                  </div>
-                )}
-
-                {/* Completed indicator */}
-                {liveMissing.missing.length === 0 && (
-                  <div className="flex items-center gap-1.5 text-xs text-success">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> All required data present
-                  </div>
-                )}
-
-                {/* Inline ledger editor */}
-                <div className="rounded-md border border-border p-3 space-y-3">
-                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Daily Inputs
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Users className="h-3 w-3" /> Covers
-                      </label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={covers || ""}
-                        onChange={(e) => { setCovers(Number(e.target.value) || 0); setCoversUnknown(false); }}
-                        className="h-8 text-sm"
-                      />
-                      {coversUnknown && (
-                        <span className="text-[10px] text-muted-foreground">Marked unknown</span>
+    <div ref={cardRef}>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <Card className={cn("overflow-hidden transition-colors", isFocused && "ring-2 ring-primary")}>
+          <div className="flex">
+            <div className={cn("w-1 shrink-0 rounded-l-lg", healthColor)} />
+            <div className="flex-1">
+              <CollapsibleTrigger asChild>
+                <CardHeader className="cursor-pointer select-none py-3 px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {open ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      <span className="font-medium text-sm">{label}</span>
+                      <Badge variant={getStatusVariant(statusLabel)} className="text-[10px] px-1.5 py-0">
+                        {statusLabel}
+                      </Badge>
+                      <MissingBadge missing={missing} />
+                      {ledger?.manual_revenue != null && !day.hasData && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">Manual</Badge>
                       )}
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Labour Hours</label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        value={labourHours || ""}
-                        onChange={(e) => setLabourHours(Number(e.target.value) || 0)}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">
-                        Add. Expenses {currencySymbol}
-                      </label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={additionalExpenses || ""}
-                        onChange={(e) => setAdditionalExpenses(Number(e.target.value) || 0)}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <Button
-                        size="sm"
-                        className="h-8 gap-1.5"
-                        onClick={handleSave}
-                        disabled={isSaving}
-                      >
-                        <Save className="h-3.5 w-3.5" />
-                        Save
+                    {hasAnyData && !isClosed ? (
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="text-right">
+                          <span className="text-muted-foreground mr-1">Rev</span>
+                          <span className="font-medium">{formatCurrency(effectiveRevenue)}</span>
+                        </div>
+                        <div className="text-right hidden sm:block">
+                          <span className="text-muted-foreground mr-1">Orders</span>
+                          <span className="font-medium">{effectiveOrders}</span>
+                        </div>
+                        <div className="text-right hidden sm:block">
+                          <span className="text-muted-foreground mr-1">Profit</span>
+                          <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
+                            {formatCurrency(adjustedProfit)}
+                          </span>
+                        </div>
+                        <div className="text-right hidden md:block">
+                          <span className="text-muted-foreground mr-1">FC%</span>
+                          <span className="font-medium">{effectiveFoodCostPct.toFixed(1)}%</span>
+                        </div>
+                        <div className="text-right hidden md:block">
+                          <span className="text-muted-foreground mr-1">Lab%</span>
+                          <span className="font-medium">{labourPct.toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    ) : isClosed ? (
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        <XCircle className="h-3.5 w-3.5" /> No trading
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <CardContent className="pt-0 pb-4 px-4 space-y-4">
+                  {/* Quick Fix Section */}
+                  {liveMissing.missing.length > 0 && !isClosed && (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-3">
+                      <h4 className="text-xs font-medium text-destructive uppercase tracking-wide flex items-center gap-1.5">
+                        <AlertTriangle className="h-3 w-3" /> Quick Fix — Missing Data
+                      </h4>
+
+                      {/* SALES missing */}
+                      {liveMissing.missing.includes("SALES") && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-muted-foreground">No sales data for this day.</p>
+                          <div className="flex flex-wrap gap-2 items-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={handleMarkClosed}
+                            >
+                              <XCircle className="h-3 w-3" /> Mark Closed
+                            </Button>
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] text-muted-foreground">Revenue {currencySymbol}</label>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                value={manualRevenue ?? ""}
+                                onChange={(e) => setManualRevenue(e.target.value ? Number(e.target.value) : null)}
+                                className="h-7 text-xs w-24"
+                                placeholder="0.00"
+                              />
+                            </div>
+                            <div className="space-y-0.5">
+                              <label className="text-[10px] text-muted-foreground">Orders</label>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={manualOrders ?? ""}
+                                onChange={(e) => setManualOrders(e.target.value ? Number(e.target.value) : null)}
+                                className="h-7 text-xs w-20"
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* LABOUR_HOURS missing */}
+                      {liveMissing.missing.includes("LABOUR_HOURS") && (
+                        <div className="flex items-end gap-2">
+                          <div className="space-y-0.5">
+                            <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-2.5 w-2.5" /> Labour Hours
+                            </label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={0.5}
+                              value={labourHours || ""}
+                              onChange={(e) => setLabourHours(Number(e.target.value) || 0)}
+                              className="h-7 text-xs w-24"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* COVERS missing */}
+                      {liveMissing.missing.includes("COVERS") && (
+                        <div className="flex items-end gap-2">
+                          <div className="space-y-0.5">
+                            <label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Users className="h-2.5 w-2.5" /> Covers
+                            </label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={covers || ""}
+                              onChange={(e) => setCovers(Number(e.target.value) || 0)}
+                              className="h-7 text-xs w-24"
+                            />
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={handleMarkCoversUnknown}
+                          >
+                            Mark unknown
+                          </Button>
+                        </div>
+                      )}
+
+                      <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSave} disabled={isSaving}>
+                        <Save className="h-3 w-3" /> Save Quick Fix
                       </Button>
                     </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground">Notes</label>
-                    <Textarea
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={2}
-                      className="text-sm min-h-[48px]"
-                      placeholder="Daily notes…"
-                    />
-                  </div>
+                  )}
 
-                  {/* Manual revenue/orders if overridden */}
-                  {!day.hasData && (
-                    <div className="grid grid-cols-2 gap-3">
+                  {/* Completed indicator */}
+                  {liveMissing.missing.length === 0 && (
+                    <div className="flex items-center gap-1.5 text-xs text-success">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> All required data present
+                    </div>
+                  )}
+
+                  {/* Inline ledger editor */}
+                  <div className="rounded-md border border-border p-3 space-y-3">
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Daily Inputs
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">Manual Revenue {currencySymbol}</label>
+                        <label className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Users className="h-3 w-3" /> Covers
+                        </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={covers || ""}
+                          onChange={(e) => { setCovers(Number(e.target.value) || 0); setCoversUnknown(false); }}
+                          className="h-8 text-sm"
+                        />
+                        {coversUnknown && (
+                          <span className="text-[10px] text-muted-foreground">Marked unknown</span>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Labour Hours</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={labourHours || ""}
+                          onChange={(e) => setLabourHours(Number(e.target.value) || 0)}
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">
+                          Add. Expenses {currencySymbol}
+                        </label>
                         <Input
                           type="number"
                           min={0}
                           step={0.01}
-                          value={manualRevenue ?? ""}
-                          onChange={(e) => setManualRevenue(e.target.value ? Number(e.target.value) : null)}
+                          value={additionalExpenses || ""}
+                          onChange={(e) => setAdditionalExpenses(Number(e.target.value) || 0)}
                           className="h-8 text-sm"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">Manual Orders</label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={manualOrders ?? ""}
-                          onChange={(e) => setManualOrders(e.target.value ? Number(e.target.value) : null)}
-                          className="h-8 text-sm"
-                        />
+                      <div className="flex items-end">
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1.5"
+                          onClick={handleSave}
+                          disabled={isSaving}
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                          Save
+                        </Button>
                       </div>
                     </div>
-                  )}
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Notes</label>
+                      <Textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={2}
+                        className="text-sm min-h-[48px]"
+                        placeholder="Daily notes…"
+                      />
+                    </div>
 
-                  {/* Closed toggle */}
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={isClosed ? "default" : "outline"}
-                      size="sm"
-                      className="h-7 text-xs gap-1"
-                      onClick={() => setIsClosed(!isClosed)}
-                    >
-                      <XCircle className="h-3 w-3" />
-                      {isClosed ? "Marked Closed" : "Mark Closed"}
-                    </Button>
-                    {isClosed && (
-                      <span className="text-[10px] text-muted-foreground">No trading day — sales requirement waived</span>
+                    {/* Manual revenue/orders if overridden */}
+                    {!day.hasData && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Manual Revenue {currencySymbol}</label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={manualRevenue ?? ""}
+                            onChange={(e) => setManualRevenue(e.target.value ? Number(e.target.value) : null)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Manual Orders</label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={manualOrders ?? ""}
+                            onChange={(e) => setManualOrders(e.target.value ? Number(e.target.value) : null)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Closed toggle */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant={isClosed ? "default" : "outline"}
+                        size="sm"
+                        className="h-7 text-xs gap-1"
+                        onClick={() => setIsClosed(!isClosed)}
+                      >
+                        <XCircle className="h-3 w-3" />
+                        {isClosed ? "Marked Closed" : "Mark Closed"}
+                      </Button>
+                      {isClosed && (
+                        <span className="text-[10px] text-muted-foreground">No trading day — sales requirement waived</span>
+                      )}
+                    </div>
+
+                    {/* Computed metrics from inputs */}
+                    {hasAnyData && (
+                      <div className="flex flex-wrap gap-4 text-xs pt-1">
+                        <span>
+                          <span className="text-muted-foreground">Labour Cost:</span>{" "}
+                          <span className="font-medium">{formatCurrency(labourCost)}</span>
+                        </span>
+                        <span>
+                          <span className="text-muted-foreground">Labour %:</span>{" "}
+                          <span className="font-medium">{labourPct.toFixed(1)}%</span>
+                        </span>
+                        <span>
+                          <span className="text-muted-foreground">Adj. Profit:</span>{" "}
+                          <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
+                            {formatCurrency(adjustedProfit)}
+                          </span>
+                        </span>
+                        {covers > 0 && (
+                          <span>
+                            <span className="text-muted-foreground">Rev/Cover:</span>{" "}
+                            <span className="font-medium">{formatCurrency(effectiveRevenue / covers)}</span>
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
-                  {/* Computed metrics from inputs */}
-                  {hasAnyData && (
-                    <div className="flex flex-wrap gap-4 text-xs pt-1">
-                      <span>
-                        <span className="text-muted-foreground">Labour Cost:</span>{" "}
-                        <span className="font-medium">{formatCurrency(labourCost)}</span>
-                      </span>
-                      <span>
-                        <span className="text-muted-foreground">Labour %:</span>{" "}
-                        <span className="font-medium">{labourPct.toFixed(1)}%</span>
-                      </span>
-                      <span>
-                        <span className="text-muted-foreground">Adj. Profit:</span>{" "}
-                        <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
-                          {formatCurrency(adjustedProfit)}
-                        </span>
-                      </span>
-                      {covers > 0 && (
-                        <span>
-                          <span className="text-muted-foreground">Rev/Cover:</span>{" "}
-                          <span className="font-medium">{formatCurrency(effectiveRevenue / covers)}</span>
-                        </span>
-                      )}
+                  {/* Existing dish/location analytics */}
+                  {day.hasData && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Top Dishes
+                        </h4>
+                        {day.topDishes.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No data</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {day.topDishes.map((dish, i) => (
+                              <div key={i} className="flex justify-between items-center text-sm">
+                                <span className="truncate mr-2">{dish.name}</span>
+                                <div className="text-right shrink-0">
+                                  <span className="font-medium">{dish.quantity} sold</span>
+                                  <span className="text-muted-foreground ml-2">
+                                    {formatCurrency(dish.revenue)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Bottom Dishes
+                        </h4>
+                        {day.worstDishes.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No data</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {day.worstDishes.map((dish, i) => (
+                              <div key={i} className="flex justify-between items-center text-sm">
+                                <span className="truncate mr-2">{dish.name}</span>
+                                <div className="text-right shrink-0">
+                                  <span className="font-medium">{dish.quantity} sold</span>
+                                  <span className="text-muted-foreground ml-2">
+                                    {formatCurrency(dish.revenue)}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
-                </div>
 
-                {/* Existing dish/location analytics */}
-                {day.hasData && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {day.hasData && day.locationPerformance.length > 1 && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Top Dishes
+                        Location Performance
                       </h4>
-                      {day.topDishes.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No data</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {day.topDishes.map((dish, i) => (
-                            <div key={i} className="flex justify-between items-center text-sm">
-                              <span className="truncate mr-2">{dish.name}</span>
-                              <div className="text-right shrink-0">
-                                <span className="font-medium">{dish.quantity} sold</span>
-                                <span className="text-muted-foreground ml-2">
-                                  {formatCurrency(dish.revenue)}
-                                </span>
-                              </div>
+                      <div className="space-y-1.5">
+                        {day.locationPerformance.map((loc, i) => (
+                          <div
+                            key={i}
+                            className="flex justify-between items-center text-sm p-2 rounded-md bg-secondary/30"
+                          >
+                            <span className="font-medium">{loc.name}</span>
+                            <div className="flex gap-6">
+                              <span>
+                                <span className="text-muted-foreground mr-1">Orders:</span>
+                                {loc.orders}
+                              </span>
+                              <span>
+                                <span className="text-muted-foreground mr-1">Rev:</span>
+                                <span className="text-success">{formatCurrency(loc.revenue)}</span>
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Bottom Dishes
-                      </h4>
-                      {day.worstDishes.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No data</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {day.worstDishes.map((dish, i) => (
-                            <div key={i} className="flex justify-between items-center text-sm">
-                              <span className="truncate mr-2">{dish.name}</span>
-                              <div className="text-right shrink-0">
-                                <span className="font-medium">{dish.quantity} sold</span>
-                                <span className="text-muted-foreground ml-2">
-                                  {formatCurrency(dish.revenue)}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {day.hasData && day.locationPerformance.length > 1 && (
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Location Performance
-                    </h4>
-                    <div className="space-y-1.5">
-                      {day.locationPerformance.map((loc, i) => (
-                        <div
-                          key={i}
-                          className="flex justify-between items-center text-sm p-2 rounded-md bg-secondary/30"
-                        >
-                          <span className="font-medium">{loc.name}</span>
-                          <div className="flex gap-6">
-                            <span>
-                              <span className="text-muted-foreground mr-1">Orders:</span>
-                              {loc.orders}
-                            </span>
-                            <span>
-                              <span className="text-muted-foreground mr-1">Rev:</span>
-                              <span className="text-success">{formatCurrency(loc.revenue)}</span>
-                            </span>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {!day.hasData && !isClosed && manualRevenue == null && (
-                  <p className="text-sm text-muted-foreground">No sales recorded for this day.</p>
-                )}
-              </CardContent>
-            </CollapsibleContent>
+                  {!day.hasData && !isClosed && manualRevenue == null && (
+                    <p className="text-sm text-muted-foreground">No sales recorded for this day.</p>
+                  )}
+                </CardContent>
+              </CollapsibleContent>
+            </div>
           </div>
-        </div>
-      </Card>
-    </Collapsible>
+        </Card>
+      </Collapsible>
+    </div>
   );
 }
 
@@ -730,6 +756,8 @@ export default function ReportsPage() {
   );
 
   const avgHourlyRate = 12.5;
+  const [focusedDate, setFocusedDate] = useState<string | undefined>();
+  const dayCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Period summary with manual override support
   const periodSummary = useMemo(() => {
@@ -791,10 +819,25 @@ export default function ReportsPage() {
 
   const handleDayClick = useCallback(
     (dateStr: string) => {
-      setCustomRange(dateStr, dateStr);
+      setFocusedDate(dateStr);
+      // Scroll to the card
+      setTimeout(() => {
+        const el = dayCardRefs.current.get(dateStr);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
     },
-    [setCustomRange]
+    []
   );
+
+  const setDayCardRef = useCallback((dateStr: string, el: HTMLDivElement | null) => {
+    if (el) {
+      dayCardRefs.current.set(dateStr, el);
+    } else {
+      dayCardRefs.current.delete(dateStr);
+    }
+  }, []);
 
   return (
     <PageLayout title="Reports" subtitle="Business performance metrics and daily breakdown">
@@ -837,7 +880,7 @@ export default function ReportsPage() {
               </div>
             )}
             {missingDaysCount > 0 && (
-              <Badge variant="secondary" className="text-[10px] gap-1">
+              <Badge variant="destructive" className="text-[10px] gap-1">
                 <AlertTriangle className="h-2.5 w-2.5" />
                 {missingDaysCount} day{missingDaysCount > 1 ? "s" : ""} need attention
               </Badge>
@@ -917,6 +960,7 @@ export default function ReportsPage() {
                     onDayClick={handleDayClick}
                     dailyData={dailyData || []}
                     ledgerEntries={ledgerEntries}
+                    focusedDate={focusedDate}
                   />
                 </CardContent>
               </Card>
@@ -940,6 +984,8 @@ export default function ReportsPage() {
                         onSaveLedger={upsertLedger}
                         isSaving={isSaving}
                         avgHourlyRate={avgHourlyRate}
+                        isFocused={focusedDate === day.date}
+                        cardRef={(el) => setDayCardRef(day.date, el)}
                       />
                     ))}
                   </div>
