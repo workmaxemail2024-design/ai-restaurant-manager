@@ -46,6 +46,10 @@ import SystemQAPage from "./pages/SystemQAPage";
 import OverheadsPage from "./pages/settings/OverheadsPage";
 import DemoSettingsPage from "./pages/settings/DemoSettingsPage";
 import DocumentsPage from "./pages/DocumentsPage";
+import ReservationsPage from "./pages/ReservationsPage";
+import ReservationFloorPage from "./pages/ReservationFloorPage";
+import ReservationCustomersPage from "./pages/ReservationCustomersPage";
+import ReservationSettingsPage from "./pages/ReservationSettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -106,6 +110,11 @@ const App = () => (
               <Route path="/automation/rules" element={<ProtectedRoute><AutomationRulesPage /></ProtectedRoute>} />
               {/* Notifications */}
               <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+              {/* Reservations */}
+              <Route path="/reservations" element={<ProtectedRoute><ReservationsPage /></ProtectedRoute>} />
+              <Route path="/reservations/floor" element={<ProtectedRoute><ReservationFloorPage /></ProtectedRoute>} />
+              <Route path="/reservations/customers" element={<ProtectedRoute><ReservationCustomersPage /></ProtectedRoute>} />
+              <Route path="/reservations/settings" element={<ProtectedRoute><ReservationSettingsPage /></ProtectedRoute>} />
               {/* Settings Routes */}
               <Route path="/settings/pos" element={<ProtectedRoute><POSIntegrationsPage /></ProtectedRoute>} />
               <Route path="/settings/roles" element={<ProtectedRoute><RoleBuilderPage /></ProtectedRoute>} />

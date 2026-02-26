@@ -28,7 +28,11 @@ import {
   Zap,
   FileText,
   FlaskConical,
-  Play
+  Play,
+  CalendarCheck,
+  LayoutGrid,
+  UserCircle,
+  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
@@ -37,6 +41,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { usePermissions, PermissionResource } from "@/hooks/usePermissions";
 import { useRestaurant } from "@/contexts/RestaurantContext";
+import { usePendingReservationCount } from "@/hooks/useReservations";
 
 interface NavItem {
   icon: typeof LayoutDashboard;
@@ -107,6 +112,17 @@ const navSections: NavSection[] = [
     ]
   },
   {
+    title: "Reservations",
+    icon: CalendarCheck,
+    permission: 'dashboard',
+    items: [
+      { icon: CalendarCheck, label: "Bookings", path: "/reservations", permission: { resource: 'dashboard', action: 'view' } },
+      { icon: LayoutGrid, label: "Floor Plan", path: "/reservations/floor", permission: { resource: 'dashboard', action: 'view' } },
+      { icon: UserCircle, label: "Customers", path: "/reservations/customers", permission: { resource: 'dashboard', action: 'view' } },
+      { icon: Settings2, label: "Settings", path: "/reservations/settings", permission: { resource: 'dashboard', action: 'view' } },
+    ]
+  },
+  {
     title: "AI Intelligence",
     icon: Sparkles,
     permission: 'ai_features',
@@ -158,6 +174,7 @@ export function PermissionFilteredSidebar() {
   const location = useLocation();
   const { hasPermission, isLoading } = usePermissions();
   const { signOut, user, currentRestaurant } = useRestaurant();
+  const { data: pendingCount = 0 } = usePendingReservationCount();
 
   const restaurantKey = currentRestaurant?.id ?? "none";
   const scrollStorageKey = `sidebar_scroll_${restaurantKey}`;
@@ -322,14 +339,22 @@ export function PermissionFilteredSidebar() {
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-0.5 pl-2">
-              {section.items.map((item) => (
-                <NavButton
-                  key={item.path}
-                  {...item}
-                  active={location.pathname === item.path}
-                  onNavigate={persistScrollNow}
-                />
-              ))}
+              {section.items.map((item) => {
+                // For reservation items, show pending badge on "Bookings"
+                const itemBadge = item.path === '/reservations' && pendingCount > 0 ? pendingCount : item.badge;
+                // Active: exact match, or for /reservations sub-routes match prefix
+                const isActive = location.pathname === item.path ||
+                  (item.path !== '/' && location.pathname.startsWith(item.path + '/'));
+                return (
+                  <NavButton
+                    key={item.path}
+                    {...item}
+                    badge={itemBadge}
+                    active={isActive}
+                    onNavigate={persistScrollNow}
+                  />
+                );
+              })}
             </CollapsibleContent>
           </Collapsible>
         ))}

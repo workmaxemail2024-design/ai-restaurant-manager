@@ -1174,6 +1174,281 @@ export type Database = {
           },
         ]
       }
+      reservation_customers: {
+        Row: {
+          created_at: string
+          email: string | null
+          first_name: string
+          id: string
+          last_name: string
+          location_id: string | null
+          marketing_opt_in: boolean
+          notes: string | null
+          phone: string | null
+          restaurant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          first_name: string
+          id?: string
+          last_name: string
+          location_id?: string | null
+          marketing_opt_in?: boolean
+          notes?: string | null
+          phone?: string | null
+          restaurant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          first_name?: string
+          id?: string
+          last_name?: string
+          location_id?: string | null
+          marketing_opt_in?: boolean
+          notes?: string | null
+          phone?: string | null
+          restaurant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_customers_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_customers_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservation_sittings: {
+        Row: {
+          buffer_minutes: number
+          created_at: string
+          days_of_week: number[]
+          default_duration_minutes: number
+          end_time: string
+          id: string
+          is_active: boolean
+          location_id: string | null
+          max_covers: number | null
+          name: string
+          restaurant_id: string
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          buffer_minutes?: number
+          created_at?: string
+          days_of_week?: number[]
+          default_duration_minutes?: number
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          max_covers?: number | null
+          name: string
+          restaurant_id: string
+          start_time?: string
+          updated_at?: string
+        }
+        Update: {
+          buffer_minutes?: number
+          created_at?: string
+          days_of_week?: number[]
+          default_duration_minutes?: number
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          location_id?: string | null
+          max_covers?: number | null
+          name?: string
+          restaurant_id?: string
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_sittings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_sittings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservation_tables: {
+        Row: {
+          area: string | null
+          created_at: string
+          h: number
+          id: string
+          is_active: boolean
+          location_id: string
+          name: string
+          restaurant_id: string
+          seats: number
+          shape: Database["public"]["Enums"]["table_shape"]
+          updated_at: string
+          w: number
+          x: number
+          y: number
+        }
+        Insert: {
+          area?: string | null
+          created_at?: string
+          h?: number
+          id?: string
+          is_active?: boolean
+          location_id: string
+          name: string
+          restaurant_id: string
+          seats?: number
+          shape?: Database["public"]["Enums"]["table_shape"]
+          updated_at?: string
+          w?: number
+          x?: number
+          y?: number
+        }
+        Update: {
+          area?: string | null
+          created_at?: string
+          h?: number
+          id?: string
+          is_active?: boolean
+          location_id?: string
+          name?: string
+          restaurant_id?: string
+          seats?: number
+          shape?: Database["public"]["Enums"]["table_shape"]
+          updated_at?: string
+          w?: number
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_tables_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_tables_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservations: {
+        Row: {
+          actual_spend: number | null
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          decline_reason: string | null
+          end_at: string
+          id: string
+          location_id: string
+          party_size: number
+          restaurant_id: string
+          sitting_id: string | null
+          source: Database["public"]["Enums"]["reservation_source"]
+          special_requests: string | null
+          start_at: string
+          status: Database["public"]["Enums"]["reservation_status"]
+          table_ids: Json
+          updated_at: string
+        }
+        Insert: {
+          actual_spend?: number | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          decline_reason?: string | null
+          end_at: string
+          id?: string
+          location_id: string
+          party_size?: number
+          restaurant_id: string
+          sitting_id?: string | null
+          source?: Database["public"]["Enums"]["reservation_source"]
+          special_requests?: string | null
+          start_at: string
+          status?: Database["public"]["Enums"]["reservation_status"]
+          table_ids?: Json
+          updated_at?: string
+        }
+        Update: {
+          actual_spend?: number | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string | null
+          decline_reason?: string | null
+          end_at?: string
+          id?: string
+          location_id?: string
+          party_size?: number
+          restaurant_id?: string
+          sitting_id?: string | null
+          source?: Database["public"]["Enums"]["reservation_source"]
+          special_requests?: string | null
+          start_at?: string
+          status?: Database["public"]["Enums"]["reservation_status"]
+          table_ids?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservations_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservations_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservations_sitting_id_fkey"
+            columns: ["sitting_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_sittings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurants: {
         Row: {
           created_at: string
@@ -1945,6 +2220,16 @@ export type Database = {
     Enums: {
       attendance_source: "manual" | "pos" | "auto"
       contract_type: "full_time" | "part_time" | "casual"
+      reservation_source: "phone" | "walk_in" | "online" | "staff"
+      reservation_status:
+        | "inquiry"
+        | "pending"
+        | "confirmed"
+        | "declined"
+        | "cancelled"
+        | "seated"
+        | "completed"
+        | "no_show"
       staff_role:
         | "chef"
         | "waiter"
@@ -1955,6 +2240,7 @@ export type Database = {
         | "cleaner"
       staff_status: "active" | "inactive" | "on_leave"
       storage_type: "freezer" | "fridge" | "dry"
+      table_shape: "square" | "circle" | "rect"
       unit_type: "kg" | "g" | "L" | "ml" | "oz" | "each"
     }
     CompositeTypes: {
@@ -2085,6 +2371,17 @@ export const Constants = {
     Enums: {
       attendance_source: ["manual", "pos", "auto"],
       contract_type: ["full_time", "part_time", "casual"],
+      reservation_source: ["phone", "walk_in", "online", "staff"],
+      reservation_status: [
+        "inquiry",
+        "pending",
+        "confirmed",
+        "declined",
+        "cancelled",
+        "seated",
+        "completed",
+        "no_show",
+      ],
       staff_role: [
         "chef",
         "waiter",
@@ -2096,6 +2393,7 @@ export const Constants = {
       ],
       staff_status: ["active", "inactive", "on_leave"],
       storage_type: ["freezer", "fridge", "dry"],
+      table_shape: ["square", "circle", "rect"],
       unit_type: ["kg", "g", "L", "ml", "oz", "each"],
     },
   },
