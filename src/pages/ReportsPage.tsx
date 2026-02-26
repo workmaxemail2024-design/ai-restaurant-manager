@@ -33,6 +33,7 @@ import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 import { ProfitLossReport } from "@/components/reports/ProfitLossReport";
 import { CashFlowReport } from "@/components/reports/CashFlowReport";
+import { ReconciliationReport } from "@/components/reports/ReconciliationReport";
 import {
   format,
   parseISO,
@@ -811,6 +812,10 @@ export default function ReportsPage() {
             <Wallet className="h-4 w-4" />
             Cash Flow
           </TabsTrigger>
+          <TabsTrigger value="reconciliation" className="gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Reconciliation
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="daily" className="space-y-4">
@@ -950,6 +955,10 @@ export default function ReportsPage() {
 
         <TabsContent value="cashflow">
           <CashFlowReport />
+        </TabsContent>
+
+        <TabsContent value="reconciliation">
+          <ReconciliationReport />
         </TabsContent>
       </Tabs>
     </PageLayout>
