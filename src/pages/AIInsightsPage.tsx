@@ -3,7 +3,13 @@ import { RequirePermission } from "@/components/RequirePermission";
 import { AIInsightCard } from "@/components/ai/AIInsightCard";
 import { AIInsightSection } from "@/components/ai/AIInsightSection";
 import { useAIInsights } from "@/hooks/useAIInsights";
+import { useOwnerIntelligence, type OwnerInsight, type InsightSeverity } from "@/hooks/useOwnerIntelligence";
+import { useLocation } from "@/contexts/LocationContext";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
 import { 
   Package, 
   Euro, 
@@ -13,6 +19,14 @@ import {
   Target,
   Zap,
   ArrowRight,
+  TrendingUp,
+  TrendingDown,
+  Lightbulb,
+  Shield,
+  BarChart3,
+  MapPin,
+  CalendarDays,
+  UtensilsCrossed,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -24,6 +38,86 @@ function InsightCTA({ to, label }: { to: string; label: string }) {
         <ArrowRight className="h-3 w-3" />
       </Button>
     </Link>
+  );
+}
+
+const severityStyles: Record<InsightSeverity, string> = {
+  critical: "border-destructive/30 bg-destructive/5",
+  warning: "border-warning/30 bg-warning/5",
+  positive: "border-success/30 bg-success/5",
+  info: "border-border bg-secondary/30",
+};
+
+const severityIconMap: Record<InsightSeverity, typeof AlertTriangle> = {
+  critical: AlertTriangle,
+  warning: AlertTriangle,
+  positive: TrendingUp,
+  info: Lightbulb,
+};
+
+const severityIconColor: Record<InsightSeverity, string> = {
+  critical: "text-destructive",
+  warning: "text-warning",
+  positive: "text-success",
+  info: "text-primary",
+};
+
+const categoryIcon: Record<string, typeof Euro> = {
+  revenue: Euro,
+  labour: Users,
+  food_cost: UtensilsCrossed,
+  menu: Target,
+  customers: CalendarDays,
+  inventory: Package,
+  locations: MapPin,
+};
+
+function AutoInsightCard({ insight }: { insight: OwnerInsight }) {
+  const Icon = severityIconMap[insight.severity];
+  const CatIcon = categoryIcon[insight.category] || BarChart3;
+  
+  return (
+    <Card className={cn("border transition-colors", severityStyles[insight.severity])}>
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          <div className="p-1.5 rounded-md bg-background border border-border shrink-0">
+            <CatIcon className={cn("h-4 w-4", severityIconColor[insight.severity])} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h4 className="text-sm font-medium">{insight.title}</h4>
+              <Badge variant="outline" className="text-[9px] px-1.5 py-0 shrink-0">
+                {insight.confidence} confidence
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">{insight.description}</p>
+            {insight.metric && (
+              <div className="flex items-center gap-3 mt-2 p-2 rounded bg-background/60 border border-border">
+                <div>
+                  <span className="text-lg font-bold">{insight.metric.value}</span>
+                  <span className="text-xs text-muted-foreground ml-1.5">{insight.metric.label}</span>
+                </div>
+                {insight.metric.change && (
+                  <span className="text-xs text-muted-foreground">{insight.metric.change}</span>
+                )}
+              </div>
+            )}
+            {insight.action && (
+              <div className="flex items-start gap-1.5 mt-2 text-sm text-primary">
+                <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>{insight.action}</span>
+              </div>
+            )}
+            {insight.missingData && insight.missingData.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1">
+                <Shield className="h-3 w-3" />
+                Reduced confidence — missing: {insight.missingData.join(", ")}
+              </p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
