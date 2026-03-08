@@ -61,13 +61,9 @@ const MISSING_LABELS: Record<MissingField, string> = {
   SALES: "Sales",
   LABOUR_HOURS: "Labour",
   COVERS: "Covers",
+  EXPENSES: "Expenses",
+  BOOKINGS: "Bookings",
 };
-
-// ─── Determine if a day is "accounted for" (green) ───
-function isDayComplete(day: DailyMetrics, ledger?: LedgerEntry): boolean {
-  const { isComplete } = evaluateMissing(day.hasData, ledger);
-  return isComplete || (ledger?.is_closed ?? false);
-}
 
 // ─── Health helpers ───
 function getHealthColor(day: DailyMetrics, labourPct: number, ledger?: LedgerEntry): string {
@@ -79,29 +75,75 @@ function getHealthColor(day: DailyMetrics, labourPct: number, ledger?: LedgerEnt
   return "bg-warning";
 }
 
-function getStatusLabel(missing: MissingField[], day: DailyMetrics, ledger?: LedgerEntry): string {
+function getStatusLabel(status: DayStatus, ledger?: LedgerEntry): string {
   if (ledger?.is_closed) return "Closed";
-  if (!day.hasData && !ledger && ledger?.manual_revenue == null) return "No Data";
-  if (missing.length > 0) return "Missing Data";
-  return "Complete";
+  switch (status) {
+    case "accounted": return "Accounted";
+    case "partial": return "Partial";
+    case "needs_attention": return "Needs Attention";
+    case "no_data": return "No Data";
+  }
 }
 
-function getStatusVariant(label: string): "default" | "secondary" | "outline" | "destructive" {
-  if (label === "Complete") return "default";
-  if (label === "Closed") return "outline";
-  if (label === "Missing Data") return "destructive";
-  return "outline";
+function getStatusVariant(status: DayStatus): "default" | "secondary" | "outline" | "destructive" {
+  switch (status) {
+    case "accounted": return "default";
+    case "partial": return "secondary";
+    case "needs_attention": return "destructive";
+    case "no_data": return "outline";
+  }
+}
+
+function getDotClass(status: DayStatus): string {
+  switch (status) {
+    case "accounted": return "bg-success";
+    case "partial": return "bg-warning";
+    case "needs_attention": return "bg-destructive";
+    case "no_data": return "bg-muted-foreground/40";
+  }
+}
+
+// ─── Data Completeness Checklist ───
+function DataChecklist({ checklist }: { checklist: Record<MissingField, boolean> }) {
+  const items: { field: MissingField; label: string }[] = [
+    { field: "SALES", label: "Sales" },
+    { field: "LABOUR_HOURS", label: "Labour" },
+    { field: "COVERS", label: "Covers" },
+    { field: "EXPENSES", label: "Expenses" },
+    { field: "BOOKINGS", label: "Bookings" },
+  ];
+  return (
+    <div className="rounded-md border border-border bg-secondary/20 p-2.5 space-y-1">
+      <h4 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+        Data Completeness
+      </h4>
+      {items.map(({ field, label }) => (
+        <div key={field} className="flex items-center gap-2 text-xs">
+          {checklist[field] ? (
+            <Check className="h-3 w-3 text-success shrink-0" />
+          ) : (
+            <X className="h-3 w-3 text-destructive shrink-0" />
+          )}
+          <span className={checklist[field] ? "text-foreground" : "text-muted-foreground"}>
+            {label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ─── Missing badge (compact) ───
 function MissingBadge({ missing }: { missing: MissingField[] }) {
   if (missing.length === 0) return null;
-  const shown = missing.slice(0, 2).map((f) => MISSING_LABELS[f]);
-  const extra = missing.length > 2 ? ` +${missing.length - 2}` : "";
+  // Only show critical missing in badge
+  const critical = missing.filter(f => f === "SALES" || f === "LABOUR_HOURS");
+  if (critical.length === 0) return null;
+  const shown = critical.map((f) => MISSING_LABELS[f]);
   return (
     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
       <AlertTriangle className="h-2.5 w-2.5" />
-      {shown.join(", ")}{extra}
+      {shown.join(", ")}
     </Badge>
   );
 }
