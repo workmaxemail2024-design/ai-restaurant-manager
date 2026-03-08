@@ -68,7 +68,7 @@ export default function BackupsPage() {
                   <span className="font-semibold">{hasRecentFailure ? "Last backup failed" : "No backup in 24h"}</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-green-600">
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                   <CheckCircle className="h-5 w-5" />
                   <span className="font-semibold">Healthy</span>
                 </div>
