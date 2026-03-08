@@ -156,6 +156,7 @@ function CalendarStrip({
   dailyData,
   ledgerEntries,
   focusedDate,
+  bookingDays,
 }: {
   selectedStart: string;
   selectedEnd: string;
@@ -163,6 +164,7 @@ function CalendarStrip({
   dailyData: DailyMetrics[];
   ledgerEntries: Map<string, LedgerEntry>;
   focusedDate?: string;
+  bookingDays: Set<string>;
 }) {
   const rangeStart = parseISO(selectedStart);
   const rangeEnd = parseISO(selectedEnd);
@@ -213,20 +215,8 @@ function CalendarStrip({
           const isSelected = isSameDay(day, rangeStart) || isSameDay(day, rangeEnd);
           const isFocused = focusedDate === dateStr;
 
-          // Determine status: green/red/grey
-          const isClosed = ledger?.is_closed ?? false;
-          const hasAnyData = (coverage?.hasData || false) || (ledger?.manual_revenue != null && (ledger.manual_revenue ?? 0) > 0);
-          const { missing } = evaluateMissing(coverage?.hasData || false, ledger);
-          const isComplete = missing.length === 0 || isClosed;
-
-          let dotClass = "bg-muted-foreground/40"; // grey default
-          if (hasAnyData || isClosed || ledger) {
-            if (isComplete) {
-              dotClass = "bg-success"; // green
-            } else {
-              dotClass = "bg-destructive"; // red
-            }
-          }
+          const { status } = evaluateMissing(coverage?.hasData || false, ledger, bookingDays.has(dateStr));
+          const dotClass = getDotClass(status);
 
           return (
             <button
@@ -253,6 +243,9 @@ function CalendarStrip({
       <div className="flex gap-3 text-[10px] text-muted-foreground pt-1">
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-success" /> Accounted
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-warning" /> Partial
         </span>
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-destructive" /> Needs attention
