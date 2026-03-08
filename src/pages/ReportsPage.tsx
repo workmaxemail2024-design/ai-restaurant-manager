@@ -1029,6 +1029,9 @@ export default function ReportsPage() {
             )}
           </div>
 
+          {/* Accuracy Note */}
+          <ReportsAccuracyNote locationId={selectedLocationId} />
+
           {isLoading ? (
             <div className="text-muted-foreground text-sm">Loading metrics…</div>
           ) : (
