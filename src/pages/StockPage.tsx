@@ -81,6 +81,7 @@ export default function StockPage() {
 
   return (
     <PageLayout title="Inventory / Stock" subtitle="Monitor stock levels, adjustments, and variances">
+      <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes"]} className="mb-4" />
       <Tabs defaultValue="levels" className="space-y-4">
         <TabsList>
           <TabsTrigger value="levels" className="flex items-center gap-2">

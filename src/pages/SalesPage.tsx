@@ -90,6 +90,9 @@ export default function SalesPage() {
 
   return (
     <PageLayout title="Sales" subtitle="Raw sales transaction ledger">
+      {/* Data Warnings */}
+      <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes", "missing_sales"]} className="mb-4" />
+
       {/* Period indicator */}
       <div className="text-sm text-muted-foreground mb-4">
         Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>
