@@ -1977,6 +1977,53 @@ export type Database = {
           },
         ]
       }
+      system_backups: {
+        Row: {
+          backup_type: string
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          file_path: string | null
+          id: string
+          notes: string | null
+          restaurant_id: string
+          size_bytes: number | null
+          status: string
+        }
+        Insert: {
+          backup_type?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          id?: string
+          notes?: string | null
+          restaurant_id: string
+          size_bytes?: number | null
+          status?: string
+        }
+        Update: {
+          backup_type?: string
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          file_path?: string | null
+          id?: string
+          notes?: string | null
+          restaurant_id?: string
+          size_bytes?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_backups_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_restaurants: {
         Row: {
           created_at: string
