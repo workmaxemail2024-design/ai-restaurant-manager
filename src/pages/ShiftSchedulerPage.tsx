@@ -7,16 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, Clock, Trash2, Wand2, Check, X, Edit2 } from "lucide-react";
+import { Plus, Calendar, Clock, Trash2, Wand2, Check, X, Edit2, Euro } from "lucide-react";
 import { 
-  useStaffShifts, 
-  useStaffWithContracts, 
-  useCreateShift, 
-  useDeleteShift,
-  useUpdateShift,
-  useGenerateDraftRoster,
-  useConfirmDraftRoster,
-  useDiscardDraftRoster,
+  useStaffShifts, useStaffWithContracts, useCreateShift, useDeleteShift,
+  useUpdateShift, useGenerateDraftRoster, useConfirmDraftRoster, useDiscardDraftRoster,
   StaffShift 
 } from "@/hooks/useShifts";
 import { useLocations } from "@/hooks/useLocations";
@@ -45,19 +39,25 @@ export default function ShiftSchedulerPage() {
   const [editingShift, setEditingShift] = useState<StaffShift | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string>("");
   const [form, setForm] = useState({
-    staff_id: "",
-    location_id: "",
-    shift_start: "",
-    shift_end: "",
-    notes: "",
+    staff_id: "", location_id: "", shift_start: "", shift_end: "", notes: "",
   });
 
-  // Count draft shifts for this week
-  const draftShiftsCount = useMemo(() => {
-    return shifts.filter(s => s.is_draft).length;
-  }, [shifts]);
-
+  const draftShiftsCount = useMemo(() => shifts.filter(s => s.is_draft).length, [shifts]);
   const hasDrafts = draftShiftsCount > 0;
+
+  // Weekly planned totals
+  const weeklyTotals = useMemo(() => {
+    let totalHours = 0;
+    let totalCost = 0;
+    shifts.forEach(s => {
+      const mins = differenceInMinutes(parseISO(s.shift_end), parseISO(s.shift_start));
+      const hours = mins / 60;
+      totalHours += hours;
+      const staffMember = staff.find(st => st.id === s.staff_id);
+      totalCost += hours * (staffMember?.hourly_rate || 0);
+    });
+    return { totalHours, totalCost };
+  }, [shifts, staff]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +74,7 @@ export default function ShiftSchedulerPage() {
   const handleEdit = (shift: StaffShift) => {
     setEditingShift(shift);
     setForm({
-      staff_id: shift.staff_id,
-      location_id: shift.location_id,
+      staff_id: shift.staff_id, location_id: shift.location_id,
       shift_start: format(parseISO(shift.shift_start), "yyyy-MM-dd'T'HH:mm"),
       shift_end: format(parseISO(shift.shift_end), "yyyy-MM-dd'T'HH:mm"),
       notes: shift.notes || "",
@@ -92,9 +91,7 @@ export default function ShiftSchedulerPage() {
   };
 
   const handleGenerateDraft = async () => {
-    if (!selectedLocation) {
-      return;
-    }
+    if (!selectedLocation) return;
     await generateDraft.mutateAsync({ weekStart, locationId: selectedLocation });
   };
 
@@ -108,9 +105,7 @@ export default function ShiftSchedulerPage() {
     await discardDraft.mutateAsync({ weekStart, locationId: selectedLocation });
   };
 
-  const getShiftsForDay = (day: Date) => {
-    return shifts.filter((shift) => isSameDay(parseISO(shift.shift_start), day));
-  };
+  const getShiftsForDay = (day: Date) => shifts.filter((shift) => isSameDay(parseISO(shift.shift_start), day));
 
   const navigateWeek = (direction: number) => {
     const newDate = new Date(selectedDate);
@@ -121,7 +116,7 @@ export default function ShiftSchedulerPage() {
   return (
     <PageLayout
       title="Timesheets"
-      description="Source of truth for labour hours — all scheduling managed here"
+      description="Planned labour — shift scheduling that defines expected hours and cost"
       action={
         <Dialog open={open} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
@@ -140,9 +135,7 @@ export default function ShiftSchedulerPage() {
                     {staff.map((s) => (
                       <SelectItem key={s.id} value={s.id} className="text-sm">
                         {s.first_name} {s.last_name}
-                        <span className="ml-1.5 text-muted-foreground text-[10px]">
-                          (max {s.max_hours_per_week}h)
-                        </span>
+                        <span className="ml-1.5 text-muted-foreground text-[10px]">(max {s.max_hours_per_week}h)</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -180,12 +173,28 @@ export default function ShiftSchedulerPage() {
       }
     >
       <div className="space-y-3">
+        {/* Weekly Planned Summary */}
+        <div className="flex flex-wrap items-center gap-4 p-3 bg-muted/50 rounded-lg border text-sm">
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-muted-foreground">Planned Hours:</span>
+            <span className="font-semibold">{weeklyTotals.totalHours.toFixed(1)}h</span>
+          </div>
+          <div className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-1.5">
+            <Euro className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-muted-foreground">Planned Cost:</span>
+            <span className="font-semibold">{formatCurrency(weeklyTotals.totalCost)}</span>
+          </div>
+          <div className="h-4 w-px bg-border" />
+          <span className="text-muted-foreground">
+            {shifts.length} shift{shifts.length !== 1 ? "s" : ""}
+            {hasDrafts && <span className="text-warning ml-1">({draftShiftsCount} draft)</span>}
+          </span>
+        </div>
+
         {/* Staff Weekly Hours Summary */}
-        <StaffWeeklyHoursSummary 
-          shifts={shifts} 
-          staff={staff} 
-          selectedLocation={selectedLocation} 
-        />
+        <StaffWeeklyHoursSummary shifts={shifts} staff={staff} selectedLocation={selectedLocation} />
 
         {/* Draft Roster Controls */}
         <Card className="border-dashed border-border/60">
@@ -193,51 +202,27 @@ export default function ShiftSchedulerPage() {
             <div className="flex flex-wrap items-center gap-2">
               <Wand2 className="h-3.5 w-3.5 text-muted-foreground" />
               <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                <SelectTrigger className="w-40 h-7 text-xs">
-                  <SelectValue placeholder="Location" />
-                </SelectTrigger>
+                <SelectTrigger className="w-40 h-7 text-xs"><SelectValue placeholder="Location" /></SelectTrigger>
                 <SelectContent>
-                  {locations.map((l) => (
-                    <SelectItem key={l.id} value={l.id} className="text-xs">{l.name}</SelectItem>
-                  ))}
+                  {locations.map((l) => <SelectItem key={l.id} value={l.id} className="text-xs">{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleGenerateDraft}
-                disabled={!selectedLocation || generateDraft.isPending || hasDrafts}
-              >
-                <Wand2 className="mr-1 h-3 w-3" />
-                Generate
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleGenerateDraft}
+                disabled={!selectedLocation || generateDraft.isPending || hasDrafts}>
+                <Wand2 className="mr-1 h-3 w-3" /> Generate
               </Button>
-
               {hasDrafts && (
                 <>
                   <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] h-5 px-1.5">
                     {draftShiftsCount} Draft
                   </Badge>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={handleConfirmDraft}
-                    disabled={confirmDraft.isPending || !selectedLocation}
-                  >
-                    <Check className="mr-1 h-3 w-3" />
-                    Confirm
+                  <Button variant="default" size="sm" className="h-7 text-xs" onClick={handleConfirmDraft}
+                    disabled={confirmDraft.isPending || !selectedLocation}>
+                    <Check className="mr-1 h-3 w-3" /> Confirm
                   </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={handleDiscardDraft}
-                    disabled={discardDraft.isPending || !selectedLocation}
-                  >
-                    <X className="mr-1 h-3 w-3" />
-                    Discard
+                  <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={handleDiscardDraft}
+                    disabled={discardDraft.isPending || !selectedLocation}>
+                    <X className="mr-1 h-3 w-3" /> Discard
                   </Button>
                 </>
               )}
@@ -247,18 +232,12 @@ export default function ShiftSchedulerPage() {
 
         {/* Week Navigation */}
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigateWeek(-1)}>
-            ← Previous
-          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigateWeek(-1)}>← Previous</Button>
           <div className="flex items-center gap-1.5 text-xs">
             <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="font-medium">
-              {format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}
-            </span>
+            <span className="font-medium">{format(weekStart, "MMM d")} – {format(weekEnd, "MMM d, yyyy")}</span>
           </div>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigateWeek(1)}>
-            Next →
-          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigateWeek(1)}>Next →</Button>
         </div>
 
         {/* Week Grid */}
@@ -267,20 +246,16 @@ export default function ShiftSchedulerPage() {
             const dayShifts = getShiftsForDay(day);
             const isToday = isSameDay(day, new Date());
             const dayHours = dayShifts.reduce((sum, s) => {
-              const start = parseISO(s.shift_start);
-              const end = parseISO(s.shift_end);
-              return sum + differenceInMinutes(end, start) / 60;
+              return sum + differenceInMinutes(parseISO(s.shift_end), parseISO(s.shift_start)) / 60;
             }, 0);
             const dayCost = dayShifts.reduce((sum, s) => {
               const staffMember = staff.find(st => st.id === s.staff_id);
-              const start = parseISO(s.shift_start);
-              const end = parseISO(s.shift_end);
-              const hours = differenceInMinutes(end, start) / 60;
+              const hours = differenceInMinutes(parseISO(s.shift_end), parseISO(s.shift_start)) / 60;
               return sum + hours * (staffMember?.hourly_rate || 0);
             }, 0);
             
             return (
-              <Card key={day.toISOString()} className={`${isToday ? "border-primary ring-1 ring-primary/20" : ""}`}>
+              <Card key={day.toISOString()} className={isToday ? "border-primary ring-1 ring-primary/20" : ""}>
                 <CardHeader className="p-2 pb-1">
                   <div className="flex items-center justify-between">
                     <div>
@@ -302,39 +277,23 @@ export default function ShiftSchedulerPage() {
                     <p className="text-[10px] text-muted-foreground py-2">No shifts</p>
                   ) : (
                     dayShifts.map((shift) => (
-                      <div 
-                        key={shift.id} 
-                        className={`p-1.5 rounded border text-xs ${
-                          shift.is_draft 
-                            ? "bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700" 
-                            : "bg-primary/5 border-primary/20"
-                        }`}
-                      >
+                      <div key={shift.id} className={`p-1.5 rounded border text-xs ${
+                        shift.is_draft 
+                          ? "bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700" 
+                          : "bg-primary/5 border-primary/20"
+                      }`}>
                         <div className="flex justify-between items-start gap-1">
                           <div className="flex-1 min-w-0">
                             {shift.is_draft && (
-                              <Badge variant="outline" className="text-[9px] px-1 py-0 mb-0.5 bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">
-                                DRAFT
-                              </Badge>
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 mb-0.5 bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700">DRAFT</Badge>
                             )}
                             <div className="font-medium text-[11px] truncate">{shift.staff?.first_name} {shift.staff?.last_name}</div>
                           </div>
                           <div className="flex gap-0.5 shrink-0">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-secondary"
-                              onClick={() => handleEdit(shift)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-secondary" onClick={() => handleEdit(shift)}>
                               <Edit2 className="h-2.5 w-2.5" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-5 w-5 text-destructive/70 hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => deleteShift.mutate(shift.id)}
-                              disabled={deleteShift.isPending}
-                            >
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive/70 hover:text-destructive hover:bg-destructive/10" onClick={() => deleteShift.mutate(shift.id)} disabled={deleteShift.isPending}>
                               <Trash2 className="h-2.5 w-2.5" />
                             </Button>
                           </div>
