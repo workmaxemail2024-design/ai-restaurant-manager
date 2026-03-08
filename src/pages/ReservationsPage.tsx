@@ -99,13 +99,9 @@ export default function ReservationsPage() {
       title="Reservations"
       subtitle="Manage bookings, covers, and table assignments"
       action={
-        <div className="flex items-center gap-2">
-          <LocationSelector />
-          <DateRangeSelector />
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 mr-1" /> New Booking
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Add Booking
+        </Button>
       }
     >
       {/* KPI Strip */}
