@@ -403,7 +403,7 @@ function DayCard({
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       )}
                       <span className="font-medium text-sm">{label}</span>
-                      <Badge variant={getStatusVariant(statusLabel)} className="text-[10px] px-1.5 py-0">
+                      <Badge variant={getStatusVariant(status)} className="text-[10px] px-1.5 py-0">
                         {statusLabel}
                       </Badge>
                       <MissingBadge missing={missing} />
