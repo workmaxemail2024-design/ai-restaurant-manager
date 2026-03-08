@@ -8,7 +8,7 @@ import { RestaurantProvider } from "@/contexts/RestaurantContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import { DateRangeProvider } from "@/contexts/DateRangeContext";
 import { AuthGuard } from "@/components/AuthGuard";
-import { DemoBanner } from "@/components/demo/DemoBanner";
+
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import LoginPage from "./pages/LoginPage";
