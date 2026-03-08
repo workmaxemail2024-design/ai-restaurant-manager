@@ -1129,6 +1129,8 @@ export default function ReportsPage() {
                         isFocused={focusedDate === day.date}
                         cardRef={(el) => setDayCardRef(day.date, el)}
                         hasBookings={bookingDaysSet.has(day.date)}
+                        actualAttendance={attendanceMap.get(day.date)}
+                        plannedShiftHours={shiftsMap.get(day.date)}
                       />
                     ))}
                   </div>
