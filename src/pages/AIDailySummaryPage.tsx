@@ -49,6 +49,7 @@ export default function AIDailySummaryPage() {
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const { data: locations = [] } = useLocations();
+  const { data: intelligence } = useOwnerIntelligence(selectedLocationId);
   const queryClient = useQueryClient();
   const restaurantId = currentRestaurant?.id;
 
