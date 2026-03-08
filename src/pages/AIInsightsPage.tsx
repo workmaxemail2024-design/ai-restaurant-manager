@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { RequirePermission } from "@/components/RequirePermission";
 import { AIInsightCard } from "@/components/ai/AIInsightCard";
@@ -6,24 +5,30 @@ import { AIInsightSection } from "@/components/ai/AIInsightSection";
 import { useAIInsights } from "@/hooks/useAIInsights";
 import { Button } from "@/components/ui/button";
 import { 
-  Sparkles, 
-  TrendingUp, 
   Package, 
   Euro, 
   AlertTriangle,
   Users,
   ShoppingCart,
   Target,
-  Zap
+  Zap,
+  ArrowRight,
 } from "lucide-react";
+import { Link } from "react-router-dom";
+
+function InsightCTA({ to, label }: { to: string; label: string }) {
+  return (
+    <Link to={to}>
+      <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-primary hover:text-primary hover:bg-primary/10 mt-2 h-7 px-2">
+        {label}
+        <ArrowRight className="h-3 w-3" />
+      </Button>
+    </Link>
+  );
+}
 
 export default function AIInsightsPage() {
   const {
-    dailySummary,
-    dailySummaryLoading,
-    dailySummaryUpdated,
-    generateDailySummary,
-    
     stockForecast,
     stockForecastLoading,
     stockForecastUpdated,
@@ -51,7 +56,6 @@ export default function AIInsightsPage() {
   } = useAIInsights();
 
   const handleRefreshAll = () => {
-    generateDailySummary();
     generateStockForecast();
     generateMenuInsights();
     generateCostAnalysis();
@@ -63,163 +67,156 @@ export default function AIInsightsPage() {
     <RequirePermission resource="ai_features" action="view">
       <PageLayout
         title="AI Insights Dashboard"
-        description="AI-powered intelligence for your restaurant operations"
+        description="Actionable recommendations across your restaurant operations"
         action={
           <Button onClick={handleRefreshAll} className="gap-2">
             <Zap className="h-4 w-4" />
-            Refresh All Insights
+            Refresh All
           </Button>
         }
       >
         <div className="space-y-8">
-          {/* Daily Operations */}
-          <AIInsightSection 
-            title="Daily Operations" 
-            description="Overview of yesterday's performance and today's priorities"
-            columns={2}
-          >
-            <AIInsightCard
-              title="AI Daily Summary"
-              description="Comprehensive analysis of operations"
-              icon={Sparkles}
-              type="info"
-              content={dailySummary?.summary}
-              items={dailySummary?.recommendations}
-              isLoading={dailySummaryLoading}
-              error={dailySummary?.error}
-              lastUpdated={dailySummaryUpdated}
-              onRefresh={generateDailySummary}
-              confidence="high"
-              whyItMatters="Reviewing daily performance helps identify trends early, allowing you to adjust operations before small issues become costly problems."
-            />
-            <AIInsightCard
-              title="Tomorrow's Sales Forecast"
-              description="Predicted revenue and busy periods"
-              icon={TrendingUp}
-              type="success"
-              items={staffForecast?.insights || staffForecast?.items}
-              isLoading={staffForecastLoading}
-              error={staffForecast?.error}
-              lastUpdated={staffForecastUpdated}
-              onRefresh={generateStaffForecast}
-              confidence="medium"
-              whyItMatters="Accurate sales forecasts let you schedule the right staff and prep the right inventory, reducing waste and overtime costs."
-            />
-          </AIInsightSection>
-
           {/* Inventory Intelligence */}
           <AIInsightSection 
             title="Inventory Intelligence" 
             description="Stock predictions and purchasing recommendations"
             columns={2}
           >
-            <AIInsightCard
-              title="Predicted Stock Shortages"
-              description="Items at risk of running out"
-              icon={Package}
-              type={stockForecast?.alerts?.length ? "warning" : "info"}
-              items={stockForecast?.alerts?.map((a: any) => `${a.ingredient}: ${a.message}`) || stockForecast?.insights}
-              isLoading={stockForecastLoading}
-              error={stockForecast?.error}
-              lastUpdated={stockForecastUpdated}
-              onRefresh={generateStockForecast}
-              confidence="high"
-              whyItMatters="Running out of key ingredients causes 86'd menu items, lost sales, and disappointed customers—stock alerts help you reorder before it happens."
-            />
-            <AIInsightCard
-              title="AI Purchase Suggestions"
-              description="Smart ordering recommendations"
-              icon={ShoppingCart}
-              type="info"
-              items={purchaseSuggestions?.recommendations || purchaseSuggestions?.items}
-              isLoading={purchaseSuggestionsLoading}
-              error={purchaseSuggestions?.error}
-              lastUpdated={purchaseSuggestionsUpdated}
-              onRefresh={generatePurchaseSuggestions}
-              confidence="medium"
-              whyItMatters="Optimized ordering reduces food waste and ensures you always have what you need without tying up cash in excess inventory."
-            />
+            <div className="space-y-0">
+              <AIInsightCard
+                title="Low Stock Risk"
+                description="Ingredients at risk of running out based on usage trends"
+                icon={Package}
+                type={stockForecast?.alerts?.length ? "warning" : "info"}
+                items={stockForecast?.alerts?.map((a: any) => `${a.ingredient}: ${a.message}`) || stockForecast?.insights}
+                isLoading={stockForecastLoading}
+                error={stockForecast?.error}
+                lastUpdated={stockForecastUpdated}
+                onRefresh={generateStockForecast}
+                confidence="high"
+                whyItMatters="Running out of key ingredients causes 86'd menu items and lost sales. Early alerts let you reorder before service is impacted."
+                emptyReason="Requires stock levels and recent sales data. Add inventory counts and record sales to activate this insight."
+              />
+              <InsightCTA to="/inventory/forecast" label="Open Inventory Forecast" />
+            </div>
+            <div className="space-y-0">
+              <AIInsightCard
+                title="Smart Purchase Suggestions"
+                description="Optimised ordering based on consumption patterns"
+                icon={ShoppingCart}
+                type="info"
+                items={purchaseSuggestions?.recommendations || purchaseSuggestions?.items}
+                isLoading={purchaseSuggestionsLoading}
+                error={purchaseSuggestions?.error}
+                lastUpdated={purchaseSuggestionsUpdated}
+                onRefresh={generatePurchaseSuggestions}
+                confidence="medium"
+                whyItMatters="Right-sized orders reduce food waste and free up cash that would otherwise be tied up in excess inventory."
+                emptyReason="Requires ingredient data and purchase history. Add ingredients and create purchase orders to enable suggestions."
+              />
+              <InsightCTA to="/purchase-orders" label="View Purchase Orders" />
+            </div>
           </AIInsightSection>
 
           {/* Menu & Profitability */}
           <AIInsightSection 
             title="Menu & Profitability" 
-            description="Menu optimization and profit analysis"
+            description="Pricing opportunities and margin analysis"
             columns={3}
           >
-            <AIInsightCard
-              title="Menu Items to Reprice"
-              description="Pricing optimization opportunities"
-              icon={Euro}
-              type="warning"
-              items={Array.isArray(menuInsights?.insights) ? menuInsights.insights.filter((i: string) => i.toLowerCase().includes('price') || i.toLowerCase().includes('margin')) : undefined}
-              isLoading={menuInsightsLoading}
-              error={menuInsights?.error}
-              lastUpdated={menuInsightsUpdated}
-              onRefresh={generateMenuInsights}
-              confidence="medium"
-              whyItMatters="Underpriced items erode margins silently—small price adjustments on popular dishes can significantly boost profitability."
-            />
-            <AIInsightCard
-              title="Top Margin Winners"
-              description="Your most profitable dishes"
-              icon={Target}
-              type="success"
-              items={Array.isArray(costAnalysis?.recommendations) ? costAnalysis.recommendations.filter((r: string) => r.toLowerCase().includes('profit') || r.toLowerCase().includes('winner') || r.toLowerCase().includes('margin')) : undefined}
-              isLoading={costAnalysisLoading}
-              error={costAnalysis?.error}
-              lastUpdated={costAnalysisUpdated}
-              onRefresh={generateCostAnalysis}
-              confidence="high"
-              whyItMatters="Knowing your profit leaders lets you promote them strategically and train staff to upsell high-margin items."
-            />
-            <AIInsightCard
-              title="Profit Leak Detection"
-              description="Areas where you're losing money"
-              icon={AlertTriangle}
-              type="error"
-              items={Array.isArray(costAnalysis?.insights) ? costAnalysis.insights.filter((i: string) => i.toLowerCase().includes('cost') || i.toLowerCase().includes('loss') || i.toLowerCase().includes('high')) : undefined}
-              isLoading={costAnalysisLoading}
-              error={costAnalysis?.error}
-              lastUpdated={costAnalysisUpdated}
-              onRefresh={generateCostAnalysis}
-              confidence="high"
-              whyItMatters="Undetected profit leaks—portion creep, waste, or mispricing—can drain thousands monthly. Early detection saves money."
-            />
+            <div className="space-y-0">
+              <AIInsightCard
+                title="Menu Items to Reprice"
+                description="Dishes where a price adjustment could improve margins"
+                icon={Euro}
+                type="warning"
+                items={Array.isArray(menuInsights?.insights) ? menuInsights.insights.filter((i: string) => i.toLowerCase().includes('price') || i.toLowerCase().includes('margin')) : undefined}
+                isLoading={menuInsightsLoading}
+                error={menuInsights?.error}
+                lastUpdated={menuInsightsUpdated}
+                onRefresh={generateMenuInsights}
+                confidence="medium"
+                whyItMatters="Underpriced popular items silently erode margins. Small adjustments on high-volume dishes significantly boost profitability."
+                emptyReason="Requires dishes with ingredient costs and recent sales. Add dish recipes and record sales to see repricing opportunities."
+              />
+              <InsightCTA to="/ai/menu-engineering" label="Open Menu Engineering" />
+            </div>
+            <div className="space-y-0">
+              <AIInsightCard
+                title="Top Margin Winners"
+                description="Your most profitable dishes to promote"
+                icon={Target}
+                type="success"
+                items={Array.isArray(costAnalysis?.recommendations) ? costAnalysis.recommendations.filter((r: string) => r.toLowerCase().includes('profit') || r.toLowerCase().includes('winner') || r.toLowerCase().includes('margin')) : undefined}
+                isLoading={costAnalysisLoading}
+                error={costAnalysis?.error}
+                lastUpdated={costAnalysisUpdated}
+                onRefresh={generateCostAnalysis}
+                confidence="high"
+                whyItMatters="Knowing your profit leaders lets you promote them strategically and train staff to upsell high-margin items."
+                emptyReason="Requires dishes with ingredient costs and sales history. Complete your menu setup to identify margin winners."
+              />
+              <InsightCTA to="/cost-analysis" label="View Cost Analysis" />
+            </div>
+            <div className="space-y-0">
+              <AIInsightCard
+                title="Profit Leak Detection"
+                description="Areas where costs are higher than expected"
+                icon={AlertTriangle}
+                type="error"
+                items={Array.isArray(costAnalysis?.insights) ? costAnalysis.insights.filter((i: string) => i.toLowerCase().includes('cost') || i.toLowerCase().includes('loss') || i.toLowerCase().includes('high')) : undefined}
+                isLoading={costAnalysisLoading}
+                error={costAnalysis?.error}
+                lastUpdated={costAnalysisUpdated}
+                onRefresh={generateCostAnalysis}
+                confidence="high"
+                whyItMatters="Undetected profit leaks—portion creep, waste, or mispricing—can drain thousands monthly. Early detection saves money."
+                emptyReason="Requires detailed cost data and sales records. Add ingredient costs and track expenses to detect leaks."
+              />
+              <InsightCTA to="/cost-analysis" label="View Cost Analysis" />
+            </div>
           </AIInsightSection>
 
-          {/* Staffing & Waste */}
+          {/* Staffing & Operations */}
           <AIInsightSection 
             title="Staffing & Operations" 
-            description="Staff scheduling and waste reduction insights"
+            description="Labour optimisation and waste reduction"
             columns={2}
           >
-            <AIInsightCard
-              title="Staffing Recommendations"
-              description="Optimal staff scheduling"
-              icon={Users}
-              type="info"
-              items={staffForecast?.recommendations}
-              isLoading={staffForecastLoading}
-              error={staffForecast?.error}
-              lastUpdated={staffForecastUpdated}
-              onRefresh={generateStaffForecast}
-              confidence="medium"
-              whyItMatters="Right-sizing staff to demand cuts labor costs without hurting service quality—labor is typically 25-35% of revenue."
-            />
-            <AIInsightCard
-              title="High Waste Risk Ingredients"
-              description="Items at risk of expiring or being wasted"
-              icon={AlertTriangle}
-              type="warning"
-              items={stockForecast?.forecasts?.filter((f: any) => f.anomaly)?.map((f: any) => `${f.ingredient}: Unusual consumption detected`)}
-              isLoading={stockForecastLoading}
-              error={stockForecast?.error}
-              lastUpdated={stockForecastUpdated}
-              onRefresh={generateStockForecast}
-              confidence="low"
-              whyItMatters="Reducing food waste directly improves your bottom line and helps you meet sustainability goals valued by customers."
-            />
+            <div className="space-y-0">
+              <AIInsightCard
+                title="Staffing Recommendation"
+                description="Adjust labour to match predicted demand"
+                icon={Users}
+                type="info"
+                items={staffForecast?.recommendations}
+                isLoading={staffForecastLoading}
+                error={staffForecast?.error}
+                lastUpdated={staffForecastUpdated}
+                onRefresh={generateStaffForecast}
+                confidence="medium"
+                whyItMatters="Right-sizing staff to demand cuts labour costs without hurting service quality—labour is typically 25–35% of revenue."
+                emptyReason="Requires staff records with hourly rates and recent sales data. Add staff and record sales to see recommendations."
+              />
+              <InsightCTA to="/ai/scheduling" label="Open Staff Scheduling" />
+            </div>
+            <div className="space-y-0">
+              <AIInsightCard
+                title="High Waste Risk Ingredients"
+                description="Items with unusual consumption patterns"
+                icon={AlertTriangle}
+                type="warning"
+                items={stockForecast?.forecasts?.filter((f: any) => f.anomaly)?.map((f: any) => `${f.ingredient}: Unusual consumption detected`)}
+                isLoading={stockForecastLoading}
+                error={stockForecast?.error}
+                lastUpdated={stockForecastUpdated}
+                onRefresh={generateStockForecast}
+                confidence="low"
+                whyItMatters="Reducing food waste directly improves your bottom line and helps meet sustainability goals valued by customers."
+                emptyReason="Requires stock tracking over time. Record regular stock counts to detect consumption anomalies."
+              />
+              <InsightCTA to="/stock" label="View Stock Levels" />
+            </div>
           </AIInsightSection>
         </div>
       </PageLayout>
