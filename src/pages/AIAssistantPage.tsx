@@ -19,13 +19,22 @@ interface Message {
   isStreaming?: boolean;
 }
 
+const quickPrompts = [
+  { label: "Lowest margin dishes", prompt: "Show my lowest margin dishes and suggest what to do about them" },
+  { label: "Location needing attention", prompt: "Which location needs the most attention right now and why?" },
+  { label: "Labour issues this week", prompt: "What labour cost issues should I fix this week?" },
+  { label: "Stock at risk", prompt: "What stock items are most at risk of running out?" },
+  { label: "Weekly performance", prompt: "Summarize this week's overall performance across all locations" },
+  { label: "Busiest upcoming day", prompt: "Based on recent trends, which day this week will be busiest?" },
+];
+
 export default function AIAssistantPage() {
   const { currentRestaurant } = useRestaurant();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: "Hello! I'm your AI restaurant assistant. I can help you with:\n\n• **Sales insights** - Ask about revenue, trends, and forecasts\n• **Inventory** - Check stock levels and get ordering suggestions\n• **Staff** - Review scheduling and performance\n• **Menu** - Analyze profitability and pricing\n• **Operations** - Get daily summaries and recommendations\n\nHow can I help you today?",
+      content: "What would you like to know about your restaurant? I can answer questions about sales, inventory, staffing, menu performance, and daily operations using your actual data.",
       timestamp: new Date()
     }
   ]);
@@ -40,13 +49,14 @@ export default function AIAssistantPage() {
     }
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading || !currentRestaurant?.id) return;
+  const sendMessage = async (text?: string) => {
+    const messageText = text || input.trim();
+    if (!messageText || isLoading || !currentRestaurant?.id) return;
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: "user",
-      content: input.trim(),
+      content: messageText,
       timestamp: new Date()
     };
 
@@ -54,7 +64,6 @@ export default function AIAssistantPage() {
     setInput("");
     setIsLoading(true);
 
-    // Add streaming placeholder
     const assistantId = `assistant-${Date.now()}`;
     setMessages(prev => [...prev, {
       id: assistantId,
@@ -68,7 +77,7 @@ export default function AIAssistantPage() {
       const response = await supabase.functions.invoke("ai-assistant", {
         body: {
           restaurant_id: currentRestaurant.id,
-          message: userMessage.content,
+          message: messageText,
           history: messages.slice(-10).map(m => ({
             role: m.role,
             content: m.content
@@ -87,7 +96,7 @@ export default function AIAssistantPage() {
       console.error("AI Assistant error:", error);
       setMessages(prev => prev.map(m => 
         m.id === assistantId 
-          ? { ...m, content: "I apologize, but I encountered an error. Please try again.", isStreaming: false }
+          ? { ...m, content: "I encountered an error processing your question. Please try again.", isStreaming: false }
           : m
       ));
     } finally {
@@ -107,23 +116,16 @@ export default function AIAssistantPage() {
     setMessages([{
       id: "welcome",
       role: "assistant",
-      content: "Chat cleared. How can I help you?",
+      content: "Chat cleared. What would you like to know?",
       timestamp: new Date()
     }]);
   };
-
-  const quickActions = [
-    { label: "Daily Summary", prompt: "Give me a summary of today's operations" },
-    { label: "Stock Alerts", prompt: "What items are running low on stock?" },
-    { label: "Top Sellers", prompt: "What are my best selling dishes this week?" },
-    { label: "Staff Schedule", prompt: "Show me the staff schedule for today" },
-  ];
 
   return (
     <RequirePermission resource="ai_features" action="view">
       <PageLayout
         title="AI Assistant"
-        description="Chat with your intelligent restaurant assistant"
+        description="Ask questions about your restaurant using real operational data"
         action={
           <Button variant="outline" onClick={clearChat} className="gap-2">
             <RefreshCw className="h-4 w-4" />
@@ -132,20 +134,18 @@ export default function AIAssistantPage() {
         }
       >
         <div className="flex flex-col h-[calc(100vh-220px)] max-h-[700px]">
-          {/* Quick Actions */}
+          {/* Suggested Prompts */}
           <div className="flex gap-2 mb-4 flex-wrap">
-            {quickActions.map((action) => (
+            {quickPrompts.map((qp) => (
               <Button
-                key={action.label}
+                key={qp.label}
                 variant="outline"
                 size="sm"
                 className="text-xs"
-                onClick={() => {
-                  setInput(action.prompt);
-                  inputRef.current?.focus();
-                }}
+                onClick={() => sendMessage(qp.prompt)}
+                disabled={isLoading}
               >
-                {action.label}
+                {qp.label}
               </Button>
             ))}
           </div>
@@ -221,13 +221,13 @@ export default function AIAssistantPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything about your restaurant..."
+                placeholder="Ask a question about your restaurant..."
                 className="pl-10 pr-4 h-12 bg-card border-border/50"
                 disabled={isLoading}
               />
             </div>
             <Button 
-              onClick={sendMessage} 
+              onClick={() => sendMessage()} 
               disabled={!input.trim() || isLoading}
               className="h-12 px-6"
             >

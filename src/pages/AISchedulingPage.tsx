@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useStaff, useStaffPerformance } from "@/hooks/useStaff";
 import { useSales } from "@/hooks/useSales";
+import { useShifts } from "@/hooks/useShifts";
 import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
-import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, parseISO, getHours, subDays } from "date-fns";
-import { Sparkles, Loader2, Users, Clock, TrendingUp, Calendar } from "lucide-react";
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, parseISO, getHours, subDays, differenceInHours } from "date-fns";
+import { Sparkles, Loader2, Users, Clock, TrendingUp, Calendar, AlertTriangle, ArrowRight, ArrowDown } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { formatCurrency } from "@/lib/currency";
+import { cn } from "@/lib/utils";
 
 interface TimeBlock {
   time: string;
@@ -31,16 +33,23 @@ export default function AISchedulingPage() {
   const { data: staff = [] } = useStaff(selectedLocationId);
   const { data: sales = [] } = useSales(format(subDays(new Date(), 30), "yyyy-MM-dd"), undefined, selectedLocationId);
   const { data: performance = [] } = useStaffPerformance();
-  
-  const [aiSchedule, setAiSchedule] = useState<StaffSuggestion[] | null>(null);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const nextWeekStart = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
   const nextWeekEnd = endOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: nextWeekStart, end: nextWeekEnd });
 
-  // Calculate hourly sales patterns - include all 24 hours for better visualization
+  // Fetch existing planned shifts for next week
+  const { data: plannedShifts = [] } = useShifts(
+    format(nextWeekStart, "yyyy-MM-dd"),
+    format(nextWeekEnd, "yyyy-MM-dd"),
+    selectedLocationId
+  );
+
+  const [aiSchedule, setAiSchedule] = useState<StaffSuggestion[] | null>(null);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Hourly sales pattern
   const hourlySales = useMemo(() => {
     const hourlyData = Array.from({ length: 24 }, (_, hour) => {
       const salesInHour = sales.filter((s) => {
@@ -53,20 +62,18 @@ export default function AISchedulingPage() {
         count: salesInHour.length,
       };
     });
-    // Filter to business hours (8am-11pm) for cleaner display
-    return hourlyData.filter((h, i) => i >= 8 && i <= 23);
+    return hourlyData.filter((_, i) => i >= 8 && i <= 23);
   }, [sales]);
 
-  // Peak hours detection
   const avgSales = hourlySales.reduce((sum, h) => sum + h.sales, 0) / hourlySales.length || 0;
   const peakHours = hourlySales.filter((h) => h.sales > avgSales * 1.5);
 
-  // Staff efficiency scores
+  // Staff efficiency
   const staffEfficiency = useMemo(() => {
     return staff.map((s) => {
       const staffPerf = performance.filter((p) => p.staff_id === s.id);
-      const avgScore = staffPerf.length > 0 
-        ? staffPerf.reduce((sum, p) => sum + (Number(p.score) || 0), 0) / staffPerf.length 
+      const avgScore = staffPerf.length > 0
+        ? staffPerf.reduce((sum, p) => sum + (Number(p.score) || 0), 0) / staffPerf.length
         : 50;
       return {
         ...s,
@@ -76,7 +83,7 @@ export default function AISchedulingPage() {
     }).sort((a, b) => b.avgScore - a.avgScore);
   }, [staff, performance]);
 
-  // Calculate recommended staffing per time block
+  // Recommended staffing by time block
   const staffingPlan = useMemo(() => {
     const blocks = [
       { time: "10:00–12:00", hours: [10, 11] },
@@ -84,24 +91,42 @@ export default function AISchedulingPage() {
       { time: "15:00–18:00", hours: [15, 16, 17] },
       { time: "18:00–22:00", hours: [18, 19, 20, 21] },
     ];
-    
+
     return blocks.map(block => {
       const blockSales = hourlySales
         .filter((h) => block.hours.includes(parseInt(h.hour)))
         .reduce((sum, h) => sum + h.sales, 0);
       const avgBlockSales = blockSales / block.hours.length;
-      
-      // Simple staffing formula: 1 FOH per €200/hr, 1 BOH per €300/hr
+
       const foh = Math.max(1, Math.ceil(avgBlockSales / 200));
       const boh = Math.max(1, Math.ceil(avgBlockSales / 300));
       const bar = avgBlockSales > 150 ? 1 : 0;
-      
-      const reason = avgBlockSales > avgSales * 1.5 ? "Peak hours" : 
-                     avgBlockSales > avgSales ? "Above average" : "Standard coverage";
-      
-      return { time: block.time, foh, boh, bar, reason };
+
+      const reason = avgBlockSales > avgSales * 1.5 ? "Peak demand"
+        : avgBlockSales > avgSales ? "Above average" : "Standard coverage";
+
+      return { time: block.time, foh, boh, bar, reason, totalRecommended: foh + boh + bar };
     });
   }, [hourlySales, avgSales]);
+
+  // Planned vs recommended comparison
+  const plannedByBlock = useMemo(() => {
+    const blocks = [
+      { time: "10:00–12:00", startH: 10, endH: 12 },
+      { time: "12:00–15:00", startH: 12, endH: 15 },
+      { time: "15:00–18:00", startH: 15, endH: 18 },
+      { time: "18:00–22:00", startH: 18, endH: 22 },
+    ];
+
+    return blocks.map(block => {
+      const staffInBlock = plannedShifts.filter(shift => {
+        const shiftStart = getHours(parseISO(shift.shift_start));
+        const shiftEnd = getHours(parseISO(shift.shift_end));
+        return shiftStart < block.endH && shiftEnd > block.startH;
+      });
+      return { time: block.time, planned: staffInBlock.length };
+    });
+  }, [plannedShifts]);
 
   const generateSchedule = async () => {
     setLoading(true);
@@ -125,16 +150,16 @@ export default function AISchedulingPage() {
     }
   };
 
-  const getHourColor = (sales: number) => {
-    if (sales > avgSales * 1.5) return "hsl(var(--destructive))";
-    if (sales > avgSales) return "hsl(var(--primary))";
+  const getHourColor = (salesVal: number) => {
+    if (salesVal > avgSales * 1.5) return "hsl(var(--destructive))";
+    if (salesVal > avgSales) return "hsl(var(--primary))";
     return "hsl(var(--muted-foreground))";
   };
 
   return (
     <PageLayout
-      title="AI Scheduling Assistant"
-      description="Optimize staff schedules based on sales patterns"
+      title="Staff Scheduling Intelligence"
+      description="Plan labour based on historical demand patterns"
     >
       <div className="space-y-6">
         {/* Summary Cards */}
@@ -158,7 +183,18 @@ export default function AISchedulingPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{peakHours.length}</div>
-              <p className="text-xs text-muted-foreground">high-traffic periods</p>
+              <p className="text-xs text-muted-foreground">high-demand periods detected</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Calendar className="h-4 w-4" /> Planned Shifts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{plannedShifts.length}</div>
+              <p className="text-xs text-muted-foreground">next week ({format(nextWeekStart, "MMM d")}–{format(nextWeekEnd, "d")})</p>
             </CardContent>
           </Card>
           <Card>
@@ -176,26 +212,13 @@ export default function AISchedulingPage() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> Next Week
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm font-medium">
-                {format(nextWeekStart, "MMM d")} - {format(nextWeekEnd, "MMM d")}
-              </div>
-              <p className="text-xs text-muted-foreground">scheduling period</p>
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Hourly Sales Pattern */}
+        {/* Hourly Demand Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Sales Pattern by Hour</CardTitle>
-            <CardDescription>Historical sales distribution to identify peak hours (last 30 days)</CardDescription>
+            <CardTitle>Historical Demand by Hour</CardTitle>
+            <CardDescription>Average sales per hour over the last 30 days — red bars indicate peak periods requiring more staff</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[280px]">
@@ -205,7 +228,7 @@ export default function AISchedulingPage() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                     <XAxis dataKey="hour" className="text-xs" />
                     <YAxis className="text-xs" />
-                    <Tooltip 
+                    <Tooltip
                       contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
                       formatter={(value: number) => [formatCurrency(value), "Sales"]}
                     />
@@ -218,23 +241,20 @@ export default function AISchedulingPage() {
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
-                  <p>No sales data for {selectedLocationId ? "this location" : "any location"} yet.</p>
-                  <p className="text-xs">
-                    {selectedLocationId 
-                      ? "Try switching to 'All Locations' or import POS data for this location."
-                      : "Import POS sales data to see staffing recommendations."}
-                  </p>
+                  <AlertTriangle className="h-6 w-6 text-muted-foreground/40" />
+                  <p>No sales data available for demand analysis.</p>
+                  <p className="text-xs">Import POS sales or record manual sales to see demand patterns.</p>
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Recommended Staffing Plan */}
+        {/* Recommended vs Planned Staffing */}
         <Card>
           <CardHeader>
             <CardTitle>Recommended Staffing by Time Block</CardTitle>
-            <CardDescription>Based on sales patterns and demand analysis</CardDescription>
+            <CardDescription>AI recommendation based on demand, compared against your currently planned shifts</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -245,26 +265,49 @@ export default function AISchedulingPage() {
                     <th className="text-center py-2 px-3">FOH</th>
                     <th className="text-center py-2 px-3">BOH</th>
                     <th className="text-center py-2 px-3">Bar</th>
-                    <th className="text-left py-2 px-3">Notes</th>
+                    <th className="text-center py-2 px-3">Recommended</th>
+                    <th className="text-center py-2 px-3">Planned</th>
+                    <th className="text-left py-2 px-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {staffingPlan.map((block) => (
-                    <tr key={block.time} className="border-b">
-                      <td className="py-2 px-3 font-medium">{block.time}</td>
-                      <td className="py-2 px-3 text-center">{block.foh}</td>
-                      <td className="py-2 px-3 text-center">{block.boh}</td>
-                      <td className="py-2 px-3 text-center">{block.bar}</td>
-                      <td className="py-2 px-3">
-                        <Badge variant={block.reason === "Peak hours" ? "destructive" : "secondary"}>
-                          {block.reason}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {staffingPlan.map((block, i) => {
+                    const planned = plannedByBlock[i]?.planned || 0;
+                    const diff = planned - block.totalRecommended;
+                    const status = diff === 0 ? "balanced" : diff > 0 ? "overstaffed" : "understaffed";
+                    return (
+                      <tr key={block.time} className="border-b">
+                        <td className="py-2 px-3 font-medium">{block.time}</td>
+                        <td className="py-2 px-3 text-center">{block.foh}</td>
+                        <td className="py-2 px-3 text-center">{block.boh}</td>
+                        <td className="py-2 px-3 text-center">{block.bar}</td>
+                        <td className="py-2 px-3 text-center font-semibold">{block.totalRecommended}</td>
+                        <td className="py-2 px-3 text-center font-semibold">{planned}</td>
+                        <td className="py-2 px-3">
+                          {planned === 0 && block.totalRecommended > 0 ? (
+                            <Badge variant="secondary" className="text-[10px]">No shifts planned</Badge>
+                          ) : (
+                            <Badge
+                              variant={status === "balanced" ? "default" : "outline"}
+                              className={cn(
+                                "text-[10px]",
+                                status === "overstaffed" && "border-yellow-500/30 text-yellow-600 dark:text-yellow-400",
+                                status === "understaffed" && "border-red-500/30 text-red-600 dark:text-red-400",
+                              )}
+                            >
+                              {status === "balanced" ? "Balanced" : status === "overstaffed" ? `+${diff} over` : `${Math.abs(diff)} short`}
+                            </Badge>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              Recommendation uses €200/hr per FOH and €300/hr per BOH based on historical demand. Planned column reflects shifts already created for next week.
+            </p>
           </CardContent>
         </Card>
 
@@ -272,18 +315,19 @@ export default function AISchedulingPage() {
         <Card>
           <CardHeader>
             <CardTitle>Staff Efficiency Rankings</CardTitle>
-            <CardDescription>Based on performance metrics</CardDescription>
+            <CardDescription>Prioritise your highest-performing staff during peak blocks</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {staffEfficiency.slice(0, 6).map((s, i) => (
                 <div key={s.id} className="p-4 rounded-lg bg-muted/50 border flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                  <div className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center font-bold",
                     i === 0 ? "bg-yellow-500 text-yellow-950" :
                     i === 1 ? "bg-gray-300 text-gray-700" :
                     i === 2 ? "bg-amber-600 text-amber-100" :
                     "bg-muted text-muted-foreground"
-                  }`}>
+                  )}>
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -307,7 +351,7 @@ export default function AISchedulingPage() {
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" /> AI Schedule Recommendation
               </CardTitle>
-              <CardDescription>Generate optimized schedule for next week</CardDescription>
+              <CardDescription>Generate an optimised schedule for next week based on demand</CardDescription>
             </div>
             <Button onClick={generateSchedule} disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -324,7 +368,7 @@ export default function AISchedulingPage() {
               <div className="space-y-4">
                 {aiSchedule.map((day) => (
                   <div key={day.date} className="p-4 rounded-lg border">
-                    <h4 className="font-semibold mb-3">{day.day} - {format(parseISO(day.date), "MMM d")}</h4>
+                    <h4 className="font-semibold mb-3">{day.day} – {format(parseISO(day.date), "MMM d")}</h4>
                     <div className="space-y-2">
                       {day.shifts.map((shift, i) => (
                         <div key={i} className="flex items-center justify-between p-2 rounded bg-muted/50">
@@ -340,7 +384,10 @@ export default function AISchedulingPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground">Click "Generate Schedule" to get AI-optimized staffing recommendations.</p>
+              <div className="text-center py-6 text-muted-foreground">
+                <p>Click "Generate Schedule" to get an AI-optimised staffing plan for next week.</p>
+                <p className="text-xs mt-1">Uses sales patterns, staff availability, and performance data.</p>
+              </div>
             )}
           </CardContent>
         </Card>

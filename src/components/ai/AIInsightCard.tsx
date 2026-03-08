@@ -24,6 +24,7 @@ export interface AIInsightCardProps {
   className?: string;
   confidence?: ConfidenceLevel;
   whyItMatters?: string;
+  emptyReason?: string;
 }
 
 const confidenceStyles: Record<ConfidenceLevel, { label: string; className: string }> = {

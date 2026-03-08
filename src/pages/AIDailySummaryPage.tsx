@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -22,7 +22,10 @@ import {
   Users,
   TrendingUp,
   Percent,
-  RefreshCw,
+  BookOpen,
+  ClipboardCheck,
+  AlertTriangle,
+  CheckCircle,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -51,7 +54,6 @@ export default function AIDailySummaryPage() {
   const fromDate = format(subDays(new Date(), Number(dateRange)), "yyyy-MM-dd");
   const toDate = format(new Date(), "yyyy-MM-dd");
 
-  // Fetch existing summaries
   const { data: summaries = [], isLoading } = useQuery({
     queryKey: ["ai-daily-summaries", restaurantId, filterLocation, fromDate, toDate],
     queryFn: async () => {
@@ -75,7 +77,6 @@ export default function AIDailySummaryPage() {
     enabled: !!restaurantId,
   });
 
-  // Generate summary for a specific date
   const generateMutation = useMutation({
     mutationFn: async (date: string) => {
       const { data, error } = await supabase.functions.invoke("ai-daily-summary", {
@@ -102,7 +103,10 @@ export default function AIDailySummaryPage() {
   const hasYesterdaySummary = summaries.some((s) => s.summary_date === yesterday);
 
   return (
-    <PageLayout title="AI Daily Summary" subtitle="AI-generated operational summaries based on real data">
+    <PageLayout
+      title="Daily Summary Journal"
+      subtitle="AI-generated manager briefings saved for each day of operations"
+    >
       <div className="space-y-4">
         {/* Filters & Actions */}
         <div className="flex flex-wrap items-center gap-3">
@@ -158,10 +162,11 @@ export default function AIDailySummaryPage() {
         ) : summaries.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <Sparkles className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-              <p className="text-muted-foreground">No summaries generated yet.</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Click "Generate Yesterday's Summary" to get started.
+              <BookOpen className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="font-medium">No summaries in this period</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+                Summaries are generated from daily sales, labour, and reservation data.
+                Click "Generate Yesterday's Summary" if sales data exists for that day.
               </p>
             </CardContent>
           </Card>
@@ -193,6 +198,54 @@ function SummaryCard({
 
   const isNoData = summary.summary_text === "No operational data available.";
 
+  // Data completeness assessment
+  const dataChecks = [
+    { label: "Sales", present: (m.revenue || 0) > 0 },
+    { label: "Labour", present: (m.labour_hours || 0) > 0 },
+    { label: "Covers", present: (m.covers || 0) > 0 },
+    { label: "Expenses", present: (m.expenses || 0) > 0 },
+    { label: "Bookings", present: (m.reservations || 0) > 0 },
+  ];
+  const presentCount = dataChecks.filter(d => d.present).length;
+  const completeness = isNoData ? "none" : presentCount >= 4 ? "high" : presentCount >= 2 ? "medium" : "low";
+
+  const completenessLabel = {
+    high: "Complete",
+    medium: "Partial Data",
+    low: "Limited Data",
+    none: "No Data",
+  };
+  const completenessColor = {
+    high: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
+    medium: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
+    low: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+    none: "bg-muted text-muted-foreground border-muted",
+  };
+
+  // Parse AI text into sections
+  const parseSections = (text: string) => {
+    const sections: { title: string; content: string[] }[] = [];
+    let currentSection = { title: "AI Analysis", content: [] as string[] };
+    
+    text.split("\n").forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      // Detect section headers (lines ending with : or starting with ##)
+      if ((trimmed.endsWith(":") && trimmed.length < 50 && !trimmed.startsWith("•") && !trimmed.startsWith("-")) || trimmed.startsWith("##")) {
+        if (currentSection.content.length > 0) {
+          sections.push({ ...currentSection });
+        }
+        currentSection = { title: trimmed.replace(/^#+\s*/, "").replace(/:$/, ""), content: [] };
+      } else {
+        currentSection.content.push(trimmed);
+      }
+    });
+    if (currentSection.content.length > 0) {
+      sections.push(currentSection);
+    }
+    return sections.length > 0 ? sections : [{ title: "AI Analysis", content: [text] }];
+  };
+
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <Card>
@@ -209,11 +262,9 @@ function SummaryCard({
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                   {locationName}
                 </Badge>
-                {isNoData && (
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                    No Data
-                  </Badge>
-                )}
+                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${completenessColor[completeness]}`}>
+                  {completenessLabel[completeness]}
+                </Badge>
               </div>
               {!isNoData && (
                 <div className="flex items-center gap-4 text-sm">
@@ -226,8 +277,8 @@ function SummaryCard({
                     <span className="font-medium">{m.orders || 0}</span>
                   </div>
                   <div className="flex items-center gap-1 hidden md:flex">
-                    <TrendingUp className="h-3 w-3 text-success" />
-                    <span className="font-medium text-success">{formatCurrency(m.estimated_profit || 0)}</span>
+                    <TrendingUp className="h-3 w-3 text-green-500" />
+                    <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(m.estimated_profit || 0)}</span>
                   </div>
                 </div>
               )}
@@ -237,17 +288,45 @@ function SummaryCard({
 
         <CollapsibleContent>
           <CardContent className="pt-0 pb-4 px-4 space-y-4">
-            {/* Metrics Grid */}
+            {/* Revenue & Orders Snapshot */}
             {!isNoData && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                <MetricChip label="Revenue" value={formatCurrency(m.revenue || 0)} icon={Euro} />
-                <MetricChip label="Orders" value={String(m.orders || 0)} icon={ShoppingBag} />
-                <MetricChip label="Avg Order" value={formatCurrency(m.avg_order_value || 0)} icon={ShoppingBag} />
-                <MetricChip label="Food Cost" value={`${m.food_cost_pct || 0}%`} icon={Percent} />
-                <MetricChip label="Labour" value={`${(m.labour_pct || 0).toFixed(1)}%`} icon={Percent} />
-                <MetricChip label="Profit" value={formatCurrency(m.estimated_profit || 0)} icon={TrendingUp} />
-                {m.covers > 0 && <MetricChip label="Covers" value={String(m.covers)} icon={Users} />}
-                {m.reservations > 0 && <MetricChip label="Bookings" value={String(m.reservations)} icon={Calendar} />}
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Euro className="h-3 w-3" /> Revenue & Orders
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <MetricChip label="Revenue" value={formatCurrency(m.revenue || 0)} />
+                  <MetricChip label="Orders" value={String(m.orders || 0)} />
+                  <MetricChip label="Avg Order" value={formatCurrency(m.avg_order_value || 0)} />
+                  <MetricChip label="Profit Est." value={formatCurrency(m.estimated_profit || 0)} />
+                </div>
+              </div>
+            )}
+
+            {/* Labour Notes */}
+            {!isNoData && (m.labour_hours > 0 || m.labour_pct > 0) && (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Users className="h-3 w-3" /> Labour
+                </h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {m.labour_hours > 0 && <MetricChip label="Hours" value={String(m.labour_hours)} />}
+                  <MetricChip label="Labour %" value={`${(m.labour_pct || 0).toFixed(1)}%`} />
+                  <MetricChip label="Food Cost %" value={`${m.food_cost_pct || 0}%`} />
+                </div>
+              </div>
+            )}
+
+            {/* Covers & Bookings */}
+            {!isNoData && (m.covers > 0 || m.reservations > 0) && (
+              <div>
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <BookOpen className="h-3 w-3" /> Covers & Reservations
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {m.covers > 0 && <MetricChip label="Covers" value={String(m.covers)} />}
+                  {m.reservations > 0 && <MetricChip label="Bookings" value={String(m.reservations)} />}
+                </div>
               </div>
             )}
 
@@ -265,9 +344,7 @@ function SummaryCard({
                 </div>
                 {m.bottom_dishes?.length > 0 && (
                   <div className="space-y-1.5">
-                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Worst Performers
-                    </h4>
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Worst Performers</h4>
                     {m.bottom_dishes.map((d: any, i: number) => (
                       <div key={i} className="flex justify-between text-sm">
                         <span className="truncate">{d.name}</span>
@@ -279,17 +356,44 @@ function SummaryCard({
               </div>
             )}
 
-            {/* AI Text */}
-            <div className="rounded-md border border-border bg-secondary/20 p-3">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  AI Analysis
-                </span>
+            {/* Data Completeness */}
+            <div>
+              <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <ClipboardCheck className="h-3 w-3" /> Data Completeness
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {dataChecks.map((check) => (
+                  <div key={check.label} className="flex items-center gap-1 text-xs">
+                    {check.present ? (
+                      <CheckCircle className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                    )}
+                    <span className={check.present ? "text-foreground" : "text-muted-foreground"}>{check.label}</span>
+                  </div>
+                ))}
               </div>
-              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">
-                {summary.summary_text}
-              </div>
+            </div>
+
+            {/* AI Analysis Sections */}
+            <div className="rounded-md border border-border bg-secondary/20 p-3 space-y-3">
+              {parseSections(summary.summary_text).map((section, i) => (
+                <div key={i}>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      {section.title}
+                    </span>
+                  </div>
+                  <div className="text-sm space-y-0.5">
+                    {section.content.map((line, j) => (
+                      <p key={j} className={line.startsWith("•") || line.startsWith("-") ? "text-muted-foreground pl-2" : ""}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </CollapsibleContent>
@@ -298,15 +402,7 @@ function SummaryCard({
   );
 }
 
-function MetricChip({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  icon: typeof Euro;
-}) {
+function MetricChip({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-border p-2 text-center">
       <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</div>
