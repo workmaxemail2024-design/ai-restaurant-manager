@@ -74,7 +74,7 @@ export function AIInsightPanel() {
       {
         type: "alert",
         title: "Low Stock Alert",
-        description: "Some ingredients may run low. Click refresh for AI analysis.",
+        description: "Some ingredients may run low. Generate insights for a detailed analysis.",
       },
       {
         type: "suggestion",

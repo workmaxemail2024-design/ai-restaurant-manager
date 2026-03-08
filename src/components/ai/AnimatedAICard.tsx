@@ -163,7 +163,7 @@ export function AnimatedAICard({
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground italic">
-            No insights available. Click refresh to generate.
+            No insights available yet. Ensure sales and labour data exist for this period.
           </p>
         )}
         
