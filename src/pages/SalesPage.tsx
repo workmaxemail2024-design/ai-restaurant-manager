@@ -16,6 +16,7 @@ import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 
 export default function SalesPage() {
   const { selectedLocationId } = useLocation();
@@ -89,6 +90,9 @@ export default function SalesPage() {
 
   return (
     <PageLayout title="Sales" subtitle="Raw sales transaction ledger">
+      {/* Data Warnings */}
+      <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes", "missing_sales"]} className="mb-4" />
+
       {/* Period indicator */}
       <div className="text-sm text-muted-foreground mb-4">
         Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>

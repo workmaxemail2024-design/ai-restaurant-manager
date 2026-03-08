@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useLocation } from "@/contexts/LocationContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
+import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 
 const roles: StaffRole[] = ["chef", "waiter", "manager", "host", "bartender", "kitchen_assistant", "cleaner"];
 const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
@@ -281,6 +282,9 @@ export default function StaffPage() {
         </TabsList>
 
         <TabsContent value="staff" className="space-y-4">
+          {/* Data Warnings */}
+          <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_labour", "no_attendance"]} />
+
           {/* Staff Summary Strip */}
           <div className="flex flex-wrap items-center gap-4 p-3 bg-muted/50 rounded-lg border text-sm">
             <div>

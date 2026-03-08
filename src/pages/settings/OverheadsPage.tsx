@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Euro, Building2, CalendarClock, MapPin } from "lucide-react";
+import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 import { format } from "date-fns";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
@@ -192,6 +193,8 @@ function OverheadsContent() {
       description="Recurring fixed costs used for profit and break-even calculations"
     >
       <div className="space-y-6">
+        <DataWarningBanner locationId={selectedLocationId} filterTypes={["unallocated_overheads"]} />
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Euro className="h-4 w-4" />
