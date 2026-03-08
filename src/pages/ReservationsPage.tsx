@@ -165,7 +165,7 @@ export default function ReservationsPage() {
                   </thead>
                   <tbody>
                     {filteredReservations.length === 0 && (
-                      <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No reservations found</td></tr>
+                      <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No bookings found for this period. Create a reservation or adjust the date range.</td></tr>
                     )}
                     {filteredReservations.map(r => {
                       const durationMin = differenceInMinutes(parseISO(r.end_at), parseISO(r.start_at));
