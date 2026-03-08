@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
+import { useOwnerIntelligence } from "@/hooks/useOwnerIntelligence";
 import { format, subDays, parseISO } from "date-fns";
 import {
   Sparkles,
@@ -26,10 +27,13 @@ import {
   ClipboardCheck,
   AlertTriangle,
   CheckCircle,
+  BarChart3,
+  Shield,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface AISummary {
   id: string;
@@ -45,6 +49,7 @@ export default function AIDailySummaryPage() {
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const { data: locations = [] } = useLocations();
+  const { data: intelligence } = useOwnerIntelligence(selectedLocationId);
   const queryClient = useQueryClient();
   const restaurantId = currentRestaurant?.id;
 
@@ -156,6 +161,53 @@ export default function AIDailySummaryPage() {
           </Button>
         </div>
 
+        {/* Weekly Performance Summary */}
+        {intelligence?.weeklySummary && (
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm">Weekly Performance</h3>
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-auto">
+                  {intelligence.weeklySummary.confidence} confidence
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">{intelligence.weeklySummary.narrative}</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                  <p className={cn("text-lg font-bold", intelligence.weeklySummary.revenueChange >= 0 ? "text-success" : "text-destructive")}>
+                    {intelligence.weeklySummary.revenueChange >= 0 ? "+" : ""}{intelligence.weeklySummary.revenueChange.toFixed(0)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Revenue</p>
+                </div>
+                <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                  <p className={cn("text-lg font-bold", intelligence.weeklySummary.ordersChange >= 0 ? "text-success" : "text-destructive")}>
+                    {intelligence.weeklySummary.ordersChange >= 0 ? "+" : ""}{intelligence.weeklySummary.ordersChange.toFixed(0)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Orders</p>
+                </div>
+                {intelligence.weeklySummary.labourPctThis !== null && (
+                  <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                    <p className="text-lg font-bold">{intelligence.weeklySummary.labourPctThis.toFixed(1)}%</p>
+                    <p className="text-[10px] text-muted-foreground">Labour %</p>
+                  </div>
+                )}
+                {intelligence.weeklySummary.foodCostPctThis !== null && (
+                  <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                    <p className="text-lg font-bold">{intelligence.weeklySummary.foodCostPctThis.toFixed(1)}%</p>
+                    <p className="text-[10px] text-muted-foreground">Food Cost %</p>
+                  </div>
+                )}
+              </div>
+              {intelligence.weeklySummary.missingData.length > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
+                  <Shield className="h-2.5 w-2.5" /> Missing: {intelligence.weeklySummary.missingData.join(", ")}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Summaries List */}
         {isLoading ? (
           <div className="text-muted-foreground text-sm">Loading summaries…</div>
@@ -216,9 +268,9 @@ function SummaryCard({
     none: "No Data",
   };
   const completenessColor = {
-    high: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-    medium: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
-    low: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+    high: "bg-success/10 text-success border-success/20",
+    medium: "bg-warning/10 text-warning border-warning/20",
+    low: "bg-destructive/10 text-destructive border-destructive/20",
     none: "bg-muted text-muted-foreground border-muted",
   };
 
@@ -277,8 +329,8 @@ function SummaryCard({
                     <span className="font-medium">{m.orders || 0}</span>
                   </div>
                   <div className="flex items-center gap-1 hidden md:flex">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(m.estimated_profit || 0)}</span>
+                    <TrendingUp className="h-3 w-3 text-success" />
+                    <span className="font-medium text-success">{formatCurrency(m.estimated_profit || 0)}</span>
                   </div>
                 </div>
               )}
@@ -365,9 +417,9 @@ function SummaryCard({
                 {dataChecks.map((check) => (
                   <div key={check.label} className="flex items-center gap-1 text-xs">
                     {check.present ? (
-                      <CheckCircle className="h-3 w-3 text-green-500" />
+                      <CheckCircle className="h-3 w-3 text-success" />
                     ) : (
-                      <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                      <AlertTriangle className="h-3 w-3 text-warning" />
                     )}
                     <span className={check.present ? "text-foreground" : "text-muted-foreground"}>{check.label}</span>
                   </div>

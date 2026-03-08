@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { DataHealthPanel } from "@/components/dashboard/DataHealthPanel";
+import { OwnerInsightsPanel } from "@/components/dashboard/OwnerInsightsPanel";
 import type { OperatingHours } from "@/components/locations/OperatingHoursEditor";
 
 const Index = () => {
@@ -210,6 +211,9 @@ const Index = () => {
 
           {/* Sidebar Content - 1 column */}
           <div className="space-y-6">
+            {/* Owner Intelligence */}
+            <OwnerInsightsPanel />
+
             {/* Data Health */}
             <DataHealthPanel locationId={selectedLocationId} />
 
