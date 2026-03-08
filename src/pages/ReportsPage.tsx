@@ -880,15 +880,15 @@ export default function ReportsPage() {
     };
   }, [metrics, dailyData, ledgerEntries, avgHourlyRate]);
 
-  // Count missing days for summary
+  // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {
     if (!dailyData) return 0;
     return dailyData.filter((day) => {
       const ledger = ledgerEntries.get(day.date);
-      const { missing } = evaluateMissing(day.hasData, ledger);
-      return missing.length > 0 && !ledger?.is_closed;
+      const { status } = evaluateMissing(day.hasData, ledger, bookingDaysSet.has(day.date));
+      return status === "needs_attention";
     }).length;
-  }, [dailyData, ledgerEntries]);
+  }, [dailyData, ledgerEntries, bookingDaysSet]);
 
   const handleDayClick = useCallback(
     (dateStr: string) => {
