@@ -45,6 +45,7 @@ import AuditLogPage from "./pages/AuditLogPage";
 import SystemQAPage from "./pages/SystemQAPage";
 import OverheadsPage from "./pages/settings/OverheadsPage";
 import DemoSettingsPage from "./pages/settings/DemoSettingsPage";
+import BackupsPage from "./pages/settings/BackupsPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import ReservationsPage from "./pages/ReservationsPage";
 import ReservationFloorPage from "./pages/ReservationFloorPage";
@@ -122,6 +123,7 @@ const App = () => (
               <Route path="/settings/system-qa" element={<ProtectedRoute><SystemQAPage /></ProtectedRoute>} />
               <Route path="/settings/financial/overheads" element={<ProtectedRoute><OverheadsPage /></ProtectedRoute>} />
               <Route path="/settings/demo" element={<ProtectedRoute><DemoSettingsPage /></ProtectedRoute>} />
+              <Route path="/settings/backups" element={<ProtectedRoute><BackupsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </BrowserRouter>

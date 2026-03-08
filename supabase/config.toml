@@ -80,3 +80,6 @@ verify_jwt = true
 
 [functions.ai-menu-extract]
 verify_jwt = true
+
+[functions.create-backup]
+verify_jwt = true
