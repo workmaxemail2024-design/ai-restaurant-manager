@@ -282,6 +282,9 @@ export default function StaffPage() {
         </TabsList>
 
         <TabsContent value="staff" className="space-y-4">
+          {/* Data Warnings */}
+          <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_labour", "no_attendance"]} />
+
           {/* Staff Summary Strip */}
           <div className="flex flex-wrap items-center gap-4 p-3 bg-muted/50 rounded-lg border text-sm">
             <div>
