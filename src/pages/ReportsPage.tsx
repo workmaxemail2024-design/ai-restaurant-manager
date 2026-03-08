@@ -903,16 +903,13 @@ export default function ReportsPage() {
   const [focusedDate, setFocusedDate] = useState<string | undefined>();
   const dayCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Period summary with manual override support
+  // Period summary with attendance-first labour hierarchy
   const periodSummary = useMemo(() => {
     if (!dailyData || dailyData.length === 0 || !metrics) {
       return {
-        revenue: metrics?.totalRevenue || 0,
-        orders: metrics?.totalOrders || 0,
-        foodCostPct: metrics?.foodCostPercent || 0,
-        profit: metrics?.totalProfit || 0,
-        totalLabourCost: 0,
-        labourPct: 0,
+        revenue: metrics?.totalRevenue || 0, orders: metrics?.totalOrders || 0,
+        foodCostPct: metrics?.foodCostPercent || 0, profit: metrics?.totalProfit || 0,
+        totalLabourCost: 0, labourPct: 0,
       };
     }
 
@@ -923,10 +920,17 @@ export default function ReportsPage() {
 
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
-      if (ledger) {
+      const actual = attendanceMap.get(day.date);
+
+      // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. nothing
+      if (actual && actual.hours > 0) {
+        totalLabourCost += actual.cost;
+      } else if (ledger && ledger.labour_hours > 0) {
         totalLabourCost += ledger.labour_hours * avgHourlyRate;
+      }
+
+      if (ledger) {
         totalAdditionalExpenses += ledger.additional_expenses;
-        // Add manual revenue for days without actual sales
         if (!day.hasData && ledger.manual_revenue != null) {
           manualRevenueTotal += ledger.manual_revenue;
           manualOrdersTotal += ledger.manual_orders ?? 0;
@@ -941,15 +945,8 @@ export default function ReportsPage() {
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
     const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : metrics.foodCostPercent;
 
-    return {
-      revenue,
-      orders,
-      foodCostPct,
-      profit: adjustedProfit,
-      totalLabourCost,
-      labourPct,
-    };
-  }, [metrics, dailyData, ledgerEntries, avgHourlyRate]);
+    return { revenue, orders, foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct };
+  }, [metrics, dailyData, ledgerEntries, avgHourlyRate, attendanceMap]);
 
   // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {
