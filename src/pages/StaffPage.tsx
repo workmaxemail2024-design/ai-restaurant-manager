@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useLocation } from "@/contexts/LocationContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
+import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 
 const roles: StaffRole[] = ["chef", "waiter", "manager", "host", "bartender", "kitchen_assistant", "cleaner"];
 const statuses: StaffStatus[] = ["active", "inactive", "on_leave"];
