@@ -267,6 +267,7 @@ function DayCard({
   avgHourlyRate,
   isFocused,
   cardRef,
+  hasBookings,
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
@@ -275,6 +276,7 @@ function DayCard({
   avgHourlyRate: number;
   isFocused: boolean;
   cardRef?: React.Ref<HTMLDivElement>;
+  hasBookings: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const dateObj = parseISO(day.date);
