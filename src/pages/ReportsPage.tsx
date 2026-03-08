@@ -685,15 +685,26 @@ function DayCard({
                     {hasAnyData && (
                       <div className="flex flex-wrap gap-4 text-xs pt-1">
                         <span>
-                          <span className="text-muted-foreground">Labour Cost:</span>{" "}
-                          <span className="font-medium">{formatCurrency(labourCost)}</span>
+                          <span className="text-muted-foreground">Labour ({labourSource === "attendance" ? "Actual" : labourSource === "manual" ? "Manual" : "—"}):</span>{" "}
+                          <span className="font-medium">{effectiveLabourHours.toFixed(1)}h · {formatCurrency(labourCost)}</span>
                         </span>
+                        {plannedShiftHours != null && plannedShiftHours > 0 && (
+                          <span>
+                            <span className="text-muted-foreground">Planned:</span>{" "}
+                            <span className="font-medium">{plannedShiftHours.toFixed(1)}h</span>
+                          </span>
+                        )}
+                        {labourVariance !== null && Math.abs(labourVariance) >= 0.5 && (
+                          <span className={cn("font-medium", labourVariance > 0 ? "text-destructive" : "text-success")}>
+                            {labourVariance > 0 ? "+" : ""}{labourVariance.toFixed(1)}h variance
+                          </span>
+                        )}
                         <span>
                           <span className="text-muted-foreground">Labour %:</span>{" "}
                           <span className="font-medium">{labourPct.toFixed(1)}%</span>
                         </span>
                         <span>
-                          <span className="text-muted-foreground">Adj. Profit:</span>{" "}
+                          <span className="text-muted-foreground">Profit:</span>{" "}
                           <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
                             {formatCurrency(adjustedProfit)}
                           </span>
