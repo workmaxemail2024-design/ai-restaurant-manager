@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Euro, Building2, CalendarClock, MapPin } from "lucide-react";
+import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 import { format } from "date-fns";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
