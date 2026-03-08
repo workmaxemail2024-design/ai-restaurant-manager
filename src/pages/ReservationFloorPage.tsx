@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ export default function ReservationFloorPage() {
   const { selectedLocationId: globalLocationId } = useLocation();
   const { data: locations = [] } = useLocations();
   const rid = currentRestaurant?.id;
+  const [searchParams] = useSearchParams();
+  const highlightTableId = searchParams.get('highlight');
 
   // ── Local floor plan location (single source of truth) ──
   const [floorLocationId, setFloorLocationId] = useState<string | null>(null);
@@ -41,11 +44,19 @@ export default function ReservationFloorPage() {
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [showAdd, setShowAdd] = useState(false);
   const [editTable, setEditTable] = useState<ReservationTable | null>(null);
-  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(highlightTableId);
   const [isSaving, setIsSaving] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
   const tablesRef = useRef(tables);
   tablesRef.current = tables;
+
+  // Auto-highlight from URL param
+  useEffect(() => {
+    if (highlightTableId) {
+      setSelectedTableId(highlightTableId);
+      setMode('preview');
+    }
+  }, [highlightTableId]);
 
   // Add table form
   const [formName, setFormName] = useState("");
@@ -74,7 +85,7 @@ export default function ReservationFloorPage() {
     setFormName(""); setFormSeats(4); setFormShape('rect'); setFormArea("");
   };
 
-  // ── Pointer-based drag (uses ref to avoid stale closures) ──
+  // ── Pointer-based drag ──
   const handlePointerDown = useCallback((e: React.PointerEvent, tableId: string) => {
     if (mode !== 'edit') return;
     e.preventDefault();
@@ -139,7 +150,6 @@ export default function ReservationFloorPage() {
       subtitle={currentLocation ? `Layout for ${currentLocation.name}` : "Drag tables to arrange your floor layout"}
       action={
         <div className="flex items-center gap-2">
-          {/* Floor-plan-specific location selector */}
           {locations.length > 0 && (
             <Select value={floorLocationId || ''} onValueChange={setFloorLocationId}>
               <SelectTrigger className="w-[180px] gap-2">
@@ -174,7 +184,6 @@ export default function ReservationFloorPage() {
               style={{ height: 500, minWidth: 600 }}
               onClick={() => mode === 'edit' && setSelectedTableId(null)}
             >
-              {/* Faint grid in edit mode */}
               {mode === 'edit' && (
                 <svg className="absolute inset-0 w-full h-full pointer-events-none" xmlns="http://www.w3.org/2000/svg">
                   <defs>
@@ -192,32 +201,35 @@ export default function ReservationFloorPage() {
                 </div>
               )}
 
-              {activeTables.map(t => (
-                <div
-                  key={t.id}
-                  id={`table-${t.id}`}
-                  className={cn(
-                    "absolute flex flex-col items-center justify-center border-2 text-xs font-medium select-none transition-shadow z-20",
-                    t.shape === 'circle' ? 'rounded-full' : t.shape === 'square' ? 'rounded-md' : 'rounded-lg',
-                    mode === 'edit'
-                      ? 'cursor-grab active:cursor-grabbing hover:shadow-md border-primary/40 bg-card'
-                      : 'cursor-default border-border bg-card/80',
-                    selectedTableId === t.id && mode === 'edit' && 'ring-2 ring-primary shadow-lg',
-                  )}
-                  style={{
-                    left: Number(t.x),
-                    top: Number(t.y),
-                    width: Number(t.w),
-                    height: Number(t.h),
-                    touchAction: 'none',
-                  }}
-                  onPointerDown={e => handlePointerDown(e, t.id)}
-                  onDoubleClick={() => mode === 'edit' && setEditTable(t)}
-                >
-                  <span className="font-semibold">{t.name}</span>
-                  <span className="text-muted-foreground text-[10px]">{t.seats} seats</span>
-                </div>
-              ))}
+              {activeTables.map(t => {
+                const isHighlighted = selectedTableId === t.id;
+                return (
+                  <div
+                    key={t.id}
+                    id={`table-${t.id}`}
+                    className={cn(
+                      "absolute flex flex-col items-center justify-center border-2 text-xs font-medium select-none transition-all z-20",
+                      t.shape === 'circle' ? 'rounded-full' : t.shape === 'square' ? 'rounded-md' : 'rounded-lg',
+                      mode === 'edit'
+                        ? 'cursor-grab active:cursor-grabbing hover:shadow-md border-primary/40 bg-card'
+                        : 'cursor-default border-border bg-card/80',
+                      isHighlighted && 'ring-4 ring-primary shadow-xl scale-110 border-primary z-30',
+                    )}
+                    style={{
+                      left: Number(t.x),
+                      top: Number(t.y),
+                      width: Number(t.w),
+                      height: Number(t.h),
+                      touchAction: 'none',
+                    }}
+                    onPointerDown={e => handlePointerDown(e, t.id)}
+                    onDoubleClick={() => mode === 'edit' && setEditTable(t)}
+                  >
+                    <span className="font-semibold">{t.name}</span>
+                    <span className="text-muted-foreground text-[10px]">{t.seats} seats</span>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
