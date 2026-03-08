@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useStaff, useStaffPerformance } from "@/hooks/useStaff";
 import { useSales } from "@/hooks/useSales";
-import { useShifts } from "@/hooks/useShifts";
+import { useStaffShifts } from "@/hooks/useShifts";
 import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, parseISO, getHours, subDays, differenceInHours } from "date-fns";
