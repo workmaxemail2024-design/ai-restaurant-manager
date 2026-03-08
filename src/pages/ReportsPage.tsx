@@ -547,8 +547,11 @@ function DayCard({
                     </div>
                   )}
 
+                  {/* Data Completeness Checklist */}
+                  <DataChecklist checklist={liveMissing.checklist} />
+
                   {/* Completed indicator */}
-                  {liveMissing.missing.length === 0 && (
+                  {liveMissing.status === "accounted" && (
                     <div className="flex items-center gap-1.5 text-xs text-success">
                       <CheckCircle2 className="h-3.5 w-3.5" /> All required data present
                     </div>
