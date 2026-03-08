@@ -16,6 +16,7 @@ import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
+import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 
 export default function SalesPage() {
   const { selectedLocationId } = useLocation();
