@@ -1,303 +1,316 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
-import { useStockLevels } from "@/hooks/useStock";
-import { useIngredients } from "@/hooks/useIngredients";
-import { useLocation } from "@/contexts/LocationContext";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, subDays } from "date-fns";
-import { 
-  Sparkles, Loader2, TrendingUp, TrendingDown, Euro, 
-  Percent, ShoppingCart, AlertTriangle, CheckCircle, ChefHat,
-  Users, Package
+import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useLocation } from "@/contexts/LocationContext";
+import { useLocations } from "@/hooks/useLocations";
+import { format, subDays, parseISO } from "date-fns";
+import {
+  Sparkles,
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  MapPin,
+  Euro,
+  ShoppingBag,
+  Users,
+  TrendingUp,
+  Percent,
+  RefreshCw,
 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCurrency } from "@/lib/currency";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+
+interface AISummary {
+  id: string;
+  restaurant_id: string;
+  location_id: string | null;
+  summary_date: string;
+  summary_text: string;
+  metrics_json: any;
+  created_at: string;
+}
 
 export default function AIDailySummaryPage() {
+  const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
-  const { data: metrics, isLoading: metricsLoading } = useDashboardMetrics(yesterday, selectedLocationId);
-  const { data: stockLevels = [] } = useStockLevels(selectedLocationId ?? undefined);
-  const { data: ingredients = [] } = useIngredients();
-  
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [loadingSummary, setLoadingSummary] = useState(false);
-  const [recommendations, setRecommendations] = useState<string[]>([]);
+  const { data: locations = [] } = useLocations();
+  const queryClient = useQueryClient();
+  const restaurantId = currentRestaurant?.id;
 
-  // Calculate stock-out warnings
-  const lowStockItems = ingredients.filter((ingredient) => {
-    const stock = stockLevels.find((s) => s.ingredient_id === ingredient.id);
-    return stock && Number(stock.quantity) < 10;
+  const [filterLocation, setFilterLocation] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<string>("7");
+
+  const fromDate = format(subDays(new Date(), Number(dateRange)), "yyyy-MM-dd");
+  const toDate = format(new Date(), "yyyy-MM-dd");
+
+  // Fetch existing summaries
+  const { data: summaries = [], isLoading } = useQuery({
+    queryKey: ["ai-daily-summaries", restaurantId, filterLocation, fromDate, toDate],
+    queryFn: async () => {
+      if (!restaurantId) return [];
+      let q = supabase
+        .from("daily_ai_summaries")
+        .select("*")
+        .eq("restaurant_id", restaurantId)
+        .gte("summary_date", fromDate)
+        .lte("summary_date", toDate)
+        .order("summary_date", { ascending: false });
+
+      if (filterLocation && filterLocation !== "all") {
+        q = q.eq("location_id", filterLocation);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data || []) as AISummary[];
+    },
+    enabled: !!restaurantId,
   });
 
-  const generateDailySummary = async () => {
-    setLoadingSummary(true);
-    try {
-      const response = await supabase.functions.invoke("ai-daily-summary", {
+  // Generate summary for a specific date
+  const generateMutation = useMutation({
+    mutationFn: async (date: string) => {
+      const { data, error } = await supabase.functions.invoke("ai-daily-summary", {
         body: {
-          metrics,
-          lowStockItems: lowStockItems.map((i) => i.name),
-          date: yesterday,
+          date,
+          restaurant_id: restaurantId,
+          location_id: filterLocation !== "all" ? filterLocation : null,
         },
       });
-      if (response.data?.summary) {
-        setAiSummary(response.data.summary);
-        setRecommendations(response.data.recommendations || []);
-      }
-    } catch (error) {
-      console.error("Error generating daily summary:", error);
-    } finally {
-      setLoadingSummary(false);
-    }
-  };
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ai-daily-summaries"] });
+      toast.success("Summary generated successfully");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to generate summary");
+    },
+  });
 
-  // Trend chart data (mock - would come from historical data)
-  const trendData = Array.from({ length: 7 }, (_, i) => ({
-    day: format(subDays(new Date(), 7 - i), "EEE"),
-    revenue: Math.random() * 5000 + 2000,
-    profit: Math.random() * 2000 + 500,
-  }));
+  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const hasYesterdaySummary = summaries.some((s) => s.summary_date === yesterday);
 
   return (
-    <PageLayout
-      title="AI Daily Summary"
-      description={`Operations summary for ${format(new Date(yesterday), "MMMM d, yyyy")}`}
-    >
-      <div className="space-y-6">
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Yesterday's Revenue</CardTitle>
-              <Euro className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metricsLoading ? "..." : formatCurrency(metrics?.totalRevenue || 0)}
-              </div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <TrendingUp className="h-3 w-3 text-green-500" /> +12% from last week
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Food Cost %</CardTitle>
-              <Percent className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metricsLoading ? "..." : metrics?.foodCostPercent.toFixed(1) || "0"}%
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Target: 28-32%
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Profit</CardTitle>
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metricsLoading ? "..." : formatCurrency(metrics?.totalProfit || 0)}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Gross profit margin
-              </p>
-            </CardContent>
-          </Card>
-          <Card className={lowStockItems.length > 0 ? "border-destructive" : ""}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Stock Alerts</CardTitle>
-              <AlertTriangle className={`h-4 w-4 ${lowStockItems.length > 0 ? "text-destructive" : "text-muted-foreground"}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{lowStockItems.length}</div>
-              <p className="text-xs text-muted-foreground">
-                items running low
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Revenue Trend */}
-        <Card>
-          <CardHeader>
-            <CardTitle>7-Day Revenue Trend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="day" className="text-xs" />
-                <YAxis className="text-xs" />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }} />
-                <Line type="monotone" dataKey="revenue" name="Revenue" stroke="hsl(var(--primary))" strokeWidth={2} />
-                <Line type="monotone" dataKey="profit" name="Profit" stroke="hsl(var(--accent))" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Top & Bottom Dishes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-600">
-                <TrendingUp className="h-5 w-5" /> Top Performing Dishes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {metricsLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}
-                </div>
-              ) : metrics?.topDishes.length ? (
-                <div className="space-y-2">
-                  {metrics.topDishes.map((dish, i) => (
-                    <div key={dish.name} className="flex items-center justify-between p-2 rounded bg-green-500/5 border border-green-500/20">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-green-600">#{i + 1}</span>
-                        <span className="font-medium">{dish.name}</span>
-                      </div>
-                      <div className="text-right text-sm">
-                        <div className="font-medium">{dish.quantity} sold</div>
-                        <div className="text-muted-foreground">{formatCurrency(dish.revenue)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No sales data for yesterday</p>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-600">
-                <TrendingDown className="h-5 w-5" /> Underperforming Dishes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {metricsLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}
-                </div>
-              ) : metrics?.worstDishes.length ? (
-                <div className="space-y-2">
-                  {metrics.worstDishes.map((dish) => (
-                    <div key={dish.name} className="flex items-center justify-between p-2 rounded bg-red-500/5 border border-red-500/20">
-                      <span className="font-medium">{dish.name}</span>
-                      <div className="text-right text-sm">
-                        <div className="font-medium">{dish.quantity} sold</div>
-                        <div className="text-muted-foreground">{formatCurrency(dish.revenue)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No sales data for yesterday</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Stock Warnings */}
-        {lowStockItems.length > 0 && (
-          <Card className="border-destructive/50 bg-destructive/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <Package className="h-5 w-5" /> Low Stock Warnings
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {lowStockItems.map((item) => (
-                  <Badge key={item.id} variant="destructive">{item.name}</Badge>
+    <PageLayout title="AI Daily Summary" subtitle="AI-generated operational summaries based on real data">
+      <div className="space-y-4">
+        {/* Filters & Actions */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            <Select value={filterLocation} onValueChange={setFilterLocation}>
+              <SelectTrigger className="w-[180px] h-8 text-sm">
+                <SelectValue placeholder="All Locations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Locations</SelectItem>
+                {locations.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* AI Summary */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" /> AI Daily Briefing
-              </CardTitle>
-              <CardDescription>Comprehensive analysis of yesterday's operations</CardDescription>
-            </div>
-            <Button onClick={generateDailySummary} disabled={loadingSummary}>
-              {loadingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              Generate Summary
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {aiSummary ? (
-              <div className="space-y-4">
-                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                  {aiSummary}
-                </div>
-                {recommendations.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" /> Recommended Actions
-                    </h4>
-                    <ul className="space-y-2">
-                      {recommendations.map((rec, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm">
-                          <span className="text-primary font-bold">{i + 1}.</span>
-                          <span>{rec}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger className="w-[140px] h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 days</SelectItem>
+                <SelectItem value="14">Last 14 days</SelectItem>
+                <SelectItem value="30">Last 30 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => generateMutation.mutate(yesterday)}
+            disabled={generateMutation.isPending}
+          >
+            {generateMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <p className="text-muted-foreground">Click "Generate Summary" to get your AI-powered daily briefing.</p>
+              <Sparkles className="h-3.5 w-3.5" />
             )}
-          </CardContent>
-        </Card>
+            {hasYesterdaySummary ? "Regenerate Yesterday" : "Generate Yesterday's Summary"}
+          </Button>
+        </div>
 
-        {/* Location Performance */}
-        {metrics?.locationPerformance && metrics.locationPerformance.length > 0 && (
+        {/* Summaries List */}
+        {isLoading ? (
+          <div className="text-muted-foreground text-sm">Loading summaries…</div>
+        ) : summaries.length === 0 ? (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ChefHat className="h-5 w-5" /> Location Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {metrics.locationPerformance.map((location) => (
-                  <div key={location.name} className="p-4 rounded-lg bg-muted/50 border">
-                    <h4 className="font-semibold">{location.name}</h4>
-                    <div className="mt-2 space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Revenue:</span>
-                        <span className="font-medium">{formatCurrency(location.revenue)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Orders:</span>
-                        <span className="font-medium">{location.orders}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+            <CardContent className="py-12 text-center">
+              <Sparkles className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-muted-foreground">No summaries generated yet.</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Click "Generate Yesterday's Summary" to get started.
+              </p>
             </CardContent>
           </Card>
+        ) : (
+          <div className="space-y-2">
+            {summaries.map((summary) => (
+              <SummaryCard key={summary.id} summary={summary} locations={locations} />
+            ))}
+          </div>
         )}
       </div>
     </PageLayout>
+  );
+}
+
+function SummaryCard({
+  summary,
+  locations,
+}: {
+  summary: AISummary;
+  locations: { id: string; name: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const m = summary.metrics_json || {};
+  const dateLabel = format(parseISO(summary.summary_date), "EEE dd MMM yyyy");
+  const locationName = summary.location_id
+    ? locations.find((l) => l.id === summary.location_id)?.name || "Unknown"
+    : "All Locations";
+
+  const isNoData = summary.summary_text === "No operational data available.";
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer select-none py-3 px-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                {open ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="font-medium text-sm">{dateLabel}</span>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                  {locationName}
+                </Badge>
+                {isNoData && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                    No Data
+                  </Badge>
+                )}
+              </div>
+              {!isNoData && (
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-1">
+                    <Euro className="h-3 w-3 text-muted-foreground" />
+                    <span className="font-medium">{formatCurrency(m.revenue || 0)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 hidden sm:flex">
+                    <ShoppingBag className="h-3 w-3 text-muted-foreground" />
+                    <span className="font-medium">{m.orders || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-1 hidden md:flex">
+                    <TrendingUp className="h-3 w-3 text-success" />
+                    <span className="font-medium text-success">{formatCurrency(m.estimated_profit || 0)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <CardContent className="pt-0 pb-4 px-4 space-y-4">
+            {/* Metrics Grid */}
+            {!isNoData && (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                <MetricChip label="Revenue" value={formatCurrency(m.revenue || 0)} icon={Euro} />
+                <MetricChip label="Orders" value={String(m.orders || 0)} icon={ShoppingBag} />
+                <MetricChip label="Avg Order" value={formatCurrency(m.avg_order_value || 0)} icon={ShoppingBag} />
+                <MetricChip label="Food Cost" value={`${m.food_cost_pct || 0}%`} icon={Percent} />
+                <MetricChip label="Labour" value={`${(m.labour_pct || 0).toFixed(1)}%`} icon={Percent} />
+                <MetricChip label="Profit" value={formatCurrency(m.estimated_profit || 0)} icon={TrendingUp} />
+                {m.covers > 0 && <MetricChip label="Covers" value={String(m.covers)} icon={Users} />}
+                {m.reservations > 0 && <MetricChip label="Bookings" value={String(m.reservations)} icon={Calendar} />}
+              </div>
+            )}
+
+            {/* Top/Bottom Dishes */}
+            {!isNoData && m.top_dishes?.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Top Dishes</h4>
+                  {m.top_dishes.map((d: any, i: number) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="truncate">{d.name}</span>
+                      <span className="text-muted-foreground shrink-0 ml-2">{d.quantity} sold</span>
+                    </div>
+                  ))}
+                </div>
+                {m.bottom_dishes?.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Worst Performers
+                    </h4>
+                    {m.bottom_dishes.map((d: any, i: number) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="truncate">{d.name}</span>
+                        <span className="text-muted-foreground shrink-0 ml-2">{d.quantity} sold</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AI Text */}
+            <div className="rounded-md border border-border bg-secondary/20 p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  AI Analysis
+                </span>
+              </div>
+              <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm">
+                {summary.summary_text}
+              </div>
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
+function MetricChip({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: typeof Euro;
+}) {
+  return (
+    <div className="rounded-md border border-border p-2 text-center">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-0.5">{label}</div>
+      <div className="text-sm font-semibold">{value}</div>
+    </div>
   );
 }

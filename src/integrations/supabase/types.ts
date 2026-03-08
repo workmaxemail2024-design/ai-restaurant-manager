@@ -150,6 +150,51 @@ export type Database = {
           },
         ]
       }
+      daily_ai_summaries: {
+        Row: {
+          created_at: string
+          id: string
+          location_id: string | null
+          metrics_json: Json
+          restaurant_id: string
+          summary_date: string
+          summary_text: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          metrics_json?: Json
+          restaurant_id: string
+          summary_date: string
+          summary_text: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          metrics_json?: Json
+          restaurant_id?: string
+          summary_date?: string
+          summary_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_ai_summaries_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_ai_summaries_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_ledger_entries: {
         Row: {
           additional_expenses: number | null
