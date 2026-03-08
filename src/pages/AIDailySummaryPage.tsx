@@ -268,9 +268,9 @@ function SummaryCard({
     none: "No Data",
   };
   const completenessColor = {
-    high: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20",
-    medium: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
-    low: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+    high: "bg-success/10 text-success border-success/20",
+    medium: "bg-warning/10 text-warning border-warning/20",
+    low: "bg-destructive/10 text-destructive border-destructive/20",
     none: "bg-muted text-muted-foreground border-muted",
   };
 
