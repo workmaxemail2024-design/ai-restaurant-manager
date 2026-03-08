@@ -11,7 +11,7 @@ import { format, formatDistanceToNow } from "date-fns";
 function statusBadge(status: string) {
   switch (status) {
     case "success":
-      return <Badge variant="default" className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Success</Badge>;
+      return <Badge className="bg-emerald-600 dark:bg-emerald-500 text-primary-foreground"><CheckCircle className="h-3 w-3 mr-1" />Success</Badge>;
     case "failed":
       return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Failed</Badge>;
     case "pending":
