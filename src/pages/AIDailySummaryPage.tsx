@@ -329,8 +329,8 @@ function SummaryCard({
                     <span className="font-medium">{m.orders || 0}</span>
                   </div>
                   <div className="flex items-center gap-1 hidden md:flex">
-                    <TrendingUp className="h-3 w-3 text-green-500" />
-                    <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(m.estimated_profit || 0)}</span>
+                    <TrendingUp className="h-3 w-3 text-success" />
+                    <span className="font-medium text-success">{formatCurrency(m.estimated_profit || 0)}</span>
                   </div>
                 </div>
               )}
