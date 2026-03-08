@@ -816,19 +816,66 @@ export default function ReportsPage() {
   const { currentRestaurant } = useRestaurant();
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
   const { data: metrics, isLoading } = useDashboardMetrics(startDate, endDate, selectedLocationId);
-  const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(
-    startDate,
-    endDate,
-    selectedLocationId
-  );
-  const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(
-    startDate,
-    endDate,
-    selectedLocationId
-  );
+  const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(startDate, endDate, selectedLocationId);
+  const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(startDate, endDate, selectedLocationId);
+
+  // Fetch actual attendance for date range
+  const restaurantId = currentRestaurant?.id;
+  const { data: attendanceData } = useQuery({
+    queryKey: ["report-attendance", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryFn: async () => {
+      if (!restaurantId) return new Map<string, { hours: number; cost: number }>();
+      let q = supabase
+        .from("staff_attendance")
+        .select("clock_in, clock_out, staff_id, staff(hourly_rate)")
+        .eq("restaurant_id", restaurantId)
+        .gte("clock_in", `${startDate}T00:00:00`)
+        .lte("clock_in", `${endDate}T23:59:59`)
+        .not("clock_out", "is", null);
+      if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
+      const { data } = await q;
+      const dayMap = new Map<string, { hours: number; cost: number }>();
+      for (const rec of data || []) {
+        if (!rec.clock_in || !rec.clock_out) continue;
+        const day = rec.clock_in.split("T")[0];
+        const hours = (new Date(rec.clock_out).getTime() - new Date(rec.clock_in).getTime()) / (1000 * 60 * 60);
+        const rate = Number((rec.staff as any)?.hourly_rate) || 0;
+        const existing = dayMap.get(day) || { hours: 0, cost: 0 };
+        dayMap.set(day, { hours: existing.hours + hours, cost: existing.cost + hours * rate });
+      }
+      return dayMap;
+    },
+    enabled: !!restaurantId,
+  });
+
+  // Fetch planned shifts for date range
+  const { data: shiftsData } = useQuery({
+    queryKey: ["report-shifts", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryFn: async () => {
+      if (!restaurantId) return new Map<string, number>();
+      let q = supabase
+        .from("staff_shifts")
+        .select("shift_start, shift_end")
+        .eq("restaurant_id", restaurantId)
+        .gte("shift_start", `${startDate}T00:00:00`)
+        .lte("shift_start", `${endDate}T23:59:59`);
+      if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
+      const { data } = await q;
+      const dayMap = new Map<string, number>();
+      for (const s of data || []) {
+        const day = s.shift_start.split("T")[0];
+        const hours = (new Date(s.shift_end).getTime() - new Date(s.shift_start).getTime()) / (1000 * 60 * 60);
+        dayMap.set(day, (dayMap.get(day) || 0) + hours);
+      }
+      return dayMap;
+    },
+    enabled: !!restaurantId,
+  });
+
+  const attendanceMap = attendanceData ?? new Map<string, { hours: number; cost: number }>();
+  const shiftsMap = shiftsData ?? new Map<string, number>();
 
   // Fetch reservation dates in range for bookings checklist
-  const restaurantId = currentRestaurant?.id;
   const { data: bookingDays } = useQuery({
     queryKey: ["report-booking-days", restaurantId, selectedLocationId ?? "all", startDate, endDate],
     queryFn: async () => {
