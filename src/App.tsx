@@ -123,6 +123,7 @@ const App = () => (
               <Route path="/settings/system-qa" element={<ProtectedRoute><SystemQAPage /></ProtectedRoute>} />
               <Route path="/settings/financial/overheads" element={<ProtectedRoute><OverheadsPage /></ProtectedRoute>} />
               <Route path="/settings/demo" element={<ProtectedRoute><DemoSettingsPage /></ProtectedRoute>} />
+              <Route path="/settings/backups" element={<ProtectedRoute><BackupsPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             </BrowserRouter>
