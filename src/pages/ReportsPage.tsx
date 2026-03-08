@@ -268,6 +268,8 @@ function DayCard({
   isFocused,
   cardRef,
   hasBookings,
+  actualAttendance,
+  plannedShiftHours,
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
@@ -277,6 +279,8 @@ function DayCard({
   isFocused: boolean;
   cardRef?: React.Ref<HTMLDivElement>;
   hasBookings: boolean;
+  actualAttendance?: { hours: number; cost: number };
+  plannedShiftHours?: number;
 }) {
   const [open, setOpen] = useState(false);
   const dateObj = parseISO(day.date);
@@ -316,9 +320,18 @@ function DayCard({
   const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
   const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
 
-  const labourCost = labourHours * avgHourlyRate;
+  // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. planned shifts
+  const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
+  const hasManualLabour = labourHours > 0;
+  const effectiveLabourHours = hasActualAttendance ? actualAttendance.hours : hasManualLabour ? labourHours : 0;
+  const labourCost = hasActualAttendance ? actualAttendance.cost : effectiveLabourHours * avgHourlyRate;
+  const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
+
+  // Variance between actual and planned
+  const labourVariance = (plannedShiftHours != null && effectiveLabourHours > 0)
+    ? effectiveLabourHours - plannedShiftHours : null;
 
   // Missing fields evaluation
   const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings);
