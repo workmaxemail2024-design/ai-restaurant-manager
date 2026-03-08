@@ -1408,6 +1408,9 @@ export type Database = {
       reservations: {
         Row: {
           actual_spend: number | null
+          arrived_at: string | null
+          cancellation_reason: string | null
+          completed_at: string | null
           created_at: string
           created_by: string | null
           customer_id: string | null
@@ -1417,6 +1420,7 @@ export type Database = {
           location_id: string
           party_size: number
           restaurant_id: string
+          seated_at: string | null
           sitting_id: string | null
           source: Database["public"]["Enums"]["reservation_source"]
           special_requests: string | null
@@ -1427,6 +1431,9 @@ export type Database = {
         }
         Insert: {
           actual_spend?: number | null
+          arrived_at?: string | null
+          cancellation_reason?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -1436,6 +1443,7 @@ export type Database = {
           location_id: string
           party_size?: number
           restaurant_id: string
+          seated_at?: string | null
           sitting_id?: string | null
           source?: Database["public"]["Enums"]["reservation_source"]
           special_requests?: string | null
@@ -1446,6 +1454,9 @@ export type Database = {
         }
         Update: {
           actual_spend?: number | null
+          arrived_at?: string | null
+          cancellation_reason?: string | null
+          completed_at?: string | null
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -1455,6 +1466,7 @@ export type Database = {
           location_id?: string
           party_size?: number
           restaurant_id?: string
+          seated_at?: string | null
           sitting_id?: string | null
           source?: Database["public"]["Enums"]["reservation_source"]
           special_requests?: string | null
@@ -2317,6 +2329,7 @@ export type Database = {
         | "inquiry"
         | "pending"
         | "confirmed"
+        | "arrived"
         | "declined"
         | "cancelled"
         | "seated"
@@ -2468,6 +2481,7 @@ export const Constants = {
         "inquiry",
         "pending",
         "confirmed",
+        "arrived",
         "declined",
         "cancelled",
         "seated",
