@@ -268,6 +268,8 @@ function DayCard({
   isFocused,
   cardRef,
   hasBookings,
+  actualAttendance,
+  plannedShiftHours,
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
@@ -277,6 +279,8 @@ function DayCard({
   isFocused: boolean;
   cardRef?: React.Ref<HTMLDivElement>;
   hasBookings: boolean;
+  actualAttendance?: { hours: number; cost: number };
+  plannedShiftHours?: number;
 }) {
   const [open, setOpen] = useState(false);
   const dateObj = parseISO(day.date);
@@ -316,9 +320,18 @@ function DayCard({
   const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
   const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
 
-  const labourCost = labourHours * avgHourlyRate;
+  // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. planned shifts
+  const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
+  const hasManualLabour = labourHours > 0;
+  const effectiveLabourHours = hasActualAttendance ? actualAttendance.hours : hasManualLabour ? labourHours : 0;
+  const labourCost = hasActualAttendance ? actualAttendance.cost : effectiveLabourHours * avgHourlyRate;
+  const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
+
+  // Variance between actual and planned
+  const labourVariance = (plannedShiftHours != null && effectiveLabourHours > 0)
+    ? effectiveLabourHours - plannedShiftHours : null;
 
   // Missing fields evaluation
   const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings);
@@ -672,15 +685,26 @@ function DayCard({
                     {hasAnyData && (
                       <div className="flex flex-wrap gap-4 text-xs pt-1">
                         <span>
-                          <span className="text-muted-foreground">Labour Cost:</span>{" "}
-                          <span className="font-medium">{formatCurrency(labourCost)}</span>
+                          <span className="text-muted-foreground">Labour ({labourSource === "attendance" ? "Actual" : labourSource === "manual" ? "Manual" : "—"}):</span>{" "}
+                          <span className="font-medium">{effectiveLabourHours.toFixed(1)}h · {formatCurrency(labourCost)}</span>
                         </span>
+                        {plannedShiftHours != null && plannedShiftHours > 0 && (
+                          <span>
+                            <span className="text-muted-foreground">Planned:</span>{" "}
+                            <span className="font-medium">{plannedShiftHours.toFixed(1)}h</span>
+                          </span>
+                        )}
+                        {labourVariance !== null && Math.abs(labourVariance) >= 0.5 && (
+                          <span className={cn("font-medium", labourVariance > 0 ? "text-destructive" : "text-success")}>
+                            {labourVariance > 0 ? "+" : ""}{labourVariance.toFixed(1)}h variance
+                          </span>
+                        )}
                         <span>
                           <span className="text-muted-foreground">Labour %:</span>{" "}
                           <span className="font-medium">{labourPct.toFixed(1)}%</span>
                         </span>
                         <span>
-                          <span className="text-muted-foreground">Adj. Profit:</span>{" "}
+                          <span className="text-muted-foreground">Profit:</span>{" "}
                           <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
                             {formatCurrency(adjustedProfit)}
                           </span>
@@ -792,19 +816,66 @@ export default function ReportsPage() {
   const { currentRestaurant } = useRestaurant();
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
   const { data: metrics, isLoading } = useDashboardMetrics(startDate, endDate, selectedLocationId);
-  const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(
-    startDate,
-    endDate,
-    selectedLocationId
-  );
-  const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(
-    startDate,
-    endDate,
-    selectedLocationId
-  );
+  const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(startDate, endDate, selectedLocationId);
+  const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(startDate, endDate, selectedLocationId);
+
+  // Fetch actual attendance for date range
+  const restaurantId = currentRestaurant?.id;
+  const { data: attendanceData } = useQuery({
+    queryKey: ["report-attendance", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryFn: async () => {
+      if (!restaurantId) return new Map<string, { hours: number; cost: number }>();
+      let q = supabase
+        .from("staff_attendance")
+        .select("clock_in, clock_out, staff_id, staff(hourly_rate)")
+        .eq("restaurant_id", restaurantId)
+        .gte("clock_in", `${startDate}T00:00:00`)
+        .lte("clock_in", `${endDate}T23:59:59`)
+        .not("clock_out", "is", null);
+      if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
+      const { data } = await q;
+      const dayMap = new Map<string, { hours: number; cost: number }>();
+      for (const rec of data || []) {
+        if (!rec.clock_in || !rec.clock_out) continue;
+        const day = rec.clock_in.split("T")[0];
+        const hours = (new Date(rec.clock_out).getTime() - new Date(rec.clock_in).getTime()) / (1000 * 60 * 60);
+        const rate = Number((rec.staff as any)?.hourly_rate) || 0;
+        const existing = dayMap.get(day) || { hours: 0, cost: 0 };
+        dayMap.set(day, { hours: existing.hours + hours, cost: existing.cost + hours * rate });
+      }
+      return dayMap;
+    },
+    enabled: !!restaurantId,
+  });
+
+  // Fetch planned shifts for date range
+  const { data: shiftsData } = useQuery({
+    queryKey: ["report-shifts", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryFn: async () => {
+      if (!restaurantId) return new Map<string, number>();
+      let q = supabase
+        .from("staff_shifts")
+        .select("shift_start, shift_end")
+        .eq("restaurant_id", restaurantId)
+        .gte("shift_start", `${startDate}T00:00:00`)
+        .lte("shift_start", `${endDate}T23:59:59`);
+      if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
+      const { data } = await q;
+      const dayMap = new Map<string, number>();
+      for (const s of data || []) {
+        const day = s.shift_start.split("T")[0];
+        const hours = (new Date(s.shift_end).getTime() - new Date(s.shift_start).getTime()) / (1000 * 60 * 60);
+        dayMap.set(day, (dayMap.get(day) || 0) + hours);
+      }
+      return dayMap;
+    },
+    enabled: !!restaurantId,
+  });
+
+  const attendanceMap = attendanceData ?? new Map<string, { hours: number; cost: number }>();
+  const shiftsMap = shiftsData ?? new Map<string, number>();
 
   // Fetch reservation dates in range for bookings checklist
-  const restaurantId = currentRestaurant?.id;
   const { data: bookingDays } = useQuery({
     queryKey: ["report-booking-days", restaurantId, selectedLocationId ?? "all", startDate, endDate],
     queryFn: async () => {
@@ -832,16 +903,13 @@ export default function ReportsPage() {
   const [focusedDate, setFocusedDate] = useState<string | undefined>();
   const dayCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Period summary with manual override support
+  // Period summary with attendance-first labour hierarchy
   const periodSummary = useMemo(() => {
     if (!dailyData || dailyData.length === 0 || !metrics) {
       return {
-        revenue: metrics?.totalRevenue || 0,
-        orders: metrics?.totalOrders || 0,
-        foodCostPct: metrics?.foodCostPercent || 0,
-        profit: metrics?.totalProfit || 0,
-        totalLabourCost: 0,
-        labourPct: 0,
+        revenue: metrics?.totalRevenue || 0, orders: metrics?.totalOrders || 0,
+        foodCostPct: metrics?.foodCostPercent || 0, profit: metrics?.totalProfit || 0,
+        totalLabourCost: 0, labourPct: 0,
       };
     }
 
@@ -852,10 +920,17 @@ export default function ReportsPage() {
 
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
-      if (ledger) {
+      const actual = attendanceMap.get(day.date);
+
+      // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. nothing
+      if (actual && actual.hours > 0) {
+        totalLabourCost += actual.cost;
+      } else if (ledger && ledger.labour_hours > 0) {
         totalLabourCost += ledger.labour_hours * avgHourlyRate;
+      }
+
+      if (ledger) {
         totalAdditionalExpenses += ledger.additional_expenses;
-        // Add manual revenue for days without actual sales
         if (!day.hasData && ledger.manual_revenue != null) {
           manualRevenueTotal += ledger.manual_revenue;
           manualOrdersTotal += ledger.manual_orders ?? 0;
@@ -870,15 +945,8 @@ export default function ReportsPage() {
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
     const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : metrics.foodCostPercent;
 
-    return {
-      revenue,
-      orders,
-      foodCostPct,
-      profit: adjustedProfit,
-      totalLabourCost,
-      labourPct,
-    };
-  }, [metrics, dailyData, ledgerEntries, avgHourlyRate]);
+    return { revenue, orders, foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct };
+  }, [metrics, dailyData, ledgerEntries, avgHourlyRate, attendanceMap]);
 
   // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {

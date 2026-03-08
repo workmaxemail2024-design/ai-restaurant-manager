@@ -25,6 +25,12 @@ const contractTypes: { value: ContractType; label: string }[] = [
   { value: "casual", label: "Casual" },
 ];
 
+const contractLabels: Record<string, string> = {
+  full_time: "Full-time",
+  part_time: "Part-time",
+  casual: "Casual",
+};
+
 export default function StaffPage() {
   const { selectedLocationId } = useLocation();
   const { data: staff = [], isLoading } = useStaff(selectedLocationId);
@@ -41,41 +47,28 @@ export default function StaffPage() {
   const [open, setOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [form, setForm] = useState<StaffInsert>({
-    first_name: "",
-    last_name: "",
-    role: "waiter",
-    hourly_rate: 0,
-    status: "active",
-    location_id: null,
-    email: null,
-    phone: null,
-    captiva_operator_code: null,
-    contract_type: "part_time",
-    max_hours_per_week: undefined,
-    min_hours_per_week: undefined,
+    first_name: "", last_name: "", role: "waiter", hourly_rate: 0,
+    status: "active", location_id: null, email: null, phone: null,
+    captiva_operator_code: null, contract_type: "part_time",
+    max_hours_per_week: undefined, min_hours_per_week: undefined,
   });
 
-  // Derived contracted hours for the form (uses max_hours as the single "contracted hours" value)
   const contractedHours = form.max_hours_per_week ?? "";
 
-  // Get unmapped staff from POS
   const staffMappings = posMappings.filter(m => m.mapping_type === "staff");
   const unmappedStaffMappings = staffMappings.filter(m => !m.is_verified);
 
+  // Summary stats
+  const activeStaff = staff.filter(s => s.status === "active");
+  const totalWeeklyCost = activeStaff.reduce((sum, s) => sum + (s.hourly_rate * s.max_hours_per_week), 0);
+  const avgRate = activeStaff.length > 0 ? activeStaff.reduce((sum, s) => sum + s.hourly_rate, 0) / activeStaff.length : 0;
+
   const resetForm = () => {
-    setForm({ 
-      first_name: "", 
-      last_name: "", 
-      role: "waiter", 
-      hourly_rate: 0, 
-      status: "active", 
-      location_id: null, 
-      email: null, 
-      phone: null, 
-      captiva_operator_code: null,
-      contract_type: "part_time",
-      max_hours_per_week: undefined,
-      min_hours_per_week: undefined,
+    setForm({
+      first_name: "", last_name: "", role: "waiter", hourly_rate: 0,
+      status: "active", location_id: null, email: null, phone: null,
+      captiva_operator_code: null, contract_type: "part_time",
+      max_hours_per_week: undefined, min_hours_per_week: undefined,
     });
     setEditingStaff(null);
   };
@@ -94,14 +87,9 @@ export default function StaffPage() {
   const handleEdit = (item: Staff) => {
     setEditingStaff(item);
     setForm({
-      first_name: item.first_name,
-      last_name: item.last_name,
-      role: item.role,
-      hourly_rate: item.hourly_rate,
-      status: item.status,
-      location_id: item.location_id,
-      email: item.email,
-      phone: item.phone,
+      first_name: item.first_name, last_name: item.last_name,
+      role: item.role, hourly_rate: item.hourly_rate, status: item.status,
+      location_id: item.location_id, email: item.email, phone: item.phone,
       captiva_operator_code: item.captiva_operator_code,
       contract_type: item.contract_type || "part_time",
       max_hours_per_week: item.max_hours_per_week ?? undefined,
@@ -112,11 +100,7 @@ export default function StaffPage() {
 
   const handleContractedHoursChange = (value: string) => {
     const hours = value === "" ? undefined : parseFloat(value);
-    setForm({ 
-      ...form, 
-      max_hours_per_week: hours,
-      min_hours_per_week: hours,
-    });
+    setForm({ ...form, max_hours_per_week: hours, min_hours_per_week: hours });
   };
 
   const handleMapStaff = (mappingId: string, staffId: string) => {
@@ -124,38 +108,61 @@ export default function StaffPage() {
   };
 
   const columns = [
-    { key: "first_name", header: "First Name" },
-    { key: "last_name", header: "Last Name" },
+    {
+      key: "name",
+      header: "Name",
+      render: (item: Staff) => (
+        <div>
+          <span className="font-medium">{item.first_name} {item.last_name}</span>
+        </div>
+      ),
+    },
     { 
-      key: "role", 
-      header: "Role",
+      key: "role", header: "Role",
       render: (item: Staff) => (
         <Badge variant="outline" className="capitalize">{item.role.replace("_", " ")}</Badge>
       )
     },
     { 
-      key: "status", 
-      header: "Status",
+      key: "status", header: "Status",
       render: (item: Staff) => (
         <Badge variant={item.status === "active" ? "default" : "secondary"} className="capitalize">
           {item.status.replace("_", " ")}
         </Badge>
       )
     },
-    { key: "hourly_rate", header: "Hourly Rate", render: (item: Staff) => formatCurrency(item.hourly_rate) },
-    { key: "location", header: "Location", render: (item: Staff) => item.locations?.name || "-" },
     {
-      key: "pos_mapping",
-      header: "POS Mapping",
+      key: "hourly_rate", header: `Rate (${currencySymbol}/h)`,
+      render: (item: Staff) => (
+        <span className="font-mono">{formatCurrency(item.hourly_rate)}</span>
+      ),
+    },
+    {
+      key: "contract", header: "Contract",
+      render: (item: Staff) => (
+        <div className="text-sm">
+          <span>{contractLabels[item.contract_type] || item.contract_type}</span>
+          {item.max_hours_per_week > 0 && (
+            <span className="text-muted-foreground ml-1">({item.max_hours_per_week}h/wk)</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "location", header: "Location",
+      render: (item: Staff) => item.locations?.name || (
+        <span className="text-muted-foreground">—</span>
+      ),
+    },
+    {
+      key: "pos_mapping", header: "POS",
       render: (item: Staff) => (
         item.captiva_operator_code ? (
-          <Badge variant="default" className="bg-green-500/20 text-green-700">
+          <Badge variant="default" className="bg-green-500/20 text-green-700 text-[10px]">
             <Link2 className="h-3 w-3 mr-1" />{item.captiva_operator_code}
           </Badge>
         ) : (
-          <Badge variant="secondary" className="text-amber-600">
-            <AlertCircle className="h-3 w-3 mr-1" />Unmapped
-          </Badge>
+          <span className="text-muted-foreground text-xs">—</span>
         )
       )
     },
@@ -163,8 +170,8 @@ export default function StaffPage() {
 
   return (
     <PageLayout
-      title="Staff Management"
-      description="Manage your team members"
+      title="Staff List"
+      description="Employee master data — defines roles, rates, and contract terms"
       action={
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
@@ -233,15 +240,8 @@ export default function StaffPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Contracted Hours (per week)</Label>
-                  <Input 
-                    type="number" 
-                    step="1" 
-                    min="0"
-                    max="168"
-                    placeholder="e.g., 40"
-                    value={contractedHours} 
-                    onChange={(e) => handleContractedHoursChange(e.target.value)} 
-                  />
+                  <Input type="number" step="1" min="0" max="168" placeholder="e.g., 40"
+                    value={contractedHours} onChange={(e) => handleContractedHoursChange(e.target.value)} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -257,11 +257,7 @@ export default function StaffPage() {
               {canEditPOSMapping && (
                 <div className="space-y-2">
                   <Label>Captiva Operator Code</Label>
-                  <Input 
-                    value={form.captiva_operator_code || ""} 
-                    onChange={(e) => setForm({ ...form, captiva_operator_code: e.target.value || null })} 
-                    placeholder="e.g., OP001"
-                  />
+                  <Input value={form.captiva_operator_code || ""} onChange={(e) => setForm({ ...form, captiva_operator_code: e.target.value || null })} placeholder="e.g., OP001" />
                   <p className="text-xs text-muted-foreground">Used for POS staff mapping</p>
                 </div>
               )}
@@ -284,7 +280,25 @@ export default function StaffPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="staff">
+        <TabsContent value="staff" className="space-y-4">
+          {/* Staff Summary Strip */}
+          <div className="flex flex-wrap items-center gap-4 p-3 bg-muted/50 rounded-lg border text-sm">
+            <div>
+              <span className="text-muted-foreground">Active: </span>
+              <span className="font-medium">{activeStaff.length}</span>
+            </div>
+            <div className="h-4 w-px bg-border" />
+            <div>
+              <span className="text-muted-foreground">Avg Rate: </span>
+              <span className="font-medium">{formatCurrency(avgRate)}/h</span>
+            </div>
+            <div className="h-4 w-px bg-border" />
+            <div>
+              <span className="text-muted-foreground">Max Weekly Cost: </span>
+              <span className="font-medium">{formatCurrency(totalWeeklyCost)}</span>
+            </div>
+          </div>
+
           <DataTable
             data={staff}
             columns={columns}
@@ -321,18 +335,11 @@ export default function StaffPage() {
                             <AlertCircle className="h-3 w-3 mr-1" />Unmapped
                           </Badge>
                         )}
-                        <Select 
-                          value={mapping.internal_id || ""} 
-                          onValueChange={v => handleMapStaff(mapping.id, v)}
-                        >
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Select staff member" />
-                          </SelectTrigger>
+                        <Select value={mapping.internal_id || ""} onValueChange={v => handleMapStaff(mapping.id, v)}>
+                          <SelectTrigger className="w-48"><SelectValue placeholder="Select staff member" /></SelectTrigger>
                           <SelectContent>
                             {staff.map(s => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.first_name} {s.last_name}
-                              </SelectItem>
+                              <SelectItem key={s.id} value={s.id}>{s.first_name} {s.last_name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
