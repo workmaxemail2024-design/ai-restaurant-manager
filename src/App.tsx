@@ -67,7 +67,7 @@ const App = () => (
             <TooltipProvider>
             <Toaster />
             <Sonner />
-            <DemoBanner />
+            
           <BrowserRouter>
             <Routes>
               {/* Public routes */}
