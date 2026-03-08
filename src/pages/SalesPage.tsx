@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Euro, ShoppingBag, TrendingUp, Lock, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/common/EmptyState";
 import { useSales, useCreateSale, useDeleteSale, Sale, SaleInsert } from "@/hooks/useSales";
 import { useDishes } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
