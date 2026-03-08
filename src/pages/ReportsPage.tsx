@@ -1060,6 +1060,7 @@ export default function ReportsPage() {
                         avgHourlyRate={avgHourlyRate}
                         isFocused={focusedDate === day.date}
                         cardRef={(el) => setDayCardRef(day.date, el)}
+                        hasBookings={bookingDaysSet.has(day.date)}
                       />
                     ))}
                   </div>
