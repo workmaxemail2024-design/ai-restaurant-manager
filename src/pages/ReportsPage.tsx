@@ -24,10 +24,17 @@ import {
   XCircle,
   CheckCircle2,
   Clock,
+  Check,
+  X,
+  CalendarDays,
+  Receipt,
 } from "lucide-react";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
-import { useDailyLedger, type LedgerEntry, type MissingField, evaluateMissing } from "@/hooks/useDailyLedger";
+import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
+import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
