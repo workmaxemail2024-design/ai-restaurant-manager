@@ -755,7 +755,7 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
             </div>
           )}
           {capacityWarning && (
-            <div className="p-2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm flex items-center gap-2">
+            <div className="p-2 rounded bg-warning/10 text-warning text-sm flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               Party size ({partySize}) exceeds table capacity ({selectedTableSeats} seats)
             </div>
