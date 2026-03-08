@@ -1034,6 +1034,7 @@ export default function ReportsPage() {
                     dailyData={dailyData || []}
                     ledgerEntries={ledgerEntries}
                     focusedDate={focusedDate}
+                    bookingDays={bookingDaysSet}
                   />
                 </CardContent>
               </Card>
