@@ -309,7 +309,8 @@ function TimelineView({ reservations, tables, startDate, onSelect }: {
     return (
       <Card>
         <CardContent className="p-8 text-center text-muted-foreground">
-          <p>No tables configured. Add tables in the Floor Plan page first.</p>
+          <p className="text-sm font-medium">No tables configured</p>
+          <p className="text-xs mt-1">Add tables in the Floor Plan page to enable the timeline view.</p>
         </CardContent>
       </Card>
     );
