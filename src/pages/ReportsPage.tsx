@@ -321,7 +321,7 @@ function DayCard({
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
 
   // Missing fields evaluation
-  const { missing } = evaluateMissing(day.hasData, ledger);
+  const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings);
   // Re-evaluate with local state for live feedback
   const localLedger: LedgerEntry = {
     entry_date: day.date,
@@ -335,9 +335,9 @@ function DayCard({
     manual_orders: manualOrders,
     covers_unknown: coversUnknown,
   };
-  const liveMissing = evaluateMissing(day.hasData, localLedger);
+  const liveMissing = evaluateMissing(day.hasData, localLedger, hasBookings);
 
-  const statusLabel = getStatusLabel(missing, day, ledger);
+  const statusLabel = getStatusLabel(status, ledger);
   const healthColor = getHealthColor(day, labourPct, ledger);
 
   const handleSave = () => {
