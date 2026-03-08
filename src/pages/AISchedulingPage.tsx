@@ -39,10 +39,9 @@ export default function AISchedulingPage() {
   const weekDays = eachDayOfInterval({ start: nextWeekStart, end: nextWeekEnd });
 
   // Fetch existing planned shifts for next week
-  const { data: plannedShifts = [] } = useShifts(
+  const { data: plannedShifts = [] } = useStaffShifts(
     format(nextWeekStart, "yyyy-MM-dd"),
-    format(nextWeekEnd, "yyyy-MM-dd"),
-    selectedLocationId
+    format(nextWeekEnd, "yyyy-MM-dd")
   );
 
   const [aiSchedule, setAiSchedule] = useState<StaffSuggestion[] | null>(null);

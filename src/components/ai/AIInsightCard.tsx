@@ -167,9 +167,11 @@ export function AIInsightCard({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground italic">
-            Click refresh to generate insights
-          </p>
+          <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+            <p className="text-sm text-muted-foreground">
+              {emptyReason || "No data available yet. Use the refresh button to generate insights when operational data exists."}
+            </p>
+          </div>
         )}
         
         {lastUpdated && (
