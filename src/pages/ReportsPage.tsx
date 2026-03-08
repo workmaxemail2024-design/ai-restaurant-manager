@@ -24,10 +24,17 @@ import {
   XCircle,
   CheckCircle2,
   Clock,
+  Check,
+  X,
+  CalendarDays,
+  Receipt,
 } from "lucide-react";
 import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
-import { useDailyLedger, type LedgerEntry, type MissingField, evaluateMissing } from "@/hooks/useDailyLedger";
+import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
+import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
@@ -54,13 +61,9 @@ const MISSING_LABELS: Record<MissingField, string> = {
   SALES: "Sales",
   LABOUR_HOURS: "Labour",
   COVERS: "Covers",
+  EXPENSES: "Expenses",
+  BOOKINGS: "Bookings",
 };
-
-// ─── Determine if a day is "accounted for" (green) ───
-function isDayComplete(day: DailyMetrics, ledger?: LedgerEntry): boolean {
-  const { isComplete } = evaluateMissing(day.hasData, ledger);
-  return isComplete || (ledger?.is_closed ?? false);
-}
 
 // ─── Health helpers ───
 function getHealthColor(day: DailyMetrics, labourPct: number, ledger?: LedgerEntry): string {
@@ -72,29 +75,75 @@ function getHealthColor(day: DailyMetrics, labourPct: number, ledger?: LedgerEnt
   return "bg-warning";
 }
 
-function getStatusLabel(missing: MissingField[], day: DailyMetrics, ledger?: LedgerEntry): string {
+function getStatusLabel(status: DayStatus, ledger?: LedgerEntry): string {
   if (ledger?.is_closed) return "Closed";
-  if (!day.hasData && !ledger && ledger?.manual_revenue == null) return "No Data";
-  if (missing.length > 0) return "Missing Data";
-  return "Complete";
+  switch (status) {
+    case "accounted": return "Accounted";
+    case "partial": return "Partial";
+    case "needs_attention": return "Needs Attention";
+    case "no_data": return "No Data";
+  }
 }
 
-function getStatusVariant(label: string): "default" | "secondary" | "outline" | "destructive" {
-  if (label === "Complete") return "default";
-  if (label === "Closed") return "outline";
-  if (label === "Missing Data") return "destructive";
-  return "outline";
+function getStatusVariant(status: DayStatus): "default" | "secondary" | "outline" | "destructive" {
+  switch (status) {
+    case "accounted": return "default";
+    case "partial": return "secondary";
+    case "needs_attention": return "destructive";
+    case "no_data": return "outline";
+  }
+}
+
+function getDotClass(status: DayStatus): string {
+  switch (status) {
+    case "accounted": return "bg-success";
+    case "partial": return "bg-warning";
+    case "needs_attention": return "bg-destructive";
+    case "no_data": return "bg-muted-foreground/40";
+  }
+}
+
+// ─── Data Completeness Checklist ───
+function DataChecklist({ checklist }: { checklist: Record<MissingField, boolean> }) {
+  const items: { field: MissingField; label: string }[] = [
+    { field: "SALES", label: "Sales" },
+    { field: "LABOUR_HOURS", label: "Labour" },
+    { field: "COVERS", label: "Covers" },
+    { field: "EXPENSES", label: "Expenses" },
+    { field: "BOOKINGS", label: "Bookings" },
+  ];
+  return (
+    <div className="rounded-md border border-border bg-secondary/20 p-2.5 space-y-1">
+      <h4 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+        Data Completeness
+      </h4>
+      {items.map(({ field, label }) => (
+        <div key={field} className="flex items-center gap-2 text-xs">
+          {checklist[field] ? (
+            <Check className="h-3 w-3 text-success shrink-0" />
+          ) : (
+            <X className="h-3 w-3 text-destructive shrink-0" />
+          )}
+          <span className={checklist[field] ? "text-foreground" : "text-muted-foreground"}>
+            {label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ─── Missing badge (compact) ───
 function MissingBadge({ missing }: { missing: MissingField[] }) {
   if (missing.length === 0) return null;
-  const shown = missing.slice(0, 2).map((f) => MISSING_LABELS[f]);
-  const extra = missing.length > 2 ? ` +${missing.length - 2}` : "";
+  // Only show critical missing in badge
+  const critical = missing.filter(f => f === "SALES" || f === "LABOUR_HOURS");
+  if (critical.length === 0) return null;
+  const shown = critical.map((f) => MISSING_LABELS[f]);
   return (
     <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
       <AlertTriangle className="h-2.5 w-2.5" />
-      {shown.join(", ")}{extra}
+      {shown.join(", ")}
     </Badge>
   );
 }
@@ -107,6 +156,7 @@ function CalendarStrip({
   dailyData,
   ledgerEntries,
   focusedDate,
+  bookingDays,
 }: {
   selectedStart: string;
   selectedEnd: string;
@@ -114,6 +164,7 @@ function CalendarStrip({
   dailyData: DailyMetrics[];
   ledgerEntries: Map<string, LedgerEntry>;
   focusedDate?: string;
+  bookingDays: Set<string>;
 }) {
   const rangeStart = parseISO(selectedStart);
   const rangeEnd = parseISO(selectedEnd);
@@ -164,20 +215,8 @@ function CalendarStrip({
           const isSelected = isSameDay(day, rangeStart) || isSameDay(day, rangeEnd);
           const isFocused = focusedDate === dateStr;
 
-          // Determine status: green/red/grey
-          const isClosed = ledger?.is_closed ?? false;
-          const hasAnyData = (coverage?.hasData || false) || (ledger?.manual_revenue != null && (ledger.manual_revenue ?? 0) > 0);
-          const { missing } = evaluateMissing(coverage?.hasData || false, ledger);
-          const isComplete = missing.length === 0 || isClosed;
-
-          let dotClass = "bg-muted-foreground/40"; // grey default
-          if (hasAnyData || isClosed || ledger) {
-            if (isComplete) {
-              dotClass = "bg-success"; // green
-            } else {
-              dotClass = "bg-destructive"; // red
-            }
-          }
+          const { status } = evaluateMissing(coverage?.hasData || false, ledger, bookingDays.has(dateStr));
+          const dotClass = getDotClass(status);
 
           return (
             <button
@@ -206,6 +245,9 @@ function CalendarStrip({
           <span className="w-1.5 h-1.5 rounded-full bg-success" /> Accounted
         </span>
         <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-warning" /> Partial
+        </span>
+        <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-destructive" /> Needs attention
         </span>
         <span className="flex items-center gap-1">
@@ -225,6 +267,7 @@ function DayCard({
   avgHourlyRate,
   isFocused,
   cardRef,
+  hasBookings,
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
@@ -233,6 +276,7 @@ function DayCard({
   avgHourlyRate: number;
   isFocused: boolean;
   cardRef?: React.Ref<HTMLDivElement>;
+  hasBookings: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const dateObj = parseISO(day.date);
@@ -277,7 +321,7 @@ function DayCard({
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
 
   // Missing fields evaluation
-  const { missing } = evaluateMissing(day.hasData, ledger);
+  const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings);
   // Re-evaluate with local state for live feedback
   const localLedger: LedgerEntry = {
     entry_date: day.date,
@@ -291,9 +335,9 @@ function DayCard({
     manual_orders: manualOrders,
     covers_unknown: coversUnknown,
   };
-  const liveMissing = evaluateMissing(day.hasData, localLedger);
+  const liveMissing = evaluateMissing(day.hasData, localLedger, hasBookings);
 
-  const statusLabel = getStatusLabel(missing, day, ledger);
+  const statusLabel = getStatusLabel(status, ledger);
   const healthColor = getHealthColor(day, labourPct, ledger);
 
   const handleSave = () => {
@@ -359,7 +403,7 @@ function DayCard({
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
                       )}
                       <span className="font-medium text-sm">{label}</span>
-                      <Badge variant={getStatusVariant(statusLabel)} className="text-[10px] px-1.5 py-0">
+                      <Badge variant={getStatusVariant(status)} className="text-[10px] px-1.5 py-0">
                         {statusLabel}
                       </Badge>
                       <MissingBadge missing={missing} />
@@ -503,8 +547,11 @@ function DayCard({
                     </div>
                   )}
 
+                  {/* Data Completeness Checklist */}
+                  <DataChecklist checklist={liveMissing.checklist} />
+
                   {/* Completed indicator */}
-                  {liveMissing.missing.length === 0 && (
+                  {liveMissing.status === "accounted" && (
                     <div className="flex items-center gap-1.5 text-xs text-success">
                       <CheckCircle2 className="h-3.5 w-3.5" /> All required data present
                     </div>
@@ -742,6 +789,7 @@ function DayCard({
 // ─── Main Page ───
 export default function ReportsPage() {
   const { selectedLocationId } = useLocation();
+  const { currentRestaurant } = useRestaurant();
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
   const { data: metrics, isLoading } = useDashboardMetrics(startDate, endDate, selectedLocationId);
   const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(
@@ -754,6 +802,31 @@ export default function ReportsPage() {
     endDate,
     selectedLocationId
   );
+
+  // Fetch reservation dates in range for bookings checklist
+  const restaurantId = currentRestaurant?.id;
+  const { data: bookingDays } = useQuery({
+    queryKey: ["report-booking-days", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryFn: async () => {
+      if (!restaurantId) return new Set<string>();
+      let q = supabase
+        .from("reservations")
+        .select("start_at")
+        .eq("restaurant_id", restaurantId)
+        .gte("start_at", `${startDate}T00:00:00`)
+        .lte("start_at", `${endDate}T23:59:59`);
+      if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
+      const { data } = await q;
+      const days = new Set<string>();
+      for (const row of data || []) {
+        if (row.start_at) days.add(row.start_at.split("T")[0]);
+      }
+      return days;
+    },
+    enabled: !!restaurantId,
+  });
+
+  const bookingDaysSet = bookingDays ?? new Set<string>();
 
   const avgHourlyRate = 12.5;
   const [focusedDate, setFocusedDate] = useState<string | undefined>();
@@ -807,15 +880,15 @@ export default function ReportsPage() {
     };
   }, [metrics, dailyData, ledgerEntries, avgHourlyRate]);
 
-  // Count missing days for summary
+  // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {
     if (!dailyData) return 0;
     return dailyData.filter((day) => {
       const ledger = ledgerEntries.get(day.date);
-      const { missing } = evaluateMissing(day.hasData, ledger);
-      return missing.length > 0 && !ledger?.is_closed;
+      const { status } = evaluateMissing(day.hasData, ledger, bookingDaysSet.has(day.date));
+      return status === "needs_attention";
     }).length;
-  }, [dailyData, ledgerEntries]);
+  }, [dailyData, ledgerEntries, bookingDaysSet]);
 
   const handleDayClick = useCallback(
     (dateStr: string) => {
@@ -961,6 +1034,7 @@ export default function ReportsPage() {
                     dailyData={dailyData || []}
                     ledgerEntries={ledgerEntries}
                     focusedDate={focusedDate}
+                    bookingDays={bookingDaysSet}
                   />
                 </CardContent>
               </Card>
@@ -986,6 +1060,7 @@ export default function ReportsPage() {
                         avgHourlyRate={avgHourlyRate}
                         isFocused={focusedDate === day.date}
                         cardRef={(el) => setDayCardRef(day.date, el)}
+                        hasBookings={bookingDaysSet.has(day.date)}
                       />
                     ))}
                   </div>
