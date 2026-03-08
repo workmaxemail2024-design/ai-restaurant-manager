@@ -789,6 +789,7 @@ function DayCard({
 // ─── Main Page ───
 export default function ReportsPage() {
   const { selectedLocationId } = useLocation();
+  const { currentRestaurant } = useRestaurant();
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
   const { data: metrics, isLoading } = useDashboardMetrics(startDate, endDate, selectedLocationId);
   const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(
@@ -801,6 +802,31 @@ export default function ReportsPage() {
     endDate,
     selectedLocationId
   );
+
+  // Fetch reservation dates in range for bookings checklist
+  const restaurantId = currentRestaurant?.id;
+  const { data: bookingDays } = useQuery({
+    queryKey: ["report-booking-days", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryFn: async () => {
+      if (!restaurantId) return new Set<string>();
+      let q = supabase
+        .from("reservations")
+        .select("start_at")
+        .eq("restaurant_id", restaurantId)
+        .gte("start_at", `${startDate}T00:00:00`)
+        .lte("start_at", `${endDate}T23:59:59`);
+      if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
+      const { data } = await q;
+      const days = new Set<string>();
+      for (const row of data || []) {
+        if (row.start_at) days.add(row.start_at.split("T")[0]);
+      }
+      return days;
+    },
+    enabled: !!restaurantId,
+  });
+
+  const bookingDaysSet = bookingDays ?? new Set<string>();
 
   const avgHourlyRate = 12.5;
   const [focusedDate, setFocusedDate] = useState<string | undefined>();
