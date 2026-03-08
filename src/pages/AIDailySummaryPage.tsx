@@ -417,9 +417,9 @@ function SummaryCard({
                 {dataChecks.map((check) => (
                   <div key={check.label} className="flex items-center gap-1 text-xs">
                     {check.present ? (
-                      <CheckCircle className="h-3 w-3 text-green-500" />
+                      <CheckCircle className="h-3 w-3 text-success" />
                     ) : (
-                      <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                      <AlertTriangle className="h-3 w-3 text-warning" />
                     )}
                     <span className={check.present ? "text-foreground" : "text-muted-foreground"}>{check.label}</span>
                   </div>
