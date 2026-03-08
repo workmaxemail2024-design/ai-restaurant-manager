@@ -210,6 +210,9 @@ const Index = () => {
 
           {/* Sidebar Content - 1 column */}
           <div className="space-y-6">
+            {/* Data Health */}
+            <DataHealthPanel locationId={selectedLocationId} />
+
             {/* Yesterday's AI Summary - single small insight card */}
             <YesterdaySummaryWidget />
 
