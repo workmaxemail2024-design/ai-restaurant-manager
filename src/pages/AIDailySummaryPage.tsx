@@ -161,6 +161,53 @@ export default function AIDailySummaryPage() {
           </Button>
         </div>
 
+        {/* Weekly Performance Summary */}
+        {intelligence?.weeklySummary && (
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm">Weekly Performance</h3>
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 ml-auto">
+                  {intelligence.weeklySummary.confidence} confidence
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">{intelligence.weeklySummary.narrative}</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                  <p className={cn("text-lg font-bold", intelligence.weeklySummary.revenueChange >= 0 ? "text-success" : "text-destructive")}>
+                    {intelligence.weeklySummary.revenueChange >= 0 ? "+" : ""}{intelligence.weeklySummary.revenueChange.toFixed(0)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Revenue</p>
+                </div>
+                <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                  <p className={cn("text-lg font-bold", intelligence.weeklySummary.ordersChange >= 0 ? "text-success" : "text-destructive")}>
+                    {intelligence.weeklySummary.ordersChange >= 0 ? "+" : ""}{intelligence.weeklySummary.ordersChange.toFixed(0)}%
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Orders</p>
+                </div>
+                {intelligence.weeklySummary.labourPctThis !== null && (
+                  <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                    <p className="text-lg font-bold">{intelligence.weeklySummary.labourPctThis.toFixed(1)}%</p>
+                    <p className="text-[10px] text-muted-foreground">Labour %</p>
+                  </div>
+                )}
+                {intelligence.weeklySummary.foodCostPctThis !== null && (
+                  <div className="rounded-md border border-border p-2 text-center bg-background/60">
+                    <p className="text-lg font-bold">{intelligence.weeklySummary.foodCostPctThis.toFixed(1)}%</p>
+                    <p className="text-[10px] text-muted-foreground">Food Cost %</p>
+                  </div>
+                )}
+              </div>
+              {intelligence.weeklySummary.missingData.length > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
+                  <Shield className="h-2.5 w-2.5" /> Missing: {intelligence.weeklySummary.missingData.join(", ")}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Summaries List */}
         {isLoading ? (
           <div className="text-muted-foreground text-sm">Loading summaries…</div>
