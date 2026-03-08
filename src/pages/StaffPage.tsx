@@ -159,7 +159,7 @@ export default function StaffPage() {
       key: "pos_mapping", header: "POS",
       render: (item: Staff) => (
         item.captiva_operator_code ? (
-          <Badge variant="default" className="bg-green-500/20 text-green-700 text-[10px]">
+          <Badge variant="default" className="bg-success/20 text-success text-[10px]">
             <Link2 className="h-3 w-3 mr-1" />{item.captiva_operator_code}
           </Badge>
         ) : (
@@ -333,9 +333,9 @@ export default function StaffPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         {mapping.is_verified ? (
-                          <Badge variant="default" className="bg-green-500">Mapped</Badge>
+                          <Badge variant="default" className="bg-success">Mapped</Badge>
                         ) : (
-                          <Badge variant="secondary" className="text-amber-600">
+                          <Badge variant="secondary" className="text-warning">
                             <AlertCircle className="h-3 w-3 mr-1" />Unmapped
                           </Badge>
                         )}

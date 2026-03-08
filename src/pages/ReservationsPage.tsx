@@ -35,8 +35,6 @@ import {
 } from "@/hooks/useReservations";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { LocationSelector } from "@/components/LocationSelector";
-import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { useNavigate } from "react-router-dom";
 
 export default function ReservationsPage() {
@@ -99,20 +97,16 @@ export default function ReservationsPage() {
       title="Reservations"
       subtitle="Manage bookings, covers, and table assignments"
       action={
-        <div className="flex items-center gap-2">
-          <LocationSelector />
-          <DateRangeSelector />
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus className="h-4 w-4 mr-1" /> New Booking
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Add Booking
+        </Button>
       }
     >
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
         <KPICard label="Total Covers" value={kpis.totalCovers} icon={Users} />
-        <KPICard label="Confirmed" value={kpis.confirmedCovers} icon={CheckCircle2} className="text-green-600" />
-        <KPICard label="Pending" value={kpis.pendingCovers} icon={Clock} className="text-amber-600" />
+        <KPICard label="Confirmed" value={kpis.confirmedCovers} icon={CheckCircle2} className="text-success" />
+        <KPICard label="Pending" value={kpis.pendingCovers} icon={Clock} className="text-warning" />
         <KPICard label="Utilisation" value={`${kpis.utilisation}%`} icon={TrendingUp} />
         <KPICard label="Avg Party" value={kpis.avgParty} icon={Users} />
         <KPICard label="Avg Spend" value={kpis.avgSpend === '—' ? '—' : `€${kpis.avgSpend}`} icon={TrendingUp} />
@@ -169,7 +163,7 @@ export default function ReservationsPage() {
                   </thead>
                   <tbody>
                     {filteredReservations.length === 0 && (
-                      <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No reservations found</td></tr>
+                      <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No bookings found for this period. Create a reservation or adjust the date range.</td></tr>
                     )}
                     {filteredReservations.map(r => {
                       const durationMin = differenceInMinutes(parseISO(r.end_at), parseISO(r.start_at));
@@ -315,7 +309,8 @@ function TimelineView({ reservations, tables, startDate, onSelect }: {
     return (
       <Card>
         <CardContent className="p-8 text-center text-muted-foreground">
-          <p>No tables configured. Add tables in the Floor Plan page first.</p>
+          <p className="text-sm font-medium">No tables configured</p>
+          <p className="text-xs mt-1">Add tables in the Floor Plan page to enable the timeline view.</p>
         </CardContent>
       </Card>
     );
@@ -761,7 +756,7 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
             </div>
           )}
           {capacityWarning && (
-            <div className="p-2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm flex items-center gap-2">
+            <div className="p-2 rounded bg-warning/10 text-warning text-sm flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               Party size ({partySize}) exceeds table capacity ({selectedTableSeats} seats)
             </div>

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Euro, ShoppingBag, TrendingUp, Lock, Trash2 } from "lucide-react";
+import { EmptyState } from "@/components/common/EmptyState";
 import { useSales, useCreateSale, useDeleteSale, Sale, SaleInsert } from "@/hooks/useSales";
 import { useDishes } from "@/hooks/useDishes";
 import { useLocations } from "@/hooks/useLocations";
@@ -215,9 +216,12 @@ export default function SalesPage() {
       {isLoading ? (
         <div className="text-muted-foreground text-sm">Loading sales data…</div>
       ) : groupedSales.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="text-sm">No sales data for this period.</p>
-        </div>
+        <EmptyState
+          icon={ShoppingBag}
+          title="No sales found for this period"
+          description="There are no recorded sales in the selected date range."
+          suggestion="Try importing POS data, recording a manual sale, or expanding the date range."
+        />
       ) : (
         <div className="space-y-4">
           {groupedSales.map(([day, group]) => (
