@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Users, Plus, Search, TrendingUp, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
-import { format, parseISO, addMinutes, eachHourOfInterval } from "date-fns";
+import { Clock, Users, Plus, Search, TrendingUp, AlertTriangle, CheckCircle2, XCircle, MapPin } from "lucide-react";
+import { format, parseISO, addMinutes, eachHourOfInterval, differenceInMinutes } from "date-fns";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
@@ -24,6 +24,10 @@ import {
   useCreateCustomer,
   checkTableConflicts,
   checkCoverConflicts,
+  getNextActions,
+  getTimestampPayload,
+  STATUS_LABELS,
+  STATUS_COLORS,
   type Reservation,
   type ReservationStatus,
   type ReservationSource,
@@ -33,28 +37,14 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { LocationSelector } from "@/components/LocationSelector";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
-
-const STATUS_COLORS: Record<ReservationStatus, string> = {
-  inquiry: 'bg-muted text-muted-foreground',
-  pending: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30',
-  confirmed: 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30',
-  declined: 'bg-destructive/15 text-destructive border-destructive/30',
-  cancelled: 'bg-muted text-muted-foreground',
-  seated: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30',
-  completed: 'bg-green-500/10 text-green-600 dark:text-green-500',
-  no_show: 'bg-destructive/10 text-destructive',
-};
-
-const STATUS_LABELS: Record<ReservationStatus, string> = {
-  inquiry: 'Inquiry', pending: 'Pending', confirmed: 'Confirmed', declined: 'Declined',
-  cancelled: 'Cancelled', seated: 'Seated', completed: 'Completed', no_show: 'No-show',
-};
+import { useNavigate } from "react-router-dom";
 
 export default function ReservationsPage() {
   const { startDate, endDate } = useDateRange();
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const rid = currentRestaurant?.id;
+  const navigate = useNavigate();
 
   const from = `${startDate}T00:00:00`;
   const to = `${endDate}T23:59:59.999`;
@@ -74,7 +64,7 @@ export default function ReservationsPage() {
   // ── KPIs ──
   const kpis = useMemo(() => {
     const active = reservations.filter(r => !['cancelled', 'declined'].includes(r.status));
-    const confirmed = reservations.filter(r => r.status === 'confirmed' || r.status === 'seated' || r.status === 'completed');
+    const confirmed = reservations.filter(r => ['confirmed', 'arrived', 'seated', 'completed'].includes(r.status));
     const pending = reservations.filter(r => r.status === 'pending');
     const completed = reservations.filter(r => r.status === 'completed');
     const noShows = reservations.filter(r => r.status === 'no_show');
@@ -169,29 +159,50 @@ export default function ReservationsPage() {
                   <thead>
                     <tr className="border-b text-muted-foreground">
                       <th className="text-left p-3 font-medium">Time</th>
+                      <th className="text-left p-3 font-medium">Duration</th>
                       <th className="text-left p-3 font-medium">Customer</th>
                       <th className="text-left p-3 font-medium">Party</th>
                       <th className="text-left p-3 font-medium">Status</th>
-                      <th className="text-left p-3 font-medium">Sitting</th>
                       <th className="text-left p-3 font-medium">Tables</th>
-                      <th className="text-left p-3 font-medium">Notes</th>
+                      <th className="text-left p-3 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredReservations.length === 0 && (
                       <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No reservations found</td></tr>
                     )}
-                    {filteredReservations.map(r => (
-                      <tr key={r.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => setSelectedRes(r)}>
-                        <td className="p-3 whitespace-nowrap">{format(parseISO(r.start_at), 'HH:mm')} – {format(parseISO(r.end_at), 'HH:mm')}</td>
-                        <td className="p-3">{r.customer ? `${r.customer.first_name} ${r.customer.last_name}` : <span className="text-muted-foreground italic">Walk-in</span>}</td>
-                        <td className="p-3">{r.party_size}</td>
-                        <td className="p-3"><Badge variant="outline" className={cn('text-xs', STATUS_COLORS[r.status])}>{STATUS_LABELS[r.status]}</Badge></td>
-                        <td className="p-3 text-muted-foreground">{r.sitting?.name || '—'}</td>
-                        <td className="p-3 text-muted-foreground">{(r.table_ids || []).map(tid => tables.find(t => t.id === tid)?.name).filter(Boolean).join(', ') || '—'}</td>
-                        <td className="p-3">{r.special_requests ? <span className="text-xs text-muted-foreground truncate max-w-[120px] block">{r.special_requests}</span> : ''}</td>
-                      </tr>
-                    ))}
+                    {filteredReservations.map(r => {
+                      const durationMin = differenceInMinutes(parseISO(r.end_at), parseISO(r.start_at));
+                      const actions = getNextActions(r.status);
+                      return (
+                        <tr key={r.id} className="border-b hover:bg-muted/50">
+                          <td className="p-3 whitespace-nowrap cursor-pointer" onClick={() => setSelectedRes(r)}>
+                            {format(parseISO(r.start_at), 'HH:mm')} – {format(parseISO(r.end_at), 'HH:mm')}
+                          </td>
+                          <td className="p-3 text-muted-foreground text-xs">{durationMin}min</td>
+                          <td className="p-3 cursor-pointer" onClick={() => setSelectedRes(r)}>
+                            {r.customer ? `${r.customer.first_name} ${r.customer.last_name}` : <span className="text-muted-foreground italic">Walk-in</span>}
+                          </td>
+                          <td className="p-3">{r.party_size}</td>
+                          <td className="p-3"><Badge variant="outline" className={cn('text-xs', STATUS_COLORS[r.status])}>{STATUS_LABELS[r.status]}</Badge></td>
+                          <td className="p-3 text-muted-foreground text-xs">
+                            {(r.table_ids || []).map(tid => tables.find(t => t.id === tid)?.name).filter(Boolean).join(', ') || '—'}
+                            {r.table_ids.length > 0 && (
+                              <button
+                                className="ml-1 text-primary hover:underline"
+                                onClick={(e) => { e.stopPropagation(); navigate(`/reservations/floor?highlight=${r.table_ids[0]}`); }}
+                                title="View on floor plan"
+                              >
+                                <MapPin className="h-3 w-3 inline" />
+                              </button>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <QuickActions reservation={r} reservations={reservations} tables={tables} />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -220,6 +231,56 @@ export default function ReservationsPage() {
         locations={locations}
       />
     </PageLayout>
+  );
+}
+
+// ── Quick Actions (inline in list) ──
+
+function QuickActions({ reservation, reservations, tables }: { reservation: Reservation; reservations: Reservation[]; tables: any[] }) {
+  const updateRes = useUpdateReservation();
+  const actions = getNextActions(reservation.status);
+
+  const handleAction = (newStatus: ReservationStatus) => {
+    // Table conflict check for confirm/arrived
+    if (['confirmed', 'arrived'].includes(newStatus) && reservation.table_ids.length > 0) {
+      const conflicts = checkTableConflicts(reservations, reservation.table_ids, reservation.start_at, reservation.end_at, reservation.id);
+      if (conflicts.length > 0) {
+        toast({ title: "Table conflict", description: `Table(s) already booked at this time.`, variant: "destructive" });
+        return;
+      }
+    }
+
+    if (newStatus === 'cancelled') {
+      const reason = prompt("Cancellation reason (optional):");
+      updateRes.mutate({ id: reservation.id, status: newStatus, cancellation_reason: reason || null, ...getTimestampPayload(newStatus) } as any);
+      return;
+    }
+
+    if (newStatus === 'no_show') {
+      updateRes.mutate({ id: reservation.id, status: newStatus, ...getTimestampPayload(newStatus) } as any);
+      return;
+    }
+
+    updateRes.mutate({ id: reservation.id, status: newStatus, ...getTimestampPayload(newStatus) } as any);
+  };
+
+  if (actions.length === 0) return null;
+
+  return (
+    <div className="flex gap-1">
+      {actions.slice(0, 2).map(a => (
+        <Button
+          key={a.status}
+          size="sm"
+          variant={(a.variant as any) || 'default'}
+          className="h-7 text-xs px-2"
+          onClick={() => handleAction(a.status)}
+          disabled={updateRes.isPending}
+        >
+          {a.label}
+        </Button>
+      ))}
+    </div>
   );
 }
 
@@ -264,7 +325,6 @@ function TimelineView({ reservations, tables, startDate, onSelect }: {
     <Card>
       <CardContent className="p-0 overflow-x-auto">
         <div className="min-w-[800px]">
-          {/* Header row */}
           <div className="flex border-b sticky top-0 bg-card z-10">
             <div className="w-24 shrink-0 p-2 text-xs font-medium text-muted-foreground border-r">Table</div>
             {hours.map(h => (
@@ -273,7 +333,6 @@ function TimelineView({ reservations, tables, startDate, onSelect }: {
               </div>
             ))}
           </div>
-          {/* Table rows */}
           {activeTables.map(table => {
             const tableRes = reservations.filter(r =>
               Array.isArray(r.table_ids) && r.table_ids.includes(table.id) &&
@@ -295,17 +354,14 @@ function TimelineView({ reservations, tables, startDate, onSelect }: {
                     const endH = rEnd.getHours() + rEnd.getMinutes() / 60;
                     const left = Math.max(0, ((startH - 9) / 14) * 100);
                     const width = Math.min(100 - left, ((endH - startH) / 14) * 100);
-                    const bgColor = r.status === 'pending' ? 'bg-amber-500/20 border-amber-500/40' :
-                      r.status === 'confirmed' ? 'bg-green-500/20 border-green-500/40' :
-                      r.status === 'seated' ? 'bg-blue-500/20 border-blue-500/40' :
-                      'bg-muted border-muted-foreground/20';
+                    const bgColor = STATUS_COLORS[r.status] || 'bg-muted border-muted-foreground/20';
                     return (
                       <button
                         key={r.id}
                         className={cn("absolute top-1 bottom-1 rounded border text-xs px-1 truncate cursor-pointer hover:opacity-80 transition-opacity", bgColor)}
                         style={{ left: `${left}%`, width: `${width}%` }}
                         onClick={() => onSelect(r)}
-                        title={r.customer ? `${r.customer.first_name} ${r.customer.last_name} (${r.party_size})` : `Party of ${r.party_size}`}
+                        title={`${r.customer ? `${r.customer.first_name} ${r.customer.last_name}` : `Party of ${r.party_size}`} · ${STATUS_LABELS[r.status]}`}
                       >
                         {r.customer ? `${r.customer.first_name} ${r.customer.last_name.charAt(0)}.` : `P${r.party_size}`}
                       </button>
@@ -331,18 +387,29 @@ function ReservationDrawer({ reservation, onClose, reservations, tables, sitting
   sittings: any[];
 }) {
   const updateRes = useUpdateReservation();
+  const navigate = useNavigate();
   if (!reservation) return null;
 
   const r = reservation;
-  const handleStatus = (status: ReservationStatus, decline_reason?: string) => {
-    if (status === 'confirmed' && r.table_ids.length > 0) {
+  const durationMin = differenceInMinutes(parseISO(r.end_at), parseISO(r.start_at));
+  const actions = getNextActions(r.status);
+
+  const handleStatus = (newStatus: ReservationStatus) => {
+    if (['confirmed', 'arrived'].includes(newStatus) && r.table_ids.length > 0) {
       const conflicts = checkTableConflicts(reservations, r.table_ids, r.start_at, r.end_at, r.id);
       if (conflicts.length > 0) {
         toast({ title: "Conflict detected", description: `Table(s) already booked at this time by ${conflicts.length} reservation(s).`, variant: "destructive" });
         return;
       }
     }
-    updateRes.mutate({ id: r.id, status, ...(decline_reason ? { decline_reason } : {}) });
+
+    if (newStatus === 'cancelled') {
+      const reason = prompt("Cancellation reason (optional):");
+      updateRes.mutate({ id: r.id, status: newStatus, cancellation_reason: reason || null, ...getTimestampPayload(newStatus) } as any);
+      return;
+    }
+
+    updateRes.mutate({ id: r.id, status: newStatus, ...getTimestampPayload(newStatus) } as any);
   };
 
   return (
@@ -374,8 +441,9 @@ function ReservationDrawer({ reservation, onClose, reservations, tables, sitting
               <p className="font-medium">{format(parseISO(r.start_at), 'EEE, d MMM yyyy')}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Time</p>
+              <p className="text-xs text-muted-foreground">Time & Duration</p>
               <p className="font-medium">{format(parseISO(r.start_at), 'HH:mm')} – {format(parseISO(r.end_at), 'HH:mm')}</p>
+              <p className="text-xs text-muted-foreground">{durationMin} minutes</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Party Size</p>
@@ -391,9 +459,50 @@ function ReservationDrawer({ reservation, onClose, reservations, tables, sitting
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Tables</p>
-              <p className="font-medium">{r.table_ids.map(tid => tables.find(t => t.id === tid)?.name).filter(Boolean).join(', ') || '—'}</p>
+              <div className="flex items-center gap-1">
+                <p className="font-medium">{r.table_ids.map(tid => tables.find(t => t.id === tid)?.name).filter(Boolean).join(', ') || '—'}</p>
+                {r.table_ids.length > 0 && (
+                  <button
+                    className="text-primary hover:underline text-xs"
+                    onClick={() => navigate(`/reservations/floor?highlight=${r.table_ids[0]}`)}
+                  >
+                    <MapPin className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Service timestamps */}
+          {(r.arrived_at || r.seated_at || r.completed_at) && (
+            <>
+              <Separator />
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground font-medium uppercase">Service Tracking</p>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  {r.arrived_at && (
+                    <div>
+                      <p className="text-muted-foreground">Arrived</p>
+                      <p className="font-medium">{format(parseISO(r.arrived_at), 'HH:mm')}</p>
+                    </div>
+                  )}
+                  {r.seated_at && (
+                    <div>
+                      <p className="text-muted-foreground">Seated</p>
+                      <p className="font-medium">{format(parseISO(r.seated_at), 'HH:mm')}</p>
+                    </div>
+                  )}
+                  {r.completed_at && (
+                    <div>
+                      <p className="text-muted-foreground">Completed</p>
+                      <p className="font-medium">{format(parseISO(r.completed_at), 'HH:mm')}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
           {r.special_requests && (
             <>
               <Separator />
@@ -408,31 +517,28 @@ function ReservationDrawer({ reservation, onClose, reservations, tables, sitting
               <strong>Decline reason:</strong> {r.decline_reason}
             </div>
           )}
+          {r.cancellation_reason && (
+            <div className="p-2 rounded bg-muted text-muted-foreground text-sm">
+              <strong>Cancellation reason:</strong> {r.cancellation_reason}
+            </div>
+          )}
           <Separator />
-          {/* Actions */}
-          <div className="flex flex-wrap gap-2">
-            {r.status === 'pending' && (
-              <>
-                <Button size="sm" onClick={() => handleStatus('confirmed')}>Confirm</Button>
-                <Button size="sm" variant="outline" onClick={() => {
-                  const reason = prompt("Reason for declining:");
-                  if (reason) handleStatus('declined', reason);
-                }}>Decline</Button>
-              </>
-            )}
-            {r.status === 'confirmed' && (
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => handleStatus('seated')}>Mark Seated</Button>
-            )}
-            {r.status === 'seated' && (
-              <Button size="sm" onClick={() => handleStatus('completed')}>Complete</Button>
-            )}
-            {['pending', 'confirmed'].includes(r.status) && (
-              <Button size="sm" variant="outline" onClick={() => handleStatus('cancelled')}>Cancel</Button>
-            )}
-            {['confirmed', 'pending'].includes(r.status) && (
-              <Button size="sm" variant="destructive" onClick={() => handleStatus('no_show')}>No-show</Button>
-            )}
-          </div>
+          {/* Status Actions */}
+          {actions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {actions.map(a => (
+                <Button
+                  key={a.status}
+                  size="sm"
+                  variant={(a.variant as any) || 'default'}
+                  onClick={() => handleStatus(a.status)}
+                  disabled={updateRes.isPending}
+                >
+                  {a.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -487,11 +593,18 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
 
   const coverCheck = checkCoverConflicts(reservations, sittingId, startAt.toISOString(), endAt.toISOString(), partySize, selectedSitting?.max_covers ?? null);
 
+  // Check if selected tables have enough seats
+  const selectedTableSeats = selectedTableIds.reduce((sum, tid) => {
+    const t = tables.find(t => t.id === tid);
+    return sum + (t?.seats || 0);
+  }, 0);
+  const capacityWarning = selectedTableIds.length > 0 && partySize > selectedTableSeats;
+
   const handleSubmit = async () => {
     if (!rid || !locationId) return;
     if (tableConflicts.length > 0) {
-      toast({ title: "Table conflict", description: "Selected table(s) are already booked at this time.", variant: "destructive" });
-      return;
+      const proceed = confirm(`Table(s) already booked at this time (${tableConflicts.length} conflict). Override?`);
+      if (!proceed) return;
     }
     if (coverCheck.exceeds) {
       toast({ title: "Capacity exceeded", description: `Max covers (${selectedSitting?.max_covers}) would be exceeded.`, variant: "destructive" });
@@ -522,10 +635,13 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
       special_requests: specialRequests || null,
       actual_spend: null,
       decline_reason: null,
+      cancellation_reason: null,
+      arrived_at: null,
+      seated_at: null,
+      completed_at: null,
       created_by: null,
     });
     onClose();
-    // reset
     setSelectedCustomerId(null); setNewCustomer(false); setFirstName(''); setLastName(''); setPhone(''); setEmail('');
     setSpecialRequests(''); setSelectedTableIds([]); setSittingId(null);
   };
@@ -577,6 +693,10 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
               <Input type="time" value={time} onChange={e => setTime(e.target.value)} />
             </div>
           </div>
+          {/* Duration preview */}
+          <div className="text-xs text-muted-foreground">
+            Duration: {duration}min{selectedSitting ? ` + ${selectedSitting.buffer_minutes}min buffer` : ''} → ends {format(endAt, 'HH:mm')}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-medium text-muted-foreground">Party Size</label>
@@ -607,7 +727,7 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
               </SelectContent>
             </Select>
           </div>
-          {/* Location (if no global filter) */}
+          {/* Location */}
           {!selectedLocationId && locations.length > 1 && (
             <div>
               <label className="text-xs font-medium text-muted-foreground">Location</label>
@@ -637,7 +757,13 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
           {tableConflicts.length > 0 && (
             <div className="p-2 rounded bg-destructive/10 text-destructive text-sm flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              Table(s) already booked at this time ({tableConflicts.length} conflict{tableConflicts.length > 1 ? 's' : ''})
+              Table(s) already booked at this time ({tableConflicts.length} conflict{tableConflicts.length > 1 ? 's' : ''}) — you can override
+            </div>
+          )}
+          {capacityWarning && (
+            <div className="p-2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Party size ({partySize}) exceeds table capacity ({selectedTableSeats} seats)
             </div>
           )}
           {coverCheck.exceeds && (

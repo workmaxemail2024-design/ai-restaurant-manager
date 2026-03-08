@@ -6,9 +6,28 @@ import { useLocation } from "@/contexts/LocationContext";
 
 // ── Types ──────────────────────────────────────────────
 
-export type ReservationStatus = 'inquiry' | 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'seated' | 'completed' | 'no_show';
+export type ReservationStatus = 'inquiry' | 'pending' | 'confirmed' | 'arrived' | 'declined' | 'cancelled' | 'seated' | 'completed' | 'no_show';
 export type ReservationSource = 'phone' | 'walk_in' | 'online' | 'staff';
 export type TableShape = 'square' | 'circle' | 'rect';
+
+export const STATUS_LIFECYCLE: ReservationStatus[] = ['pending', 'confirmed', 'arrived', 'seated', 'completed'];
+
+export const STATUS_LABELS: Record<ReservationStatus, string> = {
+  inquiry: 'Inquiry', pending: 'Pending', confirmed: 'Confirmed', arrived: 'Arrived',
+  declined: 'Declined', cancelled: 'Cancelled', seated: 'Seated', completed: 'Completed', no_show: 'No-show',
+};
+
+export const STATUS_COLORS: Record<ReservationStatus, string> = {
+  inquiry: 'bg-muted text-muted-foreground',
+  pending: 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30',
+  confirmed: 'bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30',
+  arrived: 'bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/30',
+  declined: 'bg-destructive/15 text-destructive border-destructive/30',
+  cancelled: 'bg-muted text-muted-foreground',
+  seated: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30',
+  completed: 'bg-green-500/10 text-green-600 dark:text-green-500',
+  no_show: 'bg-destructive/10 text-destructive',
+};
 
 export interface ReservationCustomer {
   id: string;
@@ -39,6 +58,10 @@ export interface Reservation {
   special_requests: string | null;
   actual_spend: number | null;
   decline_reason: string | null;
+  cancellation_reason: string | null;
+  arrived_at: string | null;
+  seated_at: string | null;
+  completed_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -178,6 +201,7 @@ export function useUpdateReservation() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['reservations'] });
       qc.invalidateQueries({ queryKey: ['reservation-pending-count'] });
+      qc.invalidateQueries({ queryKey: ['reservation-customer-stats'] });
       toast({ title: "Reservation updated" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -237,13 +261,35 @@ export function useUpdateCustomer() {
   });
 }
 
+// ── Customer Reservation History ───────────────────────
+
+export function useCustomerReservations(customerId: string | null | undefined) {
+  const { currentRestaurant } = useRestaurant();
+  const rid = currentRestaurant?.id;
+
+  return useQuery({
+    queryKey: ['customer-reservations', rid, customerId],
+    enabled: !!rid && !!customerId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('id, start_at, party_size, status, actual_spend')
+        .eq('restaurant_id', rid!)
+        .eq('customer_id', customerId!)
+        .order('start_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data as Pick<Reservation, 'id' | 'start_at' | 'party_size' | 'status' | 'actual_spend'>[];
+    },
+  });
+}
+
 // ── Tables ─────────────────────────────────────────────
 
 export function useReservationTables(overrideLocationId?: string | null) {
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const rid = currentRestaurant?.id;
-  // If an override is provided, use it; otherwise fall back to the global context
   const effectiveLocationId = overrideLocationId !== undefined ? overrideLocationId : selectedLocationId;
 
   return useQuery({
@@ -388,7 +434,7 @@ export function checkTableConflicts(
 
   return reservations.filter(r => {
     if (excludeId && r.id === excludeId) return false;
-    if (['cancelled', 'declined', 'no_show'].includes(r.status)) return false;
+    if (['cancelled', 'declined', 'no_show', 'completed'].includes(r.status)) return false;
     const rStart = new Date(r.start_at).getTime();
     const rEnd = new Date(r.end_at).getTime();
     const overlaps = start < rEnd && end > rStart;
@@ -414,7 +460,7 @@ export function checkCoverConflicts(
   const existingCovers = reservations
     .filter(r => {
       if (excludeId && r.id === excludeId) return false;
-      if (['cancelled', 'declined', 'no_show'].includes(r.status)) return false;
+      if (['cancelled', 'declined', 'no_show', 'completed'].includes(r.status)) return false;
       if (r.sitting_id !== sittingId) return false;
       const rStart = new Date(r.start_at).getTime();
       const rEnd = new Date(r.end_at).getTime();
@@ -424,4 +470,45 @@ export function checkCoverConflicts(
 
   const total = existingCovers + partySize;
   return { total, exceeds: total > maxCovers };
+}
+
+// ── Status transition helpers ──────────────────────────
+
+export function getNextActions(status: ReservationStatus): { label: string; status: ReservationStatus; variant?: string }[] {
+  switch (status) {
+    case 'pending':
+      return [
+        { label: 'Confirm', status: 'confirmed' },
+        { label: 'Cancel', status: 'cancelled', variant: 'outline' },
+        { label: 'No-show', status: 'no_show', variant: 'destructive' },
+      ];
+    case 'confirmed':
+      return [
+        { label: 'Mark Arrived', status: 'arrived' },
+        { label: 'Seat Guests', status: 'seated', variant: 'outline' },
+        { label: 'Cancel', status: 'cancelled', variant: 'outline' },
+        { label: 'No-show', status: 'no_show', variant: 'destructive' },
+      ];
+    case 'arrived':
+      return [
+        { label: 'Seat Guests', status: 'seated' },
+        { label: 'No-show', status: 'no_show', variant: 'destructive' },
+      ];
+    case 'seated':
+      return [
+        { label: 'Complete', status: 'completed' },
+      ];
+    default:
+      return [];
+  }
+}
+
+export function getTimestampPayload(newStatus: ReservationStatus): Record<string, string> {
+  const now = new Date().toISOString();
+  switch (newStatus) {
+    case 'arrived': return { arrived_at: now };
+    case 'seated': return { seated_at: now };
+    case 'completed': return { completed_at: now };
+    default: return {};
+  }
 }
