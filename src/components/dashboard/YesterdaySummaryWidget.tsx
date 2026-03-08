@@ -38,7 +38,7 @@ export function YesterdaySummaryWidget() {
 
   if (!summary) return null;
 
-  const m = summary.metrics_json || {};
+  const m = (summary.metrics_json as any) || {};
   const isNoData = summary.summary_text === "No operational data available.";
   if (isNoData) return null;
 
