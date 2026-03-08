@@ -122,6 +122,8 @@ function AutoInsightCard({ insight }: { insight: OwnerInsight }) {
 }
 
 export default function AIInsightsPage() {
+  const { selectedLocationId } = useLocation();
+  const { data: intelligence, isLoading: intelligenceLoading } = useOwnerIntelligence(selectedLocationId);
   const {
     stockForecast,
     stockForecastLoading,
@@ -156,6 +158,15 @@ export default function AIInsightsPage() {
     generateStaffForecast();
     generatePurchaseSuggestions();
   };
+
+  const autoInsights = intelligence?.insights || [];
+  const weeklySummary = intelligence?.weeklySummary;
+
+  // Group auto insights by category
+  const alertInsights = autoInsights.filter(i => i.type === "alert" || i.severity === "critical" || i.severity === "warning");
+  const trendInsights = autoInsights.filter(i => i.type === "trend");
+  const opportunityInsights = autoInsights.filter(i => i.type === "opportunity" || i.severity === "positive");
+  const comparisonInsights = autoInsights.filter(i => i.type === "comparison");
 
   return (
     <RequirePermission resource="ai_features" action="view">
