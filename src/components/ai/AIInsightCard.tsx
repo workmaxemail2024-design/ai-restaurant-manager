@@ -70,6 +70,7 @@ export function AIInsightCard({
   className,
   confidence,
   whyItMatters,
+  emptyReason,
 }: AIInsightCardProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const style = typeStyles[type];
