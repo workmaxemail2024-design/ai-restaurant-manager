@@ -71,7 +71,7 @@ export default function AIInsightsPage() {
         action={
           <Button onClick={handleRefreshAll} className="gap-2">
             <Zap className="h-4 w-4" />
-            Refresh All
+            Generate All Insights
           </Button>
         }
       >

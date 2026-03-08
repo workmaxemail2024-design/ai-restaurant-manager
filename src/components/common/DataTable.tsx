@@ -82,8 +82,9 @@ export function DataTable<T extends { id?: string }>({
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length + (onEdit || onDelete ? 1 : 0)} className="text-center text-muted-foreground py-6 text-sm">
-                No data available
+              <TableCell colSpan={columns.length + (onEdit || onDelete ? 1 : 0)} className="text-center text-muted-foreground py-10 text-sm">
+                <p className="font-medium text-foreground">No data available</p>
+                <p className="text-xs mt-1">Records will appear here once data is added.</p>
               </TableCell>
             </TableRow>
           ) : (
