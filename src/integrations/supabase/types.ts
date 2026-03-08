@@ -733,6 +733,8 @@ export type Database = {
       }
       overheads: {
         Row: {
+          allocation_details: Json
+          allocation_mode: string
           amount: number
           category: string
           created_at: string
@@ -747,6 +749,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allocation_details?: Json
+          allocation_mode?: string
           amount?: number
           category?: string
           created_at?: string
@@ -761,6 +765,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allocation_details?: Json
+          allocation_mode?: string
           amount?: number
           category?: string
           created_at?: string
