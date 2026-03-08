@@ -181,6 +181,113 @@ export default function AIInsightsPage() {
         }
       >
         <div className="space-y-8">
+          {/* Auto-Generated Intelligence */}
+          {(autoInsights.length > 0 || weeklySummary) && (
+            <>
+              {/* Weekly Summary */}
+              {weeklySummary && (
+                <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                      <h2 className="text-lg font-semibold">Weekly Performance Summary</h2>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-auto">
+                        {weeklySummary.confidence} confidence
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">{weeklySummary.narrative}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="rounded-md border border-border p-3 text-center bg-background/60">
+                        <p className={cn("text-xl font-bold", weeklySummary.revenueChange >= 0 ? "text-success" : "text-destructive")}>
+                          {weeklySummary.revenueChange >= 0 ? "+" : ""}{weeklySummary.revenueChange.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Revenue Change</p>
+                        <p className="text-[10px] text-muted-foreground">{formatCurrency(weeklySummary.thisWeek.revenue)} this week</p>
+                      </div>
+                      <div className="rounded-md border border-border p-3 text-center bg-background/60">
+                        <p className={cn("text-xl font-bold", weeklySummary.ordersChange >= 0 ? "text-success" : "text-destructive")}>
+                          {weeklySummary.ordersChange >= 0 ? "+" : ""}{weeklySummary.ordersChange.toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Order Volume</p>
+                        <p className="text-[10px] text-muted-foreground">{weeklySummary.thisWeek.orders} this week</p>
+                      </div>
+                      {weeklySummary.labourPctThis !== null && (
+                        <div className="rounded-md border border-border p-3 text-center bg-background/60">
+                          <p className={cn("text-xl font-bold", weeklySummary.labourPctThis > 35 ? "text-warning" : "text-foreground")}>
+                            {weeklySummary.labourPctThis.toFixed(1)}%
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Labour %</p>
+                          {weeklySummary.labourPctLast !== null && (
+                            <p className="text-[10px] text-muted-foreground">
+                              {(weeklySummary.labourPctThis - weeklySummary.labourPctLast) >= 0 ? "+" : ""}
+                              {(weeklySummary.labourPctThis - weeklySummary.labourPctLast).toFixed(1)}pp vs last week
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {weeklySummary.foodCostPctThis !== null && (
+                        <div className="rounded-md border border-border p-3 text-center bg-background/60">
+                          <p className={cn("text-xl font-bold", weeklySummary.foodCostPctThis > 35 ? "text-warning" : "text-foreground")}>
+                            {weeklySummary.foodCostPctThis.toFixed(1)}%
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Food Cost %</p>
+                          {weeklySummary.foodCostPctLast !== null && (
+                            <p className="text-[10px] text-muted-foreground">
+                              {(weeklySummary.foodCostPctThis - weeklySummary.foodCostPctLast) >= 0 ? "+" : ""}
+                              {(weeklySummary.foodCostPctThis - weeklySummary.foodCostPctLast).toFixed(1)}pp vs last week
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {weeklySummary.missingData.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+                        <Shield className="h-3 w-3" />
+                        Missing data: {weeklySummary.missingData.join(", ")} — some metrics may be estimated.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Performance Alerts */}
+              {alertInsights.length > 0 && (
+                <AIInsightSection title="Performance Alerts" description="Issues requiring attention" columns={2}>
+                  {alertInsights.map(insight => (
+                    <AutoInsightCard key={insight.id} insight={insight} />
+                  ))}
+                </AIInsightSection>
+              )}
+
+              {/* Trends & Patterns */}
+              {trendInsights.length > 0 && (
+                <AIInsightSection title="Trends & Patterns" description="Detected from your operational data" columns={2}>
+                  {trendInsights.map(insight => (
+                    <AutoInsightCard key={insight.id} insight={insight} />
+                  ))}
+                </AIInsightSection>
+              )}
+
+              {/* Opportunities */}
+              {opportunityInsights.length > 0 && (
+                <AIInsightSection title="Opportunities" description="Areas to grow or optimise" columns={2}>
+                  {opportunityInsights.map(insight => (
+                    <AutoInsightCard key={insight.id} insight={insight} />
+                  ))}
+                </AIInsightSection>
+              )}
+
+              {/* Location Comparison */}
+              {comparisonInsights.length > 0 && (
+                <AIInsightSection title="Location Comparison" description="Cross-location performance analysis" columns={2}>
+                  {comparisonInsights.map(insight => (
+                    <AutoInsightCard key={insight.id} insight={insight} />
+                  ))}
+                </AIInsightSection>
+              )}
+            </>
+          )}
+
           {/* Inventory Intelligence */}
           <AIInsightSection 
             title="Inventory Intelligence" 
