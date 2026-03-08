@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
+import { useOwnerIntelligence } from "@/hooks/useOwnerIntelligence";
 import { format, subDays, parseISO } from "date-fns";
 import {
   Sparkles,
@@ -26,10 +27,13 @@ import {
   ClipboardCheck,
   AlertTriangle,
   CheckCircle,
+  BarChart3,
+  Shield,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface AISummary {
   id: string;
