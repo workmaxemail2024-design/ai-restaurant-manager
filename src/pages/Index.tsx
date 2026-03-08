@@ -211,6 +211,9 @@ const Index = () => {
 
           {/* Sidebar Content - 1 column */}
           <div className="space-y-6">
+            {/* Owner Intelligence */}
+            <OwnerInsightsPanel />
+
             {/* Data Health */}
             <DataHealthPanel locationId={selectedLocationId} />
 
