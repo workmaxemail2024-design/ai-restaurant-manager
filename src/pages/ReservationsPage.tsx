@@ -35,8 +35,6 @@ import {
 } from "@/hooks/useReservations";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { LocationSelector } from "@/components/LocationSelector";
-import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { useNavigate } from "react-router-dom";
 
 export default function ReservationsPage() {
