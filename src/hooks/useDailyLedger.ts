@@ -16,17 +16,25 @@ export interface LedgerEntry {
   covers_unknown: boolean;
 }
 
-export type MissingField = "SALES" | "LABOUR_HOURS" | "COVERS";
+export type MissingField = "SALES" | "LABOUR_HOURS" | "COVERS" | "EXPENSES" | "BOOKINGS";
+
+export type DayStatus = "accounted" | "partial" | "needs_attention" | "no_data";
 
 export interface DayCompleteness {
   missing: MissingField[];
   isComplete: boolean;
+  status: DayStatus;
+  /** Which checklist items are present */
+  checklist: Record<MissingField, boolean>;
 }
 
-/** Evaluate which required fields are missing for a day */
+/** Evaluate which fields are missing for a day.
+ *  Sales & Labour are critical (red if missing).
+ *  Covers, Expenses, Bookings are optional (yellow if missing). */
 export function evaluateMissing(
   hasSalesData: boolean,
-  ledger?: LedgerEntry
+  ledger?: LedgerEntry,
+  hasBookings?: boolean
 ): DayCompleteness {
   const missing: MissingField[] = [];
 
@@ -46,7 +54,40 @@ export function evaluateMissing(
     (ledger?.covers ?? 0) > 0 || ledger?.covers_unknown === true;
   if (!coversOk) missing.push("COVERS");
 
-  return { missing, isComplete: missing.length === 0 };
+  // Expenses: present if ledger has additional_expenses entered (even 0 counts if ledger exists)
+  const expensesOk = ledger != null;
+  if (!expensesOk) missing.push("EXPENSES");
+
+  // Bookings: present if reservation data exists for the day (or no reservation system = ok)
+  const bookingsOk = hasBookings ?? false;
+  if (!bookingsOk) missing.push("BOOKINGS");
+
+  const checklist: Record<MissingField, boolean> = {
+    SALES: salesOk,
+    LABOUR_HOURS: labourOk,
+    COVERS: coversOk,
+    EXPENSES: expensesOk,
+    BOOKINGS: bookingsOk,
+  };
+
+  // Critical fields: SALES and LABOUR_HOURS
+  const hasCriticalMissing = missing.includes("SALES") || missing.includes("LABOUR_HOURS");
+  const hasAnyData = hasSalesData || ledger != null || hasBookings;
+
+  let status: DayStatus;
+  if (ledger?.is_closed) {
+    status = "accounted";
+  } else if (!hasAnyData) {
+    status = "no_data";
+  } else if (hasCriticalMissing) {
+    status = "needs_attention";
+  } else if (missing.length > 0) {
+    status = "partial";
+  } else {
+    status = "accounted";
+  }
+
+  return { missing, isComplete: missing.length === 0, status, checklist };
 }
 
 export function useDailyLedger(
