@@ -39,6 +39,7 @@ import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 import { ProfitLossReport } from "@/components/reports/ProfitLossReport";
+import { ReportsAccuracyNote } from "@/components/reports/ReportsAccuracyNote";
 import { CashFlowReport } from "@/components/reports/CashFlowReport";
 import { ReconciliationReport } from "@/components/reports/ReconciliationReport";
 import {
