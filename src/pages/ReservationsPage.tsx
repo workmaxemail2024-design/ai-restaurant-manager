@@ -107,8 +107,8 @@ export default function ReservationsPage() {
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
         <KPICard label="Total Covers" value={kpis.totalCovers} icon={Users} />
-        <KPICard label="Confirmed" value={kpis.confirmedCovers} icon={CheckCircle2} className="text-green-600" />
-        <KPICard label="Pending" value={kpis.pendingCovers} icon={Clock} className="text-amber-600" />
+        <KPICard label="Confirmed" value={kpis.confirmedCovers} icon={CheckCircle2} className="text-success" />
+        <KPICard label="Pending" value={kpis.pendingCovers} icon={Clock} className="text-warning" />
         <KPICard label="Utilisation" value={`${kpis.utilisation}%`} icon={TrendingUp} />
         <KPICard label="Avg Party" value={kpis.avgParty} icon={Users} />
         <KPICard label="Avg Spend" value={kpis.avgSpend === '—' ? '—' : `€${kpis.avgSpend}`} icon={TrendingUp} />

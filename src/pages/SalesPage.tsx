@@ -216,9 +216,12 @@ export default function SalesPage() {
       {isLoading ? (
         <div className="text-muted-foreground text-sm">Loading sales data…</div>
       ) : groupedSales.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="text-sm">No sales data for this period.</p>
-        </div>
+        <EmptyState
+          icon={ShoppingBag}
+          title="No sales found for this period"
+          description="There are no recorded sales in the selected date range."
+          suggestion="Try importing POS data, recording a manual sale, or expanding the date range."
+        />
       ) : (
         <div className="space-y-4">
           {groupedSales.map(([day, group]) => (
