@@ -46,6 +46,8 @@ interface CaptivaSettings {
   api_key?: string;
   username?: string;
   password?: string;
+  user_id?: string;
+  journals_service_id?: string;
   auto_sync_daily?: boolean;
 }
 
