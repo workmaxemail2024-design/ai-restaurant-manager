@@ -106,6 +106,8 @@ serve(async (req) => {
       sales_imported: 0,
       line_items_imported: 0,
       skipped_duplicates: 0,
+      failed_rows: 0,
+      errors: [],
     };
 
     // Check if simulation mode
