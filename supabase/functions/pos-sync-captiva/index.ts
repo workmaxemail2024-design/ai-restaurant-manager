@@ -19,6 +19,13 @@ interface SyncResult {
   sales_imported: number;
   line_items_imported: number;
   skipped_duplicates: number;
+  failed_rows: number;
+  errors: string[];
+  applied?: {
+    applied_count: number;
+    total_revenue: number;
+    line_items_unmapped: number;
+  };
   error?: string;
 }
 
