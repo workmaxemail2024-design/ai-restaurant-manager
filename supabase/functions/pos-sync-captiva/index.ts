@@ -19,6 +19,13 @@ interface SyncResult {
   sales_imported: number;
   line_items_imported: number;
   skipped_duplicates: number;
+  failed_rows: number;
+  errors: string[];
+  applied?: {
+    applied_count: number;
+    total_revenue: number;
+    line_items_unmapped: number;
+  };
   error?: string;
 }
 
@@ -28,7 +35,8 @@ serve(async (req) => {
   }
 
   try {
-    // Verify user authentication
+    // Verify auth: accept either a logged-in user JWT OR the service-role key
+    // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -37,23 +45,28 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    const isServiceRole = serviceRoleKey && token === serviceRoleKey;
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claims?.claims) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    if (!isServiceRole) {
+      const supabase = createClient(
+        supabaseUrl,
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } }
       );
+      const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
+      if (claimsError || !claims?.claims) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const body = await req.json();
-    const { integration_id, date_from, date_to, location_id } = body;
+    const { integration_id, date_from, date_to, location_id, auto_apply } = body;
 
     if (!integration_id || !date_from || !date_to || !location_id) {
       return new Response(
@@ -63,10 +76,7 @@ serve(async (req) => {
     }
 
     // Use service role for DB operations
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     // Fetch integration details
     const { data: integration, error: intError } = await adminClient
@@ -96,6 +106,8 @@ serve(async (req) => {
       sales_imported: 0,
       line_items_imported: 0,
       skipped_duplicates: 0,
+      failed_rows: 0,
+      errors: [],
     };
 
     // Check if simulation mode
@@ -259,6 +271,9 @@ serve(async (req) => {
         if (upsertError.code === "23505" || upsertError.message?.includes("duplicate")) {
           result.skipped_duplicates++;
         } else {
+          result.failed_rows++;
+          const msg = `${upsertError.code || "err"}: ${upsertError.message || "unknown"}${upsertError.details ? ` (${upsertError.details})` : ""}${upsertError.hint ? ` hint=${upsertError.hint}` : ""}`;
+          if (result.errors.length < 10) result.errors.push(msg);
           console.error("Failed to upsert sale:", upsertError);
         }
       } else {
@@ -275,26 +290,86 @@ serve(async (req) => {
       .update({ last_sync_time: new Date().toISOString() })
       .eq("id", integration_id);
 
-    // Log the sync result
+    // Determine overall status: fail if every row errored, partial if some, success otherwise
+    const overallStatus =
+      result.failed_rows > 0 && result.sales_imported === 0
+        ? "fail"
+        : result.failed_rows > 0
+        ? "partial"
+        : "success";
+
+    if (overallStatus !== "success") {
+      result.success = result.sales_imported > 0; // partial is still "success-ish" but flagged
+      if (overallStatus === "fail") {
+        result.error = `All ${result.failed_rows} rows failed to import. First error: ${result.errors[0] ?? "unknown"}`;
+      }
+    }
+
+    // Auto-apply staged imports into the sales table (default ON)
+    // Skipped when the caller explicitly opts out (auto_apply === false) or when nothing was staged.
+    const shouldAutoApply = auto_apply !== false && result.sales_imported > 0;
+    if (shouldAutoApply) {
+      try {
+        const applyRes = await fetch(`${supabaseUrl}/functions/v1/pos-apply-import`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify({
+            integration_id,
+            date_from,
+            date_to,
+            preview_only: false,
+          }),
+        });
+        const applyJson = await applyRes.json();
+        if (applyJson?.success) {
+          result.applied = {
+            applied_count: applyJson.applied_count ?? 0,
+            total_revenue: applyJson.total_revenue ?? 0,
+            line_items_unmapped: applyJson.line_items_unmapped ?? applyJson.skipped_unmapped ?? 0,
+          };
+        } else {
+          if (result.errors.length < 10) {
+            result.errors.push(`Auto-apply failed: ${applyJson?.error ?? "unknown"}`);
+          }
+        }
+      } catch (applyErr) {
+        const msg = applyErr instanceof Error ? applyErr.message : "Unknown auto-apply error";
+        if (result.errors.length < 10) result.errors.push(`Auto-apply exception: ${msg}`);
+        console.error("Auto-apply call failed:", applyErr);
+      }
+    }
+
+    // Log the sync result with real visibility
     await adminClient.from("pos_sync_logs").insert({
       location_id,
       restaurant_id: integration.restaurant_id,
       pos_provider: "captiva",
       event_type: "sync_completed",
-      status: "success",
-      message: `Imported ${result.sales_imported} sales, ${result.line_items_imported} items, skipped ${result.skipped_duplicates} duplicates`,
+      status: overallStatus,
+      message:
+        `Fetched ${salesData.length} sales, staged ${result.sales_imported}` +
+        (result.applied ? `, applied ${result.applied.applied_count} to dashboard` : "") +
+        (result.skipped_duplicates ? `, ${result.skipped_duplicates} duplicates` : "") +
+        (result.failed_rows ? `, ${result.failed_rows} failed` : ""),
       details: {
         date_from,
         date_to,
+        fetched: salesData.length,
         sales_imported: result.sales_imported,
         line_items_imported: result.line_items_imported,
         skipped_duplicates: result.skipped_duplicates,
+        failed_rows: result.failed_rows,
+        errors: result.errors,
+        applied: result.applied ?? null,
         simulation_mode: simulateMode,
       },
     });
 
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify({ ...result, fetched: salesData.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
