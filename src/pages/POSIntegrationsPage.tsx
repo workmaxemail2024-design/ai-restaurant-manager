@@ -46,6 +46,8 @@ interface CaptivaSettings {
   api_key?: string;
   username?: string;
   password?: string;
+  user_id?: string;
+  journals_service_id?: string;
   auto_sync_daily?: boolean;
 }
 
@@ -63,6 +65,8 @@ export default function POSIntegrationsPage() {
     captiva_store_id: "",
     captiva_username: "",
     captiva_password: "",
+    captiva_user_id: "",
+    captiva_journals_service_id: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -113,7 +117,8 @@ export default function POSIntegrationsPage() {
   const resetForm = useCallback(() => {
     setFormData({ 
       location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "", 
-      captiva_base_url: "", captiva_store_id: "", captiva_username: "", captiva_password: "" 
+      captiva_base_url: "", captiva_store_id: "", captiva_username: "", captiva_password: "",
+      captiva_user_id: "", captiva_journals_service_id: "",
     });
     setFormErrors({});
     setShowPassword(false);
@@ -135,6 +140,8 @@ export default function POSIntegrationsPage() {
       captiva_store_id: settings?.store_id || "",
       captiva_username: settings?.username || "",
       captiva_password: settings?.password || "",
+      captiva_user_id: settings?.user_id || "",
+      captiva_journals_service_id: settings?.journals_service_id || "",
     });
     setFormErrors({});
     setIsAddOpen(true);
@@ -360,6 +367,8 @@ export default function POSIntegrationsPage() {
       api_key: formData.api_key || (editingIntegration?.settings as CaptivaSettings)?.api_key,
       username: formData.captiva_username,
       password: formData.captiva_password || (editingIntegration?.settings as CaptivaSettings)?.password,
+      user_id: formData.captiva_user_id || (editingIntegration?.settings as CaptivaSettings)?.user_id,
+      journals_service_id: formData.captiva_journals_service_id || (editingIntegration?.settings as CaptivaSettings)?.journals_service_id,
     } : undefined;
 
     if (editingIntegration) {
@@ -511,11 +520,14 @@ export default function POSIntegrationsPage() {
                   <div>
                     <Label>Store / Outlet ID *</Label>
                     <Input 
-                      placeholder="Store ID" 
+                      placeholder="e.g. 02137" 
                       value={formData.captiva_store_id} 
                       onChange={e => { setFormData(p => ({ ...p, captiva_store_id: e.target.value })); setFormErrors(p => ({ ...p, captiva_store_id: "" })); }} 
                       className={formErrors.captiva_store_id ? "border-destructive" : ""}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Numeric Captiva Store Code from the Stores page. Examples: Rudy's Blanchardstown = <code>01584</code>, Maximilians Blanchardstown = <code>02137</code>, Gourmet Pizza Factory = <code>02136</code>. Do NOT paste the Journals/API service UUID here.
+                    </p>
                     {formErrors.captiva_store_id && <p className="text-xs text-destructive mt-1">{formErrors.captiva_store_id}</p>}
                   </div>
                   <div>
@@ -570,6 +582,28 @@ export default function POSIntegrationsPage() {
                       </Button>
                     </div>
                     {formErrors.captiva_password && <p className="text-xs text-destructive mt-1">{formErrors.captiva_password}</p>}
+                  </div>
+                  <div>
+                    <Label>User ID</Label>
+                    <Input
+                      placeholder="e.g. 2"
+                      value={formData.captiva_user_id}
+                      onChange={e => setFormData(p => ({ ...p, captiva_user_id: e.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Numeric Captiva user ID — usually the digit after the username in the portal header (e.g. <code>Max Gerhardt 2</code> → <code>2</code>). Required by most Captiva Cloud RequestTypes.
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Journals / API Service ID (optional)</Label>
+                    <Input
+                      placeholder="UUID from the AP / Journals popup"
+                      value={formData.captiva_journals_service_id}
+                      onChange={e => setFormData(p => ({ ...p, captiva_journals_service_id: e.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      The UUID shown on the AP / Journals popup in Captiva Cloud (e.g. <code>473c687b-b7bd-4de4-a51a-2ba445fe133d</code>). Sent as <code>ServiceID</code>. Leave blank if your tenant does not require it.
+                    </p>
                   </div>
                 </>
               )}
@@ -681,6 +715,16 @@ export default function POSIntegrationsPage() {
                               <span className="text-muted-foreground whitespace-nowrap">Store ID</span>
                               <span className="font-mono text-[11px] truncate text-right" title={settings?.store_id || "Not set"}>
                                 {settings?.store_id || <span className="text-muted-foreground/60">Not set</span>}
+                              </span>
+
+                              <span className="text-muted-foreground whitespace-nowrap">User ID</span>
+                              <span className="font-mono text-[11px] truncate text-right" title={settings?.user_id || "Not set"}>
+                                {settings?.user_id || <span className="text-muted-foreground/60">Not set</span>}
+                              </span>
+
+                              <span className="text-muted-foreground whitespace-nowrap">Service ID</span>
+                              <span className="font-mono text-[11px] truncate text-right" title={settings?.journals_service_id || "Not set"}>
+                                {settings?.journals_service_id ? `${settings.journals_service_id.substring(0, 8)}…` : <span className="text-muted-foreground/60">Not set</span>}
                               </span>
                               
                               <span className="text-muted-foreground whitespace-nowrap">API Key</span>
