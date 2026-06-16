@@ -28,7 +28,8 @@ serve(async (req) => {
   }
 
   try {
-    // Verify user authentication
+    // Verify auth: accept either a logged-in user JWT OR the service-role key
+    // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -37,23 +38,28 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    const isServiceRole = serviceRoleKey && token === serviceRoleKey;
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claims?.claims) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    if (!isServiceRole) {
+      const supabase = createClient(
+        supabaseUrl,
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } }
       );
+      const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
+      if (claimsError || !claims?.claims) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const body = await req.json();
-    const { integration_id, date_from, date_to, location_id } = body;
+    const { integration_id, date_from, date_to, location_id, auto_apply } = body;
 
     if (!integration_id || !date_from || !date_to || !location_id) {
       return new Response(
@@ -63,10 +69,7 @@ serve(async (req) => {
     }
 
     // Use service role for DB operations
-    const adminClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     // Fetch integration details
     const { data: integration, error: intError } = await adminClient
