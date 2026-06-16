@@ -8,10 +8,12 @@ const corsHeaders = {
 
 interface CaptivaSettings {
   base_url?: string;
-  store_id?: string;
+  store_id?: string; // numeric outlet/store code, e.g. "02137"
   api_key?: string;
   username?: string;
   password?: string;
+  user_id?: string; // numeric Captiva User ID (e.g. "2" for "Max Gerhardt 2")
+  journals_service_id?: string; // UUID shown on AP/Journals popup (optional)
 }
 
 interface SyncResult {
