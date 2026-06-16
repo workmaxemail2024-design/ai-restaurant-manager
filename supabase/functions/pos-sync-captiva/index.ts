@@ -364,9 +364,8 @@ serve(async (req) => {
         }
       } else {
         result.sales_imported++;
-        // Count line items if present
-        const items = saleRecord.items as unknown[] || [];
-        result.line_items_imported += Array.isArray(items) ? items.length : 0;
+        // Count normalized line items
+        result.line_items_imported += enrichedRecord._normalized_items.length;
       }
     }
 
