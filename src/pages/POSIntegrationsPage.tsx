@@ -140,6 +140,8 @@ export default function POSIntegrationsPage() {
       captiva_store_id: settings?.store_id || "",
       captiva_username: settings?.username || "",
       captiva_password: settings?.password || "",
+      captiva_user_id: settings?.user_id || "",
+      captiva_journals_service_id: settings?.journals_service_id || "",
     });
     setFormErrors({});
     setIsAddOpen(true);
