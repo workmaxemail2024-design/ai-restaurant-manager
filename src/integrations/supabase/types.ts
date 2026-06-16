@@ -930,7 +930,7 @@ export type Database = {
         Row: {
           created_at: string
           data: Json
-          external_sale_id: string | null
+          external_sale_id: string
           id: string
           location_id: string
           mapped_dish_id: string | null
@@ -944,7 +944,7 @@ export type Database = {
         Insert: {
           created_at?: string
           data: Json
-          external_sale_id?: string | null
+          external_sale_id: string
           id?: string
           location_id: string
           mapped_dish_id?: string | null
@@ -958,7 +958,7 @@ export type Database = {
         Update: {
           created_at?: string
           data?: Json
-          external_sale_id?: string | null
+          external_sale_id?: string
           id?: string
           location_id?: string
           mapped_dish_id?: string | null
