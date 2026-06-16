@@ -259,7 +259,7 @@ serve(async (req) => {
             sync_status: "pending",
           },
           {
-            onConflict: "location_id,pos_provider,external_sale_id",
+            onConflict: "restaurant_id,location_id,pos_provider,external_sale_id",
             ignoreDuplicates: false,
           }
         )
