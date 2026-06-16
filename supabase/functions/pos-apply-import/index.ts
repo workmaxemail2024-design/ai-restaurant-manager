@@ -39,7 +39,7 @@ serve(async (req) => {
   }
 
   try {
-    // Verify user authentication
+    // Accept either a logged-in user JWT or the service-role key (used by cron and by pos-sync-captiva auto-apply)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -48,19 +48,23 @@ serve(async (req) => {
       );
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
+    const token = authHeader.replace("Bearer ", "").trim();
+    const isServiceRole = serviceRoleKey && token === serviceRoleKey;
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claims?.claims) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    if (!isServiceRole) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { global: { headers: { Authorization: authHeader } } }
       );
+      const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
+      if (claimsError || !claims?.claims) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const body = await req.json();
