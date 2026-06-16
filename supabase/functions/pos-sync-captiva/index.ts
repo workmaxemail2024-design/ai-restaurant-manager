@@ -339,7 +339,7 @@ serve(async (req) => {
             restaurant_id: integration.restaurant_id,
             pos_provider: "captiva",
             external_sale_id: externalSaleId,
-            data: saleRecord,
+            data: enrichedRecord,
             mapped_sale_date: mappedSaleDate,
             mapped_total_price: mappedTotalPrice,
             sync_status: "pending",
