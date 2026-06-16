@@ -393,6 +393,7 @@ serve(async (req) => {
         (result.skipped_duplicates ? `, ${result.skipped_duplicates} duplicates` : "") +
         (result.failed_rows ? `, ${result.failed_rows} failed` : ""),
       details: {
+        integration_id,
         date_from,
         date_to,
         fetched: salesData.length,
