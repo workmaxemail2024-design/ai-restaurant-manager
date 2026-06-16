@@ -199,7 +199,10 @@ export default function POSIntegrationsPage() {
     let dateTo: string;
     const today = new Date();
     
-    if (syncDatePreset === "yesterday") {
+    if (syncDatePreset === "today") {
+      dateFrom = format(today, "yyyy-MM-dd");
+      dateTo = format(today, "yyyy-MM-dd");
+    } else if (syncDatePreset === "yesterday") {
       const yesterday = subDays(today, 1);
       dateFrom = format(startOfDay(yesterday), "yyyy-MM-dd");
       dateTo = format(endOfDay(yesterday), "yyyy-MM-dd");
