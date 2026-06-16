@@ -65,6 +65,8 @@ export default function POSIntegrationsPage() {
     captiva_store_id: "",
     captiva_username: "",
     captiva_password: "",
+    captiva_user_id: "",
+    captiva_journals_service_id: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
