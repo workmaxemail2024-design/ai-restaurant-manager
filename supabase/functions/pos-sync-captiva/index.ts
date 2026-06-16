@@ -271,6 +271,9 @@ serve(async (req) => {
         if (upsertError.code === "23505" || upsertError.message?.includes("duplicate")) {
           result.skipped_duplicates++;
         } else {
+          result.failed_rows++;
+          const msg = `${upsertError.code || "err"}: ${upsertError.message || "unknown"}${upsertError.details ? ` (${upsertError.details})` : ""}${upsertError.hint ? ` hint=${upsertError.hint}` : ""}`;
+          if (result.errors.length < 10) result.errors.push(msg);
           console.error("Failed to upsert sale:", upsertError);
         }
       } else {
@@ -287,26 +290,86 @@ serve(async (req) => {
       .update({ last_sync_time: new Date().toISOString() })
       .eq("id", integration_id);
 
-    // Log the sync result
+    // Determine overall status: fail if every row errored, partial if some, success otherwise
+    const overallStatus =
+      result.failed_rows > 0 && result.sales_imported === 0
+        ? "fail"
+        : result.failed_rows > 0
+        ? "partial"
+        : "success";
+
+    if (overallStatus !== "success") {
+      result.success = result.sales_imported > 0; // partial is still "success-ish" but flagged
+      if (overallStatus === "fail") {
+        result.error = `All ${result.failed_rows} rows failed to import. First error: ${result.errors[0] ?? "unknown"}`;
+      }
+    }
+
+    // Auto-apply staged imports into the sales table (default ON)
+    // Skipped when the caller explicitly opts out (auto_apply === false) or when nothing was staged.
+    const shouldAutoApply = auto_apply !== false && result.sales_imported > 0;
+    if (shouldAutoApply) {
+      try {
+        const applyRes = await fetch(`${supabaseUrl}/functions/v1/pos-apply-import`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceRoleKey}`,
+          },
+          body: JSON.stringify({
+            integration_id,
+            date_from,
+            date_to,
+            preview_only: false,
+          }),
+        });
+        const applyJson = await applyRes.json();
+        if (applyJson?.success) {
+          result.applied = {
+            applied_count: applyJson.applied_count ?? 0,
+            total_revenue: applyJson.total_revenue ?? 0,
+            line_items_unmapped: applyJson.line_items_unmapped ?? applyJson.skipped_unmapped ?? 0,
+          };
+        } else {
+          if (result.errors.length < 10) {
+            result.errors.push(`Auto-apply failed: ${applyJson?.error ?? "unknown"}`);
+          }
+        }
+      } catch (applyErr) {
+        const msg = applyErr instanceof Error ? applyErr.message : "Unknown auto-apply error";
+        if (result.errors.length < 10) result.errors.push(`Auto-apply exception: ${msg}`);
+        console.error("Auto-apply call failed:", applyErr);
+      }
+    }
+
+    // Log the sync result with real visibility
     await adminClient.from("pos_sync_logs").insert({
       location_id,
       restaurant_id: integration.restaurant_id,
       pos_provider: "captiva",
       event_type: "sync_completed",
-      status: "success",
-      message: `Imported ${result.sales_imported} sales, ${result.line_items_imported} items, skipped ${result.skipped_duplicates} duplicates`,
+      status: overallStatus,
+      message:
+        `Fetched ${salesData.length} sales, staged ${result.sales_imported}` +
+        (result.applied ? `, applied ${result.applied.applied_count} to dashboard` : "") +
+        (result.skipped_duplicates ? `, ${result.skipped_duplicates} duplicates` : "") +
+        (result.failed_rows ? `, ${result.failed_rows} failed` : ""),
       details: {
         date_from,
         date_to,
+        fetched: salesData.length,
         sales_imported: result.sales_imported,
         line_items_imported: result.line_items_imported,
         skipped_duplicates: result.skipped_duplicates,
+        failed_rows: result.failed_rows,
+        errors: result.errors,
+        applied: result.applied ?? null,
         simulation_mode: simulateMode,
       },
     });
 
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify({ ...result, fetched: salesData.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
