@@ -263,32 +263,6 @@ serve(async (req) => {
           },
         });
       }
-      } catch (err) {
-        console.error("Captiva API fetch error:", err);
-
-        await adminClient
-          .from("pos_integrations")
-          .update({
-            last_sync_status: "failed",
-            last_sync_error: `Network: ${err instanceof Error ? err.message : "Unknown"}`,
-          })
-          .eq("id", integration_id);
-
-        await adminClient.from("pos_sync_logs").insert({
-          location_id,
-          restaurant_id: integration.restaurant_id,
-          pos_provider: "captiva",
-          event_type: "sync_failed",
-          status: "error",
-          message: err instanceof Error ? err.message : "Network error",
-          details: { date_from, date_to, integration_id },
-        });
-
-        return new Response(
-          JSON.stringify({ success: false, error: `Failed to reach Captiva: ${err instanceof Error ? err.message : "Network error"}` }),
-          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
     }
 
     console.log(`Processing ${salesData.length} sales records`);
