@@ -117,7 +117,8 @@ export default function POSIntegrationsPage() {
   const resetForm = useCallback(() => {
     setFormData({ 
       location_id: "", pos_provider: "", api_key: "", api_secret: "", webhook_url: "", 
-      captiva_base_url: "", captiva_store_id: "", captiva_username: "", captiva_password: "" 
+      captiva_base_url: "", captiva_store_id: "", captiva_username: "", captiva_password: "",
+      captiva_user_id: "", captiva_journals_service_id: "",
     });
     setFormErrors({});
     setShowPassword(false);
