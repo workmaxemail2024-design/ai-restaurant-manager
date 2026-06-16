@@ -308,13 +308,8 @@ serve(async (req) => {
       }
     }
 
-    // Update integration last_sync_time
-    await adminClient
-      .from("pos_integrations")
-      .update({ last_sync_time: new Date().toISOString() })
-      .eq("id", integration_id);
-
     // Determine overall status: fail if every row errored, partial if some, success otherwise
+    // Special case: zero fetched + zero failed = success (nothing to import for that range)
     const overallStatus =
       result.failed_rows > 0 && result.sales_imported === 0
         ? "fail"
@@ -328,6 +323,25 @@ serve(async (req) => {
         result.error = `All ${result.failed_rows} rows failed to import. First error: ${result.errors[0] ?? "unknown"}`;
       }
     }
+
+    // Status-aware checkpoint update:
+    //  - Always record the attempt status + error text.
+    //  - Only advance last_successful_sync_at (and legacy last_sync_time) on a fully successful sync.
+    //    Partial/failed syncs intentionally leave the "good" checkpoint untouched so a retry can
+    //    cover the same range again.
+    const integrationUpdate: Record<string, unknown> = {
+      last_sync_status: overallStatus,
+      last_sync_error: overallStatus === "success" ? null : (result.errors[0] ?? result.error ?? null),
+    };
+    if (overallStatus === "success") {
+      const nowIso = new Date().toISOString();
+      integrationUpdate.last_successful_sync_at = nowIso;
+      integrationUpdate.last_sync_time = nowIso;
+    }
+    await adminClient
+      .from("pos_integrations")
+      .update(integrationUpdate)
+      .eq("id", integration_id);
 
     // Auto-apply staged imports into the sales table (default ON)
     // Skipped when the caller explicitly opts out (auto_apply === false) or when nothing was staged.
