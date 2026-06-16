@@ -110,6 +110,13 @@ serve(async (req) => {
       errors: [],
     };
 
+    // Mark the attempt timestamp immediately so we can tell when the integration was last touched
+    // (this is intentionally separate from last_successful_sync_at, which only advances on full success)
+    await adminClient
+      .from("pos_integrations")
+      .update({ last_sync_attempt_at: new Date().toISOString() })
+      .eq("id", integration_id);
+
     // Check if simulation mode
     const simulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
 
@@ -162,6 +169,15 @@ serve(async (req) => {
           const errorText = await response.text();
           console.error("Captiva API error:", response.status, errorText);
           
+          // Mark integration as failed (do NOT touch last_successful_sync_at)
+          await adminClient
+            .from("pos_integrations")
+            .update({
+              last_sync_status: "failed",
+              last_sync_error: `Captiva API ${response.status}: ${errorText.substring(0, 300)}`,
+            })
+            .eq("id", integration_id);
+
           // Log the failed sync attempt
           await adminClient.from("pos_sync_logs").insert({
             location_id,
@@ -170,7 +186,7 @@ serve(async (req) => {
             event_type: "sync_failed",
             status: "error",
             message: `API returned ${response.status}`,
-            details: { error: errorText.substring(0, 500), date_from, date_to },
+            details: { error: errorText.substring(0, 500), date_from, date_to, integration_id },
           });
 
           return new Response(
@@ -216,7 +232,15 @@ serve(async (req) => {
         }
       } catch (err) {
         console.error("Captiva API fetch error:", err);
-        
+
+        await adminClient
+          .from("pos_integrations")
+          .update({
+            last_sync_status: "failed",
+            last_sync_error: `Network: ${err instanceof Error ? err.message : "Unknown"}`,
+          })
+          .eq("id", integration_id);
+
         await adminClient.from("pos_sync_logs").insert({
           location_id,
           restaurant_id: integration.restaurant_id,
@@ -224,7 +248,7 @@ serve(async (req) => {
           event_type: "sync_failed",
           status: "error",
           message: err instanceof Error ? err.message : "Network error",
-          details: { date_from, date_to },
+          details: { date_from, date_to, integration_id },
         });
 
         return new Response(
@@ -284,13 +308,8 @@ serve(async (req) => {
       }
     }
 
-    // Update integration last_sync_time
-    await adminClient
-      .from("pos_integrations")
-      .update({ last_sync_time: new Date().toISOString() })
-      .eq("id", integration_id);
-
     // Determine overall status: fail if every row errored, partial if some, success otherwise
+    // Special case: zero fetched + zero failed = success (nothing to import for that range)
     const overallStatus =
       result.failed_rows > 0 && result.sales_imported === 0
         ? "fail"
@@ -304,6 +323,25 @@ serve(async (req) => {
         result.error = `All ${result.failed_rows} rows failed to import. First error: ${result.errors[0] ?? "unknown"}`;
       }
     }
+
+    // Status-aware checkpoint update:
+    //  - Always record the attempt status + error text.
+    //  - Only advance last_successful_sync_at (and legacy last_sync_time) on a fully successful sync.
+    //    Partial/failed syncs intentionally leave the "good" checkpoint untouched so a retry can
+    //    cover the same range again.
+    const integrationUpdate: Record<string, unknown> = {
+      last_sync_status: overallStatus,
+      last_sync_error: overallStatus === "success" ? null : (result.errors[0] ?? result.error ?? null),
+    };
+    if (overallStatus === "success") {
+      const nowIso = new Date().toISOString();
+      integrationUpdate.last_successful_sync_at = nowIso;
+      integrationUpdate.last_sync_time = nowIso;
+    }
+    await adminClient
+      .from("pos_integrations")
+      .update(integrationUpdate)
+      .eq("id", integration_id);
 
     // Auto-apply staged imports into the sales table (default ON)
     // Skipped when the caller explicitly opts out (auto_apply === false) or when nothing was staged.
@@ -355,6 +393,7 @@ serve(async (req) => {
         (result.skipped_duplicates ? `, ${result.skipped_duplicates} duplicates` : "") +
         (result.failed_rows ? `, ${result.failed_rows} failed` : ""),
       details: {
+        integration_id,
         date_from,
         date_to,
         fetched: salesData.length,

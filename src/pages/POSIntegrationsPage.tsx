@@ -90,7 +90,7 @@ export default function POSIntegrationsPage() {
   // Sync Now modal state
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncModalIntegration, setSyncModalIntegration] = useState<POSIntegration | null>(null);
-  const [syncDatePreset, setSyncDatePreset] = useState<"yesterday" | "last7" | "custom">("yesterday");
+  const [syncDatePreset, setSyncDatePreset] = useState<"today" | "yesterday" | "last7" | "custom">("yesterday");
   const [syncCustomStart, setSyncCustomStart] = useState<Date | undefined>(subDays(new Date(), 7));
   const [syncCustomEnd, setSyncCustomEnd] = useState<Date | undefined>(new Date());
   
@@ -199,7 +199,10 @@ export default function POSIntegrationsPage() {
     let dateTo: string;
     const today = new Date();
     
-    if (syncDatePreset === "yesterday") {
+    if (syncDatePreset === "today") {
+      dateFrom = format(today, "yyyy-MM-dd");
+      dateTo = format(today, "yyyy-MM-dd");
+    } else if (syncDatePreset === "yesterday") {
       const yesterday = subDays(today, 1);
       dateFrom = format(startOfDay(yesterday), "yyyy-MM-dd");
       dateTo = format(endOfDay(yesterday), "yyyy-MM-dd");
@@ -233,7 +236,12 @@ export default function POSIntegrationsPage() {
   // Calculate sync date range for coverage check
   const getSyncDateRange = useMemo(() => {
     const today = new Date();
-    if (syncDatePreset === "yesterday") {
+    if (syncDatePreset === "today") {
+      return {
+        dateFrom: format(today, "yyyy-MM-dd"),
+        dateTo: format(today, "yyyy-MM-dd"),
+      };
+    } else if (syncDatePreset === "yesterday") {
       const yesterday = subDays(today, 1);
       return {
         dateFrom: format(startOfDay(yesterday), "yyyy-MM-dd"),
@@ -950,6 +958,10 @@ export default function POSIntegrationsPage() {
             <div className="space-y-4">
               <RadioGroup value={syncDatePreset} onValueChange={(v) => setSyncDatePreset(v as typeof syncDatePreset)}>
                 <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="today" id="today" />
+                  <Label htmlFor="today">Today</Label>
+                </div>
+                <div className="flex items-center space-x-2">
                   <RadioGroupItem value="yesterday" id="yesterday" />
                   <Label htmlFor="yesterday">Yesterday</Label>
                 </div>
@@ -959,7 +971,7 @@ export default function POSIntegrationsPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="custom" id="custom" />
-                  <Label htmlFor="custom">Custom range</Label>
+                  <Label htmlFor="custom">Custom range (resync any date range — idempotent)</Label>
                 </div>
               </RadioGroup>
 

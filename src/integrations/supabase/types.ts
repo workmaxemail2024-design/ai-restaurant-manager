@@ -803,6 +803,10 @@ export type Database = {
           api_secret: string | null
           created_at: string
           id: string
+          last_successful_sync_at: string | null
+          last_sync_attempt_at: string | null
+          last_sync_error: string | null
+          last_sync_status: string | null
           last_sync_time: string | null
           last_test_error: string | null
           last_test_status: string | null
@@ -820,6 +824,10 @@ export type Database = {
           api_secret?: string | null
           created_at?: string
           id?: string
+          last_successful_sync_at?: string | null
+          last_sync_attempt_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
           last_sync_time?: string | null
           last_test_error?: string | null
           last_test_status?: string | null
@@ -837,6 +845,10 @@ export type Database = {
           api_secret?: string | null
           created_at?: string
           id?: string
+          last_successful_sync_at?: string | null
+          last_sync_attempt_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
           last_sync_time?: string | null
           last_test_error?: string | null
           last_test_status?: string | null
