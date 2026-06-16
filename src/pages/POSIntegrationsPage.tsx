@@ -726,7 +726,6 @@ export default function POSIntegrationsPage() {
                               <span className="font-mono text-[11px] truncate text-right" title={settings?.journals_service_id || "Not set"}>
                                 {settings?.journals_service_id ? `${settings.journals_service_id.substring(0, 8)}…` : <span className="text-muted-foreground/60">Not set</span>}
                               </span>
-                              </span>
                               
                               <span className="text-muted-foreground whitespace-nowrap">API Key</span>
                               <span className="font-mono text-[11px] text-right">
