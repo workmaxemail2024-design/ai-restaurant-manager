@@ -236,7 +236,12 @@ export default function POSIntegrationsPage() {
   // Calculate sync date range for coverage check
   const getSyncDateRange = useMemo(() => {
     const today = new Date();
-    if (syncDatePreset === "yesterday") {
+    if (syncDatePreset === "today") {
+      return {
+        dateFrom: format(today, "yyyy-MM-dd"),
+        dateTo: format(today, "yyyy-MM-dd"),
+      };
+    } else if (syncDatePreset === "yesterday") {
       const yesterday = subDays(today, 1);
       return {
         dateFrom: format(startOfDay(yesterday), "yyyy-MM-dd"),
