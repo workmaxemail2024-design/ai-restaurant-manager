@@ -367,6 +367,8 @@ export default function POSIntegrationsPage() {
       api_key: formData.api_key || (editingIntegration?.settings as CaptivaSettings)?.api_key,
       username: formData.captiva_username,
       password: formData.captiva_password || (editingIntegration?.settings as CaptivaSettings)?.password,
+      user_id: formData.captiva_user_id || (editingIntegration?.settings as CaptivaSettings)?.user_id,
+      journals_service_id: formData.captiva_journals_service_id || (editingIntegration?.settings as CaptivaSettings)?.journals_service_id,
     } : undefined;
 
     if (editingIntegration) {
