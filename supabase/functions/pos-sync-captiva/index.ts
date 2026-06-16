@@ -147,91 +147,122 @@ serve(async (req) => {
       }
       salesData = mockSales;
     } else {
-      // Call Captiva API for sales data
-      const salesUrl = `${settings.base_url.replace(/\/$/, "")}/outlet/${settings.store_id}/sales`;
-      console.log("Fetching Captiva sales from:", salesUrl, "date range:", date_from, "to", date_to);
+      // Call Captiva Cloud API dispatcher (.ashx) for sales data.
+      // The correct endpoint is POST {base_url}/CaptivaCloudAPIRequest.ashx with a typed
+      // JSON envelope, NOT /outlet/{id}/sales. The OutletCode must be the numeric
+      // store/outlet code (e.g. "02137"), not the Journals service UUID.
+      const cleanBaseUrl = settings.base_url.replace(/\/$/, "").replace(/\/CaptivaCloudAPIRequest\.ashx$/i, "");
+      const captivaEndpoint = `${cleanBaseUrl}/CaptivaCloudAPIRequest.ashx`;
 
-      try {
-        const response = await fetch(salesUrl, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "X-API-Key": apiKey,
-            "X-Username": settings.username,
-            "X-Password": settings.password,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from_date: date_from,
-            to_date: date_to,
-          }),
-        });
+      // Try multiple RequestType names since Captiva exposes both sales/journal endpoints.
+      // We attempt them in order until one returns rows or a clearly recognized response.
+      const requestTypes = ["GetSales", "GetJournals", "GetProductSales", "GetSalesJournal"];
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Captiva API error:", response.status, errorText);
-          
-          // Mark integration as failed (do NOT touch last_successful_sync_at)
-          await adminClient
-            .from("pos_integrations")
-            .update({
-              last_sync_status: "failed",
-              last_sync_error: `Captiva API ${response.status}: ${errorText.substring(0, 300)}`,
-            })
-            .eq("id", integration_id);
+      let lastRawSample = "";
+      let lastStatus = 0;
+      let lastRequestType = "";
 
-          // Log the failed sync attempt
-          await adminClient.from("pos_sync_logs").insert({
-            location_id,
-            restaurant_id: integration.restaurant_id,
-            pos_provider: "captiva",
-            event_type: "sync_failed",
-            status: "error",
-            message: `API returned ${response.status}`,
-            details: { error: errorText.substring(0, 500), date_from, date_to, integration_id },
-          });
-
-          return new Response(
-            JSON.stringify({ success: false, error: `Captiva API returned ${response.status}: ${errorText.substring(0, 200)}` }),
-            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+      for (const rt of requestTypes) {
+        const requestPayload: Record<string, unknown> = {
+          APIKey: apiKey,
+          UserName: settings.username,
+          Password: settings.password,
+          OutletCode: settings.store_id,
+          UserID: settings.user_id ?? "",
+          RequestType: rt,
+          FromDate: date_from,
+          ToDate: date_to,
+        };
+        if (settings.journals_service_id) {
+          requestPayload.ServiceID = settings.journals_service_id;
         }
 
-        const contentType = response.headers.get("Content-Type") || "";
-        const rawBody = await response.text();
+        console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} UserID=${settings.user_id ?? "(none)"} ${date_from} -> ${date_to}`);
 
-        // Handle XML or JSON response
-        if (contentType.includes("xml")) {
-          // Basic XML to JSON parsing for sales
-          console.log("Parsing XML response from Captiva");
-          // For now, extract basic sale records - in production, use proper XML parser
-          const saleMatches = rawBody.matchAll(/<sale[^>]*>([\s\S]*?)<\/sale>/gi);
-          for (const match of saleMatches) {
-            const saleXml = match[1];
-            const receiptId = saleXml.match(/<receipt_id>([^<]+)<\/receipt_id>/i)?.[1] || 
-                              saleXml.match(/<id>([^<]+)<\/id>/i)?.[1];
-            const total = saleXml.match(/<total>([^<]+)<\/total>/i)?.[1];
-            const saleDate = saleXml.match(/<date>([^<]+)<\/date>/i)?.[1] ||
-                             saleXml.match(/<sale_date>([^<]+)<\/sale_date>/i)?.[1];
-            
-            if (receiptId) {
-              salesData.push({
-                receipt_id: receiptId,
-                sale_date: saleDate,
-                total: parseFloat(total || "0"),
-                raw_xml: saleXml,
-              });
+        try {
+          const response = await fetch(captivaEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify(requestPayload),
+          });
+          lastStatus = response.status;
+          lastRequestType = rt;
+          const rawBody = await response.text();
+          lastRawSample = rawBody.substring(0, 1000);
+
+          if (!response.ok) {
+            console.log(`RequestType ${rt} returned HTTP ${response.status}, trying next.`);
+            continue;
+          }
+
+          // Parse response: prefer JSON, fall back to XML scraping.
+          let parsedRows: unknown[] = [];
+          let parsedJson: Record<string, unknown> | null = null;
+          try {
+            parsedJson = JSON.parse(rawBody);
+          } catch {
+            parsedJson = null;
+          }
+
+          if (parsedJson) {
+            // Captiva-style errors short-circuit this RequestType
+            const errMsg = parsedJson.ErrorMessage || parsedJson.errorMessage || parsedJson.Error;
+            if (errMsg && !parsedJson.Sales && !parsedJson.Data) {
+              console.log(`RequestType ${rt} returned error: ${String(errMsg)}`);
+              continue;
+            }
+            const candidate =
+              (Array.isArray(parsedJson) && parsedJson) ||
+              parsedJson.Sales || parsedJson.sales ||
+              parsedJson.Journals || parsedJson.journals ||
+              parsedJson.Data || parsedJson.data ||
+              parsedJson.Results || parsedJson.results ||
+              [];
+            parsedRows = Array.isArray(candidate) ? candidate : [];
+          } else if (rawBody.includes("<")) {
+            const matches = rawBody.matchAll(/<(?:sale|journal|transaction)[^>]*>([\s\S]*?)<\/(?:sale|journal|transaction)>/gi);
+            for (const m of matches) {
+              const xml = m[1];
+              const id = xml.match(/<(?:receipt_id|id|ReceiptNumber|TransactionID)>([^<]+)<\//i)?.[1];
+              const total = xml.match(/<(?:total|GrossTotal|NetTotal|Amount)>([^<]+)<\//i)?.[1];
+              const date = xml.match(/<(?:date|sale_date|TransactionDate|DateTime)>([^<]+)<\//i)?.[1];
+              if (id) parsedRows.push({ receipt_id: id, sale_date: date, total: parseFloat(total ?? "0"), raw_xml: xml });
             }
           }
-        } else {
-          // Parse as JSON
-          try {
-            const jsonData = JSON.parse(rawBody);
-            salesData = Array.isArray(jsonData) ? jsonData : (jsonData.sales || jsonData.data || []);
-          } catch {
-            console.error("Failed to parse Captiva response as JSON");
+
+          if (parsedRows.length > 0) {
+            salesData = parsedRows;
+            console.log(`RequestType ${rt} returned ${parsedRows.length} rows`);
+            break;
           }
+          console.log(`RequestType ${rt} returned 0 rows, trying next.`);
+        } catch (err) {
+          console.error(`RequestType ${rt} fetch error:`, err);
         }
+      }
+
+      if (salesData.length === 0) {
+        // Log a diagnostic so the user can see what the dispatcher returned for the last attempt.
+        await adminClient.from("pos_sync_logs").insert({
+          location_id,
+          restaurant_id: integration.restaurant_id,
+          pos_provider: "captiva",
+          event_type: "sync_debug",
+          status: "warning",
+          message: `Captiva dispatcher returned 0 rows for ${date_from}..${date_to}`,
+          details: {
+            integration_id,
+            date_from,
+            date_to,
+            endpoint: captivaEndpoint,
+            outlet_code: settings.store_id,
+            user_id: settings.user_id ?? null,
+            last_request_type: lastRequestType,
+            last_http_status: lastStatus,
+            raw_sample: lastRawSample,
+          },
+        });
+      }
       } catch (err) {
         console.error("Captiva API fetch error:", err);
 
