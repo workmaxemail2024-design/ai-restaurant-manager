@@ -583,6 +583,28 @@ export default function POSIntegrationsPage() {
                     </div>
                     {formErrors.captiva_password && <p className="text-xs text-destructive mt-1">{formErrors.captiva_password}</p>}
                   </div>
+                  <div>
+                    <Label>User ID</Label>
+                    <Input
+                      placeholder="e.g. 2"
+                      value={formData.captiva_user_id}
+                      onChange={e => setFormData(p => ({ ...p, captiva_user_id: e.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Numeric Captiva user ID — usually the digit after the username in the portal header (e.g. <code>Max Gerhardt 2</code> → <code>2</code>). Required by most Captiva Cloud RequestTypes.
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Journals / API Service ID (optional)</Label>
+                    <Input
+                      placeholder="UUID from the AP / Journals popup"
+                      value={formData.captiva_journals_service_id}
+                      onChange={e => setFormData(p => ({ ...p, captiva_journals_service_id: e.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      The UUID shown on the AP / Journals popup in Captiva Cloud (e.g. <code>473c687b-b7bd-4de4-a51a-2ba445fe133d</code>). Sent as <code>ServiceID</code>. Leave blank if your tenant does not require it.
+                    </p>
+                  </div>
                 </>
               )}
               
