@@ -169,6 +169,15 @@ serve(async (req) => {
           const errorText = await response.text();
           console.error("Captiva API error:", response.status, errorText);
           
+          // Mark integration as failed (do NOT touch last_successful_sync_at)
+          await adminClient
+            .from("pos_integrations")
+            .update({
+              last_sync_status: "failed",
+              last_sync_error: `Captiva API ${response.status}: ${errorText.substring(0, 300)}`,
+            })
+            .eq("id", integration_id);
+
           // Log the failed sync attempt
           await adminClient.from("pos_sync_logs").insert({
             location_id,
@@ -177,7 +186,7 @@ serve(async (req) => {
             event_type: "sync_failed",
             status: "error",
             message: `API returned ${response.status}`,
-            details: { error: errorText.substring(0, 500), date_from, date_to },
+            details: { error: errorText.substring(0, 500), date_from, date_to, integration_id },
           });
 
           return new Response(
