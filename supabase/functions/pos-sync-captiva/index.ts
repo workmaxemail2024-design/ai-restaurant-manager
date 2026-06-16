@@ -110,6 +110,13 @@ serve(async (req) => {
       errors: [],
     };
 
+    // Mark the attempt timestamp immediately so we can tell when the integration was last touched
+    // (this is intentionally separate from last_successful_sync_at, which only advances on full success)
+    await adminClient
+      .from("pos_integrations")
+      .update({ last_sync_attempt_at: new Date().toISOString() })
+      .eq("id", integration_id);
+
     // Check if simulation mode
     const simulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
 
