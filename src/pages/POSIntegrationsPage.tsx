@@ -958,6 +958,10 @@ export default function POSIntegrationsPage() {
             <div className="space-y-4">
               <RadioGroup value={syncDatePreset} onValueChange={(v) => setSyncDatePreset(v as typeof syncDatePreset)}>
                 <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="today" id="today" />
+                  <Label htmlFor="today">Today</Label>
+                </div>
+                <div className="flex items-center space-x-2">
                   <RadioGroupItem value="yesterday" id="yesterday" />
                   <Label htmlFor="yesterday">Yesterday</Label>
                 </div>
@@ -967,7 +971,7 @@ export default function POSIntegrationsPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="custom" id="custom" />
-                  <Label htmlFor="custom">Custom range</Label>
+                  <Label htmlFor="custom">Custom range (resync any date range — idempotent)</Label>
                 </div>
               </RadioGroup>
 
