@@ -267,12 +267,67 @@ serve(async (req) => {
 
     console.log(`Processing ${salesData.length} sales records`);
 
+    // Normalize raw Captiva rows into a consistent shape that captures item-level fields
+    // (product ID/PLU, name, department, qty, gross, net, VAT, discounts) where present.
+    const normalizeItems = (raw: Record<string, unknown>): Array<Record<string, unknown>> => {
+      const itemSrc =
+        (raw.Items as unknown[]) || (raw.items as unknown[]) ||
+        (raw.LineItems as unknown[]) || (raw.lineItems as unknown[]) ||
+        (raw.Products as unknown[]) || (raw.products as unknown[]) ||
+        (raw.Lines as unknown[]) || (raw.lines as unknown[]) || [];
+      if (!Array.isArray(itemSrc)) return [];
+      return itemSrc.map((it) => {
+        const i = it as Record<string, unknown>;
+        return {
+          product_id: i.ProductID ?? i.product_id ?? i.PLU ?? i.plu ?? i.ID ?? i.id ?? null,
+          name: i.Name ?? i.name ?? i.ProductName ?? i.product_name ?? null,
+          department: i.Department ?? i.department ?? i.DepartmentName ?? null,
+          quantity: Number(i.Qty ?? i.qty ?? i.Quantity ?? i.quantity ?? 0) || 0,
+          gross_sales: Number(i.GrossSales ?? i.gross_sales ?? i.Gross ?? i.AllSales ?? i.Sales ?? i.sales ?? i.Total ?? 0) || 0,
+          net_sales: Number(i.NetSales ?? i.net_sales ?? i.Net ?? 0) || 0,
+          vat: Number(i.VAT ?? i.vat ?? i.Tax ?? i.tax ?? 0) || 0,
+          discounts: Number(i.Discounts ?? i.discounts ?? i.Discount ?? i.discount ?? 0) || 0,
+          unit_price: Number(i.UnitPrice ?? i.unit_price ?? i.Price ?? i.price ?? 0) || 0,
+          raw: i,
+        };
+      });
+    };
+
+    // Log a raw-parsed sample of the first sale (with normalized items) BEFORE applying to dashboard,
+    // so the user can verify field mapping is correct in Sync Logs.
+    if (salesData.length > 0) {
+      const sample = salesData[0] as Record<string, unknown>;
+      await adminClient.from("pos_sync_logs").insert({
+        location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "sync_raw_sample",
+        status: "info",
+        message: `Raw parsed sample: 1 of ${salesData.length} sales (pre-apply)`,
+        details: {
+          integration_id,
+          date_from,
+          date_to,
+          total_fetched: salesData.length,
+          sample_raw: sample,
+          sample_normalized_items: normalizeItems(sample),
+        },
+      });
+    }
+
     // Process and insert sales with idempotency via upsert
     for (const sale of salesData) {
       const saleRecord = sale as Record<string, unknown>;
-      const externalSaleId = String(saleRecord.receipt_id || saleRecord.id || saleRecord.sale_id || `${Date.now()}-${Math.random()}`);
-      const mappedSaleDate = saleRecord.sale_date ? String(saleRecord.sale_date).split("T")[0] : null;
-      const mappedTotalPrice = typeof saleRecord.total === "number" ? saleRecord.total : parseFloat(String(saleRecord.total || 0));
+      const externalSaleId = String(
+        saleRecord.receipt_id ?? saleRecord.ReceiptNumber ?? saleRecord.TransactionID ??
+        saleRecord.id ?? saleRecord.ID ?? saleRecord.sale_id ?? `${Date.now()}-${Math.random()}`
+      );
+      const rawDate = saleRecord.sale_date ?? saleRecord.TransactionDate ?? saleRecord.DateTime ?? saleRecord.Date ?? null;
+      const mappedSaleDate = rawDate ? String(rawDate).split("T")[0] : null;
+      const rawTotal = saleRecord.total ?? saleRecord.GrossTotal ?? saleRecord.NetTotal ?? saleRecord.Amount ?? 0;
+      const mappedTotalPrice = typeof rawTotal === "number" ? rawTotal : parseFloat(String(rawTotal || 0));
+      // Enrich the stored payload with normalized item lines so downstream apply/mapping can use them.
+      const enrichedRecord = { ...saleRecord, _normalized_items: normalizeItems(saleRecord) };
 
       // Upsert the sale record (insert or update on conflict)
       // This ensures idempotency - reimporting the same date range updates existing records
