@@ -90,7 +90,7 @@ export default function POSIntegrationsPage() {
   // Sync Now modal state
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncModalIntegration, setSyncModalIntegration] = useState<POSIntegration | null>(null);
-  const [syncDatePreset, setSyncDatePreset] = useState<"yesterday" | "last7" | "custom">("yesterday");
+  const [syncDatePreset, setSyncDatePreset] = useState<"today" | "yesterday" | "last7" | "custom">("yesterday");
   const [syncCustomStart, setSyncCustomStart] = useState<Date | undefined>(subDays(new Date(), 7));
   const [syncCustomEnd, setSyncCustomEnd] = useState<Date | undefined>(new Date());
   
