@@ -520,11 +520,14 @@ export default function POSIntegrationsPage() {
                   <div>
                     <Label>Store / Outlet ID *</Label>
                     <Input 
-                      placeholder="Store ID" 
+                      placeholder="e.g. 02137" 
                       value={formData.captiva_store_id} 
                       onChange={e => { setFormData(p => ({ ...p, captiva_store_id: e.target.value })); setFormErrors(p => ({ ...p, captiva_store_id: "" })); }} 
                       className={formErrors.captiva_store_id ? "border-destructive" : ""}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Numeric Captiva Store Code from the Stores page. Examples: Rudy's Blanchardstown = <code>01584</code>, Maximilians Blanchardstown = <code>02137</code>, Gourmet Pizza Factory = <code>02136</code>. Do NOT paste the Journals/API service UUID here.
+                    </p>
                     {formErrors.captiva_store_id && <p className="text-xs text-destructive mt-1">{formErrors.captiva_store_id}</p>}
                   </div>
                   <div>
