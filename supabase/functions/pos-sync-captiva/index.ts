@@ -232,7 +232,15 @@ serve(async (req) => {
         }
       } catch (err) {
         console.error("Captiva API fetch error:", err);
-        
+
+        await adminClient
+          .from("pos_integrations")
+          .update({
+            last_sync_status: "failed",
+            last_sync_error: `Network: ${err instanceof Error ? err.message : "Unknown"}`,
+          })
+          .eq("id", integration_id);
+
         await adminClient.from("pos_sync_logs").insert({
           location_id,
           restaurant_id: integration.restaurant_id,
@@ -240,7 +248,7 @@ serve(async (req) => {
           event_type: "sync_failed",
           status: "error",
           message: err instanceof Error ? err.message : "Network error",
-          details: { date_from, date_to },
+          details: { date_from, date_to, integration_id },
         });
 
         return new Response(
