@@ -735,6 +735,14 @@ export interface CaptivaSyncResult {
   sales_imported: number;
   line_items_imported: number;
   skipped_duplicates: number;
+  failed_rows?: number;
+  fetched?: number;
+  errors?: string[];
+  applied?: {
+    applied_count: number;
+    total_revenue: number;
+    line_items_unmapped: number;
+  };
   error?: string;
 }
 
@@ -750,13 +758,27 @@ export function useCaptivaSyncNow() {
       queryClient.invalidateQueries({ queryKey: ["pos-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["pos-sync-logs"] });
       queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
-      if (data.success) {
-        toast({ 
-          title: "Sync Complete", 
-          description: `Imported ${data.sales_imported} sales, ${data.line_items_imported} line items${data.skipped_duplicates > 0 ? `, skipped ${data.skipped_duplicates} duplicates` : ""}` 
+      queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
+      queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
+      if (data.success || (data.sales_imported ?? 0) > 0) {
+        const fetched = data.fetched ?? data.sales_imported ?? 0;
+        const staged = data.sales_imported ?? 0;
+        const applied = data.applied?.applied_count ?? 0;
+        const failed = data.failed_rows ?? 0;
+        const description =
+          `Fetched ${fetched} sales, staged ${staged}, applied ${applied} to dashboard` +
+          (failed ? ` · ${failed} failed` : "") +
+          (data.skipped_duplicates ? ` · ${data.skipped_duplicates} duplicates` : "");
+        toast({
+          title: failed ? "Sync Completed With Errors" : "Sync Complete",
+          description,
+          variant: failed && staged === 0 ? "destructive" : undefined,
         });
       } else {
-        toast({ title: "Sync Failed", description: data.error, variant: "destructive" });
+        const detail = data.error || (data.errors && data.errors[0]) || "No data imported";
+        toast({ title: "Sync Failed", description: detail, variant: "destructive" });
       }
     },
     onError: (error) => {
