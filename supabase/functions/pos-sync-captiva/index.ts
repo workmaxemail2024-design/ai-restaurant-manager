@@ -186,19 +186,39 @@ serve(async (req) => {
 
         console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} UserID=${settings.user_id ?? "(none)"} ${date_from} -> ${date_to}`);
 
+        // Sanitized payload (excludes APIKey/Password) for debug logging.
+        const sanitizedPayload = {
+          UserName: settings.username,
+          OutletCode: settings.store_id,
+          UserID: settings.user_id ?? "",
+          ServiceID: settings.journals_service_id ?? null,
+          RequestType: rt,
+          FromDate: date_from,
+          ToDate: date_to,
+        };
+
+        let attemptStatus = 0;
+        let attemptRaw = "";
+        let attemptRowCount = 0;
+        let attemptError: string | null = null;
+
         try {
           const response = await fetch(captivaEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
             body: JSON.stringify(requestPayload),
           });
+          attemptStatus = response.status;
           lastStatus = response.status;
           lastRequestType = rt;
           const rawBody = await response.text();
+          attemptRaw = rawBody.substring(0, 2000);
           lastRawSample = rawBody.substring(0, 1000);
 
           if (!response.ok) {
             console.log(`RequestType ${rt} returned HTTP ${response.status}, trying next.`);
+            attemptError = `HTTP ${response.status}`;
+            attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
             continue;
           }
 
@@ -212,10 +232,11 @@ serve(async (req) => {
           }
 
           if (parsedJson) {
-            // Captiva-style errors short-circuit this RequestType
-            const errMsg = parsedJson.ErrorMessage || parsedJson.errorMessage || parsedJson.Error;
+            const errMsg = parsedJson.ErrorMessage || parsedJson.errorMessage || parsedJson.Error || (parsedJson.result === "Error" ? parsedJson.resultdesc : null);
             if (errMsg && !parsedJson.Sales && !parsedJson.Data) {
               console.log(`RequestType ${rt} returned error: ${String(errMsg)}`);
+              attemptError = String(errMsg);
+              attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
               continue;
             }
             const candidate =
@@ -237,6 +258,9 @@ serve(async (req) => {
             }
           }
 
+          attemptRowCount = parsedRows.length;
+          attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: attemptRowCount, error: null, raw_first_2000: attemptRaw });
+
           if (parsedRows.length > 0) {
             salesData = parsedRows;
             console.log(`RequestType ${rt} returned ${parsedRows.length} rows`);
@@ -244,7 +268,9 @@ serve(async (req) => {
           }
           console.log(`RequestType ${rt} returned 0 rows, trying next.`);
         } catch (err) {
+          attemptError = err instanceof Error ? err.message : String(err);
           console.error(`RequestType ${rt} fetch error:`, err);
+          attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
         }
       }
 
