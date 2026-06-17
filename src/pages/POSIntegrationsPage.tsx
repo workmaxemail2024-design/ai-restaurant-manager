@@ -515,6 +515,7 @@ export default function POSIntegrationsPage() {
                       onChange={e => { setFormData(p => ({ ...p, captiva_base_url: e.target.value })); setFormErrors(p => ({ ...p, captiva_base_url: "" })); }} 
                       className={formErrors.captiva_base_url ? "border-destructive" : ""}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Base URL can be either the root server URL or the full CaptivaCloudAPIRequest.ashx URL. The system will normalize it safely.</p>
                     {formErrors.captiva_base_url && <p className="text-xs text-destructive mt-1">{formErrors.captiva_base_url}</p>}
                   </div>
                   <div>
