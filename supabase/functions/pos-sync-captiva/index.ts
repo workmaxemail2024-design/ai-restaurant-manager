@@ -274,28 +274,32 @@ serve(async (req) => {
         }
       }
 
-      if (salesData.length === 0) {
-        // Log a diagnostic so the user can see what the dispatcher returned for the last attempt.
-        await adminClient.from("pos_sync_logs").insert({
-          location_id,
-          restaurant_id: integration.restaurant_id,
-          pos_provider: "captiva",
-          event_type: "sync_debug",
-          status: "warning",
-          message: `Captiva dispatcher returned 0 rows for ${date_from}..${date_to}`,
-          details: {
-            integration_id,
-            date_from,
-            date_to,
-            endpoint: captivaEndpoint,
-            outlet_code: settings.store_id,
-            user_id: settings.user_id ?? null,
-            last_request_type: lastRequestType,
-            last_http_status: lastStatus,
-            raw_sample: lastRawSample,
-          },
-        });
-      }
+      // Always emit a visible sync_debug entry showing exactly what was sent and received,
+      // for every Captiva attempt (success or failure). Credentials are excluded.
+      await adminClient.from("pos_sync_logs").insert({
+        location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "sync_debug",
+        status: salesData.length === 0 ? "warning" : "info",
+        message: `Captiva ${salesData.length === 0 ? "returned 0 rows" : `returned ${salesData.length} rows`} for ${date_from}..${date_to} (endpoint: ${captivaEndpoint})`,
+        details: {
+          integration_id,
+          date_from,
+          date_to,
+          saved_base_url: savedBaseUrl,
+          final_endpoint_url: captivaEndpoint,
+          already_had_dispatcher: alreadyHasDispatcher,
+          store_id_sent: settings.store_id,
+          user_id_sent: settings.user_id ?? null,
+          service_id_sent: settings.journals_service_id ?? null,
+          date_format_sent: "YYYY-MM-DD",
+          last_request_type: lastRequestType,
+          last_http_status: lastStatus,
+          last_raw_sample: lastRawSample,
+          attempts: attemptDebug,
+        },
+      });
     }
 
     console.log(`Processing ${salesData.length} sales records`);
