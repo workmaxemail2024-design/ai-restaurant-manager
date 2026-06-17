@@ -148,16 +148,23 @@ serve(async (req) => {
       salesData = mockSales;
     } else {
       // Call Captiva Cloud API dispatcher (.ashx) for sales data.
-      // The correct endpoint is POST {base_url}/CaptivaCloudAPIRequest.ashx with a typed
-      // JSON envelope, NOT /outlet/{id}/sales. The OutletCode must be the numeric
-      // store/outlet code (e.g. "02137"), not the Journals service UUID.
-      const cleanBaseUrl = settings.base_url.replace(/\/$/, "").replace(/\/CaptivaCloudAPIRequest\.ashx$/i, "");
-      const captivaEndpoint = `${cleanBaseUrl}/CaptivaCloudAPIRequest.ashx`;
+      // Safe Base URL normalization:
+      //   - Trim whitespace and trailing slashes
+      //   - If the saved value already ends in /CaptivaCloudAPIRequest.ashx (any case,
+      //     optional trailing slash, optional query string), use it as-is.
+      //   - Otherwise append /CaptivaCloudAPIRequest.ashx exactly once.
+      const savedBaseUrl = (settings.base_url ?? "").trim();
+      const trimmedBaseUrl = savedBaseUrl.replace(/\/+$/, "");
+      const alreadyHasDispatcher = /\/CaptivaCloudAPIRequest\.ashx(\/|\?|$)/i.test(trimmedBaseUrl);
+      const captivaEndpoint = alreadyHasDispatcher
+        ? trimmedBaseUrl
+        : `${trimmedBaseUrl}/CaptivaCloudAPIRequest.ashx`;
 
       // Try multiple RequestType names since Captiva exposes both sales/journal endpoints.
       // We attempt them in order until one returns rows or a clearly recognized response.
       const requestTypes = ["GetSales", "GetJournals", "GetProductSales", "GetSalesJournal"];
 
+      const attemptDebug: Array<Record<string, unknown>> = [];
       let lastRawSample = "";
       let lastStatus = 0;
       let lastRequestType = "";
