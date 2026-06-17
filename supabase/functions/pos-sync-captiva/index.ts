@@ -148,16 +148,23 @@ serve(async (req) => {
       salesData = mockSales;
     } else {
       // Call Captiva Cloud API dispatcher (.ashx) for sales data.
-      // The correct endpoint is POST {base_url}/CaptivaCloudAPIRequest.ashx with a typed
-      // JSON envelope, NOT /outlet/{id}/sales. The OutletCode must be the numeric
-      // store/outlet code (e.g. "02137"), not the Journals service UUID.
-      const cleanBaseUrl = settings.base_url.replace(/\/$/, "").replace(/\/CaptivaCloudAPIRequest\.ashx$/i, "");
-      const captivaEndpoint = `${cleanBaseUrl}/CaptivaCloudAPIRequest.ashx`;
+      // Safe Base URL normalization:
+      //   - Trim whitespace and trailing slashes
+      //   - If the saved value already ends in /CaptivaCloudAPIRequest.ashx (any case,
+      //     optional trailing slash, optional query string), use it as-is.
+      //   - Otherwise append /CaptivaCloudAPIRequest.ashx exactly once.
+      const savedBaseUrl = (settings.base_url ?? "").trim();
+      const trimmedBaseUrl = savedBaseUrl.replace(/\/+$/, "");
+      const alreadyHasDispatcher = /\/CaptivaCloudAPIRequest\.ashx(\/|\?|$)/i.test(trimmedBaseUrl);
+      const captivaEndpoint = alreadyHasDispatcher
+        ? trimmedBaseUrl
+        : `${trimmedBaseUrl}/CaptivaCloudAPIRequest.ashx`;
 
       // Try multiple RequestType names since Captiva exposes both sales/journal endpoints.
       // We attempt them in order until one returns rows or a clearly recognized response.
       const requestTypes = ["GetSales", "GetJournals", "GetProductSales", "GetSalesJournal"];
 
+      const attemptDebug: Array<Record<string, unknown>> = [];
       let lastRawSample = "";
       let lastStatus = 0;
       let lastRequestType = "";
@@ -179,19 +186,39 @@ serve(async (req) => {
 
         console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} UserID=${settings.user_id ?? "(none)"} ${date_from} -> ${date_to}`);
 
+        // Sanitized payload (excludes APIKey/Password) for debug logging.
+        const sanitizedPayload = {
+          UserName: settings.username,
+          OutletCode: settings.store_id,
+          UserID: settings.user_id ?? "",
+          ServiceID: settings.journals_service_id ?? null,
+          RequestType: rt,
+          FromDate: date_from,
+          ToDate: date_to,
+        };
+
+        let attemptStatus = 0;
+        let attemptRaw = "";
+        let attemptRowCount = 0;
+        let attemptError: string | null = null;
+
         try {
           const response = await fetch(captivaEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Accept": "application/json" },
             body: JSON.stringify(requestPayload),
           });
+          attemptStatus = response.status;
           lastStatus = response.status;
           lastRequestType = rt;
           const rawBody = await response.text();
+          attemptRaw = rawBody.substring(0, 2000);
           lastRawSample = rawBody.substring(0, 1000);
 
           if (!response.ok) {
             console.log(`RequestType ${rt} returned HTTP ${response.status}, trying next.`);
+            attemptError = `HTTP ${response.status}`;
+            attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
             continue;
           }
 
@@ -205,10 +232,11 @@ serve(async (req) => {
           }
 
           if (parsedJson) {
-            // Captiva-style errors short-circuit this RequestType
-            const errMsg = parsedJson.ErrorMessage || parsedJson.errorMessage || parsedJson.Error;
+            const errMsg = parsedJson.ErrorMessage || parsedJson.errorMessage || parsedJson.Error || (parsedJson.result === "Error" ? parsedJson.resultdesc : null);
             if (errMsg && !parsedJson.Sales && !parsedJson.Data) {
               console.log(`RequestType ${rt} returned error: ${String(errMsg)}`);
+              attemptError = String(errMsg);
+              attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
               continue;
             }
             const candidate =
@@ -230,6 +258,9 @@ serve(async (req) => {
             }
           }
 
+          attemptRowCount = parsedRows.length;
+          attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: attemptRowCount, error: null, raw_first_2000: attemptRaw });
+
           if (parsedRows.length > 0) {
             salesData = parsedRows;
             console.log(`RequestType ${rt} returned ${parsedRows.length} rows`);
@@ -237,32 +268,38 @@ serve(async (req) => {
           }
           console.log(`RequestType ${rt} returned 0 rows, trying next.`);
         } catch (err) {
+          attemptError = err instanceof Error ? err.message : String(err);
           console.error(`RequestType ${rt} fetch error:`, err);
+          attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
         }
       }
 
-      if (salesData.length === 0) {
-        // Log a diagnostic so the user can see what the dispatcher returned for the last attempt.
-        await adminClient.from("pos_sync_logs").insert({
-          location_id,
-          restaurant_id: integration.restaurant_id,
-          pos_provider: "captiva",
-          event_type: "sync_debug",
-          status: "warning",
-          message: `Captiva dispatcher returned 0 rows for ${date_from}..${date_to}`,
-          details: {
-            integration_id,
-            date_from,
-            date_to,
-            endpoint: captivaEndpoint,
-            outlet_code: settings.store_id,
-            user_id: settings.user_id ?? null,
-            last_request_type: lastRequestType,
-            last_http_status: lastStatus,
-            raw_sample: lastRawSample,
-          },
-        });
-      }
+      // Always emit a visible sync_debug entry showing exactly what was sent and received,
+      // for every Captiva attempt (success or failure). Credentials are excluded.
+      await adminClient.from("pos_sync_logs").insert({
+        location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "sync_debug",
+        status: salesData.length === 0 ? "warning" : "info",
+        message: `Captiva ${salesData.length === 0 ? "returned 0 rows" : `returned ${salesData.length} rows`} for ${date_from}..${date_to} (endpoint: ${captivaEndpoint})`,
+        details: {
+          integration_id,
+          date_from,
+          date_to,
+          saved_base_url: savedBaseUrl,
+          final_endpoint_url: captivaEndpoint,
+          already_had_dispatcher: alreadyHasDispatcher,
+          store_id_sent: settings.store_id,
+          user_id_sent: settings.user_id ?? null,
+          service_id_sent: settings.journals_service_id ?? null,
+          date_format_sent: "YYYY-MM-DD",
+          last_request_type: lastRequestType,
+          last_http_status: lastStatus,
+          last_raw_sample: lastRawSample,
+          attempts: attemptDebug,
+        },
+      });
     }
 
     console.log(`Processing ${salesData.length} sales records`);
