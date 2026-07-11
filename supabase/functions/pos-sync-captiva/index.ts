@@ -41,6 +41,9 @@ serve(async (req) => {
   }
 
   try {
+    const body = await req.json();
+    const { integration_id, date_from, date_to, location_id, auto_apply, diagnostic_user_id } = body;
+
     // Verify auth: accept either a logged-in user JWT OR the service-role key
     // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely)
     const authHeader = req.headers.get("Authorization");
@@ -53,7 +56,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
-    const token = authHeader.replace("Bearer ", "").trim();
+    const token = authHeader?.replace("Bearer ", "").trim() ?? "";
     const isServiceRole = serviceRoleKey && token === serviceRoleKey;
 
     if (!isServiceRole) {
@@ -70,9 +73,6 @@ serve(async (req) => {
         );
       }
     }
-
-    const body = await req.json();
-    const { integration_id, date_from, date_to, location_id, auto_apply } = body;
 
     if (!integration_id || !date_from || !date_to || !location_id) {
       return new Response(
@@ -178,10 +178,12 @@ serve(async (req) => {
       let lastRequestType = "";
 
       for (const rt of requestTypes) {
+        const userIdForDiagnostic = diagnostic_user_id ? String(diagnostic_user_id) : null;
+
         // Captiva API request body — fields per the Captiva API email:
         //   APIKey, UserName (= API Account Name), Password (= API Password), OutletCode
-        // UserID and ServiceID are intentionally NOT sent unless Captiva docs specifically
-        // require them (previous guessed values were rejected with "user id required").
+        // ServiceID is intentionally not sent. UserID is sent only when a one-off
+        // diagnostic request explicitly provides diagnostic_user_id.
         const requestPayload: Record<string, unknown> = {
           APIKey: apiKey,
           UserName: apiAccountName,
@@ -191,13 +193,19 @@ serve(async (req) => {
           FromDate: date_from,
           ToDate: date_to,
         };
+        if (userIdForDiagnostic) {
+          requestPayload.UserID = userIdForDiagnostic;
+        }
 
         console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} Account=${apiAccountName} ${date_from} -> ${date_to}`);
 
         // Sanitized payload (excludes APIKey/Password) for debug logging.
         const sanitizedPayload = {
+          APIKey: "[redacted]",
           UserName: apiAccountName,
+          Password: "[redacted]",
           OutletCode: settings.store_id,
+          ...(userIdForDiagnostic ? { UserID: userIdForDiagnostic } : {}),
           RequestType: rt,
           FromDate: date_from,
           ToDate: date_to,
@@ -224,7 +232,7 @@ serve(async (req) => {
           if (!response.ok) {
             console.log(`RequestType ${rt} returned HTTP ${response.status}, trying next.`);
             attemptError = `HTTP ${response.status}`;
-            attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
+            attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
             continue;
           }
 
@@ -242,7 +250,7 @@ serve(async (req) => {
             if (errMsg && !parsedJson.Sales && !parsedJson.Data) {
               console.log(`RequestType ${rt} returned error: ${String(errMsg)}`);
               attemptError = String(errMsg);
-              attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
+              attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
               continue;
             }
             const candidate =
@@ -265,7 +273,7 @@ serve(async (req) => {
           }
 
           attemptRowCount = parsedRows.length;
-          attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: attemptRowCount, error: null, raw_first_2000: attemptRaw });
+          attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: attemptRowCount, error: null, raw_first_2000: attemptRaw });
 
           if (parsedRows.length > 0) {
             salesData = parsedRows;
@@ -276,7 +284,7 @@ serve(async (req) => {
         } catch (err) {
           attemptError = err instanceof Error ? err.message : String(err);
           console.error(`RequestType ${rt} fetch error:`, err);
-          attemptDebug.push({ request_type: rt, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
+          attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
         }
       }
 
@@ -298,9 +306,9 @@ serve(async (req) => {
           already_had_dispatcher: alreadyHasDispatcher,
           store_id_sent: settings.store_id,
           api_account_name_sent: apiAccountName,
-          user_id_sent: null,
+          user_id_sent: diagnostic_user_id ? String(diagnostic_user_id) : null,
           service_id_sent: null,
-          note: "UserID and ServiceID intentionally omitted per Captiva API email spec",
+          note: diagnostic_user_id ? "One-off diagnostic request sent UserID and omitted ServiceID" : "UserID and ServiceID intentionally omitted per Captiva API email spec",
           date_format_sent: "YYYY-MM-DD",
           last_request_type: lastRequestType,
           last_http_status: lastStatus,
