@@ -184,8 +184,8 @@ export default function POSIntegrationsPage() {
       settings?.base_url && 
       settings?.store_id && 
       (settings?.api_key || integration.api_key) &&
-      settings?.username &&
-      settings?.password
+      (settings?.api_account_name || settings?.username) &&
+      (settings?.api_password || settings?.password)
     );
   }, []);
 
