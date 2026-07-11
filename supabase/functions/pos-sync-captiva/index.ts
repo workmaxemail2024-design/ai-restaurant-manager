@@ -99,9 +99,13 @@ serve(async (req) => {
     }
 
     const settings = integration.settings as CaptivaSettings;
-    if (!settings?.base_url || !settings?.store_id || !settings?.username || !settings?.password) {
+    // Prefer the new canonical field names from the Captiva API email; fall back to
+    // legacy username/password for older rows that haven't been re-saved yet.
+    const apiAccountName = settings?.api_account_name || settings?.username || "";
+    const apiPassword = settings?.api_password || settings?.password || "";
+    if (!settings?.base_url || !settings?.store_id || !apiAccountName || !apiPassword) {
       return new Response(
-        JSON.stringify({ success: false, error: "Integration missing required Captiva credentials" }),
+        JSON.stringify({ success: false, error: "Integration missing required Captiva credentials (base_url, store_id, api_account_name, api_password)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
