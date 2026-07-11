@@ -44,6 +44,10 @@ interface CaptivaSettings {
   base_url?: string;
   store_id?: string;
   api_key?: string;
+  // New canonical fields (match Captiva API email):
+  api_account_name?: string;
+  api_password?: string;
+  // Legacy — retained for backward compat when reading older rows:
   username?: string;
   password?: string;
   user_id?: string;
@@ -138,10 +142,10 @@ export default function POSIntegrationsPage() {
       webhook_url: integration.webhook_url || "",
       captiva_base_url: settings?.base_url || "",
       captiva_store_id: settings?.store_id || "",
-      captiva_username: settings?.username || "",
-      captiva_password: settings?.password || "",
-      captiva_user_id: settings?.user_id || "",
-      captiva_journals_service_id: settings?.journals_service_id || "",
+      captiva_username: settings?.api_account_name || settings?.username || "",
+      captiva_password: settings?.api_password || settings?.password || "",
+      captiva_user_id: "",
+      captiva_journals_service_id: "",
     });
     setFormErrors({});
     setIsAddOpen(true);
@@ -154,8 +158,8 @@ export default function POSIntegrationsPage() {
     if (!formData.captiva_base_url.trim()) errors.captiva_base_url = "Base URL is required";
     if (!formData.captiva_store_id.trim()) errors.captiva_store_id = "Store ID is required";
     if (!formData.api_key.trim() && !editingIntegration) errors.api_key = "API Key is required";
-    if (!formData.captiva_username.trim()) errors.captiva_username = "Username is required";
-    if (!formData.captiva_password.trim() && !editingIntegration) errors.captiva_password = "Password is required";
+    if (!formData.captiva_username.trim()) errors.captiva_username = "API Account Name is required";
+    if (!formData.captiva_password.trim() && !editingIntegration) errors.captiva_password = "API Password is required";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData, editingIntegration]);
@@ -168,8 +172,8 @@ export default function POSIntegrationsPage() {
     if (!settings?.base_url) missing.push("base_url");
     if (!settings?.store_id) missing.push("store_id");
     if (!settings?.api_key && !integration.api_key) missing.push("api_key");
-    if (!settings?.username) missing.push("username");
-    if (!settings?.password) missing.push("password");
+    if (!settings?.api_account_name && !settings?.username) missing.push("api_account_name");
+    if (!settings?.api_password && !settings?.password) missing.push("api_password");
     return missing;
   }, []);
 
@@ -180,8 +184,8 @@ export default function POSIntegrationsPage() {
       settings?.base_url && 
       settings?.store_id && 
       (settings?.api_key || integration.api_key) &&
-      settings?.username &&
-      settings?.password
+      (settings?.api_account_name || settings?.username) &&
+      (settings?.api_password || settings?.password)
     );
   }, []);
 
@@ -361,14 +365,14 @@ export default function POSIntegrationsPage() {
       return;
     }
 
+    const existingSettings = (editingIntegration?.settings as CaptivaSettings) || {};
     const captivaSettings = formData.pos_provider === "captiva" ? {
       base_url: formData.captiva_base_url,
       store_id: formData.captiva_store_id,
-      api_key: formData.api_key || (editingIntegration?.settings as CaptivaSettings)?.api_key,
-      username: formData.captiva_username,
-      password: formData.captiva_password || (editingIntegration?.settings as CaptivaSettings)?.password,
-      user_id: formData.captiva_user_id || (editingIntegration?.settings as CaptivaSettings)?.user_id,
-      journals_service_id: formData.captiva_journals_service_id || (editingIntegration?.settings as CaptivaSettings)?.journals_service_id,
+      api_key: formData.api_key || existingSettings.api_key,
+      // New canonical keys (Captiva API email):
+      api_account_name: formData.captiva_username,
+      api_password: formData.captiva_password || existingSettings.api_password || existingSettings.password,
     } : undefined;
 
     if (editingIntegration) {
@@ -423,8 +427,8 @@ export default function POSIntegrationsPage() {
           base_url: settings.base_url || "",
           api_key: settings.api_key || integration.api_key || "",
           store_id: settings.store_id || "",
-          username: settings.username || "",
-          password: settings.password || "",
+          username: settings.api_account_name || settings.username || "",
+          password: settings.api_password || settings.password || "",
         });
       } else {
         await testConnection.mutateAsync({
@@ -554,16 +558,20 @@ export default function POSIntegrationsPage() {
                     {formErrors.api_key && <p className="text-xs text-destructive mt-1">{formErrors.api_key}</p>}
                   </div>
                   <div>
-                    <Label>Username *</Label>
-                    <Input 
+                    <Label>API Account Name *</Label>
+                    <Input
+                      placeholder="e.g. Pizzeria La Scala Max Gerhardt"
                       value={formData.captiva_username} 
                       onChange={e => { setFormData(p => ({ ...p, captiva_username: e.target.value })); setFormErrors(p => ({ ...p, captiva_username: "" })); }} 
                       className={formErrors.captiva_username ? "border-destructive" : ""}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Exact <code>API Account Name</code> from the Captiva API credentials email — not your portal login email.
+                    </p>
                     {formErrors.captiva_username && <p className="text-xs text-destructive mt-1">{formErrors.captiva_username}</p>}
                   </div>
                   <div>
-                    <Label>Password *{editingIntegration ? " (leave empty to keep existing)" : ""}</Label>
+                    <Label>API Password *{editingIntegration ? " (leave empty to keep existing)" : ""}</Label>
                     <div className="relative">
                       <Input 
                         type={showPassword ? "text" : "password"} 
@@ -582,30 +590,12 @@ export default function POSIntegrationsPage() {
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Exact <code>API Password</code> from the Captiva API credentials email — not your portal password.
+                    </p>
                     {formErrors.captiva_password && <p className="text-xs text-destructive mt-1">{formErrors.captiva_password}</p>}
                   </div>
-                  <div>
-                    <Label>User ID</Label>
-                    <Input
-                      placeholder="e.g. 2"
-                      value={formData.captiva_user_id}
-                      onChange={e => setFormData(p => ({ ...p, captiva_user_id: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Numeric Captiva user ID — usually the digit after the username in the portal header (e.g. <code>Max Gerhardt 2</code> → <code>2</code>). Required by most Captiva Cloud RequestTypes.
-                    </p>
-                  </div>
-                  <div>
-                    <Label>Journals / API Service ID (optional)</Label>
-                    <Input
-                      placeholder="UUID from the AP / Journals popup"
-                      value={formData.captiva_journals_service_id}
-                      onChange={e => setFormData(p => ({ ...p, captiva_journals_service_id: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      The UUID shown on the AP / Journals popup in Captiva Cloud (e.g. <code>473c687b-b7bd-4de4-a51a-2ba445fe133d</code>). Sent as <code>ServiceID</code>. Leave blank if your tenant does not require it.
-                    </p>
-                  </div>
+
                 </>
               )}
               
@@ -718,29 +708,19 @@ export default function POSIntegrationsPage() {
                                 {settings?.store_id || <span className="text-muted-foreground/60">Not set</span>}
                               </span>
 
-                              <span className="text-muted-foreground whitespace-nowrap">User ID</span>
-                              <span className="font-mono text-[11px] truncate text-right" title={settings?.user_id || "Not set"}>
-                                {settings?.user_id || <span className="text-muted-foreground/60">Not set</span>}
-                              </span>
-
-                              <span className="text-muted-foreground whitespace-nowrap">Service ID</span>
-                              <span className="font-mono text-[11px] truncate text-right" title={settings?.journals_service_id || "Not set"}>
-                                {settings?.journals_service_id ? `${settings.journals_service_id.substring(0, 8)}…` : <span className="text-muted-foreground/60">Not set</span>}
-                              </span>
-                              
                               <span className="text-muted-foreground whitespace-nowrap">API Key</span>
                               <span className="font-mono text-[11px] text-right">
                                 {settings?.api_key || integration.api_key ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
                               </span>
-                              
-                              <span className="text-muted-foreground whitespace-nowrap">Username</span>
-                              <span className="font-mono text-[11px] truncate text-right" title={settings?.username || "Not set"}>
-                                {settings?.username || <span className="text-muted-foreground/60">Not set</span>}
+
+                              <span className="text-muted-foreground whitespace-nowrap">API Account Name</span>
+                              <span className="font-mono text-[11px] truncate text-right" title={settings?.api_account_name || settings?.username || "Not set"}>
+                                {settings?.api_account_name || settings?.username || <span className="text-muted-foreground/60">Not set</span>}
                               </span>
-                              
-                              <span className="text-muted-foreground whitespace-nowrap">Password</span>
+
+                              <span className="text-muted-foreground whitespace-nowrap">API Password</span>
                               <span className="font-mono text-[11px] text-right">
-                                {settings?.password ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
+                                {(settings?.api_password || settings?.password) ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
                               </span>
                             </div>
                             {/* Credentials Status */}

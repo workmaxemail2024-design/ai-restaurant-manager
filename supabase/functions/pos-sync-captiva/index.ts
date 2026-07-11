@@ -10,10 +10,14 @@ interface CaptivaSettings {
   base_url?: string;
   store_id?: string; // numeric outlet/store code, e.g. "02137"
   api_key?: string;
+  // New canonical fields (match Captiva API email):
+  api_account_name?: string;
+  api_password?: string;
+  // Legacy fallback fields (older rows saved these):
   username?: string;
   password?: string;
-  user_id?: string; // numeric Captiva User ID (e.g. "2" for "Max Gerhardt 2")
-  journals_service_id?: string; // UUID shown on AP/Journals popup (optional)
+  user_id?: string; // legacy — no longer sent unless explicitly required
+  journals_service_id?: string; // legacy — no longer sent unless explicitly required
 }
 
 interface SyncResult {
@@ -95,9 +99,13 @@ serve(async (req) => {
     }
 
     const settings = integration.settings as CaptivaSettings;
-    if (!settings?.base_url || !settings?.store_id || !settings?.username || !settings?.password) {
+    // Prefer the new canonical field names from the Captiva API email; fall back to
+    // legacy username/password for older rows that haven't been re-saved yet.
+    const apiAccountName = settings?.api_account_name || settings?.username || "";
+    const apiPassword = settings?.api_password || settings?.password || "";
+    if (!settings?.base_url || !settings?.store_id || !apiAccountName || !apiPassword) {
       return new Response(
-        JSON.stringify({ success: false, error: "Integration missing required Captiva credentials" }),
+        JSON.stringify({ success: false, error: "Integration missing required Captiva credentials (base_url, store_id, api_account_name, api_password)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -170,28 +178,26 @@ serve(async (req) => {
       let lastRequestType = "";
 
       for (const rt of requestTypes) {
+        // Captiva API request body — fields per the Captiva API email:
+        //   APIKey, UserName (= API Account Name), Password (= API Password), OutletCode
+        // UserID and ServiceID are intentionally NOT sent unless Captiva docs specifically
+        // require them (previous guessed values were rejected with "user id required").
         const requestPayload: Record<string, unknown> = {
           APIKey: apiKey,
-          UserName: settings.username,
-          Password: settings.password,
+          UserName: apiAccountName,
+          Password: apiPassword,
           OutletCode: settings.store_id,
-          UserID: settings.user_id ?? "",
           RequestType: rt,
           FromDate: date_from,
           ToDate: date_to,
         };
-        if (settings.journals_service_id) {
-          requestPayload.ServiceID = settings.journals_service_id;
-        }
 
-        console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} UserID=${settings.user_id ?? "(none)"} ${date_from} -> ${date_to}`);
+        console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} Account=${apiAccountName} ${date_from} -> ${date_to}`);
 
         // Sanitized payload (excludes APIKey/Password) for debug logging.
         const sanitizedPayload = {
-          UserName: settings.username,
+          UserName: apiAccountName,
           OutletCode: settings.store_id,
-          UserID: settings.user_id ?? "",
-          ServiceID: settings.journals_service_id ?? null,
           RequestType: rt,
           FromDate: date_from,
           ToDate: date_to,
@@ -291,8 +297,10 @@ serve(async (req) => {
           final_endpoint_url: captivaEndpoint,
           already_had_dispatcher: alreadyHasDispatcher,
           store_id_sent: settings.store_id,
-          user_id_sent: settings.user_id ?? null,
-          service_id_sent: settings.journals_service_id ?? null,
+          api_account_name_sent: apiAccountName,
+          user_id_sent: null,
+          service_id_sent: null,
+          note: "UserID and ServiceID intentionally omitted per Captiva API email spec",
           date_format_sent: "YYYY-MM-DD",
           last_request_type: lastRequestType,
           last_http_status: lastStatus,
