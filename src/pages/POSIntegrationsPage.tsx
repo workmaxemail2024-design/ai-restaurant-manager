@@ -44,6 +44,10 @@ interface CaptivaSettings {
   base_url?: string;
   store_id?: string;
   api_key?: string;
+  // New canonical fields (match Captiva API email):
+  api_account_name?: string;
+  api_password?: string;
+  // Legacy — retained for backward compat when reading older rows:
   username?: string;
   password?: string;
   user_id?: string;
