@@ -142,10 +142,10 @@ export default function POSIntegrationsPage() {
       webhook_url: integration.webhook_url || "",
       captiva_base_url: settings?.base_url || "",
       captiva_store_id: settings?.store_id || "",
-      captiva_username: settings?.username || "",
-      captiva_password: settings?.password || "",
-      captiva_user_id: settings?.user_id || "",
-      captiva_journals_service_id: settings?.journals_service_id || "",
+      captiva_username: settings?.api_account_name || settings?.username || "",
+      captiva_password: settings?.api_password || settings?.password || "",
+      captiva_user_id: "",
+      captiva_journals_service_id: "",
     });
     setFormErrors({});
     setIsAddOpen(true);
