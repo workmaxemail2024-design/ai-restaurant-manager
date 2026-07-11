@@ -158,8 +158,8 @@ export default function POSIntegrationsPage() {
     if (!formData.captiva_base_url.trim()) errors.captiva_base_url = "Base URL is required";
     if (!formData.captiva_store_id.trim()) errors.captiva_store_id = "Store ID is required";
     if (!formData.api_key.trim() && !editingIntegration) errors.api_key = "API Key is required";
-    if (!formData.captiva_username.trim()) errors.captiva_username = "Username is required";
-    if (!formData.captiva_password.trim() && !editingIntegration) errors.captiva_password = "Password is required";
+    if (!formData.captiva_username.trim()) errors.captiva_username = "API Account Name is required";
+    if (!formData.captiva_password.trim() && !editingIntegration) errors.captiva_password = "API Password is required";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   }, [formData, editingIntegration]);
@@ -172,8 +172,8 @@ export default function POSIntegrationsPage() {
     if (!settings?.base_url) missing.push("base_url");
     if (!settings?.store_id) missing.push("store_id");
     if (!settings?.api_key && !integration.api_key) missing.push("api_key");
-    if (!settings?.username) missing.push("username");
-    if (!settings?.password) missing.push("password");
+    if (!settings?.api_account_name && !settings?.username) missing.push("api_account_name");
+    if (!settings?.api_password && !settings?.password) missing.push("api_password");
     return missing;
   }, []);
 
