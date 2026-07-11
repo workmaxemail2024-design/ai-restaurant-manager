@@ -558,16 +558,20 @@ export default function POSIntegrationsPage() {
                     {formErrors.api_key && <p className="text-xs text-destructive mt-1">{formErrors.api_key}</p>}
                   </div>
                   <div>
-                    <Label>Username *</Label>
-                    <Input 
+                    <Label>API Account Name *</Label>
+                    <Input
+                      placeholder="e.g. Pizzeria La Scala Max Gerhardt"
                       value={formData.captiva_username} 
                       onChange={e => { setFormData(p => ({ ...p, captiva_username: e.target.value })); setFormErrors(p => ({ ...p, captiva_username: "" })); }} 
                       className={formErrors.captiva_username ? "border-destructive" : ""}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Exact <code>API Account Name</code> from the Captiva API credentials email — not your portal login email.
+                    </p>
                     {formErrors.captiva_username && <p className="text-xs text-destructive mt-1">{formErrors.captiva_username}</p>}
                   </div>
                   <div>
-                    <Label>Password *{editingIntegration ? " (leave empty to keep existing)" : ""}</Label>
+                    <Label>API Password *{editingIntegration ? " (leave empty to keep existing)" : ""}</Label>
                     <div className="relative">
                       <Input 
                         type={showPassword ? "text" : "password"} 
@@ -586,30 +590,12 @@ export default function POSIntegrationsPage() {
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Exact <code>API Password</code> from the Captiva API credentials email — not your portal password.
+                    </p>
                     {formErrors.captiva_password && <p className="text-xs text-destructive mt-1">{formErrors.captiva_password}</p>}
                   </div>
-                  <div>
-                    <Label>User ID</Label>
-                    <Input
-                      placeholder="e.g. 2"
-                      value={formData.captiva_user_id}
-                      onChange={e => setFormData(p => ({ ...p, captiva_user_id: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Numeric Captiva user ID — usually the digit after the username in the portal header (e.g. <code>Max Gerhardt 2</code> → <code>2</code>). Required by most Captiva Cloud RequestTypes.
-                    </p>
-                  </div>
-                  <div>
-                    <Label>Journals / API Service ID (optional)</Label>
-                    <Input
-                      placeholder="UUID from the AP / Journals popup"
-                      value={formData.captiva_journals_service_id}
-                      onChange={e => setFormData(p => ({ ...p, captiva_journals_service_id: e.target.value }))}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      The UUID shown on the AP / Journals popup in Captiva Cloud (e.g. <code>473c687b-b7bd-4de4-a51a-2ba445fe133d</code>). Sent as <code>ServiceID</code>. Leave blank if your tenant does not require it.
-                    </p>
-                  </div>
+
                 </>
               )}
               
