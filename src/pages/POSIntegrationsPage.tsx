@@ -365,14 +365,14 @@ export default function POSIntegrationsPage() {
       return;
     }
 
+    const existingSettings = (editingIntegration?.settings as CaptivaSettings) || {};
     const captivaSettings = formData.pos_provider === "captiva" ? {
       base_url: formData.captiva_base_url,
       store_id: formData.captiva_store_id,
-      api_key: formData.api_key || (editingIntegration?.settings as CaptivaSettings)?.api_key,
-      username: formData.captiva_username,
-      password: formData.captiva_password || (editingIntegration?.settings as CaptivaSettings)?.password,
-      user_id: formData.captiva_user_id || (editingIntegration?.settings as CaptivaSettings)?.user_id,
-      journals_service_id: formData.captiva_journals_service_id || (editingIntegration?.settings as CaptivaSettings)?.journals_service_id,
+      api_key: formData.api_key || existingSettings.api_key,
+      // New canonical keys (Captiva API email):
+      api_account_name: formData.captiva_username,
+      api_password: formData.captiva_password || existingSettings.api_password || existingSettings.password,
     } : undefined;
 
     if (editingIntegration) {
