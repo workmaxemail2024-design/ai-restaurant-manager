@@ -10,10 +10,14 @@ interface CaptivaSettings {
   base_url?: string;
   store_id?: string; // numeric outlet/store code, e.g. "02137"
   api_key?: string;
+  // New canonical fields (match Captiva API email):
+  api_account_name?: string;
+  api_password?: string;
+  // Legacy fallback fields (older rows saved these):
   username?: string;
   password?: string;
-  user_id?: string; // numeric Captiva User ID (e.g. "2" for "Max Gerhardt 2")
-  journals_service_id?: string; // UUID shown on AP/Journals popup (optional)
+  user_id?: string; // legacy — no longer sent unless explicitly required
+  journals_service_id?: string; // legacy — no longer sent unless explicitly required
 }
 
 interface SyncResult {
