@@ -708,29 +708,19 @@ export default function POSIntegrationsPage() {
                                 {settings?.store_id || <span className="text-muted-foreground/60">Not set</span>}
                               </span>
 
-                              <span className="text-muted-foreground whitespace-nowrap">User ID</span>
-                              <span className="font-mono text-[11px] truncate text-right" title={settings?.user_id || "Not set"}>
-                                {settings?.user_id || <span className="text-muted-foreground/60">Not set</span>}
-                              </span>
-
-                              <span className="text-muted-foreground whitespace-nowrap">Service ID</span>
-                              <span className="font-mono text-[11px] truncate text-right" title={settings?.journals_service_id || "Not set"}>
-                                {settings?.journals_service_id ? `${settings.journals_service_id.substring(0, 8)}…` : <span className="text-muted-foreground/60">Not set</span>}
-                              </span>
-                              
                               <span className="text-muted-foreground whitespace-nowrap">API Key</span>
                               <span className="font-mono text-[11px] text-right">
                                 {settings?.api_key || integration.api_key ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
                               </span>
-                              
-                              <span className="text-muted-foreground whitespace-nowrap">Username</span>
-                              <span className="font-mono text-[11px] truncate text-right" title={settings?.username || "Not set"}>
-                                {settings?.username || <span className="text-muted-foreground/60">Not set</span>}
+
+                              <span className="text-muted-foreground whitespace-nowrap">API Account Name</span>
+                              <span className="font-mono text-[11px] truncate text-right" title={settings?.api_account_name || settings?.username || "Not set"}>
+                                {settings?.api_account_name || settings?.username || <span className="text-muted-foreground/60">Not set</span>}
                               </span>
-                              
-                              <span className="text-muted-foreground whitespace-nowrap">Password</span>
+
+                              <span className="text-muted-foreground whitespace-nowrap">API Password</span>
                               <span className="font-mono text-[11px] text-right">
-                                {settings?.password ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
+                                {(settings?.api_password || settings?.password) ? "••••••••" : <span className="text-muted-foreground/60">Not set</span>}
                               </span>
                             </div>
                             {/* Credentials Status */}
