@@ -427,8 +427,8 @@ export default function POSIntegrationsPage() {
           base_url: settings.base_url || "",
           api_key: settings.api_key || integration.api_key || "",
           store_id: settings.store_id || "",
-          username: settings.username || "",
-          password: settings.password || "",
+          username: settings.api_account_name || settings.username || "",
+          password: settings.api_password || settings.password || "",
         });
       } else {
         await testConnection.mutateAsync({
