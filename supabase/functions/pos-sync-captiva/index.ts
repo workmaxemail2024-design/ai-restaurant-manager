@@ -178,28 +178,26 @@ serve(async (req) => {
       let lastRequestType = "";
 
       for (const rt of requestTypes) {
+        // Captiva API request body — fields per the Captiva API email:
+        //   APIKey, UserName (= API Account Name), Password (= API Password), OutletCode
+        // UserID and ServiceID are intentionally NOT sent unless Captiva docs specifically
+        // require them (previous guessed values were rejected with "user id required").
         const requestPayload: Record<string, unknown> = {
           APIKey: apiKey,
-          UserName: settings.username,
-          Password: settings.password,
+          UserName: apiAccountName,
+          Password: apiPassword,
           OutletCode: settings.store_id,
-          UserID: settings.user_id ?? "",
           RequestType: rt,
           FromDate: date_from,
           ToDate: date_to,
         };
-        if (settings.journals_service_id) {
-          requestPayload.ServiceID = settings.journals_service_id;
-        }
 
-        console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} UserID=${settings.user_id ?? "(none)"} ${date_from} -> ${date_to}`);
+        console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} Account=${apiAccountName} ${date_from} -> ${date_to}`);
 
         // Sanitized payload (excludes APIKey/Password) for debug logging.
         const sanitizedPayload = {
-          UserName: settings.username,
+          UserName: apiAccountName,
           OutletCode: settings.store_id,
-          UserID: settings.user_id ?? "",
-          ServiceID: settings.journals_service_id ?? null,
           RequestType: rt,
           FromDate: date_from,
           ToDate: date_to,
