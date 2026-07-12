@@ -35,6 +35,56 @@ interface SyncResult {
   error?: string;
 }
 
+const parseCaptivaRows = (rawBody: string): { rows: unknown[]; error: string | null } => {
+  let parsedJson: Record<string, unknown> | unknown[] | null = null;
+  try {
+    parsedJson = JSON.parse(rawBody);
+  } catch {
+    parsedJson = null;
+  }
+
+  if (parsedJson) {
+    const obj = parsedJson as Record<string, unknown>;
+    const error = obj.ErrorMessage || obj.errorMessage || obj.Error || (obj.result === "Error" ? obj.resultdesc : null);
+    const candidate =
+      (Array.isArray(parsedJson) && parsedJson) ||
+      obj.Sales || obj.sales ||
+      obj.Journals || obj.journals ||
+      obj.Data || obj.data ||
+      obj.Results || obj.results ||
+      [];
+    return { rows: Array.isArray(candidate) ? candidate : [], error: error ? String(error) : null };
+  }
+
+  const rows: unknown[] = [];
+  if (rawBody.includes("<")) {
+    const errorMatch = rawBody.match(/<(?:resultdesc|ErrorMessage|error|Error)>([^<]+)<\//i);
+    const matches = rawBody.matchAll(/<(?:sale|journal|transaction)[^>]*>([\s\S]*?)<\/(?:sale|journal|transaction)>/gi);
+    for (const m of matches) {
+      const xml = m[1];
+      const id = xml.match(/<(?:receipt_id|id|ReceiptNumber|TransactionID)>([^<]+)<\//i)?.[1];
+      const total = xml.match(/<(?:total|GrossTotal|NetTotal|Amount)>([^<]+)<\//i)?.[1];
+      const date = xml.match(/<(?:date|sale_date|TransactionDate|DateTime)>([^<]+)<\//i)?.[1];
+      if (id) rows.push({ receipt_id: id, sale_date: date, total: parseFloat(total ?? "0"), raw_xml: xml });
+    }
+    return { rows, error: errorMatch?.[1] ?? null };
+  }
+
+  return { rows, error: null };
+};
+
+const isUserIdRequiredError = (error: string | null, rawBody: string): boolean => {
+  const haystack = `${error ?? ""} ${rawBody}`.toLowerCase();
+  return haystack.includes("user id required");
+};
+
+const redactCaptivaSecrets = (value: string, apiKey?: string, apiPassword?: string): string => {
+  let redacted = value;
+  if (apiKey) redacted = redacted.split(apiKey).join("[redacted]");
+  if (apiPassword) redacted = redacted.split(apiPassword).join("[redacted]");
+  return redacted;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -42,7 +92,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { integration_id, date_from, date_to, location_id, auto_apply, diagnostic_user_id } = body;
+    const { integration_id, date_from, date_to, location_id, auto_apply, diagnostic_user_id, diagnostic_format_test } = body;
 
     // Verify auth: accept either a logged-in user JWT OR the service-role key
     // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely)
@@ -171,6 +221,158 @@ serve(async (req) => {
       // Try multiple RequestType names since Captiva exposes both sales/journal endpoints.
       // We attempt them in order until one returns rows or a clearly recognized response.
       const requestTypes = ["GetSales", "GetJournals", "GetProductSales", "GetSalesJournal"];
+
+      if (diagnostic_format_test === true) {
+        const requestType = "GetSales";
+        const userId = diagnostic_user_id ? String(diagnostic_user_id) : "2";
+        const basePayload: Record<string, string> = {
+          APIKey: String(apiKey ?? ""),
+          UserName: apiAccountName,
+          Password: apiPassword,
+          OutletCode: String(settings.store_id ?? ""),
+          UserID: userId,
+          RequestType: requestType,
+          FromDate: date_from,
+          ToDate: date_to,
+        };
+        const sanitizedPayload: Record<string, string> = {
+          ...basePayload,
+          APIKey: "[redacted]",
+          Password: "[redacted]",
+        };
+        const toQueryString = (payload: Record<string, string>) => new URLSearchParams(payload).toString();
+        const sanitizedQueryString = toQueryString(sanitizedPayload);
+
+        const formatAttempts: Array<{
+          format: string;
+          contentType: string | null;
+          sanitizedRequest: string | Record<string, string>;
+          run: () => Promise<Response>;
+        }> = [
+          {
+            format: "json_body",
+            contentType: "application/json",
+            sanitizedRequest: sanitizedPayload,
+            run: () => fetch(captivaEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Accept": "application/json" },
+              body: JSON.stringify(basePayload),
+            }),
+          },
+          {
+            format: "x_www_form_urlencoded_body",
+            contentType: "application/x-www-form-urlencoded",
+            sanitizedRequest: sanitizedQueryString,
+            run: () => fetch(captivaEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
+              body: toQueryString(basePayload),
+            }),
+          },
+          {
+            format: "multipart_form_data_body",
+            contentType: "multipart/form-data",
+            sanitizedRequest: sanitizedPayload,
+            run: () => {
+              const form = new FormData();
+              Object.entries(basePayload).forEach(([key, value]) => form.append(key, value));
+              return fetch(captivaEndpoint, {
+                method: "POST",
+                headers: { "Accept": "application/json" },
+                body: form,
+              });
+            },
+          },
+          {
+            format: "query_string_parameters",
+            contentType: null,
+            sanitizedRequest: `${captivaEndpoint}?${sanitizedQueryString}`,
+            run: () => fetch(`${captivaEndpoint}?${toQueryString(basePayload)}`, {
+              method: "GET",
+              headers: { "Accept": "application/json" },
+            }),
+          },
+          {
+            format: "xml_body",
+            contentType: "application/xml",
+            sanitizedRequest: `<Request><APIKey>[redacted]</APIKey><UserName>${apiAccountName}</UserName><Password>[redacted]</Password><OutletCode>${settings.store_id}</OutletCode><UserID>${userId}</UserID><RequestType>${requestType}</RequestType><FromDate>${date_from}</FromDate><ToDate>${date_to}</ToDate></Request>`,
+            run: () => fetch(captivaEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/xml", "Accept": "application/xml, application/json" },
+              body: `<Request><APIKey>${basePayload.APIKey}</APIKey><UserName>${basePayload.UserName}</UserName><Password>${basePayload.Password}</Password><OutletCode>${basePayload.OutletCode}</OutletCode><UserID>${basePayload.UserID}</UserID><RequestType>${basePayload.RequestType}</RequestType><FromDate>${basePayload.FromDate}</FromDate><ToDate>${basePayload.ToDate}</ToDate></Request>`,
+            }),
+          },
+        ];
+
+        const diagnosticResults: Array<Record<string, unknown>> = [];
+        for (const attempt of formatAttempts) {
+          let httpStatus = 0;
+          let rawFirst2000 = "";
+          let errorMessage: string | null = null;
+          let parsedRowCount = 0;
+          let changedFromUserIdRequired = false;
+
+          try {
+            const response = await attempt.run();
+            httpStatus = response.status;
+            const rawBody = await response.text();
+            rawFirst2000 = redactCaptivaSecrets(rawBody.substring(0, 2000), String(apiKey ?? ""), apiPassword);
+            const parsed = parseCaptivaRows(rawBody);
+            parsedRowCount = parsed.rows.length;
+            errorMessage = parsed.error ?? (response.ok ? null : `HTTP ${response.status}`);
+            changedFromUserIdRequired = !isUserIdRequiredError(errorMessage, rawBody);
+          } catch (err) {
+            errorMessage = err instanceof Error ? err.message : String(err);
+            changedFromUserIdRequired = true;
+          }
+
+          const details = {
+            integration_id,
+            date_from,
+            date_to,
+            final_endpoint_url: captivaEndpoint,
+            format_used: attempt.format,
+            content_type: attempt.contentType,
+            request_type: requestType,
+            user_id_sent: userId,
+            sanitized_request: attempt.sanitizedRequest,
+            http_status: httpStatus,
+            raw_response_first_2000: rawFirst2000,
+            error_changed_from_user_id_required: changedFromUserIdRequired,
+            parsed_row_count: parsedRowCount,
+            error_message: errorMessage,
+            note: "Diagnostic-only request format test; no sales are staged or applied by this branch.",
+          };
+
+          diagnosticResults.push(details);
+          await adminClient.from("pos_sync_logs").insert({
+            location_id,
+            restaurant_id: integration.restaurant_id,
+            pos_provider: "captiva",
+            event_type: "sync_debug",
+            status: parsedRowCount > 0 ? "info" : changedFromUserIdRequired ? "warning" : "warning",
+            message: `Captiva format diagnostic ${attempt.format}: ${parsedRowCount} rows, ${errorMessage ?? "no error"}`,
+            details,
+          });
+
+          if (changedFromUserIdRequired) {
+            break;
+          }
+        }
+
+        await adminClient
+          .from("pos_integrations")
+          .update({
+            last_sync_status: "diagnostic",
+            last_sync_error: diagnosticResults.at(-1)?.error_message ?? null,
+          })
+          .eq("id", integration_id);
+
+        return new Response(
+          JSON.stringify({ success: true, diagnostic_only: true, applied: false, results: diagnosticResults }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       const attemptDebug: Array<Record<string, unknown>> = [];
       let lastRawSample = "";
