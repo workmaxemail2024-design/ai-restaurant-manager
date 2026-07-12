@@ -78,6 +78,13 @@ const isUserIdRequiredError = (error: string | null, rawBody: string): boolean =
   return haystack.includes("user id required");
 };
 
+const redactCaptivaSecrets = (value: string, apiKey?: string, apiPassword?: string): string => {
+  let redacted = value;
+  if (apiKey) redacted = redacted.split(apiKey).join("[redacted]");
+  if (apiPassword) redacted = redacted.split(apiPassword).join("[redacted]");
+  return redacted;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -87,19 +94,10 @@ serve(async (req) => {
     const body = await req.json();
     const { integration_id, date_from, date_to, location_id, auto_apply, diagnostic_user_id, diagnostic_format_test } = body;
 
-    const isExactDiagnosticFormatTest =
-      diagnostic_format_test === true &&
-      integration_id === "352d9172-529c-493c-a015-fada248ad054" &&
-      location_id === "461a2edc-108d-4923-89c4-ac7a9f8cb9e1" &&
-      date_from === "2026-06-07" &&
-      date_to === "2026-06-07" &&
-      String(diagnostic_user_id ?? "2") === "2" &&
-      auto_apply === false;
-
     // Verify auth: accept either a logged-in user JWT OR the service-role key
     // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely)
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader && !isExactDiagnosticFormatTest) {
+    if (!authHeader) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing authorization header" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -111,7 +109,7 @@ serve(async (req) => {
     const token = authHeader?.replace("Bearer ", "").trim() ?? "";
     const isServiceRole = serviceRoleKey && token === serviceRoleKey;
 
-    if (!isServiceRole && !isExactDiagnosticFormatTest) {
+    if (!isServiceRole) {
       const supabase = createClient(
         supabaseUrl,
         Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -318,7 +316,7 @@ serve(async (req) => {
             const response = await attempt.run();
             httpStatus = response.status;
             const rawBody = await response.text();
-            rawFirst2000 = rawBody.substring(0, 2000);
+            rawFirst2000 = redactCaptivaSecrets(rawBody.substring(0, 2000), String(apiKey ?? ""), apiPassword);
             const parsed = parseCaptivaRows(rawBody);
             parsedRowCount = parsed.rows.length;
             errorMessage = parsed.error ?? (response.ok ? null : `HTTP ${response.status}`);
