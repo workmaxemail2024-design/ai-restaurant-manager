@@ -360,14 +360,6 @@ serve(async (req) => {
           }
         }
 
-        await adminClient
-          .from("pos_integrations")
-          .update({
-            last_sync_status: "diagnostic",
-            last_sync_error: diagnosticResults.at(-1)?.error_message ?? null,
-          })
-          .eq("id", integration_id);
-
         return new Response(
           JSON.stringify({ success: true, diagnostic_only: true, applied: false, results: diagnosticResults }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
