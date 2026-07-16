@@ -1241,9 +1241,17 @@ export default function ReportsPage() {
                     <div className={cn("text-xl font-bold", periodSummary.profit >= 0 ? "text-success" : "text-destructive")}>
                       {formatCurrency(periodSummary.profit)}
                     </div>
-                    {periodSummary.itemsMissingCost > 0 && (
-                      <div className="text-[10px] text-warning">Margin incomplete — {periodSummary.itemsMissingCost} items missing cost</div>
-                    )}
+                    <div className="space-y-0.5 mt-0.5">
+                      {periodSummary.foodCostIsEstimated && (
+                        <div className="text-[10px] text-warning">Margin incomplete — using est. 30% food cost</div>
+                      )}
+                      {periodSummary.itemsMissingCost > 0 && (
+                        <div className="text-[10px] text-warning">{periodSummary.itemsMissingCost} items missing cost</div>
+                      )}
+                      {!periodSummary.hasAnyLabour && (
+                        <div className="text-[10px] text-warning">Labour missing</div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
