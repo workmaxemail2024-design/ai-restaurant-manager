@@ -889,6 +889,75 @@ export type Database = {
           },
         ]
       }
+      pos_daily_summaries: {
+        Row: {
+          average_order_value: number | null
+          created_at: string
+          discounts: number
+          gross_sales: number
+          id: string
+          location_id: string | null
+          net_sales: number
+          order_count: number | null
+          pos_provider: string
+          report_date: string
+          restaurant_id: string
+          source_file_name: string | null
+          updated_at: string
+          vat_amount: number
+          visitor_count: number | null
+        }
+        Insert: {
+          average_order_value?: number | null
+          created_at?: string
+          discounts?: number
+          gross_sales?: number
+          id?: string
+          location_id?: string | null
+          net_sales?: number
+          order_count?: number | null
+          pos_provider: string
+          report_date: string
+          restaurant_id: string
+          source_file_name?: string | null
+          updated_at?: string
+          vat_amount?: number
+          visitor_count?: number | null
+        }
+        Update: {
+          average_order_value?: number | null
+          created_at?: string
+          discounts?: number
+          gross_sales?: number
+          id?: string
+          location_id?: string | null
+          net_sales?: number
+          order_count?: number | null
+          pos_provider?: string
+          report_date?: string
+          restaurant_id?: string
+          source_file_name?: string | null
+          updated_at?: string
+          vat_amount?: number
+          visitor_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_daily_summaries_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_daily_summaries_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_integrations: {
         Row: {
           api_key: string | null

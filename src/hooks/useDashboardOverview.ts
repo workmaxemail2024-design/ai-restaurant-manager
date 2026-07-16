@@ -12,8 +12,9 @@ interface HourlyRevenue {
 
 interface DashboardOverview {
   revenueToday: number;
-  ordersToday: number;
-  aovToday: number;
+  ordersToday: number | null;
+  aovToday: number | null;
+  visitorsToday: number | null;
   revenueYesterday: number;
   revenueSameWeekdayLastWeek: number;
   labourTodayCost: number;
@@ -40,8 +41,9 @@ export function useDashboardOverview(locationId?: string | null) {
       if (!restaurantId) {
         return {
           revenueToday: 0,
-          ordersToday: 0,
-          aovToday: 0,
+          ordersToday: null,
+          aovToday: null,
+          visitorsToday: null,
           revenueYesterday: 0,
           revenueSameWeekdayLastWeek: 0,
           labourTodayCost: 0,
@@ -50,6 +52,7 @@ export function useDashboardOverview(locationId?: string | null) {
           revenueSeries: [],
           isLoadingRevenue: false,
         };
+
       }
 
       // Fetch sales for selected date range
@@ -94,10 +97,39 @@ export function useDashboardOverview(locationId?: string | null) {
 
       // Calculate revenue totals for the selected range
       const revenueToday = rangeSales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
-      const ordersToday = rangeSales?.length || 0;
-      const aovToday = ordersToday > 0 ? revenueToday / ordersToday : 0;
       const revenueYesterday = yesterdaySales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
       const revenueSameWeekdayLastWeek = lastWeekSales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
+
+      // Prefer authoritative order/visitor/AOV counts from pos_daily_summaries.
+      // Product-row counts (sales.length) are NOT receipts, so we don't fall back to them.
+      let summaryQuery = supabase
+        .from("pos_daily_summaries")
+        .select("order_count, visitor_count, average_order_value, gross_sales")
+        .eq("restaurant_id", restaurantId)
+        .gte("report_date", startDate)
+        .lte("report_date", endDate);
+      if (locationId) summaryQuery = summaryQuery.eq("location_id", locationId);
+      const { data: summaries } = await summaryQuery;
+
+      let ordersToday: number | null = null;
+      let visitorsToday: number | null = null;
+      let aovToday: number | null = null;
+      if (summaries && summaries.length) {
+        const orderSum = summaries.reduce<number | null>((acc, r: any) => {
+          if (r.order_count == null) return acc;
+          return (acc ?? 0) + Number(r.order_count);
+        }, null);
+        const visitorSum = summaries.reduce<number | null>((acc, r: any) => {
+          if (r.visitor_count == null) return acc;
+          return (acc ?? 0) + Number(r.visitor_count);
+        }, null);
+        ordersToday = orderSum;
+        visitorsToday = visitorSum;
+        if (orderSum != null && orderSum > 0) {
+          aovToday = revenueToday / orderSum;
+        }
+      }
+
 
       // Build hourly revenue series for the end date (most recent day in range)
       const hourlyMap: Record<string, { revenue: number; orders: number }> = {};
@@ -176,6 +208,7 @@ export function useDashboardOverview(locationId?: string | null) {
         revenueToday,
         ordersToday,
         aovToday,
+        visitorsToday,
         revenueYesterday,
         revenueSameWeekdayLastWeek,
         labourTodayCost,
@@ -184,6 +217,7 @@ export function useDashboardOverview(locationId?: string | null) {
         revenueSeries,
         isLoadingRevenue: false,
       };
+
     },
     enabled: !!restaurantId,
     refetchOnMount: "always",
