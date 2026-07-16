@@ -10,6 +10,14 @@ import {
   type ExternalPOSItem,
 } from '@/hooks/usePOS';
 import { useDateRange } from '@/contexts/DateRangeContext';
+import { DateRangeSelector } from '@/components/DateRangeSelector';
+import { useLocation } from '@/contexts/LocationContext';
+import { useLocations } from '@/hooks/useLocations';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format, parseISO } from 'date-fns';
+import { CalendarIcon, MapPin } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
