@@ -570,6 +570,79 @@ export function useUnmappedPOSItems(locationId?: string, posProvider?: string) {
   });
 }
 
+// ========== External POS Items (Captiva product catalogue) ==========
+
+export interface ExternalPOSItem {
+  id: string;
+  restaurant_id: string;
+  location_id: string;
+  pos_provider: string;
+  external_item_id: string;
+  external_item_name: string | null;
+  department: string | null;
+  mapped_dish_id: string | null;
+  needs_review: boolean;
+  last_qty: number | null;
+  last_gross: number | null;
+  last_seen_at: string | null;
+  dishes?: { id: string; name: string } | null;
+}
+
+export function useExternalPOSItems(locationId?: string, posProvider?: string) {
+  return useQuery({
+    queryKey: ["external-pos-items", locationId, posProvider],
+    queryFn: async () => {
+      if (!locationId) return [] as ExternalPOSItem[];
+      let query = supabase
+        .from("external_pos_items")
+        .select("*, dishes:mapped_dish_id (id, name)")
+        .eq("location_id", locationId)
+        .order("last_gross", { ascending: false, nullsFirst: false });
+      if (posProvider) {
+        // Match both captiva variants (api vs xls) so the mapping tab is complete
+        if (posProvider.startsWith("captiva")) {
+          query = query.like("pos_provider", "captiva%");
+        } else {
+          query = query.eq("pos_provider", posProvider);
+        }
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as unknown as ExternalPOSItem[];
+    },
+    enabled: !!locationId,
+  });
+}
+
+export function useUpdateExternalPOSItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { id: string; mapped_dish_id?: string | null; needs_review?: boolean }) => {
+      const update: Record<string, unknown> = {};
+      if (params.mapped_dish_id !== undefined) update.mapped_dish_id = params.mapped_dish_id;
+      if (params.needs_review !== undefined) update.needs_review = params.needs_review;
+      const { data, error } = await supabase
+        .from("external_pos_items")
+        .update(update)
+        .eq("id", params.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["external-pos-items"] });
+      queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
+      queryClient.invalidateQueries({ queryKey: ["dishes"] });
+      toast({ title: "POS item updated" });
+    },
+    onError: (error) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+
 
 // Types for unmapped staff
 export interface UnmappedPOSStaff {

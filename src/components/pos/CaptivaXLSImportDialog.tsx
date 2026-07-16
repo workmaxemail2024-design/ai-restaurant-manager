@@ -177,8 +177,14 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     try {
       const dateStr = format(reportDate, "yyyy-MM-dd");
       const provider = "captiva_xls";
+      const inferItemType = (dept: string): string => {
+        const d = (dept || "").toLowerCase();
+        if (/wine|beer|cocktail|spirit|drink|water|soft|coffee|tea|cappuccino|juice|bar|beverage/.test(d)) return "beverage";
+        if (!d) return "other";
+        return "food";
+      };
 
-      // 1) Upsert external POS items (master catalogue of Captiva products for this location)
+      // 1) Upsert external POS items (Captiva product catalogue for this location)
       const catalogueRows = parsed.rows.map((r) => ({
         restaurant_id: currentRestaurant.id,
         location_id: locationId,
@@ -198,17 +204,98 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
         });
       if (catErr) throw catErr;
 
-      // Fetch back with mapped_dish_id so we can post sales
+      // 2) Auto-create master dishes for products that don't already have a mapped dish
       const { data: catalogue } = await supabase
         .from("external_pos_items")
-        .select("id, external_item_id, mapped_dish_id")
+        .select("id, external_item_id, external_item_name, department, mapped_dish_id, needs_review")
         .eq("restaurant_id", currentRestaurant.id)
         .eq("location_id", locationId)
         .eq("pos_provider", provider)
         .in("external_item_id", parsed.rows.map((r) => r.external_item_id));
       const catByExt = new Map((catalogue || []).map((c: any) => [c.external_item_id, c]));
 
-      // 2) Stage every product row in pos_sales_import (idempotent per date+product)
+      // Find already-existing captiva-linked dishes for this restaurant so we don't duplicate
+      const externalIds = parsed.rows.map((r) => r.external_item_id);
+      const { data: existingDishes } = await supabase
+        .from("dishes")
+        .select("id, captiva_external_id")
+        .eq("restaurant_id", currentRestaurant.id)
+        .in("captiva_external_id", externalIds);
+      const dishByExt = new Map<string, string>(
+        (existingDishes || []).map((d: any) => [d.captiva_external_id, d.id])
+      );
+
+      // Rows needing a new auto-created master dish
+      const rowsNeedingDish = parsed.rows.filter((r) => {
+        const cat = catByExt.get(r.external_item_id);
+        if (cat?.mapped_dish_id) return false; // already mapped
+        if (dishByExt.has(r.external_item_id)) return false; // dish exists, we'll re-link
+        return true;
+      });
+      if (rowsNeedingDish.length) {
+        const dishInserts = rowsNeedingDish.map((r) => ({
+          restaurant_id: currentRestaurant.id,
+          location_id: locationId,
+          name: r.item_name || `Captiva ${r.external_item_id}`,
+          category: r.department || null,
+          department: r.department || null,
+          selling_price: r.quantity > 0 ? Number((r.gross_sales / r.quantity).toFixed(2)) : 0,
+          item_type: inferItemType(r.department),
+          source: "captiva_xls",
+          needs_review: true,
+          is_active: true,
+          captiva_external_id: r.external_item_id,
+        }));
+        const { data: created, error: dErr } = await supabase
+          .from("dishes")
+          .insert(dishInserts)
+          .select("id, captiva_external_id");
+        if (dErr) throw dErr;
+        for (const d of created || []) {
+          if (d.captiva_external_id) dishByExt.set(d.captiva_external_id, d.id);
+        }
+      }
+
+      // 3) Persist mapped_dish_id on external_pos_items rows that were previously null
+      const linkRows = parsed.rows
+        .map((r) => {
+          const cat = catByExt.get(r.external_item_id);
+          if (!cat) return null;
+          if (cat.mapped_dish_id) return null; // user has already mapped
+          const dishId = dishByExt.get(r.external_item_id);
+          if (!dishId) return null;
+          return {
+            restaurant_id: currentRestaurant.id,
+            location_id: locationId,
+            pos_provider: provider,
+            external_item_id: r.external_item_id,
+            external_item_name: r.item_name,
+            department: r.department || null,
+            mapped_dish_id: dishId,
+            needs_review: true,
+          };
+        })
+        .filter(Boolean) as any[];
+      if (linkRows.length) {
+        const { error: linkErr } = await supabase
+          .from("external_pos_items")
+          .upsert(linkRows, {
+            onConflict: "restaurant_id,location_id,pos_provider,external_item_id",
+            ignoreDuplicates: false,
+          });
+        if (linkErr) throw linkErr;
+      }
+
+      // Build final external -> dish map (either user-mapped or auto-created)
+      const finalDishByExt = new Map<string, string>();
+      for (const r of parsed.rows) {
+        const dishId = catByExt.get(r.external_item_id)?.mapped_dish_id
+          || dishByExt.get(r.external_item_id)
+          || null;
+        if (dishId) finalDishByExt.set(r.external_item_id, dishId);
+      }
+
+      // 4) Stage every product row in pos_sales_import (idempotent per date+product)
       const importRows = parsed.rows.map((r) => ({
         restaurant_id: currentRestaurant.id,
         location_id: locationId,
@@ -217,7 +304,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
         mapped_quantity: Math.round(r.quantity),
         mapped_total_price: r.gross_sales,
         mapped_sale_date: dateStr,
-        mapped_dish_id: catByExt.get(r.external_item_id)?.mapped_dish_id ?? null,
+        mapped_dish_id: finalDishByExt.get(r.external_item_id) ?? null,
         external_item_id: r.external_item_id,
         item_name: r.item_name,
         department: r.department || null,
@@ -225,7 +312,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
         net_sales: r.net_sales,
         vat_amount: r.vat_amount,
         discount_amount: r.discount_amount,
-        sync_status: catByExt.get(r.external_item_id)?.mapped_dish_id ? "mapped" : "pending",
+        sync_status: finalDishByExt.get(r.external_item_id) ? "mapped" : "pending",
         data: {
           source: provider,
           report_date: dateStr,
@@ -243,36 +330,6 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
 
       let appliedCount = 0;
       if (mode === "apply") {
-        // Ensure a sentinel "Unmapped POS Sales" dish exists so unmapped revenue still lands in sales
-        const SENTINEL_NAME = "Unmapped POS Sales";
-        let sentinelId: string | null = null;
-        const { data: existingSentinel } = await supabase
-          .from("dishes")
-          .select("id")
-          .eq("restaurant_id", currentRestaurant.id)
-          .eq("name", SENTINEL_NAME)
-          .maybeSingle();
-        if (existingSentinel?.id) {
-          sentinelId = existingSentinel.id;
-        } else {
-          const { data: created, error: sErr } = await supabase
-            .from("dishes")
-            .insert({
-              restaurant_id: currentRestaurant.id,
-              name: SENTINEL_NAME,
-              selling_price: 0,
-              item_type: "other",
-              source: "captiva_xls",
-              needs_review: true,
-              is_active: false,
-              category: "Unmapped",
-            })
-            .select("id")
-            .single();
-          if (sErr) throw sErr;
-          sentinelId = created!.id;
-        }
-
         // Wipe any prior POS-sourced sales for this location+date so re-apply is idempotent
         await supabase
           .from("sales")
@@ -283,11 +340,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
           .eq("source", provider);
 
         const saleRows = (stagedRows || [])
-          .filter((s: any) => (s.mapped_quantity ?? 0) > 0 || (s.mapped_total_price ?? 0) > 0)
+          .filter((s: any) => s.mapped_dish_id && ((s.mapped_quantity ?? 0) > 0 || (s.mapped_total_price ?? 0) > 0))
           .map((s: any) => ({
             restaurant_id: currentRestaurant.id,
             location_id: locationId,
-            dish_id: s.mapped_dish_id || sentinelId,
+            dish_id: s.mapped_dish_id,
             quantity: Math.max(1, Math.round(s.mapped_quantity || 1)),
             total_price: Number(s.mapped_total_price || 0),
             sale_date: dateStr,
@@ -301,7 +358,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
         }
       }
 
-      // 3) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs)
+      // 5) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs)
       const parsedOrders = orderCountInput.trim() ? parseInt(orderCountInput, 10) : null;
       const parsedVisitors = visitorCountInput.trim() ? parseInt(visitorCountInput, 10) : null;
       let parsedAOV: number | null = aovInput.trim() ? Number(aovInput.replace(",", ".")) : null;
@@ -309,7 +366,6 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
         parsedAOV = Number((totals.gross / parsedOrders).toFixed(2));
       }
 
-      // Delete-then-insert so we don't need a partial-index onConflict target
       await supabase
         .from("pos_daily_summaries")
         .delete()
@@ -338,7 +394,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
         title: mode === "apply" ? "Import applied" : "Import staged",
         description:
           `${importRows.length} products · ${catalogueRows.length} POS items catalogued` +
-          (mode === "apply" ? ` · ${appliedCount} sale rows posted to dashboard` : "") +
+          (mode === "apply" ? ` · ${appliedCount} product sale rows posted to dashboard` : "") +
           `. Gross ${formatCurrency(totals.gross)}, Net ${formatCurrency(totals.net)}, VAT ${formatCurrency(totals.vat)}, Qty ${totals.qty}` +
           (parsedOrders != null ? `, Orders ${parsedOrders}` : "") + `.`,
       });
