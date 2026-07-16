@@ -1,0 +1,1 @@
+ALTER TABLE public.external_pos_items ADD COLUMN IF NOT EXISTS manual_type text CHECK (manual_type IN ('food','drink','modifier','other'));

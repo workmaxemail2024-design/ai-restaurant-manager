@@ -473,6 +473,7 @@ export type Database = {
           last_qty: number | null
           last_seen_at: string | null
           location_id: string
+          manual_type: string | null
           mapped_dish_id: string | null
           needs_review: boolean
           pos_provider: string
@@ -489,6 +490,7 @@ export type Database = {
           last_qty?: number | null
           last_seen_at?: string | null
           location_id: string
+          manual_type?: string | null
           mapped_dish_id?: string | null
           needs_review?: boolean
           pos_provider: string
@@ -505,6 +507,7 @@ export type Database = {
           last_qty?: number | null
           last_seen_at?: string | null
           location_id?: string
+          manual_type?: string | null
           mapped_dish_id?: string | null
           needs_review?: boolean
           pos_provider?: string
