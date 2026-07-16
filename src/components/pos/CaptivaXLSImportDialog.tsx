@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { useDateRange } from "@/contexts/DateRangeContext";
+import { useLocation } from "@/contexts/LocationContext";
 
 const REQUIRED_COLUMNS = [
   "Name", "ID", "Department", "All Sales", "Deposit Fees", "Qty",
