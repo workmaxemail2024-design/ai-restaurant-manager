@@ -1122,7 +1122,7 @@ export default function ReportsPage() {
           ) : (
             <>
               {/* Period Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">Revenue</CardTitle>
@@ -1135,15 +1135,46 @@ export default function ReportsPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">Orders</CardTitle>
-                    <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                    <Receipt className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.orders}</div>
+                    <div className="text-xl font-bold">{periodSummary.orders ?? "—"}</div>
+                    <div className="text-[10px] text-muted-foreground">receipts</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Food Cost %</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">AOV</CardTitle>
+                    <span className="text-xs text-primary font-medium">{currencySymbol}</span>
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3">
+                    <div className="text-xl font-bold">{periodSummary.aov != null ? formatCurrency(periodSummary.aov) : "—"}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Covers</CardTitle>
+                    <Users className="h-3.5 w-3.5 text-primary" />
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3">
+                    <div className="text-xl font-bold">{periodSummary.visitors ?? "—"}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Qty Sold</CardTitle>
+                    <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3">
+                    <div className="text-xl font-bold">{periodSummary.qtySold}</div>
+                    <div className="text-[10px] text-muted-foreground">item units</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
+                      Food Cost %{periodSummary.foodCostIsEstimated ? " (est.)" : ""}
+                    </CardTitle>
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
@@ -1157,29 +1188,27 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className="text-xl font-bold">{periodSummary.labourPct.toFixed(1)}%</div>
+                    <div className="text-[10px] text-muted-foreground">{formatCurrency(periodSummary.totalLabourCost)}</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Labour Cost</CardTitle>
-                    <span className="text-xs text-primary font-medium">{currencySymbol}</span>
-                  </CardHeader>
-                  <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{formatCurrency(periodSummary.totalLabourCost)}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Profit</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
+                      {profitIsEstimated ? "Est. Profit" : "Profit"}
+                    </CardTitle>
                     <TrendingUp className="h-3.5 w-3.5 text-success" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className={cn("text-xl font-bold", periodSummary.profit >= 0 ? "text-success" : "text-destructive")}>
                       {formatCurrency(periodSummary.profit)}
                     </div>
+                    {periodSummary.itemsMissingCost > 0 && (
+                      <div className="text-[10px] text-warning">Margin incomplete — {periodSummary.itemsMissingCost} items missing cost</div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
+
 
               {/* Calendar Navigation Strip */}
               <Card>
