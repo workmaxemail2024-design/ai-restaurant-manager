@@ -30,6 +30,7 @@ import { POSDishMappingTab } from "@/components/pos/POSDishMappingTab";
 import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
 import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
 import { useDateRangeCoverage } from "@/hooks/usePOSDateCoverage";
+import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -472,13 +473,15 @@ export default function POSIntegrationsPage() {
       title="POS Integrations" 
       description="Connect and manage your Point of Sale systems"
       action={
-        <Dialog open={isAddOpen} onOpenChange={(open) => {
-          setIsAddOpen(open);
-          if (!open) resetForm();
-        }}>
-          <DialogTrigger asChild>
-            <Button onClick={() => resetForm()}><Plus className="h-4 w-4 mr-2" />Add Integration</Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <CaptivaXLSImportDialog />
+          <Dialog open={isAddOpen} onOpenChange={(open) => {
+            setIsAddOpen(open);
+            if (!open) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button onClick={() => resetForm()}><Plus className="h-4 w-4 mr-2" />Add Integration</Button>
+            </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>{editingIntegration ? "Edit POS Integration" : "Add POS Integration"}</DialogTitle>
@@ -628,6 +631,7 @@ export default function POSIntegrationsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       }
     >
       <div className="space-y-4">
