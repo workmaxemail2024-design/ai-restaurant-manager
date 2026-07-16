@@ -965,50 +965,74 @@ export default function ReportsPage() {
   const [focusedDate, setFocusedDate] = useState<string | undefined>();
   const dayCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Period summary with attendance-first labour hierarchy
+  // Period summary — orders/visitors from pos_daily_summaries (authoritative), qty from sales rows
   const periodSummary = useMemo(() => {
-    if (!dailyData || dailyData.length === 0 || !metrics) {
-      return {
-        revenue: metrics?.totalRevenue || 0, orders: metrics?.totalOrders || 0,
-        foodCostPct: metrics?.foodCostPercent || 0, profit: metrics?.totalProfit || 0,
-        totalLabourCost: 0, labourPct: 0,
-      };
-    }
+    const empty = {
+      revenue: 0, orders: null as number | null, qtySold: 0, visitors: null as number | null,
+      aov: null as number | null, foodCostPct: 0, profit: 0,
+      totalLabourCost: 0, labourPct: 0,
+      foodCostIsEstimated: true, itemsMissingCost: 0, hasAnyLabour: false,
+    };
+    if (!dailyData || dailyData.length === 0) return empty;
 
     let totalLabourCost = 0;
     let totalAdditionalExpenses = 0;
     let manualRevenueTotal = 0;
     let manualOrdersTotal = 0;
+    let salesRevenue = 0;
+    let qtySold = 0;
+    let orderTotal: number | null = null;
+    let visitorTotal: number | null = null;
+    let itemsMissingCost = 0;
+    let hasAnyLabour = false;
 
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
       const actual = attendanceMap.get(day.date);
 
-      // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. nothing
+      salesRevenue += day.revenue;
+      qtySold += day.qtySold;
+      itemsMissingCost += day.itemsMissingCost;
+      if (day.orders != null) orderTotal = (orderTotal ?? 0) + day.orders;
+      if (day.visitors != null) visitorTotal = (visitorTotal ?? 0) + day.visitors;
+
       if (actual && actual.hours > 0) {
         totalLabourCost += actual.cost;
+        hasAnyLabour = true;
       } else if (ledger && ledger.labour_hours > 0) {
         totalLabourCost += ledger.labour_hours * avgHourlyRate;
+        hasAnyLabour = true;
       }
 
       if (ledger) {
         totalAdditionalExpenses += ledger.additional_expenses;
         if (!day.hasData && ledger.manual_revenue != null) {
           manualRevenueTotal += ledger.manual_revenue;
-          manualOrdersTotal += ledger.manual_orders ?? 0;
+          if (ledger.manual_orders != null) {
+            manualOrdersTotal += ledger.manual_orders;
+          }
         }
       }
     }
 
-    const revenue = metrics.totalRevenue + manualRevenueTotal;
-    const orders = metrics.totalOrders + manualOrdersTotal;
-    const foodCost = revenue * (metrics.foodCostPercent / 100);
+    const revenue = salesRevenue + manualRevenueTotal;
+    if (manualOrdersTotal > 0) orderTotal = (orderTotal ?? 0) + manualOrdersTotal;
+    const foodCostPercentBase = metrics?.foodCostPercent ?? 30;
+    const foodCost = revenue * (foodCostPercentBase / 100);
     const adjustedProfit = revenue - foodCost - totalLabourCost - totalAdditionalExpenses;
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
-    const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : metrics.foodCostPercent;
+    const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : foodCostPercentBase;
+    const aov = orderTotal && orderTotal > 0 ? revenue / orderTotal : null;
+    // Food cost is "estimated" whenever we lack real recipe costs for every sold item
+    const foodCostIsEstimated = itemsMissingCost > 0 || foodCostPercentBase === 30;
 
-    return { revenue, orders, foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct };
+    return {
+      revenue, orders: orderTotal, qtySold, visitors: visitorTotal, aov,
+      foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct,
+      foodCostIsEstimated, itemsMissingCost, hasAnyLabour,
+    };
   }, [metrics, dailyData, ledgerEntries, avgHourlyRate, attendanceMap]);
+  const profitIsEstimated = periodSummary.foodCostIsEstimated || !periodSummary.hasAnyLabour;
 
   // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {
