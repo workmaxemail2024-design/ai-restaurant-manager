@@ -301,13 +301,48 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
         }
       }
 
+      // 3) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs)
+      const parsedOrders = orderCountInput.trim() ? parseInt(orderCountInput, 10) : null;
+      const parsedVisitors = visitorCountInput.trim() ? parseInt(visitorCountInput, 10) : null;
+      let parsedAOV: number | null = aovInput.trim() ? Number(aovInput.replace(",", ".")) : null;
+      if (parsedAOV == null && parsedOrders && parsedOrders > 0) {
+        parsedAOV = Number((totals.gross / parsedOrders).toFixed(2));
+      }
+
+      // Delete-then-insert so we don't need a partial-index onConflict target
+      await supabase
+        .from("pos_daily_summaries")
+        .delete()
+        .eq("restaurant_id", currentRestaurant.id)
+        .eq("location_id", locationId)
+        .eq("pos_provider", provider)
+        .eq("report_date", dateStr);
+
+      const { error: sumErr } = await supabase.from("pos_daily_summaries").insert({
+        restaurant_id: currentRestaurant.id,
+        location_id: locationId,
+        pos_provider: provider,
+        report_date: dateStr,
+        gross_sales: Number(totals.gross.toFixed(2)),
+        net_sales: Number(totals.net.toFixed(2)),
+        vat_amount: Number(totals.vat.toFixed(2)),
+        discounts: Number(totals.disc.toFixed(2)),
+        order_count: Number.isFinite(parsedOrders as any) ? parsedOrders : null,
+        visitor_count: Number.isFinite(parsedVisitors as any) ? parsedVisitors : null,
+        average_order_value: Number.isFinite(parsedAOV as any) ? parsedAOV : null,
+        source_file_name: file?.name || null,
+      });
+      if (sumErr) throw sumErr;
+
       toast({
         title: mode === "apply" ? "Import applied" : "Import staged",
         description:
           `${importRows.length} products · ${catalogueRows.length} POS items catalogued` +
           (mode === "apply" ? ` · ${appliedCount} sale rows posted to dashboard` : "") +
-          `. Gross ${formatCurrency(totals.gross)}, Net ${formatCurrency(totals.net)}, VAT ${formatCurrency(totals.vat)}, Qty ${totals.qty}.`,
+          `. Gross ${formatCurrency(totals.gross)}, Net ${formatCurrency(totals.net)}, VAT ${formatCurrency(totals.vat)}, Qty ${totals.qty}` +
+          (parsedOrders != null ? `, Orders ${parsedOrders}` : "") + `.`,
       });
+
 
       queryClient.invalidateQueries();
       setOpen(false);
