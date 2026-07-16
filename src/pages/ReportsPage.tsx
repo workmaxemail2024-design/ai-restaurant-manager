@@ -317,9 +317,13 @@ function DayCard({
 
   // Effective revenue: use manual override if no actual sales data
   const effectiveRevenue = day.hasData ? day.revenue : (manualRevenue ?? 0);
-  const effectiveOrders = day.hasData ? day.orders : (manualOrders ?? 0);
+  // Orders = receipt count (from pos_daily_summaries). Qty is separate.
+  const effectiveOrders: number | null = day.hasData
+    ? (day.orders ?? (manualOrders ?? null))
+    : (manualOrders ?? null);
   const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
   const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
+  const foodCostIsEstimated = day.hasData ? day.foodCostIsEstimated : true;
 
   // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. planned shifts
   const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
@@ -329,6 +333,7 @@ function DayCard({
   const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
+  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || day.itemsMissingCost > 0;
 
   // Variance between actual and planned
   const labourVariance = (plannedShiftHours != null && effectiveLabourHours > 0)
