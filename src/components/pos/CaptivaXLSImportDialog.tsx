@@ -404,6 +404,14 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       });
 
 
+
+      // Persist import context so Menu Performance / Dashboard immediately
+      // reflect the imported report date + location instead of jumping to today.
+      try {
+        setCustomRange(dateStr, dateStr);
+        if (locationId) setSelectedLocationId(locationId);
+      } catch { /* non-blocking */ }
+
       queryClient.invalidateQueries();
       setOpen(false);
       reset();
