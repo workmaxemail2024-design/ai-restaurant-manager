@@ -106,33 +106,43 @@ function getDotClass(status: DayStatus): string {
 
 // ─── Data Completeness Checklist ───
 function DataChecklist({ checklist }: { checklist: Record<MissingField, boolean> }) {
-  const items: { field: MissingField; label: string }[] = [
+  const items: { field: MissingField; label: string; optional?: boolean }[] = [
     { field: "SALES", label: "Sales" },
     { field: "LABOUR_HOURS", label: "Labour" },
     { field: "COVERS", label: "Covers" },
     { field: "EXPENSES", label: "Expenses" },
-    { field: "BOOKINGS", label: "Bookings" },
+    { field: "BOOKINGS", label: "Bookings", optional: true },
   ];
   return (
     <div className="rounded-md border border-border bg-secondary/20 p-2.5 space-y-1">
       <h4 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
         Data Completeness
       </h4>
-      {items.map(({ field, label }) => (
-        <div key={field} className="flex items-center gap-2 text-xs">
-          {checklist[field] ? (
-            <Check className="h-3 w-3 text-success shrink-0" />
-          ) : (
-            <X className="h-3 w-3 text-destructive shrink-0" />
-          )}
-          <span className={checklist[field] ? "text-foreground" : "text-muted-foreground"}>
-            {label}
-          </span>
-        </div>
-      ))}
+      {items.map(({ field, label, optional }) => {
+        const ok = checklist[field];
+        const showOptional = optional && !ok;
+        return (
+          <div key={field} className="flex items-center gap-2 text-xs">
+            {ok ? (
+              <Check className="h-3 w-3 text-success shrink-0" />
+            ) : showOptional ? (
+              <span className="h-3 w-3 rounded-full border border-muted-foreground/40 shrink-0" />
+            ) : (
+              <X className="h-3 w-3 text-destructive shrink-0" />
+            )}
+            <span className={ok ? "text-foreground" : "text-muted-foreground"}>
+              {label}
+              {showOptional && (
+                <span className="ml-1 text-[10px] text-muted-foreground/70">(optional)</span>
+              )}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
+
 
 // ─── Missing badge (compact) ───
 function MissingBadge({ missing }: { missing: MissingField[] }) {
@@ -667,19 +677,26 @@ function DayCard({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="space-y-1">
                         <label className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Users className="h-3 w-3" /> Covers
+                          <Users className="h-3 w-3" />
+                          {day.visitors != null && day.visitors > 0 ? "Override Covers" : "Covers"}
                         </label>
                         <Input
                           type="number"
                           min={0}
+                          placeholder={day.visitors != null && day.visitors > 0 ? String(day.visitors) : ""}
                           value={covers || ""}
                           onChange={(e) => { setCovers(Number(e.target.value) || 0); setCoversUnknown(false); }}
                           className="h-8 text-sm"
                         />
-                        {coversUnknown && (
+                        {day.visitors != null && day.visitors > 0 ? (
+                          <span className="text-[10px] text-muted-foreground">
+                            Current Captiva covers: {day.visitors}. Only enter a value here to override.
+                          </span>
+                        ) : coversUnknown ? (
                           <span className="text-[10px] text-muted-foreground">Marked unknown</span>
-                        )}
+                        ) : null}
                       </div>
+
                       <div className="space-y-1">
                         <label className="text-xs text-muted-foreground">Labour Hours</label>
                         <Input
