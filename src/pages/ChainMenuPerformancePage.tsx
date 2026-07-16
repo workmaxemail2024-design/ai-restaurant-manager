@@ -76,7 +76,12 @@ interface Row {
 }
 
 export default function ChainMenuPerformancePage() {
-  const { startDate, endDate, presetLabel } = useDateRange();
+  const { startDate, endDate, presetLabel, preset, setCustomRange } = useDateRange();
+  const { selectedLocationId } = useLocation();
+  const { data: locations = [] } = useLocations();
+  const activeLocation = locations.find((l) => l.id === selectedLocationId);
+  const locationLabel = activeLocation?.name ?? 'All locations';
+  const [reportDateOpen, setReportDateOpen] = useState(false);
   const { data: dishes } = useDishes();
   const { data: sales } = useSales(startDate, endDate);
   const { data: extItems } = useAllExternalPOSItems();
