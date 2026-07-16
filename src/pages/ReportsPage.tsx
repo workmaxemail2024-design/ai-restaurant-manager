@@ -1044,14 +1044,19 @@ export default function ReportsPage() {
 
     const revenue = salesRevenue + manualRevenueTotal;
     if (manualOrdersTotal > 0) orderTotal = (orderTotal ?? 0) + manualOrdersTotal;
-    const foodCostPercentBase = metrics?.foodCostPercent ?? 30;
-    const foodCost = revenue * (foodCostPercentBase / 100);
+    // Consistent food cost: use the actual per-dish recipe cost % if the recipe engine
+    // has coverage; otherwise fall back to a flat 30 % estimate (matches the daily row).
+    const hasRealFoodCost =
+      metrics?.foodCostPercent != null &&
+      metrics.foodCostPercent > 0 &&
+      itemsMissingCost === 0;
+    const effectiveFoodCostPct = hasRealFoodCost ? (metrics!.foodCostPercent as number) : 30;
+    const foodCost = revenue * (effectiveFoodCostPct / 100);
     const adjustedProfit = revenue - foodCost - totalLabourCost - totalAdditionalExpenses;
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
-    const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : foodCostPercentBase;
+    const foodCostPct = effectiveFoodCostPct;
     const aov = orderTotal && orderTotal > 0 ? revenue / orderTotal : null;
-    // Food cost is "estimated" whenever we lack real recipe costs for every sold item
-    const foodCostIsEstimated = itemsMissingCost > 0 || foodCostPercentBase === 30;
+    const foodCostIsEstimated = !hasRealFoodCost;
 
     return {
       revenue, orders: orderTotal, qtySold, visitors: visitorTotal, aov,
