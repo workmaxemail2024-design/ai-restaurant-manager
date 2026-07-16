@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { useDateRange } from "@/contexts/DateRangeContext";
+import { useLocation } from "@/contexts/LocationContext";
 
 const REQUIRED_COLUMNS = [
   "Name", "ID", "Department", "All Sales", "Deposit Fees", "Qty",
@@ -67,6 +69,8 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const { currentRestaurant } = useRestaurant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { setCustomRange } = useDateRange();
+  const { setSelectedLocationId } = useLocation();
 
   const [file, setFile] = useState<File | null>(null);
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
@@ -399,6 +403,14 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
           (parsedOrders != null ? `, Orders ${parsedOrders}` : "") + `.`,
       });
 
+
+
+      // Persist import context so Menu Performance / Dashboard immediately
+      // reflect the imported report date + location instead of jumping to today.
+      try {
+        setCustomRange(dateStr, dateStr);
+        if (locationId) setSelectedLocationId(locationId);
+      } catch { /* non-blocking */ }
 
       queryClient.invalidateQueries();
       setOpen(false);
