@@ -583,6 +583,7 @@ export interface ExternalPOSItem {
   mapped_dish_id: string | null;
   needs_review: boolean;
   manual_type: 'food' | 'drink' | 'modifier' | 'other' | null;
+  manual_drink_type: 'alcoholic' | 'non_alcoholic' | 'unknown' | null;
   last_qty: number | null;
   last_gross: number | null;
   last_seen_at: string | null;
@@ -633,11 +634,12 @@ export function useAllExternalPOSItems() {
 export function useUpdateExternalPOSItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: string; mapped_dish_id?: string | null; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'modifier' | 'other' | null }) => {
+    mutationFn: async (params: { id: string; mapped_dish_id?: string | null; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'modifier' | 'other' | null; manual_drink_type?: 'alcoholic' | 'non_alcoholic' | 'unknown' | null }) => {
       const update: Record<string, unknown> = {};
       if (params.mapped_dish_id !== undefined) update.mapped_dish_id = params.mapped_dish_id;
       if (params.needs_review !== undefined) update.needs_review = params.needs_review;
       if (params.manual_type !== undefined) update.manual_type = params.manual_type;
+      if (params.manual_drink_type !== undefined) update.manual_drink_type = params.manual_drink_type;
       const { data, error } = await supabase
         .from("external_pos_items")
         .update(update)
@@ -662,11 +664,12 @@ export function useUpdateExternalPOSItem() {
 export function useBulkUpdateExternalPOSItems() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { ids: string[]; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'modifier' | 'other' | null }) => {
+    mutationFn: async (params: { ids: string[]; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'modifier' | 'other' | null; manual_drink_type?: 'alcoholic' | 'non_alcoholic' | 'unknown' | null }) => {
       if (!params.ids.length) return 0;
       const update: Record<string, unknown> = {};
       if (params.needs_review !== undefined) update.needs_review = params.needs_review;
       if (params.manual_type !== undefined) update.manual_type = params.manual_type;
+      if (params.manual_drink_type !== undefined) update.manual_drink_type = params.manual_drink_type;
       const { error } = await supabase
         .from("external_pos_items")
         .update(update)
