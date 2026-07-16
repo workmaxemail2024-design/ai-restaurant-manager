@@ -216,7 +216,7 @@ function CalendarStrip({
           const isSelected = isSameDay(day, rangeStart) || isSameDay(day, rangeEnd);
           const isFocused = focusedDate === dateStr;
 
-          const { status } = evaluateMissing(coverage?.hasData || false, ledger, bookingDays.has(dateStr));
+          const { status } = evaluateMissing(coverage?.hasData || false, ledger, bookingDays.has(dateStr), coverage?.visitors ?? null);
           const dotClass = getDotClass(status);
 
           return (
