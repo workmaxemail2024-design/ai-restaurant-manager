@@ -1071,10 +1071,11 @@ export default function ReportsPage() {
     if (!dailyData) return 0;
     return dailyData.filter((day) => {
       const ledger = ledgerEntries.get(day.date);
-      const { status } = evaluateMissing(day.hasData, ledger, bookingDaysSet.has(day.date));
+      const actual = attendanceMap.get(day.date);
+      const { status } = evaluateMissing(day.hasData, ledger, bookingDaysSet.has(day.date), day.visitors, actual?.hours);
       return status === "needs_attention";
     }).length;
-  }, [dailyData, ledgerEntries, bookingDaysSet]);
+  }, [dailyData, ledgerEntries, bookingDaysSet, attendanceMap]);
 
   const handleDayClick = useCallback(
     (dateStr: string) => {
