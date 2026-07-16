@@ -12,8 +12,18 @@ interface HourlyRevenue {
 
 interface DashboardOverview {
   revenueToday: number;
-  ordersToday: number;
-  aovToday: number;
+  ordersToday: number | null;
+  aovToday: number | null;
+  visitorsToday: number | null;
+  revenueYesterday: number;
+  revenueSameWeekdayLastWeek: number;
+  labourTodayCost: number;
+  labourTodayPct: number | null;
+  hasLabourToday: boolean;
+  revenueSeries: HourlyRevenue[];
+  isLoadingRevenue: boolean;
+}
+
   revenueYesterday: number;
   revenueSameWeekdayLastWeek: number;
   labourTodayCost: number;
