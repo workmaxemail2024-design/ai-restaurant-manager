@@ -208,6 +208,7 @@ export function useDashboardOverview(locationId?: string | null) {
         revenueToday,
         ordersToday,
         aovToday,
+        visitorsToday,
         revenueYesterday,
         revenueSameWeekdayLastWeek,
         labourTodayCost,
@@ -216,6 +217,7 @@ export function useDashboardOverview(locationId?: string | null) {
         revenueSeries,
         isLoadingRevenue: false,
       };
+
     },
     enabled: !!restaurantId,
     refetchOnMount: "always",
