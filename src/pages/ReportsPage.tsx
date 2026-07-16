@@ -438,16 +438,20 @@ function DayCard({
                         </div>
                         <div className="text-right hidden sm:block">
                           <span className="text-muted-foreground mr-1">Orders</span>
-                          <span className="font-medium">{effectiveOrders}</span>
+                          <span className="font-medium">{effectiveOrders ?? "—"}</span>
                         </div>
                         <div className="text-right hidden sm:block">
-                          <span className="text-muted-foreground mr-1">Profit</span>
+                          <span className="text-muted-foreground mr-1">Qty</span>
+                          <span className="font-medium">{day.qtySold}</span>
+                        </div>
+                        <div className="text-right hidden sm:block">
+                          <span className="text-muted-foreground mr-1">{profitIsEstimated ? "Est. Profit" : "Profit"}</span>
                           <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
                             {formatCurrency(adjustedProfit)}
                           </span>
                         </div>
                         <div className="text-right hidden md:block">
-                          <span className="text-muted-foreground mr-1">FC%</span>
+                          <span className="text-muted-foreground mr-1">FC%{foodCostIsEstimated ? "*" : ""}</span>
                           <span className="font-medium">{effectiveFoodCostPct.toFixed(1)}%</span>
                         </div>
                         <div className="text-right hidden md:block">
