@@ -504,6 +504,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                     )}
                   </div>
 
+                  <div className="rounded-lg border p-3 space-y-2">
+                    <div className="text-sm font-medium">Daily summary (optional)</div>
+                    <p className="text-xs text-muted-foreground">
+                      Product rows are not receipts. Enter true order/visitor counts from the Captiva journal summary if available. Leave blank if unknown.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <Label className="text-xs">Orders</Label>
+                        <Input type="number" min="0" placeholder="e.g. 26" value={orderCountInput} onChange={(e) => setOrderCountInput(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Visitors</Label>
+                        <Input type="number" min="0" placeholder="e.g. 106" value={visitorCountInput} onChange={(e) => setVisitorCountInput(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Avg order value</Label>
+                        <Input type="number" min="0" step="0.01" placeholder="auto" value={aovInput} onChange={(e) => setAovInput(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+
                   <Alert>
                     <CheckCircle2 className="h-4 w-4" />
                     <AlertDescription className="text-xs">
