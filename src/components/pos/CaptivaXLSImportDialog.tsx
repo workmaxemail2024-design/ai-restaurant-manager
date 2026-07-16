@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -168,72 +169,127 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     setBusy(true);
     try {
       const dateStr = format(reportDate, "yyyy-MM-dd");
-      const records = parsed.rows.map((r) => ({
+      const provider = "captiva_xls";
+
+      // 1) Upsert external POS items (master catalogue of Captiva products for this location)
+      const catalogueRows = parsed.rows.map((r) => ({
         restaurant_id: currentRestaurant.id,
         location_id: locationId,
-        pos_provider: "captiva_xls",
+        pos_provider: provider,
+        external_item_id: r.external_item_id,
+        external_item_name: r.item_name,
+        department: r.department || null,
+        last_seen_at: new Date().toISOString(),
+        last_qty: r.quantity,
+        last_gross: r.gross_sales,
+      }));
+      const { error: catErr } = await supabase
+        .from("external_pos_items")
+        .upsert(catalogueRows, {
+          onConflict: "restaurant_id,location_id,pos_provider,external_item_id",
+          ignoreDuplicates: false,
+        });
+      if (catErr) throw catErr;
+
+      // Fetch back with mapped_dish_id so we can post sales
+      const { data: catalogue } = await supabase
+        .from("external_pos_items")
+        .select("id, external_item_id, mapped_dish_id")
+        .eq("restaurant_id", currentRestaurant.id)
+        .eq("location_id", locationId)
+        .eq("pos_provider", provider)
+        .in("external_item_id", parsed.rows.map((r) => r.external_item_id));
+      const catByExt = new Map((catalogue || []).map((c: any) => [c.external_item_id, c]));
+
+      // 2) Stage every product row in pos_sales_import (idempotent per date+product)
+      const importRows = parsed.rows.map((r) => ({
+        restaurant_id: currentRestaurant.id,
+        location_id: locationId,
+        pos_provider: provider,
         external_sale_id: `${dateStr}:${r.external_item_id}`,
         mapped_quantity: Math.round(r.quantity),
         mapped_total_price: r.gross_sales,
         mapped_sale_date: dateStr,
-        sync_status: "pending",
+        mapped_dish_id: catByExt.get(r.external_item_id)?.mapped_dish_id ?? null,
+        external_item_id: r.external_item_id,
+        item_name: r.item_name,
+        department: r.department || null,
+        gross_sales: r.gross_sales,
+        net_sales: r.net_sales,
+        vat_amount: r.vat_amount,
+        discount_amount: r.discount_amount,
+        sync_status: catByExt.get(r.external_item_id)?.mapped_dish_id ? "mapped" : "pending",
         data: {
-          source: "captiva_xls",
+          source: provider,
           report_date: dateStr,
           sheet: sheetName,
-          external_item_id: r.external_item_id,
-          item_name: r.item_name,
-          department: r.department,
-          quantity: r.quantity,
-          gross_sales: r.gross_sales,
-          net_sales: r.net_sales,
-          vat_amount: r.vat_amount,
-          discount_amount: r.discount_amount,
           raw: r.raw,
         },
       }));
-
-      // Idempotent upsert on (restaurant_id, location_id, pos_provider, external_sale_id)
-      const { error: upErr } = await supabase
+      const { data: stagedRows, error: upErr } = await supabase
         .from("pos_sales_import")
-        .upsert(records, { onConflict: "restaurant_id,location_id,pos_provider,external_sale_id" });
+        .upsert(importRows, {
+          onConflict: "restaurant_id,location_id,pos_provider,external_sale_id",
+        })
+        .select("id, external_item_id, mapped_dish_id, mapped_quantity, mapped_total_price");
       if (upErr) throw upErr;
 
       let appliedCount = 0;
       if (mode === "apply") {
-        // Fuzzy-map to dishes and insert into sales
-        const { data: dishes } = await supabase
+        // Ensure a sentinel "Unmapped POS Sales" dish exists so unmapped revenue still lands in sales
+        const SENTINEL_NAME = "Unmapped POS Sales";
+        let sentinelId: string | null = null;
+        const { data: existingSentinel } = await supabase
           .from("dishes")
-          .select("id, name")
-          .eq("restaurant_id", currentRestaurant.id);
-        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-        const dishMap = new Map((dishes || []).map((d) => [norm(d.name), d.id]));
+          .select("id")
+          .eq("restaurant_id", currentRestaurant.id)
+          .eq("name", SENTINEL_NAME)
+          .maybeSingle();
+        if (existingSentinel?.id) {
+          sentinelId = existingSentinel.id;
+        } else {
+          const { data: created, error: sErr } = await supabase
+            .from("dishes")
+            .insert({
+              restaurant_id: currentRestaurant.id,
+              name: SENTINEL_NAME,
+              selling_price: 0,
+              item_type: "other",
+              source: "captiva_xls",
+              needs_review: true,
+              is_active: false,
+              category: "Unmapped",
+            })
+            .select("id")
+            .single();
+          if (sErr) throw sErr;
+          sentinelId = created!.id;
+        }
 
-        // Remove any prior applied rows for this date+source+location to keep idempotent
+        // Wipe any prior POS-sourced sales for this location+date so re-apply is idempotent
         await supabase
           .from("sales")
           .delete()
           .eq("restaurant_id", currentRestaurant.id)
           .eq("location_id", locationId)
-          .eq("sale_date", dateStr);
+          .eq("sale_date", dateStr)
+          .eq("source", provider);
 
-        const saleRows: any[] = [];
-        for (const r of parsed.rows) {
-          if (r.quantity <= 0 && r.gross_sales <= 0) continue;
-          const dishId = dishMap.get(norm(r.item_name));
-          if (!dishId) continue;
-          saleRows.push({
+        const saleRows = (stagedRows || [])
+          .filter((s: any) => (s.mapped_quantity ?? 0) > 0 || (s.mapped_total_price ?? 0) > 0)
+          .map((s: any) => ({
             restaurant_id: currentRestaurant.id,
             location_id: locationId,
-            dish_id: dishId,
-            quantity: Math.max(1, Math.round(r.quantity)),
-            total_price: r.gross_sales,
+            dish_id: s.mapped_dish_id || sentinelId,
+            quantity: Math.max(1, Math.round(s.mapped_quantity || 1)),
+            total_price: Number(s.mapped_total_price || 0),
             sale_date: dateStr,
-          });
-        }
+            source: provider,
+            pos_import_id: s.id,
+          }));
         if (saleRows.length) {
-          const { error: sErr } = await supabase.from("sales").insert(saleRows);
-          if (sErr) throw sErr;
+          const { error: insErr } = await supabase.from("sales").insert(saleRows);
+          if (insErr) throw insErr;
           appliedCount = saleRows.length;
         }
       }
@@ -241,8 +297,8 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       toast({
         title: mode === "apply" ? "Import applied" : "Import staged",
         description:
-          `${records.length} rows staged` +
-          (mode === "apply" ? ` — ${appliedCount} mapped to dishes and posted to sales` : "") +
+          `${importRows.length} products · ${catalogueRows.length} POS items catalogued` +
+          (mode === "apply" ? ` · ${appliedCount} sale rows posted to dashboard` : "") +
           `. Gross ${formatCurrency(totals.gross)}, Net ${formatCurrency(totals.net)}, VAT ${formatCurrency(totals.vat)}, Qty ${totals.qty}.`,
       });
 
@@ -256,6 +312,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       setBusy(false);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
@@ -429,7 +486,3 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   );
 }
 
-// Local Input to avoid extra import churn
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cn("flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50", props.className)} />;
-}

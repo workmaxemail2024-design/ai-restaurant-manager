@@ -315,33 +315,48 @@ export type Database = {
           captiva_external_id: string | null
           category: string | null
           created_at: string
+          department: string | null
           id: string
+          is_active: boolean
+          item_type: string
           location_id: string | null
           name: string
+          needs_review: boolean
           restaurant_id: string | null
           selling_price: number
+          source: string
           updated_at: string
         }
         Insert: {
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
+          department?: string | null
           id?: string
+          is_active?: boolean
+          item_type?: string
           location_id?: string | null
           name: string
+          needs_review?: boolean
           restaurant_id?: string | null
           selling_price?: number
+          source?: string
           updated_at?: string
         }
         Update: {
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
+          department?: string | null
           id?: string
+          is_active?: boolean
+          item_type?: string
           location_id?: string | null
           name?: string
+          needs_review?: boolean
           restaurant_id?: string | null
           selling_price?: number
+          source?: string
           updated_at?: string
         }
         Relationships: [
@@ -443,6 +458,65 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_pos_items: {
+        Row: {
+          created_at: string
+          department: string | null
+          external_item_id: string
+          external_item_name: string | null
+          id: string
+          last_gross: number | null
+          last_qty: number | null
+          last_seen_at: string | null
+          location_id: string
+          mapped_dish_id: string | null
+          needs_review: boolean
+          pos_provider: string
+          restaurant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          external_item_id: string
+          external_item_name?: string | null
+          id?: string
+          last_gross?: number | null
+          last_qty?: number | null
+          last_seen_at?: string | null
+          location_id: string
+          mapped_dish_id?: string | null
+          needs_review?: boolean
+          pos_provider: string
+          restaurant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          external_item_id?: string
+          external_item_name?: string | null
+          id?: string
+          last_gross?: number | null
+          last_qty?: number | null
+          last_seen_at?: string | null
+          location_id?: string
+          mapped_dish_id?: string | null
+          needs_review?: boolean
+          pos_provider?: string
+          restaurant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_pos_items_mapped_dish_id_fkey"
+            columns: ["mapped_dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
             referencedColumns: ["id"]
           },
         ]
@@ -589,25 +663,43 @@ export type Database = {
       }
       menu_dishes: {
         Row: {
+          available_from: string | null
+          available_to: string | null
           created_at: string
           dish_id: string
+          display_order: number
           id: string
+          is_active: boolean
           menu_id: string
+          price_override: number | null
           restaurant_id: string | null
+          section_override: string | null
         }
         Insert: {
+          available_from?: string | null
+          available_to?: string | null
           created_at?: string
           dish_id: string
+          display_order?: number
           id?: string
+          is_active?: boolean
           menu_id: string
+          price_override?: number | null
           restaurant_id?: string | null
+          section_override?: string | null
         }
         Update: {
+          available_from?: string | null
+          available_to?: string | null
           created_at?: string
           dish_id?: string
+          display_order?: number
           id?: string
+          is_active?: boolean
           menu_id?: string
+          price_override?: number | null
           restaurant_id?: string | null
+          section_override?: string | null
         }
         Relationships: [
           {
@@ -942,44 +1034,65 @@ export type Database = {
         Row: {
           created_at: string
           data: Json
+          department: string | null
+          discount_amount: number | null
+          external_item_id: string | null
           external_sale_id: string
+          gross_sales: number | null
           id: string
+          item_name: string | null
           location_id: string
           mapped_dish_id: string | null
           mapped_quantity: number | null
           mapped_sale_date: string | null
           mapped_total_price: number | null
+          net_sales: number | null
           pos_provider: string
           restaurant_id: string | null
           sync_status: string | null
+          vat_amount: number | null
         }
         Insert: {
           created_at?: string
           data: Json
+          department?: string | null
+          discount_amount?: number | null
+          external_item_id?: string | null
           external_sale_id: string
+          gross_sales?: number | null
           id?: string
+          item_name?: string | null
           location_id: string
           mapped_dish_id?: string | null
           mapped_quantity?: number | null
           mapped_sale_date?: string | null
           mapped_total_price?: number | null
+          net_sales?: number | null
           pos_provider: string
           restaurant_id?: string | null
           sync_status?: string | null
+          vat_amount?: number | null
         }
         Update: {
           created_at?: string
           data?: Json
+          department?: string | null
+          discount_amount?: number | null
+          external_item_id?: string | null
           external_sale_id?: string
+          gross_sales?: number | null
           id?: string
+          item_name?: string | null
           location_id?: string
           mapped_dish_id?: string | null
           mapped_quantity?: number | null
           mapped_sale_date?: string | null
           mapped_total_price?: number | null
+          net_sales?: number | null
           pos_provider?: string
           restaurant_id?: string | null
           sync_status?: string | null
+          vat_amount?: number | null
         }
         Relationships: [
           {
@@ -1595,9 +1708,11 @@ export type Database = {
           dish_id: string
           id: string
           location_id: string
+          pos_import_id: string | null
           quantity: number
           restaurant_id: string | null
           sale_date: string
+          source: string
           total_price: number
         }
         Insert: {
@@ -1605,9 +1720,11 @@ export type Database = {
           dish_id: string
           id?: string
           location_id: string
+          pos_import_id?: string | null
           quantity?: number
           restaurant_id?: string | null
           sale_date?: string
+          source?: string
           total_price?: number
         }
         Update: {
@@ -1615,9 +1732,11 @@ export type Database = {
           dish_id?: string
           id?: string
           location_id?: string
+          pos_import_id?: string | null
           quantity?: number
           restaurant_id?: string | null
           sale_date?: string
+          source?: string
           total_price?: number
         }
         Relationships: [
