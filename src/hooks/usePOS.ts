@@ -582,6 +582,7 @@ export interface ExternalPOSItem {
   department: string | null;
   mapped_dish_id: string | null;
   needs_review: boolean;
+  manual_type: 'food' | 'drink' | 'modifier' | 'other' | null;
   last_qty: number | null;
   last_gross: number | null;
   last_seen_at: string | null;
