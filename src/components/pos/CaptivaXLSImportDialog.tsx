@@ -78,6 +78,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Optional daily summary fields (from Captiva journal, not product XLS rows)
+  const [orderCountInput, setOrderCountInput] = useState<string>("");
+  const [visitorCountInput, setVisitorCountInput] = useState<string>("");
+  const [aovInput, setAovInput] = useState<string>("");
+
   const sheetNames = workbook?.SheetNames || [];
   const availableSheets = includeInactive
     ? sheetNames
@@ -86,7 +91,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const reset = () => {
     setFile(null); setWorkbook(null); setSheetName(""); setError(null);
     setMode("stage"); setIncludeInactive(false);
+    setOrderCountInput(""); setVisitorCountInput(""); setAovInput("");
   };
+
 
   const handleFile = useCallback(async (f: File) => {
     setError(null);
