@@ -317,9 +317,13 @@ function DayCard({
 
   // Effective revenue: use manual override if no actual sales data
   const effectiveRevenue = day.hasData ? day.revenue : (manualRevenue ?? 0);
-  const effectiveOrders = day.hasData ? day.orders : (manualOrders ?? 0);
+  // Orders = receipt count (from pos_daily_summaries). Qty is separate.
+  const effectiveOrders: number | null = day.hasData
+    ? (day.orders ?? (manualOrders ?? null))
+    : (manualOrders ?? null);
   const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
   const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
+  const foodCostIsEstimated = day.hasData ? day.foodCostIsEstimated : true;
 
   // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. planned shifts
   const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
@@ -329,6 +333,7 @@ function DayCard({
   const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
+  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || day.itemsMissingCost > 0;
 
   // Variance between actual and planned
   const labourVariance = (plannedShiftHours != null && effectiveLabourHours > 0)
@@ -433,16 +438,20 @@ function DayCard({
                         </div>
                         <div className="text-right hidden sm:block">
                           <span className="text-muted-foreground mr-1">Orders</span>
-                          <span className="font-medium">{effectiveOrders}</span>
+                          <span className="font-medium">{effectiveOrders ?? "—"}</span>
                         </div>
                         <div className="text-right hidden sm:block">
-                          <span className="text-muted-foreground mr-1">Profit</span>
+                          <span className="text-muted-foreground mr-1">Qty</span>
+                          <span className="font-medium">{day.qtySold}</span>
+                        </div>
+                        <div className="text-right hidden sm:block">
+                          <span className="text-muted-foreground mr-1">{profitIsEstimated ? "Est. Profit" : "Profit"}</span>
                           <span className={cn("font-medium", adjustedProfit >= 0 ? "text-success" : "text-destructive")}>
                             {formatCurrency(adjustedProfit)}
                           </span>
                         </div>
                         <div className="text-right hidden md:block">
-                          <span className="text-muted-foreground mr-1">FC%</span>
+                          <span className="text-muted-foreground mr-1">FC%{foodCostIsEstimated ? "*" : ""}</span>
                           <span className="font-medium">{effectiveFoodCostPct.toFixed(1)}%</span>
                         </div>
                         <div className="text-right hidden md:block">
@@ -552,6 +561,16 @@ function DayCard({
                           >
                             Mark unknown
                           </Button>
+                          {day.visitors != null && day.visitors > 0 && covers !== day.visitors && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => setCovers(day.visitors!)}
+                            >
+                              Use Captiva ({day.visitors})
+                            </Button>
+                          )}
                         </div>
                       )}
 
@@ -570,6 +589,48 @@ function DayCard({
                       <CheckCircle2 className="h-3.5 w-3.5" /> All required data present
                     </div>
                   )}
+
+                  {/* Daily Performance — from Captiva import */}
+                  {day.hasData && (
+                    <div className="rounded-md border border-border bg-secondary/10 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Daily Performance
+                        </h4>
+                        {!day.hasSummary && (
+                          <Badge variant="outline" className="text-[10px]">No POS summary</Badge>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{formatCurrency(day.summary?.grossSales ?? day.revenue)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Net Revenue</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.netSales) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.vat) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.discounts) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span className="font-medium">{day.orders ?? "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">AOV</span><span className="font-medium">{day.aov != null ? formatCurrency(day.aov) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Covers / Visitors</span><span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Qty Sold</span><span className="font-medium">{day.qtySold}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Food Revenue</span><span className="font-medium">{formatCurrency(day.revenueByType.food)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.alcoholic)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Non-alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.nonAlcoholic)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Modifiers / Sides</span><span className="font-medium">{formatCurrency(day.revenueByType.modifier)}</span></div>
+                      </div>
+                      {(foodCostIsEstimated || day.itemsMissingCost > 0 || labourSource === "none") && (
+                        <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground space-y-0.5">
+                          {foodCostIsEstimated && (
+                            <div>* Food cost is <span className="text-warning font-medium">estimated (30%)</span> — actual recipe costs not applied here.</div>
+                          )}
+                          {day.itemsMissingCost > 0 && (
+                            <div>Margin incomplete — <span className="text-warning font-medium">{day.itemsMissingCost}</span> sold items missing recipe/product cost.</div>
+                          )}
+                          {labourSource === "none" && (
+                            <div>Labour cost unknown — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
 
                   {/* Inline ledger editor */}
                   <div className="rounded-md border border-border p-3 space-y-3">
@@ -904,50 +965,74 @@ export default function ReportsPage() {
   const [focusedDate, setFocusedDate] = useState<string | undefined>();
   const dayCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
-  // Period summary with attendance-first labour hierarchy
+  // Period summary — orders/visitors from pos_daily_summaries (authoritative), qty from sales rows
   const periodSummary = useMemo(() => {
-    if (!dailyData || dailyData.length === 0 || !metrics) {
-      return {
-        revenue: metrics?.totalRevenue || 0, orders: metrics?.totalOrders || 0,
-        foodCostPct: metrics?.foodCostPercent || 0, profit: metrics?.totalProfit || 0,
-        totalLabourCost: 0, labourPct: 0,
-      };
-    }
+    const empty = {
+      revenue: 0, orders: null as number | null, qtySold: 0, visitors: null as number | null,
+      aov: null as number | null, foodCostPct: 0, profit: 0,
+      totalLabourCost: 0, labourPct: 0,
+      foodCostIsEstimated: true, itemsMissingCost: 0, hasAnyLabour: false,
+    };
+    if (!dailyData || dailyData.length === 0) return empty;
 
     let totalLabourCost = 0;
     let totalAdditionalExpenses = 0;
     let manualRevenueTotal = 0;
     let manualOrdersTotal = 0;
+    let salesRevenue = 0;
+    let qtySold = 0;
+    let orderTotal: number | null = null;
+    let visitorTotal: number | null = null;
+    let itemsMissingCost = 0;
+    let hasAnyLabour = false;
 
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
       const actual = attendanceMap.get(day.date);
 
-      // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. nothing
+      salesRevenue += day.revenue;
+      qtySold += day.qtySold;
+      itemsMissingCost += day.itemsMissingCost;
+      if (day.orders != null) orderTotal = (orderTotal ?? 0) + day.orders;
+      if (day.visitors != null) visitorTotal = (visitorTotal ?? 0) + day.visitors;
+
       if (actual && actual.hours > 0) {
         totalLabourCost += actual.cost;
+        hasAnyLabour = true;
       } else if (ledger && ledger.labour_hours > 0) {
         totalLabourCost += ledger.labour_hours * avgHourlyRate;
+        hasAnyLabour = true;
       }
 
       if (ledger) {
         totalAdditionalExpenses += ledger.additional_expenses;
         if (!day.hasData && ledger.manual_revenue != null) {
           manualRevenueTotal += ledger.manual_revenue;
-          manualOrdersTotal += ledger.manual_orders ?? 0;
+          if (ledger.manual_orders != null) {
+            manualOrdersTotal += ledger.manual_orders;
+          }
         }
       }
     }
 
-    const revenue = metrics.totalRevenue + manualRevenueTotal;
-    const orders = metrics.totalOrders + manualOrdersTotal;
-    const foodCost = revenue * (metrics.foodCostPercent / 100);
+    const revenue = salesRevenue + manualRevenueTotal;
+    if (manualOrdersTotal > 0) orderTotal = (orderTotal ?? 0) + manualOrdersTotal;
+    const foodCostPercentBase = metrics?.foodCostPercent ?? 30;
+    const foodCost = revenue * (foodCostPercentBase / 100);
     const adjustedProfit = revenue - foodCost - totalLabourCost - totalAdditionalExpenses;
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
-    const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : metrics.foodCostPercent;
+    const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : foodCostPercentBase;
+    const aov = orderTotal && orderTotal > 0 ? revenue / orderTotal : null;
+    // Food cost is "estimated" whenever we lack real recipe costs for every sold item
+    const foodCostIsEstimated = itemsMissingCost > 0 || foodCostPercentBase === 30;
 
-    return { revenue, orders, foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct };
+    return {
+      revenue, orders: orderTotal, qtySold, visitors: visitorTotal, aov,
+      foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct,
+      foodCostIsEstimated, itemsMissingCost, hasAnyLabour,
+    };
   }, [metrics, dailyData, ledgerEntries, avgHourlyRate, attendanceMap]);
+  const profitIsEstimated = periodSummary.foodCostIsEstimated || !periodSummary.hasAnyLabour;
 
   // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {
@@ -1037,7 +1122,7 @@ export default function ReportsPage() {
           ) : (
             <>
               {/* Period Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">Revenue</CardTitle>
@@ -1050,15 +1135,46 @@ export default function ReportsPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">Orders</CardTitle>
-                    <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                    <Receipt className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.orders}</div>
+                    <div className="text-xl font-bold">{periodSummary.orders ?? "—"}</div>
+                    <div className="text-[10px] text-muted-foreground">receipts</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Food Cost %</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">AOV</CardTitle>
+                    <span className="text-xs text-primary font-medium">{currencySymbol}</span>
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3">
+                    <div className="text-xl font-bold">{periodSummary.aov != null ? formatCurrency(periodSummary.aov) : "—"}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Covers</CardTitle>
+                    <Users className="h-3.5 w-3.5 text-primary" />
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3">
+                    <div className="text-xl font-bold">{periodSummary.visitors ?? "—"}</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Qty Sold</CardTitle>
+                    <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                  </CardHeader>
+                  <CardContent className="px-3 pb-3">
+                    <div className="text-xl font-bold">{periodSummary.qtySold}</div>
+                    <div className="text-[10px] text-muted-foreground">item units</div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
+                      Food Cost %{periodSummary.foodCostIsEstimated ? " (est.)" : ""}
+                    </CardTitle>
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
@@ -1072,29 +1188,27 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className="text-xl font-bold">{periodSummary.labourPct.toFixed(1)}%</div>
+                    <div className="text-[10px] text-muted-foreground">{formatCurrency(periodSummary.totalLabourCost)}</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Labour Cost</CardTitle>
-                    <span className="text-xs text-primary font-medium">{currencySymbol}</span>
-                  </CardHeader>
-                  <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{formatCurrency(periodSummary.totalLabourCost)}</div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Profit</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">
+                      {profitIsEstimated ? "Est. Profit" : "Profit"}
+                    </CardTitle>
                     <TrendingUp className="h-3.5 w-3.5 text-success" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className={cn("text-xl font-bold", periodSummary.profit >= 0 ? "text-success" : "text-destructive")}>
                       {formatCurrency(periodSummary.profit)}
                     </div>
+                    {periodSummary.itemsMissingCost > 0 && (
+                      <div className="text-[10px] text-warning">Margin incomplete — {periodSummary.itemsMissingCost} items missing cost</div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
+
 
               {/* Calendar Navigation Strip */}
               <Card>
