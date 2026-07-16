@@ -30,6 +30,7 @@ import { POSDishMappingTab } from "@/components/pos/POSDishMappingTab";
 import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
 import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
 import { useDateRangeCoverage } from "@/hooks/usePOSDateCoverage";
+import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
