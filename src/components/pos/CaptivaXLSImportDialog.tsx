@@ -69,6 +69,8 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const { currentRestaurant } = useRestaurant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { setCustomRange } = useDateRange();
+  const { setSelectedLocationId } = useLocation();
 
   const [file, setFile] = useState<File | null>(null);
   const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
