@@ -24,15 +24,6 @@ interface DashboardOverview {
   isLoadingRevenue: boolean;
 }
 
-  revenueYesterday: number;
-  revenueSameWeekdayLastWeek: number;
-  labourTodayCost: number;
-  labourTodayPct: number | null;
-  hasLabourToday: boolean;
-  revenueSeries: HourlyRevenue[];
-  isLoadingRevenue: boolean;
-}
-
 export function useDashboardOverview(locationId?: string | null) {
   const { currentRestaurant } = useRestaurant();
   const { startDate, endDate } = useDateRange();
