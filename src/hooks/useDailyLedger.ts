@@ -64,9 +64,11 @@ export function evaluateMissing(
   const expensesOk = ledger != null;
   if (!expensesOk) missing.push("EXPENSES");
 
-  // Bookings: present if reservation data exists for the day (or no reservation system = ok)
+  // Bookings: OPTIONAL. Only relevant if the location uses the booking module.
+  // We treat as non-missing so it never triggers "Needs Attention" or Quick Fix.
   const bookingsOk = hasBookings ?? false;
-  if (!bookingsOk) missing.push("BOOKINGS");
+  // NOTE: intentionally not pushed to `missing` — bookings are optional.
+
 
   const checklist: Record<MissingField, boolean> = {
     SALES: salesOk,
