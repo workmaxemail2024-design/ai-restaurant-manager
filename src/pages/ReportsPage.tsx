@@ -609,23 +609,49 @@ function DayCard({
                         <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.discounts) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span className="font-medium">{day.orders ?? "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">AOV</span><span className="font-medium">{day.aov != null ? formatCurrency(day.aov) : "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Covers / Visitors</span><span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span></div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Covers / Visitors{day.visitors != null && day.visitors > 0 ? " (Captiva)" : ""}</span>
+                          <span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span>
+                        </div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Qty Sold</span><span className="font-medium">{day.qtySold}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Food Revenue</span><span className="font-medium">{formatCurrency(day.revenueByType.food)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.alcoholic)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Non-alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.nonAlcoholic)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Modifiers / Sides</span><span className="font-medium">{formatCurrency(day.revenueByType.modifier)}</span></div>
                       </div>
+                      {/* Revenue split — reconciles back to total item revenue */}
+                      {(() => {
+                        const rt = day.revenueByType;
+                        const catTotal = rt.food + rt.alcoholic + rt.nonAlcoholic + rt.modifier + rt.other;
+                        // Unclassified = any revenue we could not bucket at all (should be 0 after backfill).
+                        const unclassified = Math.max(0, day.revenue - catTotal);
+                        const totalReconciled = catTotal + unclassified;
+                        return (
+                          <div className="pt-2 mt-1 border-t border-border/60">
+                            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Revenue Split</div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
+                              <div className="flex justify-between"><span className="text-muted-foreground">Food</span><span className="font-medium">{formatCurrency(rt.food)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Alcoholic</span><span className="font-medium">{formatCurrency(rt.alcoholic)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Non-alcoholic</span><span className="font-medium">{formatCurrency(rt.nonAlcoholic)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Modifiers / Sides</span><span className="font-medium">{formatCurrency(rt.modifier)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Other / Unclassified</span><span className="font-medium">{formatCurrency(rt.other + unclassified)}</span></div>
+                              {day.summary && (
+                                <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">−{formatCurrency(day.summary.discounts)}</span></div>
+                              )}
+                              <div className="flex justify-between col-span-2 md:col-span-2 border-t border-border/60 pt-1 mt-1">
+                                <span className="text-muted-foreground font-medium">Total Item Revenue</span>
+                                <span className="font-semibold">{formatCurrency(totalReconciled)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {(foodCostIsEstimated || day.itemsMissingCost > 0 || labourSource === "none") && (
                         <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground space-y-0.5">
                           {foodCostIsEstimated && (
-                            <div>* Food cost is <span className="text-warning font-medium">estimated (30%)</span> — actual recipe costs not applied here.</div>
+                            <div>Food cost shown is <span className="text-warning font-medium">Estimated Food Cost % (30.0%)</span> — actual recipe costs not applied.</div>
                           )}
                           {day.itemsMissingCost > 0 && (
                             <div>Margin incomplete — <span className="text-warning font-medium">{day.itemsMissingCost}</span> sold items missing recipe/product cost.</div>
                           )}
                           {labourSource === "none" && (
-                            <div>Labour cost unknown — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
+                            <div>Labour missing — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
                           )}
                         </div>
                       )}
