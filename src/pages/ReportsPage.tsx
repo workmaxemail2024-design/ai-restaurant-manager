@@ -340,7 +340,8 @@ function DayCard({
     ? effectiveLabourHours - plannedShiftHours : null;
 
   // Missing fields evaluation
-  const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings);
+  const actualHours = actualAttendance?.hours ?? 0;
+  const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings, day.visitors, actualHours);
   // Re-evaluate with local state for live feedback
   const localLedger: LedgerEntry = {
     entry_date: day.date,
@@ -354,7 +355,7 @@ function DayCard({
     manual_orders: manualOrders,
     covers_unknown: coversUnknown,
   };
-  const liveMissing = evaluateMissing(day.hasData, localLedger, hasBookings);
+  const liveMissing = evaluateMissing(day.hasData, localLedger, hasBookings, day.visitors, actualHours);
 
   const statusLabel = getStatusLabel(status, ledger);
   const healthColor = getHealthColor(day, labourPct, ledger);
