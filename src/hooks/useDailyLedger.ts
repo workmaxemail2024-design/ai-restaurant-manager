@@ -34,7 +34,11 @@ export interface DayCompleteness {
 export function evaluateMissing(
   hasSalesData: boolean,
   ledger?: LedgerEntry,
-  hasBookings?: boolean
+  hasBookings?: boolean,
+  /** Covers imported from Captiva (visitor_count from pos_daily_summaries) */
+  captivaVisitors?: number | null,
+  /** Actual attendance hours already logged for the day (bypasses ledger.labour_hours) */
+  actualLabourHours?: number,
 ): DayCompleteness {
   const missing: MissingField[] = [];
 
@@ -45,13 +49,15 @@ export function evaluateMissing(
     (ledger?.manual_revenue != null && ledger.manual_revenue > 0);
   if (!salesOk) missing.push("SALES");
 
-  // Labour hours: present if ledger has labour_hours > 0
-  const labourOk = (ledger?.labour_hours ?? 0) > 0;
+  // Labour hours: present if ledger has labour_hours > 0 OR actual attendance recorded
+  const labourOk = (ledger?.labour_hours ?? 0) > 0 || (actualLabourHours ?? 0) > 0;
   if (!labourOk) missing.push("LABOUR_HOURS");
 
-  // Covers: present if ledger has covers > 0 OR explicitly marked unknown
+  // Covers: present if Captiva imported visitors, ledger has covers > 0, OR explicitly marked unknown
   const coversOk =
-    (ledger?.covers ?? 0) > 0 || ledger?.covers_unknown === true;
+    (captivaVisitors != null && captivaVisitors > 0) ||
+    (ledger?.covers ?? 0) > 0 ||
+    ledger?.covers_unknown === true;
   if (!coversOk) missing.push("COVERS");
 
   // Expenses: present if ledger has additional_expenses entered (even 0 counts if ledger exists)

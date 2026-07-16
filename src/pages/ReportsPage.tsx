@@ -216,7 +216,7 @@ function CalendarStrip({
           const isSelected = isSameDay(day, rangeStart) || isSameDay(day, rangeEnd);
           const isFocused = focusedDate === dateStr;
 
-          const { status } = evaluateMissing(coverage?.hasData || false, ledger, bookingDays.has(dateStr));
+          const { status } = evaluateMissing(coverage?.hasData || false, ledger, bookingDays.has(dateStr), coverage?.visitors ?? null);
           const dotClass = getDotClass(status);
 
           return (
@@ -340,7 +340,8 @@ function DayCard({
     ? effectiveLabourHours - plannedShiftHours : null;
 
   // Missing fields evaluation
-  const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings);
+  const actualHours = actualAttendance?.hours ?? 0;
+  const { missing, status, checklist } = evaluateMissing(day.hasData, ledger, hasBookings, day.visitors, actualHours);
   // Re-evaluate with local state for live feedback
   const localLedger: LedgerEntry = {
     entry_date: day.date,
@@ -354,7 +355,7 @@ function DayCard({
     manual_orders: manualOrders,
     covers_unknown: coversUnknown,
   };
-  const liveMissing = evaluateMissing(day.hasData, localLedger, hasBookings);
+  const liveMissing = evaluateMissing(day.hasData, localLedger, hasBookings, day.visitors, actualHours);
 
   const statusLabel = getStatusLabel(status, ledger);
   const healthColor = getHealthColor(day, labourPct, ledger);
@@ -608,23 +609,49 @@ function DayCard({
                         <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.discounts) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span className="font-medium">{day.orders ?? "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">AOV</span><span className="font-medium">{day.aov != null ? formatCurrency(day.aov) : "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Covers / Visitors</span><span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span></div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Covers / Visitors{day.visitors != null && day.visitors > 0 ? " (Captiva)" : ""}</span>
+                          <span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span>
+                        </div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Qty Sold</span><span className="font-medium">{day.qtySold}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Food Revenue</span><span className="font-medium">{formatCurrency(day.revenueByType.food)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.alcoholic)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Non-alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.nonAlcoholic)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Modifiers / Sides</span><span className="font-medium">{formatCurrency(day.revenueByType.modifier)}</span></div>
                       </div>
+                      {/* Revenue split — reconciles back to total item revenue */}
+                      {(() => {
+                        const rt = day.revenueByType;
+                        const catTotal = rt.food + rt.alcoholic + rt.nonAlcoholic + rt.modifier + rt.other;
+                        // Unclassified = any revenue we could not bucket at all (should be 0 after backfill).
+                        const unclassified = Math.max(0, day.revenue - catTotal);
+                        const totalReconciled = catTotal + unclassified;
+                        return (
+                          <div className="pt-2 mt-1 border-t border-border/60">
+                            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Revenue Split</div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
+                              <div className="flex justify-between"><span className="text-muted-foreground">Food</span><span className="font-medium">{formatCurrency(rt.food)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Alcoholic</span><span className="font-medium">{formatCurrency(rt.alcoholic)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Non-alcoholic</span><span className="font-medium">{formatCurrency(rt.nonAlcoholic)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Modifiers / Sides</span><span className="font-medium">{formatCurrency(rt.modifier)}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Other / Unclassified</span><span className="font-medium">{formatCurrency(rt.other + unclassified)}</span></div>
+                              {day.summary && (
+                                <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">−{formatCurrency(day.summary.discounts)}</span></div>
+                              )}
+                              <div className="flex justify-between col-span-2 md:col-span-2 border-t border-border/60 pt-1 mt-1">
+                                <span className="text-muted-foreground font-medium">Total Item Revenue</span>
+                                <span className="font-semibold">{formatCurrency(totalReconciled)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {(foodCostIsEstimated || day.itemsMissingCost > 0 || labourSource === "none") && (
                         <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground space-y-0.5">
                           {foodCostIsEstimated && (
-                            <div>* Food cost is <span className="text-warning font-medium">estimated (30%)</span> — actual recipe costs not applied here.</div>
+                            <div>Food cost shown is <span className="text-warning font-medium">Estimated Food Cost % (30.0%)</span> — actual recipe costs not applied.</div>
                           )}
                           {day.itemsMissingCost > 0 && (
                             <div>Margin incomplete — <span className="text-warning font-medium">{day.itemsMissingCost}</span> sold items missing recipe/product cost.</div>
                           )}
                           {labourSource === "none" && (
-                            <div>Labour cost unknown — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
+                            <div>Labour missing — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
                           )}
                         </div>
                       )}
@@ -1017,14 +1044,19 @@ export default function ReportsPage() {
 
     const revenue = salesRevenue + manualRevenueTotal;
     if (manualOrdersTotal > 0) orderTotal = (orderTotal ?? 0) + manualOrdersTotal;
-    const foodCostPercentBase = metrics?.foodCostPercent ?? 30;
-    const foodCost = revenue * (foodCostPercentBase / 100);
+    // Consistent food cost: use the actual per-dish recipe cost % if the recipe engine
+    // has coverage; otherwise fall back to a flat 30 % estimate (matches the daily row).
+    const hasRealFoodCost =
+      metrics?.foodCostPercent != null &&
+      metrics.foodCostPercent > 0 &&
+      itemsMissingCost === 0;
+    const effectiveFoodCostPct = hasRealFoodCost ? (metrics!.foodCostPercent as number) : 30;
+    const foodCost = revenue * (effectiveFoodCostPct / 100);
     const adjustedProfit = revenue - foodCost - totalLabourCost - totalAdditionalExpenses;
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
-    const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : foodCostPercentBase;
+    const foodCostPct = effectiveFoodCostPct;
     const aov = orderTotal && orderTotal > 0 ? revenue / orderTotal : null;
-    // Food cost is "estimated" whenever we lack real recipe costs for every sold item
-    const foodCostIsEstimated = itemsMissingCost > 0 || foodCostPercentBase === 30;
+    const foodCostIsEstimated = !hasRealFoodCost;
 
     return {
       revenue, orders: orderTotal, qtySold, visitors: visitorTotal, aov,
@@ -1039,10 +1071,11 @@ export default function ReportsPage() {
     if (!dailyData) return 0;
     return dailyData.filter((day) => {
       const ledger = ledgerEntries.get(day.date);
-      const { status } = evaluateMissing(day.hasData, ledger, bookingDaysSet.has(day.date));
+      const actual = attendanceMap.get(day.date);
+      const { status } = evaluateMissing(day.hasData, ledger, bookingDaysSet.has(day.date), day.visitors, actual?.hours);
       return status === "needs_attention";
     }).length;
-  }, [dailyData, ledgerEntries, bookingDaysSet]);
+  }, [dailyData, ledgerEntries, bookingDaysSet, attendanceMap]);
 
   const handleDayClick = useCallback(
     (dateStr: string) => {
@@ -1153,11 +1186,14 @@ export default function ReportsPage() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Covers</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Covers / Visitors</CardTitle>
                     <Users className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className="text-xl font-bold">{periodSummary.visitors ?? "—"}</div>
+                    {periodSummary.visitors != null && periodSummary.visitors > 0 && (
+                      <div className="text-[10px] text-muted-foreground">from Captiva</div>
+                    )}
                   </CardContent>
                 </Card>
                 <Card>
@@ -1173,12 +1209,15 @@ export default function ReportsPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">
-                      Food Cost %{periodSummary.foodCostIsEstimated ? " (est.)" : ""}
+                      {periodSummary.foodCostIsEstimated ? "Est. Food Cost %" : "Food Cost %"}
                     </CardTitle>
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className="text-xl font-bold">{periodSummary.foodCostPct.toFixed(1)}%</div>
+                    {periodSummary.foodCostIsEstimated && (
+                      <div className="text-[10px] text-muted-foreground">default 30%</div>
+                    )}
                   </CardContent>
                 </Card>
                 <Card>
@@ -1202,9 +1241,17 @@ export default function ReportsPage() {
                     <div className={cn("text-xl font-bold", periodSummary.profit >= 0 ? "text-success" : "text-destructive")}>
                       {formatCurrency(periodSummary.profit)}
                     </div>
-                    {periodSummary.itemsMissingCost > 0 && (
-                      <div className="text-[10px] text-warning">Margin incomplete — {periodSummary.itemsMissingCost} items missing cost</div>
-                    )}
+                    <div className="space-y-0.5 mt-0.5">
+                      {periodSummary.foodCostIsEstimated && (
+                        <div className="text-[10px] text-warning">Margin incomplete — using est. 30% food cost</div>
+                      )}
+                      {periodSummary.itemsMissingCost > 0 && (
+                        <div className="text-[10px] text-warning">{periodSummary.itemsMissingCost} items missing cost</div>
+                      )}
+                      {!periodSummary.hasAnyLabour && (
+                        <div className="text-[10px] text-warning">Labour missing</div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
