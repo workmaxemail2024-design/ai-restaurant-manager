@@ -677,19 +677,26 @@ function DayCard({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="space-y-1">
                         <label className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Users className="h-3 w-3" /> Covers
+                          <Users className="h-3 w-3" />
+                          {day.visitors != null && day.visitors > 0 ? "Override Covers" : "Covers"}
                         </label>
                         <Input
                           type="number"
                           min={0}
+                          placeholder={day.visitors != null && day.visitors > 0 ? String(day.visitors) : ""}
                           value={covers || ""}
                           onChange={(e) => { setCovers(Number(e.target.value) || 0); setCoversUnknown(false); }}
                           className="h-8 text-sm"
                         />
-                        {coversUnknown && (
+                        {day.visitors != null && day.visitors > 0 ? (
+                          <span className="text-[10px] text-muted-foreground">
+                            Current Captiva covers: {day.visitors}. Only enter a value here to override.
+                          </span>
+                        ) : coversUnknown ? (
                           <span className="text-[10px] text-muted-foreground">Marked unknown</span>
-                        )}
+                        ) : null}
                       </div>
+
                       <div className="space-y-1">
                         <label className="text-xs text-muted-foreground">Labour Hours</label>
                         <Input
