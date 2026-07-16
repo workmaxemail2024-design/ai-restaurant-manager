@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
   Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3,
-  Pencil, Info
+  Pencil, Info, FileSpreadsheet
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
