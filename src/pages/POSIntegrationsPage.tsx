@@ -21,6 +21,7 @@ import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
   useApplyPOSImport, useToggleAutoSync, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
+import { usePermissions } from "@/hooks/usePermissions";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
