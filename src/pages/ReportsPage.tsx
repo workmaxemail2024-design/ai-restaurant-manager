@@ -1215,7 +1215,7 @@ export default function ReportsPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">
-                      {periodSummary.foodCostIsEstimated ? "Est. Food Cost %" : "Food Cost %"}
+                      {periodSummary.foodCostIsEstimated ? "Food Cost % (est.)" : "Food Cost %"}
                     </CardTitle>
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
