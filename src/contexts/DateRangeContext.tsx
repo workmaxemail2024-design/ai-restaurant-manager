@@ -236,12 +236,16 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
 
   // Persist to localStorage whenever preset or custom dates change
   const persistToStorage = useCallback((newPreset: DatePreset, newStart?: string, newEnd?: string) => {
+    const data: StoredDateRange = {
+      preset: newPreset,
+      ...(newPreset === 'custom' && { startDate: newStart, endDate: newEnd })
+    };
+    // Global "last used" fallback — survives navigation and restaurant switches.
+    try {
+      localStorage.setItem(`${DATE_RANGE_STORAGE_PREFIX}last`, JSON.stringify(data));
+    } catch { /* ignore */ }
     if (currentRestaurant) {
       const storageKey = `${DATE_RANGE_STORAGE_PREFIX}${currentRestaurant.id}`;
-      const data: StoredDateRange = { 
-        preset: newPreset,
-        ...(newPreset === 'custom' && { startDate: newStart, endDate: newEnd })
-      };
       localStorage.setItem(storageKey, JSON.stringify(data));
     }
   }, [currentRestaurant?.id]);
