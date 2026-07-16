@@ -29,19 +29,37 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, TrendingDown, Lightbulb, Check, ChevronDown } from 'lucide-react';
 import { formatCurrency, currencySymbol } from '@/lib/currency';
-import { inferItemType, ITEM_TYPE_LABEL, type PosItemType } from '@/lib/posItemClassification';
+import {
+  inferItemType,
+  inferDrinkType,
+  ITEM_TYPE_LABEL,
+  DRINK_TYPE_LABEL,
+  type PosItemType,
+  type DrinkType,
+} from '@/lib/posItemClassification';
 
 type StatusFilter = 'all' | 'mapped' | 'unmapped' | 'auto-review';
 type BucketTab = 'sold' | 'zero' | 'review' | 'modifiers' | 'all';
+type TypeFilter =
+  | 'all'
+  | 'food'
+  | 'drink'
+  | 'drink_alcoholic'
+  | 'drink_non_alcoholic'
+  | 'modifier'
+  | 'other';
+type ChartMode = 'food_drink' | 'food' | 'drink' | 'alcoholic' | 'non_alcoholic';
 
 interface Row {
-  id: string;                    // dish id
-  extId: string | null;          // external_pos_items.id (for review actions)
+  id: string;
+  extId: string | null;
   name: string;
   department: string | null;
-  itemType: PosItemType;         // effective (manual override wins over inferred)
+  itemType: PosItemType;
   inferredType: PosItemType;
   manualType: PosItemType | null;
+  drinkType: DrinkType;              // effective when itemType === 'drink'
+  manualDrinkType: DrinkType | null;
   quantity: number;
   revenue: number;
   basePrice: number;
@@ -60,11 +78,11 @@ export default function ChainMenuPerformancePage() {
   const [tab, setTab] = useState<BucketTab>('sold');
   const [includeModifiers, setIncludeModifiers] = useState(false);
   const [status, setStatus] = useState<StatusFilter>('all');
-  const [typeFilter, setTypeFilter] = useState<'all' | PosItemType>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [chartMode, setChartMode] = useState<ChartMode>('food_drink');
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set()); // set of external ids
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // dish_id -> { external record }
   const extByDish = useMemo(() => {
     const map = new Map<string, ExternalPOSItem>();
     (extItems || []).forEach((e) => {
@@ -87,14 +105,20 @@ export default function ChainMenuPerformancePage() {
       const dept = ext?.department ?? null;
       const inferred = inferItemType(dept, dish.name);
       const manual = (ext?.manual_type ?? null) as PosItemType | null;
+      const itemType = manual ?? inferred;
+      const manualDrink = (ext?.manual_drink_type ?? null) as DrinkType | null;
+      const drinkType: DrinkType =
+        itemType === 'drink' ? manualDrink ?? inferDrinkType(dept, dish.name) : 'unknown';
       return {
         id: dish.id,
         extId: ext?.id ?? null,
         name: dish.name,
         department: dept,
-        itemType: manual ?? inferred,
+        itemType,
         inferredType: inferred,
         manualType: manual,
+        drinkType,
+        manualDrinkType: manualDrink,
         quantity: qty,
         revenue: rev,
         basePrice: dish.selling_price,
@@ -110,11 +134,15 @@ export default function ChainMenuPerformancePage() {
     const sold = nonMod.filter((r) => r.quantity > 0);
     const zero = nonMod.filter((r) => r.quantity === 0);
     const review = rows.filter((r) => r.needsReview);
+    const alcoholic = rows.filter((r) => r.itemType === 'drink' && r.drinkType === 'alcoholic');
+    const nonAlcoholic = rows.filter((r) => r.itemType === 'drink' && r.drinkType === 'non_alcoholic');
     return {
       sold: sold.length,
       zero: zero.length,
       review: review.length,
       modifiers: modifiers.length,
+      alcoholic: alcoholic.length,
+      nonAlcoholic: nonAlcoholic.length,
       all: rows.length,
     };
   }, [rows]);
@@ -128,6 +156,18 @@ export default function ChainMenuPerformancePage() {
     return peers.filter((r) => r.quantity < threshold);
   }, [rows]);
 
+  const matchesTypeFilter = (r: Row): boolean => {
+    switch (typeFilter) {
+      case 'all': return true;
+      case 'food': return r.itemType === 'food';
+      case 'drink': return r.itemType === 'drink';
+      case 'drink_alcoholic': return r.itemType === 'drink' && r.drinkType === 'alcoholic';
+      case 'drink_non_alcoholic': return r.itemType === 'drink' && r.drinkType === 'non_alcoholic';
+      case 'modifier': return r.itemType === 'modifier';
+      case 'other': return r.itemType === 'other';
+    }
+  };
+
   const filtered = useMemo(() => {
     let list = rows;
     if (tab === 'sold') list = list.filter((r) => r.quantity > 0 && r.itemType !== 'modifier');
@@ -135,11 +175,11 @@ export default function ChainMenuPerformancePage() {
     else if (tab === 'review') list = list.filter((r) => r.needsReview);
     else if (tab === 'modifiers') list = list.filter((r) => r.itemType === 'modifier');
 
-    if (!includeModifiers && tab !== 'modifiers' && tab !== 'all') {
+    if (!includeModifiers && tab !== 'modifiers' && tab !== 'all' && typeFilter !== 'modifier') {
       list = list.filter((r) => r.itemType !== 'modifier');
     }
 
-    if (typeFilter !== 'all') list = list.filter((r) => r.itemType === typeFilter);
+    list = list.filter(matchesTypeFilter);
 
     if (status === 'mapped') list = list.filter((r) => !!r.extId && !r.needsReview);
     else if (status === 'unmapped') list = list.filter((r) => !r.extId);
@@ -153,6 +193,7 @@ export default function ChainMenuPerformancePage() {
     }
 
     return [...list].sort((a, b) => b.revenue - a.revenue);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, tab, includeModifiers, typeFilter, status, search]);
 
   const visibleRows = filtered.slice(0, 100);
@@ -162,8 +203,7 @@ export default function ChainMenuPerformancePage() {
   const toggleRow = (extId: string | null) => {
     if (!extId) return;
     const next = new Set(selected);
-    if (next.has(extId)) next.delete(extId);
-    else next.add(extId);
+    if (next.has(extId)) next.delete(extId); else next.add(extId);
     setSelected(next);
   };
 
@@ -187,31 +227,44 @@ export default function ChainMenuPerformancePage() {
     setSelected(new Set());
   };
 
+  // Set as Alcoholic / Non-Alcoholic Drink in one action (type + subtype)
+  const bulkSetDrink = async (subtype: DrinkType) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    await bulkUpdate.mutateAsync({
+      ids,
+      manual_type: 'drink',
+      manual_drink_type: subtype,
+      needs_review: false,
+    });
+    setSelected(new Set());
+  };
+
   const chartData = useMemo(() => {
     const pool = rows.filter((r) => {
       if (r.quantity <= 0) return false;
-      if (r.itemType === 'modifier') return includeModifiers;
-      return r.itemType === 'food' || r.itemType === 'drink';
+      if (r.itemType === 'modifier') return includeModifiers && chartMode === 'food_drink';
+      switch (chartMode) {
+        case 'food_drink': return r.itemType === 'food' || r.itemType === 'drink';
+        case 'food': return r.itemType === 'food';
+        case 'drink': return r.itemType === 'drink';
+        case 'alcoholic': return r.itemType === 'drink' && r.drinkType === 'alcoholic';
+        case 'non_alcoholic': return r.itemType === 'drink' && r.drinkType === 'non_alcoholic';
+      }
     });
     return pool
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 8)
       .map((r) => ({ name: r.name.substring(0, 18), revenue: r.revenue, quantity: r.quantity }));
-  }, [rows, includeModifiers]);
+  }, [rows, includeModifiers, chartMode]);
 
   const topPerformer = chartData[0]?.name || '-';
 
   const recommendations = useMemo(() => {
     const recs: string[] = [];
-    if (buckets.review > 0) {
-      recs.push(`${buckets.review} auto-created item(s) still need review — use bulk actions to speed this up.`);
-    }
-    if (underperformers.length > 0) {
-      recs.push(`${underperformers.length} sold food/drink item(s) fall below the peer sales threshold.`);
-    }
-    if (buckets.zero > 0) {
-      recs.push(`${buckets.zero} item(s) had zero sales in this period. Check active menus.`);
-    }
+    if (buckets.review > 0) recs.push(`${buckets.review} auto-created item(s) still need review — use bulk actions to speed this up.`);
+    if (underperformers.length > 0) recs.push(`${underperformers.length} sold food/drink item(s) fall below the peer sales threshold.`);
+    if (buckets.zero > 0) recs.push(`${buckets.zero} item(s) had zero sales in this period. Check active menus.`);
     return recs;
   }, [buckets, underperformers]);
 
@@ -223,12 +276,13 @@ export default function ChainMenuPerformancePage() {
           {startDate !== endDate && <span> ({startDate} → {endDate})</span>}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-6">
           <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Total Items</p><p className="text-2xl font-bold">{buckets.all}</p></CardContent></Card>
           <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Sold</p><p className="text-2xl font-bold text-green-600">{buckets.sold}</p></CardContent></Card>
           <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Zero-sale</p><p className="text-2xl font-bold text-muted-foreground">{buckets.zero}</p></CardContent></Card>
           <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Needs Review</p><p className="text-2xl font-bold text-yellow-500">{buckets.review}</p></CardContent></Card>
-          <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Underperformers</p><p className="text-2xl font-bold text-destructive">{underperformers.length}</p><p className="text-[10px] text-muted-foreground mt-1">Sold food/drink only</p></CardContent></Card>
+          <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Alcoholic</p><p className="text-2xl font-bold">{buckets.alcoholic}</p></CardContent></Card>
+          <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Non-alcoholic</p><p className="text-2xl font-bold">{buckets.nonAlcoholic}</p></CardContent></Card>
         </div>
 
         {recommendations.length > 0 && (
@@ -249,12 +303,24 @@ export default function ChainMenuPerformancePage() {
             <div>
               <CardTitle>Top Items by Revenue</CardTitle>
               <CardDescription>
-                Sold Food &amp; Drink only. Top performer: <span className="font-medium text-foreground">{topPerformer}</span>
+                Top performer: <span className="font-medium text-foreground">{topPerformer}</span>
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch id="chart-mods" checked={includeModifiers} onCheckedChange={setIncludeModifiers} />
-              <Label htmlFor="chart-mods" className="text-sm">Include modifiers / sides</Label>
+            <div className="flex items-center gap-3">
+              <Select value={chartMode} onValueChange={(v) => setChartMode(v as ChartMode)}>
+                <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="food_drink">Food + Drink</SelectItem>
+                  <SelectItem value="food">Food only</SelectItem>
+                  <SelectItem value="drink">All drinks</SelectItem>
+                  <SelectItem value="alcoholic">Alcoholic drinks only</SelectItem>
+                  <SelectItem value="non_alcoholic">Non-alcoholic drinks only</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2">
+                <Switch id="chart-mods" checked={includeModifiers} onCheckedChange={setIncludeModifiers} />
+                <Label htmlFor="chart-mods" className="text-sm">Include modifiers</Label>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -291,13 +357,15 @@ export default function ChainMenuPerformancePage() {
 
             <div className="flex flex-wrap items-center gap-3">
               <Input placeholder="Search name or department…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-xs" />
-              <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
-                <SelectTrigger className="w-[160px]"><SelectValue placeholder="Item type" /></SelectTrigger>
+              <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as TypeFilter)}>
+                <SelectTrigger className="w-[200px]"><SelectValue placeholder="Item type" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All types</SelectItem>
-                  <SelectItem value="food">Food</SelectItem>
-                  <SelectItem value="drink">Drink</SelectItem>
-                  <SelectItem value="modifier">Modifier / Side</SelectItem>
+                  <SelectItem value="food">Food only</SelectItem>
+                  <SelectItem value="drink">All drinks</SelectItem>
+                  <SelectItem value="drink_alcoholic">Alcoholic drinks</SelectItem>
+                  <SelectItem value="drink_non_alcoholic">Non-alcoholic drinks</SelectItem>
+                  <SelectItem value="modifier">Modifiers / sides</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -318,9 +386,7 @@ export default function ChainMenuPerformancePage() {
 
             {/* Bulk action bar */}
             <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 p-2">
-              <span className="text-sm text-muted-foreground pl-1">
-                {selected.size} selected
-              </span>
+              <span className="text-sm text-muted-foreground pl-1">{selected.size} selected</span>
               <div className="flex-1" />
               <Button size="sm" variant="outline" onClick={bulkMarkReviewed} disabled={bulkUpdate.isPending}>
                 <Check className="h-4 w-4 mr-1" /> Mark visible as reviewed
@@ -335,7 +401,8 @@ export default function ChainMenuPerformancePage() {
                   <DropdownMenuLabel>Apply to {selected.size} item(s)</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => bulkSetType('food')}>Food</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => bulkSetType('drink')}>Drink</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkSetDrink('alcoholic')}>Alcoholic drink</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkSetDrink('non_alcoholic')}>Non-alcoholic drink</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => bulkSetType('modifier')}>Modifier / Side</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => bulkSetType('other')}>Other</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -347,15 +414,12 @@ export default function ChainMenuPerformancePage() {
                 <thead>
                   <tr className="border-b">
                     <th className="w-8 py-3 px-2">
-                      <Checkbox
-                        checked={allVisibleSelected}
-                        onCheckedChange={toggleAllVisible}
-                        aria-label="Select all visible"
-                      />
+                      <Checkbox checked={allVisibleSelected} onCheckedChange={toggleAllVisible} aria-label="Select all visible" />
                     </th>
                     <th className="text-left py-3 px-2">Product</th>
                     <th className="text-left py-3 px-2">Department</th>
                     <th className="text-left py-3 px-2">Type</th>
+                    <th className="text-left py-3 px-2">Alcohol</th>
                     <th className="text-right py-3 px-2">Qty</th>
                     <th className="text-right py-3 px-2">Revenue</th>
                     <th className="text-right py-3 px-2">Price</th>
@@ -370,12 +434,7 @@ export default function ChainMenuPerformancePage() {
                     return (
                       <tr key={r.id} className="border-b hover:bg-muted/50">
                         <td className="py-3 px-2">
-                          <Checkbox
-                            checked={isSelected}
-                            disabled={!r.extId}
-                            onCheckedChange={() => toggleRow(r.extId)}
-                            aria-label={`Select ${r.name}`}
-                          />
+                          <Checkbox checked={isSelected} disabled={!r.extId} onCheckedChange={() => toggleRow(r.extId)} aria-label={`Select ${r.name}`} />
                         </td>
                         <td className="py-3 px-2">
                           <p className="font-medium">{r.name}</p>
@@ -389,6 +448,25 @@ export default function ChainMenuPerformancePage() {
                             {ITEM_TYPE_LABEL[r.itemType]}
                             {r.manualType && <span className="ml-1 text-[10px] opacity-70">(set)</span>}
                           </Badge>
+                        </td>
+                        <td className="py-3 px-2">
+                          {r.itemType === 'drink' ? (
+                            <Badge
+                              variant="outline"
+                              className={
+                                r.drinkType === 'alcoholic'
+                                  ? 'bg-purple-500/15 text-purple-600 border-purple-500/30'
+                                  : r.drinkType === 'non_alcoholic'
+                                  ? 'bg-sky-500/15 text-sky-600 border-sky-500/30'
+                                  : ''
+                              }
+                            >
+                              {DRINK_TYPE_LABEL[r.drinkType]}
+                              {r.manualDrinkType && <span className="ml-1 text-[10px] opacity-70">(set)</span>}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="py-3 px-2 text-right">{r.quantity}</td>
                         <td className="py-3 px-2 text-right font-medium">{formatCurrency(r.revenue)}</td>
@@ -411,12 +489,7 @@ export default function ChainMenuPerformancePage() {
                         </td>
                         <td className="py-3 px-2 text-right">
                           {r.extId && r.needsReview && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => updateOne.mutate({ id: r.extId!, needs_review: false })}
-                              disabled={updateOne.isPending}
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => updateOne.mutate({ id: r.extId!, needs_review: false })} disabled={updateOne.isPending}>
                               Mark reviewed
                             </Button>
                           )}
@@ -426,7 +499,7 @@ export default function ChainMenuPerformancePage() {
                   })}
                   {visibleRows.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={10} className="text-center py-8 text-muted-foreground">
                         No items match the current filters.
                       </td>
                     </tr>

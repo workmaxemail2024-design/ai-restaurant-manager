@@ -3,6 +3,7 @@
 // specific food/drink dept names, then broader keyword search.
 
 export type PosItemType = 'food' | 'drink' | 'modifier' | 'other';
+export type DrinkType = 'alcoholic' | 'non_alcoholic' | 'unknown';
 
 // Exact / substring matches on the DEPARTMENT column
 const FOOD_DEPTS = [
@@ -36,8 +37,30 @@ const MODIFIER_NAME_HINTS = [
   'dressing', 'dip',
 ];
 
+// Alcohol classification keywords (matched against dept OR name)
+const ALCOHOL_KEYWORDS = [
+  'wine', 'white wine', 'red wine', 'rose wine', 'rosé wine', 'prosecco',
+  'champagne', 'beer', 'lager', 'ale', 'stout', 'cider', 'spirit', 'spirits',
+  'gin', 'vodka', 'whiskey', 'whisky', 'rum', 'tequila', 'brandy', 'cognac',
+  'cocktail', 'cocktails', 'aperol', 'spritz', 'margarita', 'mojito',
+  'liqueur', 'shots', 'shot', 'sangria', 'martini', 'negroni', 'bourbon',
+  'baileys', 'jager', 'jägermeister', 'amaretto', 'sambuca',
+];
+
+const NON_ALCOHOL_KEYWORDS = [
+  'soft drink', 'soft drinks', 'softs', 'tea', 'coffee', 'cappuccino',
+  'latte', 'americano', 'espresso', 'macchiato', 'mocha', 'flat white',
+  'water', 'juice', 'coke', 'cola', 'fanta', 'sprite', '7up', 'seven up',
+  'lemonade', 'mocktail', 'smoothie', 'milkshake', 'hot chocolate',
+  'iced tea', 'iced coffee', 'kids drink',
+];
+
 function normalise(value: string | null | undefined): string {
   return (value || '').toString().toLowerCase().trim();
+}
+
+function containsAny(haystacks: string[], needles: string[]): boolean {
+  return needles.some((n) => haystacks.some((h) => h.includes(n)));
 }
 
 export function inferItemType(
@@ -57,12 +80,25 @@ export function inferItemType(
     if (MODIFIER_NAME_HINTS.some((k) => nm.includes(k))) return 'modifier';
   }
 
-  // 3. Drink department wins over food (avoids "coffee cake" style edge cases
-  //    where the dept is clearly drink-oriented)
+  // 3. Alcohol keywords are a very strong drink signal even without a dept match
+  if (containsAny([dept, nm], ALCOHOL_KEYWORDS)) return 'drink';
+
+  // 4. Drink department wins over food
   if (looksLikeDrinkDept) return 'drink';
   if (looksLikeFoodDept) return 'food';
 
   return 'other';
+}
+
+export function inferDrinkType(
+  department: string | null | undefined,
+  name?: string | null,
+): DrinkType {
+  const dept = normalise(department);
+  const nm = normalise(name);
+  if (containsAny([dept, nm], ALCOHOL_KEYWORDS)) return 'alcoholic';
+  if (containsAny([dept, nm], NON_ALCOHOL_KEYWORDS)) return 'non_alcoholic';
+  return 'unknown';
 }
 
 export const ITEM_TYPES: PosItemType[] = ['food', 'drink', 'modifier', 'other'];
@@ -72,4 +108,10 @@ export const ITEM_TYPE_LABEL: Record<PosItemType, string> = {
   drink: 'Drink',
   modifier: 'Modifier / Side',
   other: 'Other',
+};
+
+export const DRINK_TYPE_LABEL: Record<DrinkType, string> = {
+  alcoholic: 'Alcoholic',
+  non_alcoholic: 'Non-alcoholic',
+  unknown: 'Unknown',
 };
