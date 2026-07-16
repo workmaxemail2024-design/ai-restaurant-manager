@@ -125,38 +125,50 @@ function setUrlDateParams(startDate: string, endDate: string) {
 export function DateRangeProvider({ children }: { children: ReactNode }) {
   const { currentRestaurant } = useRestaurant();
   
-  // Default to last 7 days instead of today for better initial data view
-  const defaultDates = getPresetDates('7d');
-  const [preset, setPresetState] = useState<DatePreset>('7d');
-  const [startDate, setStartDate] = useState<string>(defaultDates.startDate);
-  const [endDate, setEndDate] = useState<string>(defaultDates.endDate);
+  // Compute the initial state synchronously so refreshes never flash today's default.
+  // Priority: URL query params → global last-used localStorage → 7d default.
+  const computeInitial = (): { preset: DatePreset; startDate: string; endDate: string } => {
+    if (typeof window !== 'undefined') {
+      const urlParams = getUrlDateParams();
+      if (urlParams.from && urlParams.to) {
+        try {
+          const f = parseISO(urlParams.from);
+          const t = parseISO(urlParams.to);
+          if (!isNaN(f.getTime()) && !isNaN(t.getTime())) {
+            return { preset: 'custom', startDate: urlParams.from, endDate: urlParams.to };
+          }
+        } catch { /* ignore */ }
+      }
+      try {
+        const raw = localStorage.getItem(`${DATE_RANGE_STORAGE_PREFIX}last`);
+        if (raw) {
+          const parsed: StoredDateRange = JSON.parse(raw);
+          if (parsed.preset === 'custom' && parsed.startDate && parsed.endDate) {
+            return { preset: 'custom', startDate: parsed.startDate, endDate: parsed.endDate };
+          }
+          if (parsed.preset) {
+            const d = getPresetDates(parsed.preset);
+            return { preset: parsed.preset, startDate: d.startDate, endDate: d.endDate };
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    const d = getPresetDates('7d');
+    return { preset: '7d', startDate: d.startDate, endDate: d.endDate };
+  };
+
+  const initial = computeInitial();
+  const [preset, setPresetState] = useState<DatePreset>(initial.preset);
+  const [startDate, setStartDate] = useState<string>(initial.startDate);
+  const [endDate, setEndDate] = useState<string>(initial.endDate);
   const previousRestaurantId = useRef<string | null>(null);
   const initialized = useRef(false);
 
-  // Initialize from URL params on mount
+  // Sync URL to state on mount (so navigation that strips query still shows dates)
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-    
-    const urlParams = getUrlDateParams();
-    if (urlParams.from && urlParams.to) {
-      // Validate dates
-      try {
-        const fromDate = parseISO(urlParams.from);
-        const toDate = parseISO(urlParams.to);
-        if (!isNaN(fromDate.getTime()) && !isNaN(toDate.getTime())) {
-          setPresetState('custom');
-          setStartDate(urlParams.from);
-          setEndDate(urlParams.to);
-          return;
-        }
-      } catch {
-        // Invalid dates, fall through to defaults
-      }
-    }
-    
-    // No valid URL params, set defaults to URL
-    setUrlDateParams(defaultDates.startDate, defaultDates.endDate);
+    setUrlDateParams(initial.startDate, initial.endDate);
   }, []);
 
   // Load date range from localStorage when restaurant changes
