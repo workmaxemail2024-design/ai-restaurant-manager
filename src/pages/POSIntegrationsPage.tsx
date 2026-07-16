@@ -14,13 +14,14 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Plus, RefreshCw, Plug, AlertTriangle, CheckCircle2, XCircle, 
   Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3,
-  Pencil, Info
+  Pencil, Info, FileSpreadsheet
 } from "lucide-react";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
   useApplyPOSImport, useToggleAutoSync, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
+import { usePermissions } from "@/hooks/usePermissions";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +87,8 @@ export default function POSIntegrationsPage() {
   const reconciliation = usePOSReconciliation();
   const updateMapping = useUpdatePOSMapping();
   const { toast } = useToast();
+  const { hasFullAccess, hasPermission } = usePermissions();
+  const showCaptivaImport = hasFullAccess() || hasPermission('pos', 'admin');
 
   const [reconciliationData, setReconciliationData] = useState<{
     summary?: { system_total: number; pos_total: number; difference: number; unmapped_count: number };
@@ -474,7 +477,16 @@ export default function POSIntegrationsPage() {
       description="Connect and manage your Point of Sale systems"
       action={
         <div className="flex items-center gap-2">
-          <CaptivaXLSImportDialog />
+          {showCaptivaImport && (
+            <CaptivaXLSImportDialog
+              trigger={
+                <Button variant="default">
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Import Captiva XLS
+                </Button>
+              }
+            />
+          )}
           <Dialog open={isAddOpen} onOpenChange={(open) => {
             setIsAddOpen(open);
             if (!open) resetForm();
@@ -853,6 +865,17 @@ export default function POSIntegrationsPage() {
                                 )}
                                 {applyingId === integration.id ? "Applying..." : "Apply to Dashboard"}
                               </Button>
+                              {showCaptivaImport && (
+                                <CaptivaXLSImportDialog
+                                  defaultLocationId={integration.location_id}
+                                  trigger={
+                                    <Button size="sm" variant="secondary">
+                                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                                      Import XLS
+                                    </Button>
+                                  }
+                                />
+                              )}
                             </>
                           )}
                           <Button size="sm" variant="destructive" onClick={() => deleteIntegration.mutate(integration.id)}>
