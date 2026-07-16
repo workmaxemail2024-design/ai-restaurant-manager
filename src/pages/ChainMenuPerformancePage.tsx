@@ -284,10 +284,46 @@ export default function ChainMenuPerformancePage() {
   return (
     <PageLayout title="Chain Menu Performance" description="Compare dish performance across all locations">
       <div className="space-y-6">
-        <div className="text-sm text-muted-foreground">
-          Showing data for: <span className="font-medium text-foreground">{presetLabel}</span>
-          {startDate !== endDate && <span> ({startDate} → {endDate})</span>}
-        </div>
+        <Card>
+          <CardContent className="pt-4 pb-4 flex flex-wrap items-center gap-3">
+            <DateRangeSelector />
+            <Popover open={reportDateOpen} onOpenChange={setReportDateOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  Report date
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={startDate === endDate ? parseISO(startDate) : undefined}
+                  onSelect={(d) => {
+                    if (!d) return;
+                    const s = format(d, 'yyyy-MM-dd');
+                    setCustomRange(s, s);
+                    setReportDateOpen(false);
+                  }}
+                  disabled={(date) => date > new Date()}
+                  initialFocus
+                  className={cn('p-3 pointer-events-auto')}
+                />
+              </PopoverContent>
+            </Popover>
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              <Badge variant="outline" className="gap-1">
+                <MapPin className="h-3 w-3" /> {locationLabel}
+              </Badge>
+              <Badge variant="secondary">{presetLabel}</Badge>
+              <Badge variant="outline">
+                {startDate === endDate ? startDate : `${startDate} → ${endDate}`}
+              </Badge>
+              {preset === 'custom' && (
+                <Badge variant="outline" className="text-primary border-primary/40">Custom</Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 md:grid-cols-6">
           <Card><CardContent className="pt-4"><p className="text-sm text-muted-foreground">Total Items</p><p className="text-2xl font-bold">{buckets.all}</p></CardContent></Card>
