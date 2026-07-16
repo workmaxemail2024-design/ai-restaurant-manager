@@ -1186,11 +1186,14 @@ export default function ReportsPage() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Covers</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Covers / Visitors</CardTitle>
                     <Users className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className="text-xl font-bold">{periodSummary.visitors ?? "—"}</div>
+                    {periodSummary.visitors != null && periodSummary.visitors > 0 && (
+                      <div className="text-[10px] text-muted-foreground">from Captiva</div>
+                    )}
                   </CardContent>
                 </Card>
                 <Card>
@@ -1206,12 +1209,15 @@ export default function ReportsPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">
-                      Food Cost %{periodSummary.foodCostIsEstimated ? " (est.)" : ""}
+                      {periodSummary.foodCostIsEstimated ? "Est. Food Cost %" : "Food Cost %"}
                     </CardTitle>
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className="text-xl font-bold">{periodSummary.foodCostPct.toFixed(1)}%</div>
+                    {periodSummary.foodCostIsEstimated && (
+                      <div className="text-[10px] text-muted-foreground">default 30%</div>
+                    )}
                   </CardContent>
                 </Card>
                 <Card>
