@@ -499,10 +499,10 @@ export function useUnmappedPOSItems(locationId?: string, posProvider?: string) {
       const { data: mappings } = await mappingsQuery;
       const mappedNames = new Set(mappings?.map(m => m.external_name || m.external_id) || []);
       
-      // Get all sales imports and extract item names
+      // Get all sales imports (both classic API items[] and per-product XLS rows)
       let salesQuery = supabase
         .from("pos_sales_import")
-        .select("data")
+        .select("data, external_item_id, item_name, department, mapped_dish_id, mapped_quantity, mapped_total_price, gross_sales")
         .eq("location_id", locationId);
       
       if (posProvider) {
@@ -516,6 +516,22 @@ export function useUnmappedPOSItems(locationId?: string, posProvider?: string) {
       const itemStats = new Map<string, { count: number; qty: number; revenue: number; prices: number[] }>();
       
       for (const sale of sales || []) {
+        // 1) Per-product XLS row
+        if (sale.item_name && !sale.mapped_dish_id) {
+          const name = sale.item_name;
+          if (!mappedNames.has(name) && !mappedNames.has(sale.external_item_id || "")) {
+            const qty = Number(sale.mapped_quantity || 0);
+            const revenue = Number(sale.gross_sales ?? sale.mapped_total_price ?? 0);
+            const existing = itemStats.get(name) || { count: 0, qty: 0, revenue: 0, prices: [] };
+            existing.count += 1;
+            existing.qty += qty;
+            existing.revenue += revenue;
+            if (qty > 0) existing.prices.push(revenue / qty);
+            itemStats.set(name, existing);
+          }
+        }
+
+        // 2) Classic transactional imports with items[] payload
         const items = (sale.data as Record<string, unknown>)?.items as Array<{ name: string; price: string | number; qty: number }> | undefined;
         if (!items) continue;
         
@@ -553,6 +569,7 @@ export function useUnmappedPOSItems(locationId?: string, posProvider?: string) {
     enabled: !!locationId,
   });
 }
+
 
 // Types for unmapped staff
 export interface UnmappedPOSStaff {
