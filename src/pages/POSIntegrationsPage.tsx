@@ -865,6 +865,17 @@ export default function POSIntegrationsPage() {
                                 )}
                                 {applyingId === integration.id ? "Applying..." : "Apply to Dashboard"}
                               </Button>
+                              {showCaptivaImport && (
+                                <CaptivaXLSImportDialog
+                                  defaultLocationId={integration.location_id}
+                                  trigger={
+                                    <Button size="sm" variant="secondary">
+                                      <FileSpreadsheet className="h-4 w-4 mr-2" />
+                                      Import XLS
+                                    </Button>
+                                  }
+                                />
+                              )}
                             </>
                           )}
                           <Button size="sm" variant="destructive" onClick={() => deleteIntegration.mutate(integration.id)}>
