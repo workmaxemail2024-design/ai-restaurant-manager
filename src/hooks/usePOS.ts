@@ -614,6 +614,21 @@ export function useExternalPOSItems(locationId?: string, posProvider?: string) {
   });
 }
 
+// All external POS items across all locations (used for menu performance analytics)
+export function useAllExternalPOSItems() {
+  return useQuery({
+    queryKey: ["external-pos-items", "all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("external_pos_items")
+        .select("*, dishes:mapped_dish_id (id, name)")
+        .order("last_gross", { ascending: false, nullsFirst: false });
+      if (error) throw error;
+      return (data || []) as unknown as ExternalPOSItem[];
+    },
+  });
+}
+
 export function useUpdateExternalPOSItem() {
   const queryClient = useQueryClient();
   return useMutation({
