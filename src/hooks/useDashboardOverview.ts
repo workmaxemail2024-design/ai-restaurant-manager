@@ -41,8 +41,9 @@ export function useDashboardOverview(locationId?: string | null) {
       if (!restaurantId) {
         return {
           revenueToday: 0,
-          ordersToday: 0,
-          aovToday: 0,
+          ordersToday: null,
+          aovToday: null,
+          visitorsToday: null,
           revenueYesterday: 0,
           revenueSameWeekdayLastWeek: 0,
           labourTodayCost: 0,
@@ -51,6 +52,7 @@ export function useDashboardOverview(locationId?: string | null) {
           revenueSeries: [],
           isLoadingRevenue: false,
         };
+
       }
 
       // Fetch sales for selected date range
