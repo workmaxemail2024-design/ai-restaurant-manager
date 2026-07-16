@@ -561,6 +561,16 @@ function DayCard({
                           >
                             Mark unknown
                           </Button>
+                          {day.visitors != null && day.visitors > 0 && covers !== day.visitors && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => setCovers(day.visitors!)}
+                            >
+                              Use Captiva ({day.visitors})
+                            </Button>
+                          )}
                         </div>
                       )}
 
@@ -579,6 +589,48 @@ function DayCard({
                       <CheckCircle2 className="h-3.5 w-3.5" /> All required data present
                     </div>
                   )}
+
+                  {/* Daily Performance — from Captiva import */}
+                  {day.hasData && (
+                    <div className="rounded-md border border-border bg-secondary/10 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Daily Performance
+                        </h4>
+                        {!day.hasSummary && (
+                          <Badge variant="outline" className="text-[10px]">No POS summary</Badge>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{formatCurrency(day.summary?.grossSales ?? day.revenue)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Net Revenue</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.netSales) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.vat) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.discounts) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span className="font-medium">{day.orders ?? "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">AOV</span><span className="font-medium">{day.aov != null ? formatCurrency(day.aov) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Covers / Visitors</span><span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Qty Sold</span><span className="font-medium">{day.qtySold}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Food Revenue</span><span className="font-medium">{formatCurrency(day.revenueByType.food)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.alcoholic)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Non-alcoholic</span><span className="font-medium">{formatCurrency(day.revenueByType.nonAlcoholic)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Modifiers / Sides</span><span className="font-medium">{formatCurrency(day.revenueByType.modifier)}</span></div>
+                      </div>
+                      {(foodCostIsEstimated || day.itemsMissingCost > 0 || labourSource === "none") && (
+                        <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground space-y-0.5">
+                          {foodCostIsEstimated && (
+                            <div>* Food cost is <span className="text-warning font-medium">estimated (30%)</span> — actual recipe costs not applied here.</div>
+                          )}
+                          {day.itemsMissingCost > 0 && (
+                            <div>Margin incomplete — <span className="text-warning font-medium">{day.itemsMissingCost}</span> sold items missing recipe/product cost.</div>
+                          )}
+                          {labourSource === "none" && (
+                            <div>Labour cost unknown — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
 
                   {/* Inline ledger editor */}
                   <div className="rounded-md border border-border p-3 space-y-3">
