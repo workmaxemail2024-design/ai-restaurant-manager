@@ -477,7 +477,16 @@ export default function POSIntegrationsPage() {
       description="Connect and manage your Point of Sale systems"
       action={
         <div className="flex items-center gap-2">
-          <CaptivaXLSImportDialog />
+          {showCaptivaImport && (
+            <CaptivaXLSImportDialog
+              trigger={
+                <Button variant="default">
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Import Captiva XLS
+                </Button>
+              }
+            />
+          )}
           <Dialog open={isAddOpen} onOpenChange={(open) => {
             setIsAddOpen(open);
             if (!open) resetForm();
