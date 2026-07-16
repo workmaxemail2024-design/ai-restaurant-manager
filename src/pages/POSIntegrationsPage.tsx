@@ -87,6 +87,8 @@ export default function POSIntegrationsPage() {
   const reconciliation = usePOSReconciliation();
   const updateMapping = useUpdatePOSMapping();
   const { toast } = useToast();
+  const { hasFullAccess, hasPermission } = usePermissions();
+  const showCaptivaImport = hasFullAccess() || hasPermission('pos', 'admin');
 
   const [reconciliationData, setReconciliationData] = useState<{
     summary?: { system_total: number; pos_total: number; difference: number; unmapped_count: number };
