@@ -100,19 +100,30 @@ const Index = () => {
           <MetricCard
             title="Revenue Today"
             value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)}
-            change={overview?.ordersToday ? `${overview.ordersToday} orders` : "No sales yet"}
-            changeType={(overview?.ordersToday || 0) > 0 ? "neutral" : "neutral"}
+            change={
+              overview?.ordersToday != null
+                ? `${overview.ordersToday} orders`
+                : overview?.revenueToday
+                  ? "Orders: —"
+                  : "No sales yet"
+            }
+            changeType="neutral"
             icon={Euro}
             delay={0}
           />
           <MetricCard
             title="Orders Today"
-            value={overviewLoading ? "..." : String(overview?.ordersToday || 0)}
-            change={`AOV ${formatCurrency(overview?.aovToday || 0)}`}
+            value={overviewLoading ? "..." : overview?.ordersToday != null ? String(overview.ordersToday) : "—"}
+            change={
+              overview?.aovToday != null
+                ? `AOV ${formatCurrency(overview.aovToday)}`
+                : "AOV —"
+            }
             changeType="neutral"
             icon={ShoppingBag}
             delay={100}
           />
+
           <MetricCard
             title="Labour Cost Today"
             value={
