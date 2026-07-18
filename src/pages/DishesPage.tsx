@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, ChevronRight, Link2, AlertCircle, Search, X, Trash2, Filter, Upload, ChevronDown, ChevronUp } from "lucide-react";
 import { MenuUploadDialog } from "@/components/dishes/MenuUploadDialog";
 import { DishCategorySection } from "@/components/dishes/DishCategorySection";
+import { DishDetailDialog } from "@/components/dishes/DishDetailDialog";
 import { MenuSelector } from "@/components/menus/MenuSelector";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
