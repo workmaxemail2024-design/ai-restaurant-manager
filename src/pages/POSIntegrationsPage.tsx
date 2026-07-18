@@ -32,6 +32,7 @@ import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
 import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
 import { useDateRangeCoverage } from "@/hooks/usePOSDateCoverage";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
+import { HistoricalCaptivaImportDialog } from "@/components/pos/HistoricalCaptivaImportDialog";
 
 const POS_PROVIDERS = [
   { value: "square", label: "Square" },
@@ -478,14 +479,17 @@ export default function POSIntegrationsPage() {
       action={
         <div className="flex items-center gap-2">
           {showCaptivaImport && (
-            <CaptivaXLSImportDialog
-              trigger={
-                <Button variant="default">
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Import Captiva XLS
-                </Button>
-              }
-            />
+            <>
+              <CaptivaXLSImportDialog
+                trigger={
+                  <Button variant="default">
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Import Captiva XLS
+                  </Button>
+                }
+              />
+              <HistoricalCaptivaImportDialog />
+            </>
           )}
           <Dialog open={isAddOpen} onOpenChange={(open) => {
             setIsAddOpen(open);

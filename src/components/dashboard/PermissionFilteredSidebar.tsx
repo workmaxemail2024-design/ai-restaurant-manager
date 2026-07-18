@@ -149,6 +149,7 @@ const navSections: NavSection[] = [
       { icon: Store, label: "Multi-Location", path: "/analytics/multi-location", permission: { resource: 'analytics', action: 'view' } },
       { icon: ChefHat, label: "Menu Performance", path: "/analytics/menu-performance", permission: { resource: 'analytics', action: 'view' } },
       { icon: TrendingUp, label: "Forecast", path: "/analytics/forecast", permission: { resource: 'analytics', action: 'view' } },
+      { icon: BarChart3, label: "Product Intelligence", path: "/analytics/product-intelligence", permission: { resource: 'analytics', action: 'view' } },
     ]
   },
   {

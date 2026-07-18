@@ -37,6 +37,7 @@ import CostAnalysisPage from "./pages/CostAnalysisPage";
 import POSIntegrationsPage from "./pages/POSIntegrationsPage";
 import MultiLocationIntelligencePage from "./pages/MultiLocationIntelligencePage";
 import ChainMenuPerformancePage from "./pages/ChainMenuPerformancePage";
+import ProductIntelligencePage from "./pages/ProductIntelligencePage";
 import ForecastDashboardPage from "./pages/ForecastDashboardPage";
 import RoleBuilderPage from "./pages/RoleBuilderPage";
 import AutomationRulesPage from "./pages/AutomationRulesPage";
@@ -107,6 +108,7 @@ const App = () => (
               <Route path="/analytics/multi-location" element={<ProtectedRoute><MultiLocationIntelligencePage /></ProtectedRoute>} />
               <Route path="/analytics/menu-performance" element={<ProtectedRoute><ChainMenuPerformancePage /></ProtectedRoute>} />
               <Route path="/analytics/forecast" element={<ProtectedRoute><ForecastDashboardPage /></ProtectedRoute>} />
+              <Route path="/analytics/product-intelligence" element={<ProtectedRoute><ProductIntelligencePage /></ProtectedRoute>} />
               {/* Automation Routes */}
               <Route path="/automation/rules" element={<ProtectedRoute><AutomationRulesPage /></ProtectedRoute>} />
               {/* Notifications */}

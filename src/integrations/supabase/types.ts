@@ -485,6 +485,7 @@ export type Database = {
           needs_review: boolean
           pos_provider: string
           restaurant_id: string
+          source: string | null
           updated_at: string
         }
         Insert: {
@@ -503,6 +504,7 @@ export type Database = {
           needs_review?: boolean
           pos_provider: string
           restaurant_id: string
+          source?: string | null
           updated_at?: string
         }
         Update: {
@@ -521,6 +523,7 @@ export type Database = {
           needs_review?: boolean
           pos_provider?: string
           restaurant_id?: string
+          source?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -532,6 +535,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      historical_pos_product_summaries: {
+        Row: {
+          created_at: string
+          department: string | null
+          discount_amount: number
+          external_item_id: string
+          gross_sales: number
+          id: string
+          imported_at: string
+          item_name: string | null
+          location_id: string
+          net_sales: number
+          period_end: string
+          period_label: string | null
+          period_start: string
+          pos_provider: string
+          quantity_sold: number
+          restaurant_id: string
+          source_file_name: string | null
+          updated_at: string
+          vat_amount: number
+        }
+        Insert: {
+          created_at?: string
+          department?: string | null
+          discount_amount?: number
+          external_item_id: string
+          gross_sales?: number
+          id?: string
+          imported_at?: string
+          item_name?: string | null
+          location_id: string
+          net_sales?: number
+          period_end: string
+          period_label?: string | null
+          period_start: string
+          pos_provider?: string
+          quantity_sold?: number
+          restaurant_id: string
+          source_file_name?: string | null
+          updated_at?: string
+          vat_amount?: number
+        }
+        Update: {
+          created_at?: string
+          department?: string | null
+          discount_amount?: number
+          external_item_id?: string
+          gross_sales?: number
+          id?: string
+          imported_at?: string
+          item_name?: string | null
+          location_id?: string
+          net_sales?: number
+          period_end?: string
+          period_label?: string | null
+          period_start?: string
+          pos_provider?: string
+          quantity_sold?: number
+          restaurant_id?: string
+          source_file_name?: string | null
+          updated_at?: string
+          vat_amount?: number
+        }
+        Relationships: []
       }
       ingredient_prices: {
         Row: {
