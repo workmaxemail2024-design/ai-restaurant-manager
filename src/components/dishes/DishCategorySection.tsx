@@ -101,20 +101,26 @@ export function DishCategorySection({
         {formatCurrency(Number(dish.selling_price))}
       </TableCell>
       <TableCell className={cn("text-muted-foreground text-sm", compact ? "py-1.5" : "py-2")}>
-        {formatCurrency(Number(dish.dish_cost || 0))}
+        {dish.has_cost ? formatCurrency(Number(dish.dish_cost || 0)) : (
+          <span className="text-warning">Missing</span>
+        )}
       </TableCell>
       <TableCell className={cn(compact ? "py-1.5" : "py-2")}>
-        <Badge 
-          variant="secondary"
-          className={cn(
-            "text-xs",
-            (dish.profit_margin || 0) >= 60 ? "bg-success/15 text-success" : 
-            (dish.profit_margin || 0) >= 40 ? "bg-warning/15 text-warning" : 
-            "bg-destructive/15 text-destructive"
-          )}
-        >
-          {(dish.profit_margin || 0).toFixed(0)}%
-        </Badge>
+        {dish.profit_margin === null || dish.profit_margin === undefined ? (
+          <Badge variant="secondary" className="text-xs bg-warning/15 text-warning">Incomplete</Badge>
+        ) : (
+          <Badge 
+            variant="secondary"
+            className={cn(
+              "text-xs",
+              dish.profit_margin >= 60 ? "bg-success/15 text-success" : 
+              dish.profit_margin >= 40 ? "bg-warning/15 text-warning" : 
+              "bg-destructive/15 text-destructive"
+            )}
+          >
+            {dish.profit_margin.toFixed(0)}%
+          </Badge>
+        )}
       </TableCell>
       <TableCell className={cn(compact ? "py-1.5" : "py-2")}>
         {dish.captiva_external_id ? (
@@ -196,18 +202,24 @@ export function DishCategorySection({
                 </Badge>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Avg margin: </span>
-                <Badge 
-                  variant="secondary"
-                  className={cn(
-                    "text-xs",
-                    dishes.reduce((sum, d) => sum + (d.profit_margin || 0), 0) / dishes.length >= 60 
-                      ? "bg-success/15 text-success" 
-                      : "bg-warning/15 text-warning"
-                  )}
-                >
-                  {(dishes.reduce((sum, d) => sum + (d.profit_margin || 0), 0) / dishes.length).toFixed(0)}%
-                </Badge>
+                {(() => {
+                  const costed = dishes.filter(d => d.profit_margin !== null && d.profit_margin !== undefined);
+                  if (costed.length === 0) {
+                    return <Badge variant="secondary" className="text-xs bg-warning/15 text-warning">No costs yet</Badge>;
+                  }
+                  const avg = costed.reduce((s, d) => s + (d.profit_margin || 0), 0) / costed.length;
+                  return (
+                    <>
+                      <span>Avg margin: </span>
+                      <Badge variant="secondary" className={cn("text-xs", avg >= 60 ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
+                        {avg.toFixed(0)}%
+                      </Badge>
+                      {costed.length < dishes.length && (
+                        <span className="text-xs">({costed.length}/{dishes.length} costed)</span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </CardHeader>

@@ -2,18 +2,30 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
+export type DishItemType = "food" | "drink" | "alcoholic" | "non_alcoholic" | "modifier" | "other";
+
 export interface Dish {
   id: string;
   name: string;
   category: string | null;
+  department: string | null;
   location_id: string | null;
   selling_price: number;
   created_at: string;
   updated_at: string;
   captiva_external_id: string | null;
+  item_type: string | null;
+  needs_review: boolean | null;
+  is_active: boolean | null;
+  direct_cost: number | null;
+  use_direct_cost: boolean | null;
   locations?: { name: string } | null;
-  dish_cost?: number;
-  profit_margin?: number;
+  /** Computed cost (recipe or direct). null = no cost configured. */
+  dish_cost: number | null;
+  /** Computed margin %. null = cost missing. */
+  profit_margin: number | null;
+  /** True when recipe ingredients or direct cost are configured. */
+  has_cost: boolean;
 }
 
 export interface DishIngredient {
@@ -27,8 +39,14 @@ export interface DishIngredient {
 export type DishInsert = {
   name: string;
   category?: string | null;
+  department?: string | null;
   location_id?: string | null;
   selling_price: number;
+  item_type?: string | null;
+  needs_review?: boolean | null;
+  is_active?: boolean | null;
+  direct_cost?: number | null;
+  use_direct_cost?: boolean | null;
 };
 
 export function useDishes(locationId?: string | null) {
@@ -39,28 +57,30 @@ export function useDishes(locationId?: string | null) {
         .from("dishes")
         .select("*, locations(name)")
         .order("name");
-      
+
       if (locationId) {
         query = query.eq("location_id", locationId);
       }
-      
+
       const { data, error } = await query;
       if (error) throw error;
-      
-      // Calculate cost and margin for each dish
+
       const dishesWithMetrics = await Promise.all(
-        data.map(async (dish) => {
+        (data || []).map(async (dish: any) => {
           const { data: costData } = await supabase.rpc("calculate_dish_cost", { p_dish_id: dish.id });
           const { data: marginData } = await supabase.rpc("calculate_dish_margin", { p_dish_id: dish.id });
+          const cost = costData === null || costData === undefined ? null : Number(costData);
+          const margin = marginData === null || marginData === undefined ? null : Number(marginData);
           return {
             ...dish,
-            dish_cost: costData || 0,
-            profit_margin: marginData || 0,
-          };
+            dish_cost: cost,
+            profit_margin: margin,
+            has_cost: cost !== null,
+          } as Dish;
         })
       );
-      
-      return dishesWithMetrics as Dish[];
+
+      return dishesWithMetrics;
     },
   });
 }
@@ -87,7 +107,7 @@ export function useCreateDish() {
     mutationFn: async (dish: DishInsert) => {
       const { data, error } = await supabase
         .from("dishes")
-        .insert(dish)
+        .insert(dish as any)
         .select()
         .single();
       if (error) throw error;
@@ -109,7 +129,7 @@ export function useUpdateDish() {
     mutationFn: async ({ id, ...dish }: Partial<DishInsert> & { id: string }) => {
       const { data, error } = await supabase
         .from("dishes")
-        .update(dish)
+        .update(dish as any)
         .eq("id", id)
         .select()
         .single();
@@ -118,7 +138,7 @@ export function useUpdateDish() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dishes"] });
-      toast({ title: "Dish updated successfully" });
+      toast({ title: "Dish updated" });
     },
     onError: (error) => {
       toast({ title: "Error updating dish", description: error.message, variant: "destructive" });
