@@ -202,18 +202,24 @@ export function DishCategorySection({
                 </Badge>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Avg margin: </span>
-                <Badge 
-                  variant="secondary"
-                  className={cn(
-                    "text-xs",
-                    dishes.reduce((sum, d) => sum + (d.profit_margin || 0), 0) / dishes.length >= 60 
-                      ? "bg-success/15 text-success" 
-                      : "bg-warning/15 text-warning"
-                  )}
-                >
-                  {(dishes.reduce((sum, d) => sum + (d.profit_margin || 0), 0) / dishes.length).toFixed(0)}%
-                </Badge>
+                {(() => {
+                  const costed = dishes.filter(d => d.profit_margin !== null && d.profit_margin !== undefined);
+                  if (costed.length === 0) {
+                    return <Badge variant="secondary" className="text-xs bg-warning/15 text-warning">No costs yet</Badge>;
+                  }
+                  const avg = costed.reduce((s, d) => s + (d.profit_margin || 0), 0) / costed.length;
+                  return (
+                    <>
+                      <span>Avg margin: </span>
+                      <Badge variant="secondary" className={cn("text-xs", avg >= 60 ? "bg-success/15 text-success" : "bg-warning/15 text-warning")}>
+                        {avg.toFixed(0)}%
+                      </Badge>
+                      {costed.length < dishes.length && (
+                        <span className="text-xs">({costed.length}/{dishes.length} costed)</span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </CardHeader>
