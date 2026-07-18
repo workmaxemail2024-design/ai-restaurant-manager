@@ -316,6 +316,7 @@ export type Database = {
           category: string | null
           created_at: string
           department: string | null
+          direct_cost: number | null
           id: string
           is_active: boolean
           item_type: string
@@ -326,12 +327,14 @@ export type Database = {
           selling_price: number
           source: string
           updated_at: string
+          use_direct_cost: boolean
         }
         Insert: {
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
           department?: string | null
+          direct_cost?: number | null
           id?: string
           is_active?: boolean
           item_type?: string
@@ -342,12 +345,14 @@ export type Database = {
           selling_price?: number
           source?: string
           updated_at?: string
+          use_direct_cost?: boolean
         }
         Update: {
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
           department?: string | null
+          direct_cost?: number | null
           id?: string
           is_active?: boolean
           item_type?: string
@@ -358,6 +363,7 @@ export type Database = {
           selling_price?: number
           source?: string
           updated_at?: string
+          use_direct_cost?: boolean
         }
         Relationships: [
           {
