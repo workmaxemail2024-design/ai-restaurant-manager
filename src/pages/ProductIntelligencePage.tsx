@@ -3,20 +3,63 @@ import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Info, History, AlertCircle } from "lucide-react";
+import { Info, History, AlertCircle, Check } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { useHistoricalPeriods, useHistoricalPOSRows } from "@/hooks/useHistoricalPOS";
 import { HistoricalCaptivaImportDialog } from "@/components/pos/HistoricalCaptivaImportDialog";
+import { useUpdateExternalPOSItem, useBulkUpdateExternalPOSItems } from "@/hooks/usePOS";
 import { formatCurrency } from "@/lib/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { inferItemType, inferDrinkType } from "@/lib/posItemClassification";
 import { Button } from "@/components/ui/button";
+
+type Classification =
+  | "food"
+  | "alcoholic"
+  | "non_alcoholic"
+  | "modifier"
+  | "ingredient"
+  | "ignore";
+
+const CLASSIFICATION_LABELS: Record<Classification, string> = {
+  food: "Food",
+  alcoholic: "Alcoholic drink",
+  non_alcoholic: "Non-alcoholic drink",
+  modifier: "Modifier / Side",
+  ingredient: "Ingredient / Stock",
+  ignore: "Ignore / Other",
+};
+
+function classificationToUpdate(c: Classification) {
+  switch (c) {
+    case "food":
+      return { manual_type: "food" as const, manual_drink_type: null };
+    case "alcoholic":
+      return { manual_type: "drink" as const, manual_drink_type: "alcoholic" as const };
+    case "non_alcoholic":
+      return { manual_type: "drink" as const, manual_drink_type: "non_alcoholic" as const };
+    case "modifier":
+      return { manual_type: "modifier" as const, manual_drink_type: null };
+    case "ingredient":
+    case "ignore":
+      return { manual_type: "other" as const, manual_drink_type: null };
+  }
+}
 
 export default function ProductIntelligencePage() {
   const { data: locations = [] } = useLocations();
@@ -35,20 +78,19 @@ export default function ProductIntelligencePage() {
   }, [periods, periodKey]);
 
   const [ps, pe] = periodKey ? periodKey.split("|") : [null, null];
-  const { data: rows = [], isLoading } = useHistoricalPOSRows({
+  const { data: rows = [] } = useHistoricalPOSRows({
     locationId,
     periodStart: ps,
     periodEnd: pe,
   });
 
-  // External POS items catalogue — for review status & mapping detection
   const { data: catalogue = [] } = useQuery({
     queryKey: ["external-pos-items-catalogue", currentRestaurant?.id, locationId ?? "all"],
     enabled: !!currentRestaurant,
     queryFn: async () => {
       let q = supabase
         .from("external_pos_items")
-        .select("external_item_id, mapped_dish_id, needs_review, manual_type, manual_drink_type, source")
+        .select("id, external_item_id, mapped_dish_id, needs_review, manual_type, manual_drink_type, source")
         .eq("restaurant_id", currentRestaurant!.id);
       if (locationId) q = q.eq("location_id", locationId);
       const { data, error } = await q;
@@ -57,7 +99,6 @@ export default function ProductIntelligencePage() {
     },
   });
 
-  // Dishes with cost info (for "missing cost" flag)
   const { data: dishes = [] } = useQuery({
     queryKey: ["dishes-for-intel", currentRestaurant?.id],
     enabled: !!currentRestaurant,
@@ -83,22 +124,29 @@ export default function ProductIntelligencePage() {
     return m;
   }, [dishes]);
 
+  const updateOne = useUpdateExternalPOSItem();
+  const bulkUpdate = useBulkUpdateExternalPOSItems();
+
   const classified = useMemo(() => {
     return rows.map((r) => {
       const cat = catByExt.get(r.external_item_id);
       const explicitType = cat?.manual_type as string | undefined;
       const type = explicitType || inferItemType(r.department, r.item_name);
-      const drink = cat?.manual_drink_type || (type === "drink" ? inferDrinkType(r.department, r.item_name) : "unknown");
+      const drink =
+        cat?.manual_drink_type ||
+        (type === "drink" ? inferDrinkType(r.department, r.item_name) : "unknown");
       const dish = dishByExt.get(r.external_item_id);
-      const hasCost = !!dish && (
-        (dish.use_direct_cost && Number(dish.direct_cost || 0) > 0) ||
-        ((dish.has_recipe?.[0]?.count ?? 0) > 0)
-      );
+      const hasCost =
+        !!dish &&
+        ((dish.use_direct_cost && Number(dish.direct_cost || 0) > 0) ||
+          (dish.has_recipe?.[0]?.count ?? 0) > 0);
       const isNew = cat?.source === "captiva_historical" && !cat?.mapped_dish_id;
       return {
         ...r,
+        catId: cat?.id as string | undefined,
         type,
         drink,
+        manualType: explicitType as string | undefined,
         needs_review: !!cat?.needs_review,
         is_new: isNew,
         has_cost: hasCost,
@@ -109,7 +157,10 @@ export default function ProductIntelligencePage() {
 
   const totals = useMemo(() => {
     const t = { gross: 0, qty: 0, count: classified.length };
-    for (const r of classified) { t.gross += Number(r.gross_sales); t.qty += Number(r.quantity_sold); }
+    for (const r of classified) {
+      t.gross += Number(r.gross_sales);
+      t.qty += Number(r.quantity_sold);
+    }
     return t;
   }, [classified]);
 
@@ -125,26 +176,194 @@ export default function ProductIntelligencePage() {
       let bucket = "other";
       if (r.type === "food") bucket = "food";
       else if (r.type === "modifier") bucket = "modifier";
-      else if (r.type === "drink") bucket = r.drink === "alcoholic" ? "alcoholic" : r.drink === "non_alcoholic" ? "non_alcoholic" : "other";
+      else if (r.type === "drink")
+        bucket =
+          r.drink === "alcoholic"
+            ? "alcoholic"
+            : r.drink === "non_alcoholic"
+            ? "non_alcoholic"
+            : "other";
       t[bucket].gross += Number(r.gross_sales);
       t[bucket].qty += Number(r.quantity_sold);
     }
     return t;
   }, [classified]);
 
-  const topByRevenue = useMemo(() => [...classified].sort((a, b) => b.gross_sales - a.gross_sales).slice(0, 15), [classified]);
-  const topByQty = useMemo(() => [...classified].sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 15), [classified]);
+  const topByRevenue = useMemo(
+    () => [...classified].sort((a, b) => b.gross_sales - a.gross_sales).slice(0, 15),
+    [classified],
+  );
+  const topByQty = useMemo(
+    () => [...classified].sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 15),
+    [classified],
+  );
   const lowSellers = useMemo(
-    () => [...classified].filter((r) => r.quantity_sold > 0).sort((a, b) => a.quantity_sold - b.quantity_sold).slice(0, 15),
+    () =>
+      [...classified]
+        .filter((r) => r.quantity_sold > 0)
+        .sort((a, b) => a.quantity_sold - b.quantity_sold)
+        .slice(0, 15),
     [classified],
   );
   const newProducts = classified.filter((r) => r.is_new);
   const needsReview = classified.filter((r) => r.needs_review);
-  const missingCost = classified.filter((r) => !r.has_cost && r.type !== "modifier" && r.type !== "other");
-  const worthCostingFirst = [...missingCost].sort((a, b) => b.gross_sales - a.gross_sales).slice(0, 15);
+  const missingCost = classified.filter(
+    (r) => !r.has_cost && r.type !== "modifier" && r.type !== "other",
+  );
+  const worthCostingFirst = [...missingCost]
+    .sort((a, b) => b.gross_sales - a.gross_sales)
+    .slice(0, 15);
 
   const currentPeriod = periods.find((p) => `${p.period_start}|${p.period_end}` === periodKey);
-  const locName = locations.find((l: any) => l.id === (currentPeriod?.location_id || locationId))?.name;
+  const locName = locations.find(
+    (l: any) => l.id === (currentPeriod?.location_id || locationId),
+  )?.name;
+
+  // Selection is global across tabs (by catalogue id)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSel = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  const clearSel = () => setSelected(new Set());
+
+  const setRowClassification = async (catId: string, c: Classification) => {
+    const upd = classificationToUpdate(c);
+    await updateOne.mutateAsync({ id: catId, ...upd, needs_review: false });
+  };
+  const setBulkClassification = async (c: Classification) => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    const upd = classificationToUpdate(c);
+    await bulkUpdate.mutateAsync({ ids, ...upd, needs_review: false });
+    clearSel();
+  };
+  const markRowReviewed = async (catId: string) => {
+    await updateOne.mutateAsync({ id: catId, needs_review: false });
+  };
+  const bulkMarkReviewed = async () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    await bulkUpdate.mutateAsync({ ids, needs_review: false });
+    clearSel();
+  };
+
+  const renderProductTable = (data: any[], emptyLabel = "No data") => {
+    if (!data.length)
+      return <div className="p-8 text-center text-sm text-muted-foreground">{emptyLabel}</div>;
+    const visibleIds = data.map((r) => r.catId).filter(Boolean) as string[];
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+    const toggleAll = () => {
+      setSelected((s) => {
+        const n = new Set(s);
+        if (allSelected) visibleIds.forEach((id) => n.delete(id));
+        else visibleIds.forEach((id) => n.add(id));
+        return n;
+      });
+    };
+    return (
+      <div className="border rounded mt-2">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">
+                <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+              </TableHead>
+              <TableHead>Product</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead className="text-right">Gross</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right w-56">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell>
+                  {r.catId && (
+                    <Checkbox
+                      checked={selected.has(r.catId)}
+                      onCheckedChange={() => toggleSel(r.catId!)}
+                    />
+                  )}
+                </TableCell>
+                <TableCell className="font-medium">{r.item_name}</TableCell>
+                <TableCell className="text-muted-foreground text-sm">{r.department}</TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="text-xs">
+                    {r.type === "drink"
+                      ? r.drink === "alcoholic"
+                        ? "Alcoholic"
+                        : r.drink === "non_alcoholic"
+                        ? "Non-alc"
+                        : "Drink"
+                      : r.type}
+                  </Badge>
+                  {!r.manualType && (
+                    <span className="ml-1 text-[10px] text-muted-foreground">(auto)</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">{r.quantity_sold}</TableCell>
+                <TableCell className="text-right">{formatCurrency(Number(r.gross_sales))}</TableCell>
+                <TableCell className="text-xs space-x-1">
+                  {r.is_new && <Badge variant="outline">New</Badge>}
+                  {r.needs_review && <Badge className="bg-warning/15 text-warning">Review</Badge>}
+                  {!r.has_cost && r.type !== "modifier" && r.type !== "other" && (
+                    <Badge variant="outline" className="text-warning border-warning/40">
+                      No cost
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1">
+                    {r.catId && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={updateOne.isPending}
+                          >
+                            Set type
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Classify as</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((c) => (
+                            <DropdownMenuItem
+                              key={c}
+                              onClick={() => setRowClassification(r.catId!, c)}
+                            >
+                              {CLASSIFICATION_LABELS[c]}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    {r.catId && r.needs_review && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => markRowReviewed(r.catId!)}
+                        disabled={updateOne.isPending}
+                      >
+                        <Check className="h-3 w-3 mr-1" /> Reviewed
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
 
   return (
     <PageLayout
@@ -155,8 +374,8 @@ export default function ProductIntelligencePage() {
       <Alert className="mb-4">
         <Info className="h-4 w-4" />
         <AlertDescription>
-          <strong>Historical aggregate data</strong> — period totals, not daily transactions.
-          Does not affect daily dashboard, reports, labour %, AOV, or profit.
+          <strong>Historical aggregate data</strong> — period totals, not daily transactions. Does
+          not affect daily dashboard, reports, labour %, AOV, or profit.
         </AlertDescription>
       </Alert>
 
@@ -168,7 +387,9 @@ export default function ProductIntelligencePage() {
             <p className="text-sm text-muted-foreground">
               Import a yearly / period Captiva product report to unlock Product Intelligence.
             </p>
-            <div className="pt-2"><HistoricalCaptivaImportDialog defaultLocationId={locationId ?? undefined} /></div>
+            <div className="pt-2">
+              <HistoricalCaptivaImportDialog defaultLocationId={locationId ?? undefined} />
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -177,14 +398,17 @@ export default function ProductIntelligencePage() {
             <div className="min-w-64">
               <label className="text-xs uppercase text-muted-foreground">Period</label>
               <Select value={periodKey} onValueChange={setPeriodKey}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {periods.map((p) => {
                     const key = `${p.period_start}|${p.period_end}`;
                     const loc = locations.find((l: any) => l.id === p.location_id)?.name || "";
                     return (
                       <SelectItem key={key} value={key}>
-                        {p.period_label || `${p.period_start} → ${p.period_end}`} · {loc} · {formatCurrency(p.total_gross)}
+                        {p.period_label || `${p.period_start} → ${p.period_end}`} · {loc} ·{" "}
+                        {formatCurrency(p.total_gross)}
                       </SelectItem>
                     );
                   })}
@@ -195,20 +419,31 @@ export default function ProductIntelligencePage() {
             {currentPeriod?.period_label && <Badge>{currentPeriod.period_label}</Badge>}
           </div>
 
-          {/* KPI cards */}
           <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
             <KpiCard title="Total gross" value={formatCurrency(totals.gross)} sub="historical" />
             <KpiCard title="Total qty" value={String(totals.qty)} sub="historical" />
             <KpiCard title="Products" value={String(totals.count)} />
             <KpiCard title="New products" value={String(newProducts.length)} sub="from this import" />
-            <KpiCard title="Needs review" value={String(needsReview.length)} tone={needsReview.length ? "warn" : undefined} />
-            <KpiCard title="Missing cost" value={String(missingCost.length)} tone={missingCost.length ? "warn" : undefined} />
+            <KpiCard
+              title="Needs review"
+              value={String(needsReview.length)}
+              tone={needsReview.length ? "warn" : undefined}
+            />
+            <KpiCard
+              title="Missing cost"
+              value={String(missingCost.length)}
+              tone={missingCost.length ? "warn" : undefined}
+            />
           </div>
 
-          {/* Revenue by type */}
           <Card className="mb-4">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Revenue by type <span className="text-xs font-normal text-muted-foreground">(historical aggregate)</span></CardTitle>
+              <CardTitle className="text-base">
+                Revenue by type{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (historical aggregate)
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <TypeCard label="Food" data={byType.food} />
@@ -219,6 +454,40 @@ export default function ProductIntelligencePage() {
             </CardContent>
           </Card>
 
+          {/* Bulk action bar */}
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 p-3 mb-3 border rounded bg-muted/40">
+              <span className="text-sm font-medium">{selected.size} selected</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="default" disabled={bulkUpdate.isPending}>
+                    Set type for selected
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuLabel>Classify as</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((c) => (
+                    <DropdownMenuItem key={c} onClick={() => setBulkClassification(c)}>
+                      {CLASSIFICATION_LABELS[c]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={bulkMarkReviewed}
+                disabled={bulkUpdate.isPending}
+              >
+                <Check className="h-3 w-3 mr-1" /> Mark reviewed
+              </Button>
+              <Button size="sm" variant="ghost" onClick={clearSel}>
+                Clear
+              </Button>
+            </div>
+          )}
+
           <Tabs defaultValue="top-revenue">
             <TabsList>
               <TabsTrigger value="top-revenue">Top by revenue</TabsTrigger>
@@ -226,22 +495,35 @@ export default function ProductIntelligencePage() {
               <TabsTrigger value="low">Low sellers</TabsTrigger>
               <TabsTrigger value="new">New products ({newProducts.length})</TabsTrigger>
               <TabsTrigger value="review">Needs review ({needsReview.length})</TabsTrigger>
-              <TabsTrigger value="cost">Worth costing first ({worthCostingFirst.length})</TabsTrigger>
+              <TabsTrigger value="cost">
+                Worth costing first ({worthCostingFirst.length})
+              </TabsTrigger>
+              <TabsTrigger value="all">All ({classified.length})</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="top-revenue"><ProductTable rows={topByRevenue} /></TabsContent>
-            <TabsContent value="top-qty"><ProductTable rows={topByQty} /></TabsContent>
-            <TabsContent value="low"><ProductTable rows={lowSellers} /></TabsContent>
-            <TabsContent value="new"><ProductTable rows={newProducts} emptyLabel="No new products from this import" /></TabsContent>
-            <TabsContent value="review"><ProductTable rows={needsReview} emptyLabel="Nothing awaiting review" /></TabsContent>
+            <TabsContent value="top-revenue">{renderProductTable(topByRevenue)}</TabsContent>
+            <TabsContent value="top-qty">{renderProductTable(topByQty)}</TabsContent>
+            <TabsContent value="low">{renderProductTable(lowSellers)}</TabsContent>
+            <TabsContent value="new">
+              {renderProductTable(newProducts, "No new products from this import")}
+            </TabsContent>
+            <TabsContent value="review">
+              {renderProductTable(needsReview, "Nothing awaiting review")}
+            </TabsContent>
             <TabsContent value="cost">
               <Alert className="mb-3">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  High-revenue items with no recipe or direct cost. Prioritise these to improve profit accuracy.
+                  High-revenue items with no recipe or direct cost. Prioritise these to improve
+                  profit accuracy.
                 </AlertDescription>
               </Alert>
-              <ProductTable rows={worthCostingFirst} emptyLabel="All sellable items have costs configured" />
+              {renderProductTable(worthCostingFirst, "All sellable items have costs configured")}
+            </TabsContent>
+            <TabsContent value="all">
+              {renderProductTable(
+                [...classified].sort((a, b) => b.gross_sales - a.gross_sales),
+              )}
             </TabsContent>
           </Tabs>
         </>
@@ -250,12 +532,24 @@ export default function ProductIntelligencePage() {
   );
 }
 
-function KpiCard({ title, value, sub, tone }: { title: string; value: string; sub?: string; tone?: "warn" }) {
+function KpiCard({
+  title,
+  value,
+  sub,
+  tone,
+}: {
+  title: string;
+  value: string;
+  sub?: string;
+  tone?: "warn";
+}) {
   return (
     <Card>
       <CardContent className="p-3">
         <div className="text-xs uppercase text-muted-foreground">{title}</div>
-        <div className={`text-xl font-semibold ${tone === "warn" ? "text-warning" : ""}`}>{value}</div>
+        <div className={`text-xl font-semibold ${tone === "warn" ? "text-warning" : ""}`}>
+          {value}
+        </div>
         {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
       </CardContent>
     </Card>
@@ -268,48 +562,6 @@ function TypeCard({ label, data }: { label: string; data: { gross: number; qty: 
       <div className="text-xs uppercase text-muted-foreground">{label}</div>
       <div className="text-lg font-semibold">{formatCurrency(data.gross)}</div>
       <div className="text-xs text-muted-foreground">Qty {data.qty}</div>
-    </div>
-  );
-}
-
-function ProductTable({ rows, emptyLabel = "No data" }: { rows: any[]; emptyLabel?: string }) {
-  if (!rows.length) return <div className="p-8 text-center text-sm text-muted-foreground">{emptyLabel}</div>;
-  return (
-    <div className="border rounded mt-2">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Product</TableHead>
-            <TableHead>Department</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead className="text-right">Qty</TableHead>
-            <TableHead className="text-right">Gross</TableHead>
-            <TableHead>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.id}>
-              <TableCell className="font-medium">{r.item_name}</TableCell>
-              <TableCell className="text-muted-foreground text-sm">{r.department}</TableCell>
-              <TableCell>
-                <Badge variant="secondary" className="text-xs">
-                  {r.type === "drink" ? (r.drink === "alcoholic" ? "Alcoholic" : r.drink === "non_alcoholic" ? "Non-alc" : "Drink") : r.type}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-right">{r.quantity_sold}</TableCell>
-              <TableCell className="text-right">{formatCurrency(Number(r.gross_sales))}</TableCell>
-              <TableCell className="text-xs space-x-1">
-                {r.is_new && <Badge variant="outline">New</Badge>}
-                {r.needs_review && <Badge className="bg-warning/15 text-warning">Review</Badge>}
-                {!r.has_cost && r.type !== "modifier" && r.type !== "other" && (
-                  <Badge variant="outline" className="text-warning border-warning/40">No cost</Badge>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
     </div>
   );
 }
