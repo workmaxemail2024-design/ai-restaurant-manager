@@ -42,6 +42,8 @@ const Index = () => {
   const [quickExpenseOpen, setQuickExpenseOpen] = useState(false);
   const [labourReviewOpen, setLabourReviewOpen] = useState(false);
   const [stockReviewOpen, setStockReviewOpen] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+
 
   // Refresh dashboard data on mount
   useEffect(() => {
