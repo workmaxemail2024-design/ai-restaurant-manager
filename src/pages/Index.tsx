@@ -9,9 +9,10 @@ import { AlertItem } from "@/components/dashboard/AlertItem";
 import { ActionRequiredPanel } from "@/components/dashboard/ActionRequiredPanel";
 import { YesterdaySummaryWidget } from "@/components/dashboard/YesterdaySummaryWidget";
 import { TodayHoursIndicator } from "@/components/dashboard/TodayHoursIndicator";
-import { Euro, ShoppingBag, Users, Clock, CalendarDays, MapPin, Camera } from "lucide-react";
+import { Euro, ShoppingBag, Users, Clock, CalendarDays, MapPin, Camera, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuickSupplierDocDialog } from "@/components/dashboard/QuickSupplierDocDialog";
+import { QuickExpenseDialog } from "@/components/dashboard/QuickExpenseDialog";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { useLocations } from "@/hooks/useLocations";
@@ -44,6 +45,7 @@ const Index = () => {
   const { isSingleDay, label: periodLabel } = useSelectedPeriodLabel();
   const restaurantId = currentRestaurant?.id;
   const [quickDocOpen, setQuickDocOpen] = useState(false);
+  const [quickExpenseOpen, setQuickExpenseOpen] = useState(false);
 
   // Refresh dashboard data on mount
   useEffect(() => {
@@ -106,6 +108,15 @@ const Index = () => {
               <Camera className="h-5 w-5 mr-2" />
               Take Photo / Upload Supplier Doc
             </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-14 px-6 text-base w-full sm:w-auto"
+              onClick={() => setQuickExpenseOpen(true)}
+            >
+              <Plus className="h-5 w-5 mr-2" />
+              Add Expense
+            </Button>
             {!selectedLocationId && (
               <span className="text-sm text-muted-foreground">
                 Select a location to record a supplier delivery.
@@ -115,6 +126,13 @@ const Index = () => {
         )}
 
         {isSingleDay && <DailyCompletionStrip date={startDate} />}
+
+        <QuickExpenseDialog
+          open={quickExpenseOpen}
+          onOpenChange={setQuickExpenseOpen}
+          date={startDate}
+          locationId={selectedLocationId}
+        />
 
         <QuickSupplierDocDialog
           open={quickDocOpen}
