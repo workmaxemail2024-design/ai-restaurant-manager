@@ -269,6 +269,9 @@ export type Database = {
           expenses_confirmed: boolean
           id: string
           is_closed: boolean
+          labour_confirmed: boolean
+          labour_confirmed_at: string | null
+          labour_confirmed_by: string | null
           labour_hours: number | null
           location_id: string | null
           manual_orders: number | null
@@ -286,6 +289,9 @@ export type Database = {
           expenses_confirmed?: boolean
           id?: string
           is_closed?: boolean
+          labour_confirmed?: boolean
+          labour_confirmed_at?: string | null
+          labour_confirmed_by?: string | null
           labour_hours?: number | null
           location_id?: string | null
           manual_orders?: number | null
@@ -303,6 +309,9 @@ export type Database = {
           expenses_confirmed?: boolean
           id?: string
           is_closed?: boolean
+          labour_confirmed?: boolean
+          labour_confirmed_at?: string | null
+          labour_confirmed_by?: string | null
           labour_hours?: number | null
           location_id?: string | null
           manual_orders?: number | null
