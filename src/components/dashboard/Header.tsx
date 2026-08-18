@@ -53,9 +53,9 @@ export function Header({
   };
 
   return (
-    <header className="flex items-center justify-between py-6 relative z-50">
+    <header className="flex flex-wrap items-center justify-between gap-3 py-6 relative z-50">
       <div>
-        <h1 className="text-2xl font-bold">Operations Dashboard</h1>
+        <h1 className="text-2xl font-bold">{title}</h1>
         <div className="flex items-center gap-4 mt-1">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
