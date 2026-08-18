@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useDailyLedger } from "@/hooks/useDailyLedger";
+import { useDailyLedger, evaluateMissing } from "@/hooks/useDailyLedger";
 import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
@@ -41,6 +41,7 @@ function Tile({
   icon: Icon,
   onClick,
   action,
+  blocking,
 }: {
   label: string;
   detail: string;
@@ -48,6 +49,7 @@ function Tile({
   icon: React.ElementType;
   onClick?: () => void;
   action?: React.ReactNode;
+  blocking?: boolean;
 }) {
   const StateIcon = STATE_ICON[state];
   return (
@@ -61,6 +63,7 @@ function Tile({
       className={cn(
         "min-w-[150px] flex-1 rounded-lg border p-3 min-h-[92px] flex flex-col justify-between transition-colors",
         STATE_STYLES[state],
+        blocking && "ring-2 ring-destructive ring-offset-1 ring-offset-background",
         onClick && "cursor-pointer hover:opacity-90"
       )}
     >
@@ -89,22 +92,36 @@ export function DailyCompletionStrip({ date }: Props) {
   const { entries, upsert, isSaving } = useDailyLedger(date, date, selectedLocationId);
   const ledger = entries.get(date);
 
-  const revenue = overview?.revenueToday ?? 0;
-  const manualRevenue = ledger?.manual_revenue ?? 0;
-  const salesOk = revenue > 0 || manualRevenue > 0;
-
-  const labourOk = (overview?.hasLabourToday ?? false) || (ledger?.labour_hours ?? 0) > 0;
-
   const captivaCovers = overview?.visitorsToday ?? null;
-  const coversOk =
-    (captivaCovers != null && captivaCovers > 0) ||
-    (ledger?.covers ?? 0) > 0 ||
-    ledger?.covers_unknown === true;
+  const hasSalesData = (overview?.revenueToday ?? 0) > 0;
 
-  const expensesOk = ledger != null;
+  // Single source of truth for completion rules
+  const { checklist } = evaluateMissing(
+    hasSalesData,
+    ledger,
+    undefined,
+    captivaCovers,
+    overview?.hasLabourToday ? 1 : 0
+  );
+
+  const salesOk = checklist.SALES;
+  const labourOk = checklist.LABOUR_HOURS;
+  const coversOk = checklist.COVERS;
+  const expensesOk = checklist.EXPENSES;
   const isClosed = ledger?.is_closed ?? false;
 
+  const blockers: string[] = [];
+  if (!salesOk) blockers.push("Sales");
+  if (!labourOk) blockers.push("Labour");
+  if (!coversOk) blockers.push("Covers");
+  const closeBlocked = !isClosed && blockers.length > 0;
+  const blockerMessage =
+    blockers.length > 0
+      ? `Complete ${blockers.join(", ").replace(/, ([^,]*)$/, " and $1")} before closing this day`
+      : "";
+
   const handleCloseDay = () => {
+    if (closeBlocked) return;
     upsert({
       entry_date: date,
       location_id: selectedLocationId ?? null,
@@ -132,6 +149,7 @@ export function DailyCompletionStrip({ date }: Props) {
             label="Sales"
             icon={Euro}
             state={salesOk ? "ok" : "missing"}
+            blocking={!salesOk && !isClosed}
             detail={salesOk ? "Revenue recorded" : "No sales or manual revenue"}
             onClick={() => navigate("/sales")}
           />
@@ -139,13 +157,15 @@ export function DailyCompletionStrip({ date }: Props) {
             label="Labour"
             icon={Clock}
             state={labourOk ? "ok" : "missing"}
+            blocking={!labourOk && !isClosed}
             detail={labourOk ? "Attendance / hours logged" : "No attendance or hours"}
             onClick={() => navigate("/attendance")}
           />
           <Tile
             label="Covers"
             icon={Users}
-            state={coversOk ? "ok" : "warn"}
+            state={coversOk ? "ok" : "missing"}
+            blocking={!coversOk && !isClosed}
             detail={
               captivaCovers != null && captivaCovers > 0
                 ? `${captivaCovers} from POS`
@@ -182,13 +202,19 @@ export function DailyCompletionStrip({ date }: Props) {
             label="Close Day"
             icon={Lock}
             state={isClosed ? "ok" : "warn"}
-            detail={isClosed ? "Day closed" : "Day still open"}
+            detail={
+              isClosed
+                ? "Day closed"
+                : closeBlocked
+                  ? blockerMessage
+                  : "Ready to close"
+            }
             action={
               <Button
                 size="sm"
                 variant={isClosed ? "outline" : "default"}
                 className="mt-2 h-9 w-full"
-                disabled={isSaving}
+                disabled={isSaving || closeBlocked}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseDay();
