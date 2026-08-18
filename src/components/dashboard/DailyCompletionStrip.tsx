@@ -22,6 +22,8 @@ import { useLocation } from "@/contexts/LocationContext";
 import { useDayDocuments } from "@/hooks/useDocuments";
 import { QuickSupplierDocDialog } from "@/components/dashboard/QuickSupplierDocDialog";
 import { QuickExpenseDialog } from "@/components/dashboard/QuickExpenseDialog";
+import { LabourReviewDialog } from "@/components/dashboard/LabourReviewDialog";
+import { useDayLabour } from "@/hooks/useDayLabour";
 import { useDailyExpenses } from "@/hooks/useDailyExpenses";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -100,6 +102,8 @@ export function DailyCompletionStrip({ date }: Props) {
   const { data: dayDocs = [] } = useDayDocuments(date, selectedLocationId);
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const [labourDialogOpen, setLabourDialogOpen] = useState(false);
+  const { data: dayLabour } = useDayLabour(date, selectedLocationId);
   const { data: dayExpenses = [] } = useDailyExpenses(date, selectedLocationId);
   const { entries, upsert, isSaving } = useDailyLedger(date, date, selectedLocationId);
   const ledger = entries.get(date);
@@ -146,6 +150,36 @@ export function DailyCompletionStrip({ date }: Props) {
       : pendingDocs.length > 0
         ? `${supplierDocs.length} doc${supplierDocs.length > 1 ? "s" : ""} • ${pendingDocs.length} need review`
         : `${okDocs.length} processed`;
+
+  // Labour: red = no data, amber = data but not reviewed, green = confirmed & clean
+  const labourRows = dayLabour?.rows ?? [];
+  const labourIssues = labourRows.filter((r) => r.issue !== null).length;
+  const labourHours =
+    (dayLabour?.totalHours ?? 0) > 0 ? dayLabour!.totalHours : ledger?.labour_hours ?? 0;
+  const labourCost = dayLabour?.totalCost ?? 0;
+  const labourRevenue = overview?.revenueToday ?? 0;
+  const labourPct = labourRevenue > 0 && labourCost > 0 ? (labourCost / labourRevenue) * 100 : null;
+  const hasLabourData = labourRows.length > 0 || (ledger?.labour_hours ?? 0) > 0;
+  const labourConfirmed = ledger?.labour_confirmed === true;
+  const labourState: TileState = !hasLabourData
+    ? "missing"
+    : labourConfirmed && labourIssues === 0
+      ? "ok"
+      : "warn";
+  const labourDetail = !hasLabourData
+    ? "No attendance or hours"
+    : [
+        `${labourHours.toFixed(1)}h`,
+        labourCost > 0 ? formatCurrency(labourCost) : null,
+        labourPct != null ? `${labourPct.toFixed(1)}% of revenue` : null,
+        labourIssues > 0
+          ? `${labourIssues} issue${labourIssues > 1 ? "s" : ""}`
+          : labourConfirmed
+            ? "Confirmed"
+            : "Not reviewed",
+      ]
+        .filter(Boolean)
+        .join(" • ");
 
   const blockers: string[] = [];
   if (!salesOk) blockers.push("Sales");
@@ -197,10 +231,23 @@ export function DailyCompletionStrip({ date }: Props) {
           <Tile
             label="Labour"
             icon={Clock}
-            state={labourOk ? "ok" : "missing"}
+            state={labourState}
             blocking={!labourOk && !isClosed}
-            detail={labourOk ? "Attendance / hours logged" : "No attendance or hours"}
-            onClick={() => navigate("/attendance")}
+            detail={labourDetail}
+            onClick={() => setLabourDialogOpen(true)}
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 h-9 w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLabourDialogOpen(true);
+                }}
+              >
+                {labourConfirmed ? "View labour" : "Review labour"}
+              </Button>
+            }
           />
           <Tile
             label="Covers"
@@ -337,6 +384,13 @@ export function DailyCompletionStrip({ date }: Props) {
           />
         </div>
       </CardContent>
+
+      <LabourReviewDialog
+        open={labourDialogOpen}
+        onOpenChange={setLabourDialogOpen}
+        date={date}
+        locationId={selectedLocationId}
+      />
 
       <QuickExpenseDialog
         open={expenseDialogOpen}

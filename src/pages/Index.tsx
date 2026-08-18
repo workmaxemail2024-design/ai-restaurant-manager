@@ -13,6 +13,7 @@ import { Euro, ShoppingBag, Users, Clock, CalendarDays, MapPin, Camera, Plus } f
 import { Button } from "@/components/ui/button";
 import { QuickSupplierDocDialog } from "@/components/dashboard/QuickSupplierDocDialog";
 import { QuickExpenseDialog } from "@/components/dashboard/QuickExpenseDialog";
+import { LabourReviewDialog } from "@/components/dashboard/LabourReviewDialog";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { useLocations } from "@/hooks/useLocations";
@@ -46,6 +47,7 @@ const Index = () => {
   const restaurantId = currentRestaurant?.id;
   const [quickDocOpen, setQuickDocOpen] = useState(false);
   const [quickExpenseOpen, setQuickExpenseOpen] = useState(false);
+  const [labourReviewOpen, setLabourReviewOpen] = useState(false);
 
   // Refresh dashboard data on mount
   useEffect(() => {
@@ -117,6 +119,15 @@ const Index = () => {
               <Plus className="h-5 w-5 mr-2" />
               Add Expense
             </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-14 px-6 text-base w-full sm:w-auto"
+              onClick={() => setLabourReviewOpen(true)}
+            >
+              <Clock className="h-5 w-5 mr-2" />
+              Review Labour
+            </Button>
             {!selectedLocationId && (
               <span className="text-sm text-muted-foreground">
                 Select a location to record a supplier delivery.
@@ -126,6 +137,13 @@ const Index = () => {
         )}
 
         {isSingleDay && <DailyCompletionStrip date={startDate} />}
+
+        <LabourReviewDialog
+          open={labourReviewOpen}
+          onOpenChange={setLabourReviewOpen}
+          date={startDate}
+          locationId={selectedLocationId}
+        />
 
         <QuickExpenseDialog
           open={quickExpenseOpen}
