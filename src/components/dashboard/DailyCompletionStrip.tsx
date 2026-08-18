@@ -117,16 +117,26 @@ export function DailyCompletionStrip({ date }: Props) {
   const isClosed = ledger?.is_closed ?? false;
 
   // Supplier docs (informational in this stage — does not block Close Day)
-  const supplierDocs = dayDocs.filter((d) => d.supplier_id != null);
-  const processedDocs = supplierDocs.filter((d) => d.processing_status === "processed");
+  const supplierDocs = selectedLocationId
+    ? dayDocs.filter((d) => d.supplier_id != null && d.location_id === selectedLocationId)
+    : [];
+  const okDocs = supplierDocs.filter((d) => d.processing_status === "processed");
+  const pendingDocs = supplierDocs.filter(
+    (d) => d.processing_status !== "processed"
+  );
   const docsState: TileState =
-    supplierDocs.length === 0 ? "warn" : processedDocs.length > 0 ? "ok" : "warn";
-  const docsDetail =
-    supplierDocs.length === 0
-      ? "No supplier docs yet"
-      : processedDocs.length > 0
-        ? `${supplierDocs.length} doc${supplierDocs.length > 1 ? "s" : ""} • ${processedDocs.length} processed`
-        : `${supplierDocs.length} uploaded • needs review`;
+    !selectedLocationId
+      ? "unknown"
+      : okDocs.length > 0 && pendingDocs.length === 0
+        ? "ok"
+        : "warn";
+  const docsDetail = !selectedLocationId
+    ? "Select a location"
+    : supplierDocs.length === 0
+      ? "No supplier docs"
+      : pendingDocs.length > 0
+        ? `${supplierDocs.length} doc${supplierDocs.length > 1 ? "s" : ""} • ${pendingDocs.length} need review`
+        : `${okDocs.length} processed`;
 
   const blockers: string[] = [];
   if (!salesOk) blockers.push("Sales");
@@ -210,8 +220,15 @@ export function DailyCompletionStrip({ date }: Props) {
                 size="sm"
                 variant="outline"
                 className="mt-2 h-9 w-full"
+                disabled={!selectedLocationId}
+                title={
+                  selectedLocationId
+                    ? undefined
+                    : "Select a location to record a supplier delivery."
+                }
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!selectedLocationId) return;
                   setDocDialogOpen(true);
                 }}
               >
