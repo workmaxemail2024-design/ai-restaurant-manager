@@ -74,16 +74,18 @@ export function Header({
         {/* Restaurant Switcher - conditionally rendered */}
         {showRestaurantSwitcher && <RestaurantSwitcher />}
 
-        {/* Location Selector with Scope Label */}
-        <div className="flex items-center gap-2">
-          <LocationSelector />
-          <Badge variant="outline" className="text-xs whitespace-nowrap hidden lg:flex">
-            Scope: {selectedLocationName || "All Locations"}
-          </Badge>
-        </div>
-
-        {/* Date Range Selector */}
-        <DateRangeSelector />
+        {/* Location + Date selectors (hidden when the page owns them) */}
+        {showScopeSelectors && (
+          <>
+            <div className="flex items-center gap-2">
+              <LocationSelector />
+              <Badge variant="outline" className="text-xs whitespace-nowrap hidden lg:flex">
+                Scope: {selectedLocationName || "All Locations"}
+              </Badge>
+            </div>
+            <DateRangeSelector />
+          </>
+        )}
         {/* Notifications */}
         <NotificationDrawer />
 
