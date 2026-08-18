@@ -126,121 +126,135 @@ const Index = () => {
           locationId={selectedLocationId}
         />
 
-        {/* Operational Snapshot */}
-        <div className="flex items-center justify-between mt-6">
-          <h2 className="text-lg font-semibold">Operational Snapshot</h2>
-          <span className="text-xs text-muted-foreground">
-            {selectedLocationId ? "Filtered by location" : "All locations"} • {periodLabel}
-          </span>
-        </div>
+        {/* 5. Owner / System Overview — secondary, collapsed by default */}
+        <Collapsible open={overviewOpen} onOpenChange={setOverviewOpen} className="mt-8">
+          <div className="rounded-xl border border-border bg-card/40">
+            <CollapsibleTrigger className="w-full flex items-center justify-between gap-3 p-4 min-h-[56px] text-left">
+              <div>
+                <h2 className="text-base font-semibold">Owner / System Overview</h2>
+                <p className="text-xs text-muted-foreground">
+                  Operational snapshot, location status, intelligence and system health
+                </p>
+              </div>
+              <ChevronDown
+                className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${overviewOpen ? "rotate-180" : ""}`}
+              />
+            </CollapsibleTrigger>
 
-        {/* Top Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
-          <MetricCard
-            title={isSingleDay ? "Revenue" : "Revenue (period)"}
-            value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)}
-            change={
-              overview?.ordersToday != null
-                ? `${overview.ordersToday} orders`
-                : overview?.revenueToday
-                  ? "Orders: —"
-                  : "No sales yet"
-            }
-            changeType="neutral"
-            icon={Euro}
-            delay={0}
-          />
-          <MetricCard
-            title={isSingleDay ? "Orders" : "Orders (period)"}
-            value={overviewLoading ? "..." : overview?.ordersToday != null ? String(overview.ordersToday) : "—"}
-            change={
-              overview?.aovToday != null
-                ? `AOV ${formatCurrency(overview.aovToday)}`
-                : "AOV —"
-            }
-            changeType="neutral"
-            icon={ShoppingBag}
-            delay={100}
-          />
+            <CollapsibleContent className="p-4 pt-0">
+              {/* Operational Snapshot (secondary — duplicates daily metrics above) */}
+              <div className="flex items-center justify-between mt-2">
+                <h3 className="text-sm font-semibold">Operational Snapshot</h3>
+                <span className="text-xs text-muted-foreground">
+                  {selectedLocationId ? "Filtered by location" : "All locations"} • {periodLabel}
+                </span>
+              </div>
 
-          <MetricCard
-            title={isSingleDay ? "Labour Cost" : "Labour Cost (period)"}
-            value={
-              overviewLoading
-                ? "..."
-                : overview?.hasLabourToday
-                  ? formatCurrency(overview.labourTodayCost)
-                  : "—"
-            }
-            change={
-              overview?.hasLabourToday
-                ? (overview.labourTodayPct !== null
-                  ? `${overview.labourTodayPct.toFixed(1)}% of revenue`
-                  : "No revenue yet")
-                : "Log attendance"
-            }
-            changeType={
-              overview?.hasLabourToday && overview.labourTodayPct !== null && overview.labourTodayPct < 30
-                ? "positive"
-                : "neutral"
-            }
-            icon={Clock}
-            delay={200}
-          />
-          <MetricCard
-            title="Active Staff"
-            value={String(activeStaffCount)}
-            change={selectedLocationId ? "At this location" : "All locations"}
-            changeType="neutral"
-            icon={Users}
-            delay={300}
-          />
-        </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
+                <MetricCard
+                  title={isSingleDay ? "Revenue" : "Revenue (period)"}
+                  value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)}
+                  change={
+                    overview?.ordersToday != null
+                      ? `${overview.ordersToday} orders`
+                      : overview?.revenueToday
+                        ? "Orders: —"
+                        : "No sales yet"
+                  }
+                  changeType="neutral"
+                  icon={Euro}
+                  delay={0}
+                />
+                <MetricCard
+                  title={isSingleDay ? "Orders" : "Orders (period)"}
+                  value={overviewLoading ? "..." : overview?.ordersToday != null ? String(overview.ordersToday) : "—"}
+                  change={
+                    overview?.aovToday != null
+                      ? `AOV ${formatCurrency(overview.aovToday)}`
+                      : "AOV —"
+                  }
+                  changeType="neutral"
+                  icon={ShoppingBag}
+                  delay={100}
+                />
+                <MetricCard
+                  title={isSingleDay ? "Labour Cost" : "Labour Cost (period)"}
+                  value={
+                    overviewLoading
+                      ? "..."
+                      : overview?.hasLabourToday
+                        ? formatCurrency(overview.labourTodayCost)
+                        : "—"
+                  }
+                  change={
+                    overview?.hasLabourToday
+                      ? (overview.labourTodayPct !== null
+                        ? `${overview.labourTodayPct.toFixed(1)}% of revenue`
+                        : "No revenue yet")
+                      : "Log attendance"
+                  }
+                  changeType="neutral"
+                  icon={Clock}
+                  delay={200}
+                />
+                <MetricCard
+                  title="Active Staff"
+                  value={String(activeStaffCount)}
+                  change={selectedLocationId ? "At this location" : "All locations"}
+                  changeType="neutral"
+                  icon={Users}
+                  delay={300}
+                />
+              </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
-          {/* Main Content - 2 columns */}
-          <div className="xl:col-span-2 space-y-6">
-            {/* Location Status */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <h2 className="text-lg font-semibold">Location Status</h2>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
+                <div className="xl:col-span-2 space-y-6">
+                  {/* Location Status */}
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        <h3 className="text-sm font-semibold">Location Status</h3>
+                      </div>
+                      <button className="text-sm text-primary hover:underline" onClick={() => navigate('/locations')}>View All</button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {visibleLocations.map((location, index) => (
+                        <LocationCard
+                          key={location.id}
+                          name={location.name}
+                          address={location.address || ""}
+                          status="open"
+                          revenue={
+                            locationRevenueLoading
+                              ? "..."
+                              : formatCurrency(locationRevenue?.[location.id] ?? 0)
+                          }
+                          staff={staff.filter(s => s.location_id === location.id && s.status === "active").length}
+                          waitTime="--"
+                          delay={index * 100 + 200}
+                        />
+                      ))}
+                    </div>
+                    {selectedLocationId && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Showing the selected location only. Switch to All Locations for cross-location status.
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <button className="text-sm text-primary hover:underline" onClick={() => navigate('/locations')}>View All</button>
+
+                <div className="space-y-6">
+                  <OwnerInsightsPanel />
+                  <DataHealthPanel locationId={selectedLocationId} />
+                  <YesterdaySummaryWidget />
+                  <ActionRequiredPanel locationId={selectedLocationId} />
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {locations.slice(0, 4).map((location, index) => (
-                  <LocationCard
-                    key={location.id}
-                    name={location.name}
-                    address={location.address || ""}
-                    status="open"
-                    revenue="--"
-                    staff={staff.filter(s => s.location_id === location.id && s.status === "active").length}
-                    waitTime="--"
-                    delay={index * 100 + 200}
-                  />
-                ))}
-              </div>
-            </div>
+            </CollapsibleContent>
           </div>
+        </Collapsible>
 
-          {/* Sidebar Content - 1 column */}
-          <div className="space-y-6">
-            {/* Owner Intelligence */}
-            <OwnerInsightsPanel />
-
-            {/* Data Health */}
-            <DataHealthPanel locationId={selectedLocationId} />
-
-            {/* Yesterday's AI Summary - single small insight card */}
-            <YesterdaySummaryWidget />
-
-            {/* Action Required / Alerts */}
-            <ActionRequiredPanel locationId={selectedLocationId} />
-          </div>
-        </div>
       </main>
     </div>
   );
