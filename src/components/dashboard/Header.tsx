@@ -17,9 +17,16 @@ import type { OperatingHours } from "@/components/locations/OperatingHoursEditor
 
 interface HeaderProps {
   showRestaurantSwitcher?: boolean;
+  /** Hide the location + date selectors when the page already owns them (e.g. Daily Control Centre). */
+  showScopeSelectors?: boolean;
+  title?: string;
 }
 
-export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
+export function Header({
+  showRestaurantSwitcher = true,
+  showScopeSelectors = true,
+  title = "Operations Dashboard",
+}: HeaderProps) {
   const { signOut, user } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const { data: locations = [] } = useLocations();
