@@ -344,8 +344,9 @@ export function useDayDocuments(date: string, locationId: string | null) {
         .eq("document_date", date)
         .order("created_at", { ascending: false });
 
+      // Daily completion is per-location: only exact matches count.
       if (locationId) {
-        query = query.or(`location_id.eq.${locationId},location_id.is.null`);
+        query = query.eq("location_id", locationId);
       }
 
       const { data, error } = await query;

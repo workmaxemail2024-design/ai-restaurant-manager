@@ -96,15 +96,21 @@ const Index = () => {
         <DailyControlCentre />
 
         {isSingleDay && (
-          <div className="mt-4 flex">
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
             <Button
               size="lg"
               className="h-14 px-6 text-base w-full sm:w-auto"
+              disabled={!selectedLocationId}
               onClick={() => setQuickDocOpen(true)}
             >
               <Camera className="h-5 w-5 mr-2" />
               Take Photo / Upload Supplier Doc
             </Button>
+            {!selectedLocationId && (
+              <span className="text-sm text-muted-foreground">
+                Select a location to record a supplier delivery.
+              </span>
+            )}
           </div>
         )}
 
