@@ -16,6 +16,8 @@ export interface LedgerEntry {
   covers_unknown: boolean;
   /** Manager explicitly confirmed expenses for the day (incl. "no expenses") */
   expenses_confirmed?: boolean;
+  /** Manager explicitly reviewed & confirmed labour for the day */
+  labour_confirmed?: boolean;
 }
 
 export type MissingField = "SALES" | "LABOUR_HOURS" | "COVERS" | "EXPENSES" | "BOOKINGS";
@@ -146,6 +148,7 @@ export function useDailyLedger(
           manual_orders: (row as any).manual_orders != null ? Number((row as any).manual_orders) : null,
           covers_unknown: (row as any).covers_unknown ?? false,
           expenses_confirmed: (row as any).expenses_confirmed ?? false,
+          labour_confirmed: (row as any).labour_confirmed ?? false,
         });
       }
       return map;
@@ -156,6 +159,9 @@ export function useDailyLedger(
   const upsertMutation = useMutation({
     mutationFn: async (entry: LedgerEntry) => {
       if (!restaurantId) throw new Error("No restaurant");
+
+      // Preserve flags the caller did not explicitly set
+      const existing = query.data?.get(entry.entry_date);
 
       const payload = {
         restaurant_id: restaurantId,
@@ -169,8 +175,10 @@ export function useDailyLedger(
         manual_revenue: entry.manual_revenue,
         manual_orders: entry.manual_orders,
         covers_unknown: entry.covers_unknown,
-        expenses_confirmed: entry.expenses_confirmed ?? false,
+        expenses_confirmed: entry.expenses_confirmed ?? existing?.expenses_confirmed ?? false,
+        labour_confirmed: entry.labour_confirmed ?? existing?.labour_confirmed ?? false,
       };
+
 
       const { error } = await supabase
         .from("daily_ledger_entries")
