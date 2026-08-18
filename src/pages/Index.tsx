@@ -25,6 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { DataHealthPanel } from "@/components/dashboard/DataHealthPanel";
+import { DailyControlCentre, useSelectedPeriodLabel } from "@/components/dashboard/DailyControlCentre";
+import { DailyCompletionStrip } from "@/components/dashboard/DailyCompletionStrip";
 import { OwnerInsightsPanel } from "@/components/dashboard/OwnerInsightsPanel";
 import type { OperatingHours } from "@/components/locations/OperatingHoursEditor";
 
@@ -36,6 +38,8 @@ const Index = () => {
   const { data: locations = [] } = useLocations();
   const { data: staff = [] } = useStaff(selectedLocationId);
   const { data: pendingReservations = 0 } = usePendingReservationCount();
+  const { startDate, endDate } = useDateRange();
+  const { isSingleDay, label: periodLabel } = useSelectedPeriodLabel();
   const restaurantId = currentRestaurant?.id;
 
   // Refresh dashboard data on mount
@@ -48,23 +52,22 @@ const Index = () => {
     });
   }, [queryClient]);
 
-  // Dashboard overview - today only
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  // Dashboard overview - scoped to selected date range + location
   const { data: overview, isLoading: overviewLoading } = useDashboardOverview(selectedLocationId);
 
   const activeStaffCount = staff.filter(s => s.status === "active").length;
 
-  // Today's bookings (covers + count)
-  const { data: todayBookings } = useQuery({
-    queryKey: ["dashboard-today-bookings", restaurantId, selectedLocationId ?? "all", todayStr],
+  // Bookings for the selected date/location (info only)
+  const { data: periodBookings } = useQuery({
+    queryKey: ["dashboard-bookings", restaurantId, selectedLocationId ?? "all", startDate, endDate],
     queryFn: async () => {
       if (!restaurantId) return { count: 0, covers: 0 };
       let q = supabase
         .from("reservations")
         .select("party_size, status")
         .eq("restaurant_id", restaurantId)
-        .gte("start_at", `${todayStr}T00:00:00`)
-        .lte("start_at", `${todayStr}T23:59:59`)
+        .gte("start_at", `${startDate}T00:00:00`)
+        .lte("start_at", `${endDate}T23:59:59`)
         .not("status", "in", '("cancelled","declined","no_show")');
       if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
       const { data } = await q;
@@ -87,18 +90,21 @@ const Index = () => {
       <main className="ml-64 p-8">
         <Header showRestaurantSwitcher={false} />
 
+        <DailyControlCentre />
+        {isSingleDay && <DailyCompletionStrip date={startDate} />}
+
         {/* Operational Snapshot */}
         <div className="flex items-center justify-between mt-6">
           <h2 className="text-lg font-semibold">Operational Snapshot</h2>
           <span className="text-xs text-muted-foreground">
-            {selectedLocationId ? "Filtered by location" : "All locations"} • Today
+            {selectedLocationId ? "Filtered by location" : "All locations"} • {periodLabel}
           </span>
         </div>
 
         {/* Top Metrics Row */}
         <div className="grid grid-cols-4 gap-4 mt-4">
           <MetricCard
-            title="Revenue Today"
+            title={isSingleDay ? "Revenue" : "Revenue (period)"}
             value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)}
             change={
               overview?.ordersToday != null
@@ -112,7 +118,7 @@ const Index = () => {
             delay={0}
           />
           <MetricCard
-            title="Orders Today"
+            title={isSingleDay ? "Orders" : "Orders (period)"}
             value={overviewLoading ? "..." : overview?.ordersToday != null ? String(overview.ordersToday) : "—"}
             change={
               overview?.aovToday != null
@@ -125,7 +131,7 @@ const Index = () => {
           />
 
           <MetricCard
-            title="Labour Cost Today"
+            title={isSingleDay ? "Labour Cost" : "Labour Cost (period)"}
             value={
               overviewLoading
                 ? "..."
@@ -167,7 +173,7 @@ const Index = () => {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <CalendarDays className="h-4 w-4 text-primary" />
-                    <h3 className="font-semibold">Today's Bookings</h3>
+                    <h3 className="font-semibold">Bookings · {periodLabel}</h3>
                   </div>
                   <button
                     className="text-sm text-primary hover:underline"
@@ -178,11 +184,11 @@ const Index = () => {
                 </div>
                 <div className="flex items-center gap-6">
                   <div>
-                    <p className="text-2xl font-bold">{todayBookings?.count ?? 0}</p>
+                    <p className="text-2xl font-bold">{periodBookings?.count ?? 0}</p>
                     <p className="text-xs text-muted-foreground">Reservations</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{todayBookings?.covers ?? 0}</p>
+                    <p className="text-2xl font-bold">{periodBookings?.covers ?? 0}</p>
                     <p className="text-xs text-muted-foreground">Covers</p>
                   </div>
                   {pendingReservations > 0 && (
