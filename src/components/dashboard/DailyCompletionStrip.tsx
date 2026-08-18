@@ -332,13 +332,15 @@ export function DailyCompletionStrip({ date }: Props) {
             label="Expenses"
             icon={Wallet}
             state={expensesOk ? "ok" : "warn"}
+            blocking={expensesBlocked && !isClosed}
             detail={
               dayExpenses.length > 0
                 ? `${dayExpenses.length} entr${dayExpenses.length === 1 ? "y" : "ies"} • ${formatCurrency(expenseTotal)}`
                 : expensesConfirmed
                   ? "No expenses today (confirmed)"
-                  : "Not reviewed yet"
+                  : "Not reviewed yet — required to close"
             }
+
             onClick={() => setExpenseDialogOpen(true)}
             action={
               <div className="flex gap-1 mt-2">
