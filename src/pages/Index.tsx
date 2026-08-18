@@ -52,8 +52,7 @@ const Index = () => {
     });
   }, [queryClient]);
 
-  // Dashboard overview - today only
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+  // Dashboard overview - scoped to selected date range + location
   const { data: overview, isLoading: overviewLoading } = useDashboardOverview(selectedLocationId);
 
   const activeStaffCount = staff.filter(s => s.status === "active").length;
