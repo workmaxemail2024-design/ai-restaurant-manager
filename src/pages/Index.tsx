@@ -60,6 +60,19 @@ const Index = () => {
 
   const activeStaffCount = staff.filter(s => s.status === "active").length;
 
+  // Same sales source + restaurant/date scoping as the Financial Summary,
+  // so Location Status revenue can never disagree with the headline figures.
+  const { data: locationRevenue, isLoading: locationRevenueLoading } = useLocationRevenue(
+    startDate,
+    endDate
+  );
+
+  // When a specific location is selected, cross-location cards are not shown.
+  const visibleLocations = selectedLocationId
+    ? locations.filter((l) => l.id === selectedLocationId)
+    : locations.slice(0, 4);
+
+
   return (
     <div className="min-h-screen bg-background">
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_hsl(30_100%_50%_/_0.08),_transparent_50%)] pointer-events-none z-0" />
