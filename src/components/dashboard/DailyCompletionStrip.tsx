@@ -254,7 +254,7 @@ export function DailyCompletionStrip({ date }: Props) {
           )}
         </div>
 
-        <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
           <Tile
             label="Sales"
             icon={Euro}
