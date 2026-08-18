@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { PermissionFilteredSidebar } from "@/components/dashboard/PermissionFilteredSidebar";
@@ -9,7 +9,9 @@ import { AlertItem } from "@/components/dashboard/AlertItem";
 import { ActionRequiredPanel } from "@/components/dashboard/ActionRequiredPanel";
 import { YesterdaySummaryWidget } from "@/components/dashboard/YesterdaySummaryWidget";
 import { TodayHoursIndicator } from "@/components/dashboard/TodayHoursIndicator";
-import { Euro, ShoppingBag, Users, Clock, CalendarDays, MapPin } from "lucide-react";
+import { Euro, ShoppingBag, Users, Clock, CalendarDays, MapPin, Camera } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { QuickSupplierDocDialog } from "@/components/dashboard/QuickSupplierDocDialog";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { useLocations } from "@/hooks/useLocations";
@@ -41,6 +43,7 @@ const Index = () => {
   const { startDate, endDate } = useDateRange();
   const { isSingleDay, label: periodLabel } = useSelectedPeriodLabel();
   const restaurantId = currentRestaurant?.id;
+  const [quickDocOpen, setQuickDocOpen] = useState(false);
 
   // Refresh dashboard data on mount
   useEffect(() => {
@@ -91,7 +94,28 @@ const Index = () => {
         <Header showRestaurantSwitcher={false} />
 
         <DailyControlCentre />
+
+        {isSingleDay && (
+          <div className="mt-4 flex">
+            <Button
+              size="lg"
+              className="h-14 px-6 text-base w-full sm:w-auto"
+              onClick={() => setQuickDocOpen(true)}
+            >
+              <Camera className="h-5 w-5 mr-2" />
+              Take Photo / Upload Supplier Doc
+            </Button>
+          </div>
+        )}
+
         {isSingleDay && <DailyCompletionStrip date={startDate} />}
+
+        <QuickSupplierDocDialog
+          open={quickDocOpen}
+          onOpenChange={setQuickDocOpen}
+          date={startDate}
+          locationId={selectedLocationId}
+        />
 
         {/* Operational Snapshot */}
         <div className="flex items-center justify-between mt-6">
