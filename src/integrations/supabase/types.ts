@@ -278,6 +278,9 @@ export type Database = {
           manual_revenue: number | null
           notes: string | null
           restaurant_id: string
+          stock_reviewed: boolean
+          stock_reviewed_at: string | null
+          stock_reviewed_by: string | null
           updated_at: string
         }
         Insert: {
@@ -298,6 +301,9 @@ export type Database = {
           manual_revenue?: number | null
           notes?: string | null
           restaurant_id: string
+          stock_reviewed?: boolean
+          stock_reviewed_at?: string | null
+          stock_reviewed_by?: string | null
           updated_at?: string
         }
         Update: {
@@ -318,6 +324,9 @@ export type Database = {
           manual_revenue?: number | null
           notes?: string | null
           restaurant_id?: string
+          stock_reviewed?: boolean
+          stock_reviewed_at?: string | null
+          stock_reviewed_by?: string | null
           updated_at?: string
         }
         Relationships: [
