@@ -267,7 +267,7 @@ export function DailyCompletionStrip({ date }: Props) {
             label="Labour"
             icon={Clock}
             state={labourState}
-            blocking={!labourOk && !isClosed}
+            blocking={labourBlocked && !isClosed}
             detail={labourDetail}
             onClick={() => setLabourDialogOpen(true)}
             action={
