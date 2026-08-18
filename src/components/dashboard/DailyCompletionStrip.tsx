@@ -141,7 +141,11 @@ export function DailyCompletionStrip({ date }: Props) {
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold">Daily Completion</h3>
-          <span className="text-xs text-muted-foreground">Selected day only</span>
+          {closeBlocked ? (
+            <span className="text-xs font-medium text-destructive">{blockerMessage}</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Selected day only</span>
+          )}
         </div>
 
         <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
@@ -201,7 +205,7 @@ export function DailyCompletionStrip({ date }: Props) {
           <Tile
             label="Close Day"
             icon={Lock}
-            state={isClosed ? "ok" : "warn"}
+            state={isClosed ? "ok" : closeBlocked ? "missing" : "warn"}
             detail={
               isClosed
                 ? "Day closed"
