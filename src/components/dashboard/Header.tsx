@@ -17,9 +17,16 @@ import type { OperatingHours } from "@/components/locations/OperatingHoursEditor
 
 interface HeaderProps {
   showRestaurantSwitcher?: boolean;
+  /** Hide the location + date selectors when the page already owns them (e.g. Daily Control Centre). */
+  showScopeSelectors?: boolean;
+  title?: string;
 }
 
-export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
+export function Header({
+  showRestaurantSwitcher = true,
+  showScopeSelectors = true,
+  title = "Operations Dashboard",
+}: HeaderProps) {
   const { signOut, user } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const { data: locations = [] } = useLocations();
@@ -46,9 +53,9 @@ export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
   };
 
   return (
-    <header className="flex items-center justify-between py-6 relative z-50">
+    <header className="flex flex-wrap items-center justify-between gap-3 py-6 relative z-50">
       <div>
-        <h1 className="text-2xl font-bold">Operations Dashboard</h1>
+        <h1 className="text-2xl font-bold">{title}</h1>
         <div className="flex items-center gap-4 mt-1">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
@@ -67,16 +74,18 @@ export function Header({ showRestaurantSwitcher = true }: HeaderProps) {
         {/* Restaurant Switcher - conditionally rendered */}
         {showRestaurantSwitcher && <RestaurantSwitcher />}
 
-        {/* Location Selector with Scope Label */}
-        <div className="flex items-center gap-2">
-          <LocationSelector />
-          <Badge variant="outline" className="text-xs whitespace-nowrap hidden lg:flex">
-            Scope: {selectedLocationName || "All Locations"}
-          </Badge>
-        </div>
-
-        {/* Date Range Selector */}
-        <DateRangeSelector />
+        {/* Location + Date selectors (hidden when the page owns them) */}
+        {showScopeSelectors && (
+          <>
+            <div className="flex items-center gap-2">
+              <LocationSelector />
+              <Badge variant="outline" className="text-xs whitespace-nowrap hidden lg:flex">
+                Scope: {selectedLocationName || "All Locations"}
+              </Badge>
+            </div>
+            <DateRangeSelector />
+          </>
+        )}
         {/* Notifications */}
         <NotificationDrawer />
 

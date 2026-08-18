@@ -1,14 +1,12 @@
 import { MapPin, CalendarRange } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { LocationSelector } from "@/components/LocationSelector";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { useDateRange, type DatePreset } from "@/contexts/DateRangeContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
-import { cn } from "@/lib/utils";
 
 const QUICK_PRESETS: { value: DatePreset; label: string }[] = [
   { value: "today", label: "Today" },
@@ -39,37 +37,30 @@ export function DailyControlCentre() {
   return (
     <Card className="mt-4">
       <CardContent className="p-4 sm:p-5 space-y-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-1">
-            <h2 className="text-xl font-bold tracking-tight">Daily Control Centre</h2>
-            <p className="text-sm text-muted-foreground">
-              Everything below is scoped to the selected location and period.
-            </p>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-1 min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight">Daily Control Centre</h2>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="flex items-center gap-1.5 font-semibold">
+                <MapPin className="h-4 w-4 text-primary" />
+                {locationName}
+              </span>
+              <span className="text-muted-foreground">|</span>
+              <span className="flex items-center gap-1.5 font-semibold">
+                <CalendarRange className="h-4 w-4 text-primary" />
+                {label}
+                {!isSingleDay && (
+                  <span className="font-normal text-muted-foreground">· range</span>
+                )}
+              </span>
+            </div>
           </div>
 
+          {/* The one primary location + date control for the whole dashboard */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <LocationSelector />
-            </div>
+            <LocationSelector />
             <DateRangeSelector />
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="h-9 gap-2 px-3 text-sm font-semibold"
-          >
-            <MapPin className="h-4 w-4" />
-            {locationName}
-          </Badge>
-          <Badge variant="outline" className="h-9 gap-2 px-3 text-sm">
-            <CalendarRange className="h-4 w-4" />
-            {label}
-            {!isSingleDay && (
-              <span className="text-muted-foreground">· range</span>
-            )}
-          </Badge>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -78,18 +69,12 @@ export function DailyControlCentre() {
               key={p.value}
               variant={preset === p.value ? "default" : "outline"}
               size="sm"
-              className={cn("h-10 min-w-[96px] px-4 text-sm")}
+              className="h-11 min-w-[104px] px-4 text-sm"
               onClick={() => setPreset(p.value)}
             >
               {p.label}
             </Button>
           ))}
-          <Badge
-            variant={preset === "custom" ? "default" : "outline"}
-            className="h-10 px-4 text-sm flex items-center"
-          >
-            Custom / single date via picker
-          </Badge>
         </div>
       </CardContent>
     </Card>

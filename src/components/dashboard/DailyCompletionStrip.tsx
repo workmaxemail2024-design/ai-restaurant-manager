@@ -73,7 +73,7 @@ function Tile({
         if (onClick && (e.key === "Enter" || e.key === " ")) onClick();
       }}
       className={cn(
-        "min-w-[150px] flex-1 rounded-lg border p-3 min-h-[92px] flex flex-col justify-between transition-colors",
+        "rounded-lg border p-3 min-h-[104px] flex flex-col justify-between transition-colors",
         STATE_STYLES[state],
         blocking && "ring-2 ring-destructive ring-offset-1 ring-offset-background",
         onClick && "cursor-pointer hover:opacity-90"
@@ -245,8 +245,8 @@ export function DailyCompletionStrip({ date }: Props) {
   return (
     <Card className="mt-4">
       <CardContent className="p-4 sm:p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Daily Completion</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-base font-semibold">Daily Completion</h3>
           {closeBlocked ? (
             <span className="text-xs font-medium text-destructive">{blockerMessage}</span>
           ) : (
@@ -254,7 +254,7 @@ export function DailyCompletionStrip({ date }: Props) {
           )}
         </div>
 
-        <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
           <Tile
             label="Sales"
             icon={Euro}
@@ -274,7 +274,7 @@ export function DailyCompletionStrip({ date }: Props) {
               <Button
                 size="sm"
                 variant="outline"
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 onClick={(e) => {
                   e.stopPropagation();
                   setLabourDialogOpen(true);
@@ -305,12 +305,14 @@ export function DailyCompletionStrip({ date }: Props) {
             icon={FileText}
             state={docsState}
             detail={docsDetail}
-            onClick={() => navigate("/documents")}
+            onClick={() =>
+              selectedLocationId ? setDocDialogOpen(true) : navigate("/documents")
+            }
             action={
               <Button
                 size="sm"
                 variant="outline"
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 disabled={!selectedLocationId}
                 title={
                   selectedLocationId
@@ -347,7 +349,7 @@ export function DailyCompletionStrip({ date }: Props) {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-9 flex-1"
+                  className="h-10 flex-1"
                   disabled={!selectedLocationId}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -361,7 +363,7 @@ export function DailyCompletionStrip({ date }: Props) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-9 flex-1 text-xs"
+                    className="h-10 flex-1 text-xs"
                     disabled={isSaving}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -399,7 +401,7 @@ export function DailyCompletionStrip({ date }: Props) {
               <Button
                 size="sm"
                 variant="outline"
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 disabled={!selectedLocationId}
                 title={
                   selectedLocationId ? undefined : "Select a location to record wastage."
@@ -429,7 +431,7 @@ export function DailyCompletionStrip({ date }: Props) {
               <Button
                 size="sm"
                 variant={isClosed ? "outline" : "default"}
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 disabled={isSaving || closeBlocked}
                 onClick={(e) => {
                   e.stopPropagation();
