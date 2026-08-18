@@ -85,7 +85,21 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
     );
   }
 
-  const profitTone = data.operatingProfit >= 0 ? "profit-positive" : "profit-negative";
+  // Result is only "confirmed" when the essential inputs are sufficiently complete:
+  // real revenue, real (non-estimated) food cost, labour cost present and reviewed,
+  // and overheads configured.
+  const isIndicative =
+    !data.isComplete ||
+    data.foodCostIsEstimated ||
+    data.labourCost <= 0 ||
+    !data.labourConfirmed ||
+    !data.hasOverheads;
+
+  const profitTone = isIndicative
+    ? "default"
+    : data.operatingProfit >= 0
+      ? "profit-positive"
+      : "profit-negative";
 
   return (
     <Card className="mt-4">
@@ -188,21 +202,26 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
         {/* 3. Result */}
         <div className="grid gap-3 grid-cols-1 lg:grid-cols-3 mt-4">
           <Stat
-            label="Operating Profit"
+            label={isIndicative ? "Indicative Profit" : "Operating Profit"}
             value={formatCurrency(data.operatingProfit)}
             tone={profitTone}
             size="hero"
-            estimated={!data.isComplete || data.foodCostIsEstimated}
-            sub="Revenue − food cost − labour − expenses − overheads"
+            estimated={isIndicative}
+            sub={
+              isIndicative
+                ? "Indicative — some inputs incomplete or estimated"
+                : "Revenue − food cost − labour − expenses − overheads"
+            }
           />
           <Stat
-            label="Operating Margin"
+            label={isIndicative ? "Indicative Margin" : "Operating Margin"}
             value={
               data.operatingMarginPct != null ? `${data.operatingMarginPct.toFixed(1)}%` : "—"
             }
             tone={profitTone}
-            estimated={!data.isComplete || data.foodCostIsEstimated}
+            estimated={isIndicative}
           />
+
           <Stat
             label="Supplier Purchases"
             value={data.purchaseOrderCount > 0 ? formatCurrency(data.purchases) : "—"}

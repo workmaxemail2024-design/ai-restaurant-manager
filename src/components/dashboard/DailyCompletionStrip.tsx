@@ -144,9 +144,13 @@ export function DailyCompletionStrip({ date }: Props) {
   const docsState: TileState =
     !selectedLocationId
       ? "unknown"
-      : okDocs.length > 0 && pendingDocs.length === 0
-        ? "ok"
-        : "warn";
+      : supplierDocs.length === 0
+        ? // No documents recorded is not a problem — neutral informational state
+          "unknown"
+        : pendingDocs.length > 0
+          ? "warn"
+          : "ok";
+
   const docsDetail = !selectedLocationId
     ? "Select a location"
     : supplierDocs.length === 0
