@@ -11,18 +11,43 @@ function Stat({
   value,
   sub,
   tone,
+  size = "md",
+  estimated,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: "default" | "cost" | "profit-positive" | "profit-negative";
+  size?: "sm" | "md" | "hero";
+  estimated?: boolean;
 }) {
   return (
-    <div className="rounded-lg border bg-muted/30 p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <div
+      className={cn(
+        "rounded-lg border bg-muted/30 p-3",
+        size === "hero" && "bg-card border-primary/30 p-4",
+        estimated && "border-dashed border-warning/60 bg-warning/5"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p
+          className={cn(
+            "text-xs text-muted-foreground",
+            size === "hero" && "text-sm font-medium text-foreground"
+          )}
+        >
+          {label}
+        </p>
+        {estimated && (
+          <Badge variant="outline" className="text-[10px] border-warning/60 text-warning">
+            Estimated
+          </Badge>
+        )}
+      </div>
       <p
         className={cn(
-          "text-lg font-semibold mt-1",
+          "font-semibold mt-1",
+          size === "hero" ? "text-3xl" : size === "sm" ? "text-base" : "text-lg",
           tone === "cost" && "text-foreground/80",
           tone === "profit-positive" && "text-success",
           tone === "profit-negative" && "text-destructive"
