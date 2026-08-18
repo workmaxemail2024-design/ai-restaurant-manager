@@ -195,6 +195,70 @@ export type Database = {
           },
         ]
       }
+      daily_expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          document_id: string | null
+          entry_date: string
+          id: string
+          location_id: string
+          note: string | null
+          restaurant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          entry_date: string
+          id?: string
+          location_id: string
+          note?: string | null
+          restaurant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          entry_date?: string
+          id?: string
+          location_id?: string
+          note?: string | null
+          restaurant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_expenses_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_expenses_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_expenses_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_ledger_entries: {
         Row: {
           additional_expenses: number | null
@@ -202,6 +266,7 @@ export type Database = {
           covers_unknown: boolean
           created_at: string
           entry_date: string
+          expenses_confirmed: boolean
           id: string
           is_closed: boolean
           labour_hours: number | null
@@ -218,6 +283,7 @@ export type Database = {
           covers_unknown?: boolean
           created_at?: string
           entry_date: string
+          expenses_confirmed?: boolean
           id?: string
           is_closed?: boolean
           labour_hours?: number | null
@@ -234,6 +300,7 @@ export type Database = {
           covers_unknown?: boolean
           created_at?: string
           entry_date?: string
+          expenses_confirmed?: boolean
           id?: string
           is_closed?: boolean
           labour_hours?: number | null

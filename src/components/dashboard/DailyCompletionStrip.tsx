@@ -9,6 +9,7 @@ import {
   Package,
   Lock,
   Camera,
+  Plus,
   CheckCircle2,
   AlertTriangle,
   HelpCircle,
@@ -20,6 +21,9 @@ import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDayDocuments } from "@/hooks/useDocuments";
 import { QuickSupplierDocDialog } from "@/components/dashboard/QuickSupplierDocDialog";
+import { QuickExpenseDialog } from "@/components/dashboard/QuickExpenseDialog";
+import { useDailyExpenses } from "@/hooks/useDailyExpenses";
+import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 type TileState = "ok" | "warn" | "missing" | "unknown";
@@ -95,6 +99,8 @@ export function DailyCompletionStrip({ date }: Props) {
   const { data: overview } = useDashboardOverview(selectedLocationId);
   const { data: dayDocs = [] } = useDayDocuments(date, selectedLocationId);
   const [docDialogOpen, setDocDialogOpen] = useState(false);
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
+  const { data: dayExpenses = [] } = useDailyExpenses(date, selectedLocationId);
   const { entries, upsert, isSaving } = useDailyLedger(date, date, selectedLocationId);
   const ledger = entries.get(date);
 
@@ -113,7 +119,10 @@ export function DailyCompletionStrip({ date }: Props) {
   const salesOk = checklist.SALES;
   const labourOk = checklist.LABOUR_HOURS;
   const coversOk = checklist.COVERS;
-  const expensesOk = checklist.EXPENSES;
+  // Expenses: real entries for the day, or an explicit "no expenses" confirmation
+  const expenseTotal = dayExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const expensesConfirmed = ledger?.expenses_confirmed === true;
+  const expensesOk = dayExpenses.length > 0 || expensesConfirmed;
   const isClosed = ledger?.is_closed ?? false;
 
   // Supplier docs (informational in this stage — does not block Close Day)
@@ -241,8 +250,57 @@ export function DailyCompletionStrip({ date }: Props) {
             label="Expenses"
             icon={Wallet}
             state={expensesOk ? "ok" : "warn"}
-            detail={expensesOk ? "Daily ledger entry exists" : "No ledger entry yet"}
-            onClick={() => navigate("/reports")}
+            detail={
+              dayExpenses.length > 0
+                ? `${dayExpenses.length} entr${dayExpenses.length === 1 ? "y" : "ies"} • ${formatCurrency(expenseTotal)}`
+                : expensesConfirmed
+                  ? "No expenses today (confirmed)"
+                  : "Not reviewed yet"
+            }
+            onClick={() => setExpenseDialogOpen(true)}
+            action={
+              <div className="flex gap-1 mt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 flex-1"
+                  disabled={!selectedLocationId}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpenseDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add
+                </Button>
+                {dayExpenses.length === 0 && !expensesConfirmed && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-9 flex-1 text-xs"
+                    disabled={isSaving}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      upsert({
+                        entry_date: date,
+                        location_id: selectedLocationId ?? null,
+                        covers: ledger?.covers ?? 0,
+                        labour_hours: ledger?.labour_hours ?? 0,
+                        additional_expenses: ledger?.additional_expenses ?? 0,
+                        notes: ledger?.notes ?? "",
+                        is_closed: isClosed,
+                        manual_revenue: ledger?.manual_revenue ?? null,
+                        manual_orders: ledger?.manual_orders ?? null,
+                        covers_unknown: ledger?.covers_unknown ?? false,
+                        expenses_confirmed: true,
+                      });
+                    }}
+                  >
+                    None today
+                  </Button>
+                )}
+              </div>
+            }
           />
           <Tile
             label="Stock / Wastage"
@@ -279,6 +337,13 @@ export function DailyCompletionStrip({ date }: Props) {
           />
         </div>
       </CardContent>
+
+      <QuickExpenseDialog
+        open={expenseDialogOpen}
+        onOpenChange={setExpenseDialogOpen}
+        date={date}
+        locationId={selectedLocationId}
+      />
 
       <QuickSupplierDocDialog
         open={docDialogOpen}

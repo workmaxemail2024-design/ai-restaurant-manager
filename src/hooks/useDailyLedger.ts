@@ -14,6 +14,8 @@ export interface LedgerEntry {
   manual_revenue: number | null;
   manual_orders: number | null;
   covers_unknown: boolean;
+  /** Manager explicitly confirmed expenses for the day (incl. "no expenses") */
+  expenses_confirmed?: boolean;
 }
 
 export type MissingField = "SALES" | "LABOUR_HOURS" | "COVERS" | "EXPENSES" | "BOOKINGS";
@@ -143,6 +145,7 @@ export function useDailyLedger(
           manual_revenue: (row as any).manual_revenue != null ? Number((row as any).manual_revenue) : null,
           manual_orders: (row as any).manual_orders != null ? Number((row as any).manual_orders) : null,
           covers_unknown: (row as any).covers_unknown ?? false,
+          expenses_confirmed: (row as any).expenses_confirmed ?? false,
         });
       }
       return map;
@@ -166,6 +169,7 @@ export function useDailyLedger(
         manual_revenue: entry.manual_revenue,
         manual_orders: entry.manual_orders,
         covers_unknown: entry.covers_unknown,
+        expenses_confirmed: entry.expenses_confirmed ?? false,
       };
 
       const { error } = await supabase
