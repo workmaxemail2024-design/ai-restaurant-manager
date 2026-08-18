@@ -18,6 +18,8 @@ export interface LedgerEntry {
   expenses_confirmed?: boolean;
   /** Manager explicitly reviewed & confirmed labour for the day */
   labour_confirmed?: boolean;
+  /** Manager explicitly reviewed stock / wastage for the day */
+  stock_reviewed?: boolean;
 }
 
 export type MissingField = "SALES" | "LABOUR_HOURS" | "COVERS" | "EXPENSES" | "BOOKINGS";
@@ -149,6 +151,7 @@ export function useDailyLedger(
           covers_unknown: (row as any).covers_unknown ?? false,
           expenses_confirmed: (row as any).expenses_confirmed ?? false,
           labour_confirmed: (row as any).labour_confirmed ?? false,
+          stock_reviewed: (row as any).stock_reviewed ?? false,
         });
       }
       return map;
@@ -177,6 +180,7 @@ export function useDailyLedger(
         covers_unknown: entry.covers_unknown,
         expenses_confirmed: entry.expenses_confirmed ?? existing?.expenses_confirmed ?? false,
         labour_confirmed: entry.labour_confirmed ?? existing?.labour_confirmed ?? false,
+        stock_reviewed: entry.stock_reviewed ?? existing?.stock_reviewed ?? false,
       };
 
 
