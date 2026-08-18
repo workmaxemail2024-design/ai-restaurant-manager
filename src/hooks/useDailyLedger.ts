@@ -160,6 +160,9 @@ export function useDailyLedger(
     mutationFn: async (entry: LedgerEntry) => {
       if (!restaurantId) throw new Error("No restaurant");
 
+      // Preserve flags the caller did not explicitly set
+      const existing = query.data?.get(entry.entry_date);
+
       const payload = {
         restaurant_id: restaurantId,
         location_id: locationId || null,
@@ -172,9 +175,10 @@ export function useDailyLedger(
         manual_revenue: entry.manual_revenue,
         manual_orders: entry.manual_orders,
         covers_unknown: entry.covers_unknown,
-        expenses_confirmed: entry.expenses_confirmed ?? false,
-        labour_confirmed: entry.labour_confirmed ?? false,
+        expenses_confirmed: entry.expenses_confirmed ?? existing?.expenses_confirmed ?? false,
+        labour_confirmed: entry.labour_confirmed ?? existing?.labour_confirmed ?? false,
       };
+
 
       const { error } = await supabase
         .from("daily_ledger_entries")
