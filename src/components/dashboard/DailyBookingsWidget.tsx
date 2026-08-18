@@ -36,7 +36,7 @@ export function DailyBookingsWidget({
       if (!restaurantId) return null;
       let q = supabase
         .from("reservations")
-        .select("party_size, status, start_at, guest_name")
+        .select("party_size, status, start_at")
         .eq("restaurant_id", restaurantId)
         .gte("start_at", `${startDate}T00:00:00`)
         .lte("start_at", `${endDate}T23:59:59`)
@@ -77,9 +77,9 @@ export function DailyBookingsWidget({
   });
 
   const nextLabel = data?.next
-    ? `${format(parseISO(data.next.start_at), isSingleDay ? "HH:mm" : "d MMM HH:mm")}${
-        data.next.guest_name ? ` · ${data.next.guest_name}` : ""
-      }`
+    ? `${format(parseISO(data.next.start_at), isSingleDay ? "HH:mm" : "d MMM HH:mm")} · ${
+        data.next.party_size
+      } covers`
     : null;
 
   return (
