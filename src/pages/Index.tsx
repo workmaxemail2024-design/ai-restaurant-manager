@@ -150,6 +150,14 @@ const Index = () => {
 
         {isSingleDay && <DailyCompletionStrip date={startDate} />}
 
+        <DailyFinancialSummary
+          startDate={startDate}
+          endDate={endDate}
+          locationId={selectedLocationId}
+          periodLabel={periodLabel}
+        />
+
+
         <StockWastageDialog
           open={stockReviewOpen}
           onOpenChange={setStockReviewOpen}
