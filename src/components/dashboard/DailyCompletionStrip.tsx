@@ -391,6 +391,8 @@ export function DailyCompletionStrip({ date }: Props) {
             icon={Package}
             state={stockState}
             blocking={stockBlocked && !isClosed}
+            detail={stockDetail}
+
 
             onClick={() => setStockDialogOpen(true)}
             action={
