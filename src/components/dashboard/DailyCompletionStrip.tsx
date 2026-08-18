@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Euro,
@@ -7,6 +8,7 @@ import {
   Wallet,
   Package,
   Lock,
+  Camera,
   CheckCircle2,
   AlertTriangle,
   HelpCircle,
@@ -16,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { useDailyLedger, evaluateMissing } from "@/hooks/useDailyLedger";
 import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 import { useLocation } from "@/contexts/LocationContext";
+import { useDayDocuments } from "@/hooks/useDocuments";
+import { QuickSupplierDocDialog } from "@/components/dashboard/QuickSupplierDocDialog";
 import { cn } from "@/lib/utils";
 
 type TileState = "ok" | "warn" | "missing" | "unknown";
@@ -89,6 +93,8 @@ export function DailyCompletionStrip({ date }: Props) {
   const navigate = useNavigate();
   const { selectedLocationId } = useLocation();
   const { data: overview } = useDashboardOverview(selectedLocationId);
+  const { data: dayDocs = [] } = useDayDocuments(date, selectedLocationId);
+  const [docDialogOpen, setDocDialogOpen] = useState(false);
   const { entries, upsert, isSaving } = useDailyLedger(date, date, selectedLocationId);
   const ledger = entries.get(date);
 
@@ -109,6 +115,18 @@ export function DailyCompletionStrip({ date }: Props) {
   const coversOk = checklist.COVERS;
   const expensesOk = checklist.EXPENSES;
   const isClosed = ledger?.is_closed ?? false;
+
+  // Supplier docs (informational in this stage — does not block Close Day)
+  const supplierDocs = dayDocs.filter((d) => d.supplier_id != null);
+  const processedDocs = supplierDocs.filter((d) => d.processing_status === "processed");
+  const docsState: TileState =
+    supplierDocs.length === 0 ? "warn" : processedDocs.length > 0 ? "ok" : "warn";
+  const docsDetail =
+    supplierDocs.length === 0
+      ? "No supplier docs yet"
+      : processedDocs.length > 0
+        ? `${supplierDocs.length} doc${supplierDocs.length > 1 ? "s" : ""} • ${processedDocs.length} processed`
+        : `${supplierDocs.length} uploaded • needs review`;
 
   const blockers: string[] = [];
   if (!salesOk) blockers.push("Sales");
@@ -184,9 +202,23 @@ export function DailyCompletionStrip({ date }: Props) {
           <Tile
             label="Supplier Docs"
             icon={FileText}
-            state="unknown"
-            detail="Not checked yet"
+            state={docsState}
+            detail={docsDetail}
             onClick={() => navigate("/documents")}
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 h-9 w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDocDialogOpen(true);
+                }}
+              >
+                <Camera className="h-4 w-4 mr-1" />
+                Add doc
+              </Button>
+            }
           />
           <Tile
             label="Expenses"
@@ -230,6 +262,13 @@ export function DailyCompletionStrip({ date }: Props) {
           />
         </div>
       </CardContent>
+
+      <QuickSupplierDocDialog
+        open={docDialogOpen}
+        onOpenChange={setDocDialogOpen}
+        date={date}
+        locationId={selectedLocationId}
+      />
     </Card>
   );
 }
