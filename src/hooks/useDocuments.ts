@@ -327,3 +327,31 @@ export function useLinkDocumentToPO() {
     },
   });
 }
+
+// Documents captured for a specific day + location (dashboard supplier docs tile)
+export function useDayDocuments(date: string, locationId: string | null) {
+  const { currentRestaurant } = useRestaurant();
+  const restaurantId = currentRestaurant?.id;
+
+  return useQuery({
+    queryKey: ["documents", "day", restaurantId, locationId ?? "all", date],
+    queryFn: async () => {
+      if (!restaurantId) return [];
+      let query = supabase
+        .from("documents")
+        .select(`*, supplier:suppliers(id, name), location:locations(id, name)`)
+        .eq("restaurant_id", restaurantId)
+        .eq("document_date", date)
+        .order("created_at", { ascending: false });
+
+      if (locationId) {
+        query = query.or(`location_id.eq.${locationId},location_id.is.null`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as Document[];
+    },
+    enabled: !!restaurantId && !!date,
+  });
+}
