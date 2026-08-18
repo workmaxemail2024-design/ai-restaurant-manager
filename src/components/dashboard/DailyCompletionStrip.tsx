@@ -24,6 +24,8 @@ import { QuickSupplierDocDialog } from "@/components/dashboard/QuickSupplierDocD
 import { QuickExpenseDialog } from "@/components/dashboard/QuickExpenseDialog";
 import { LabourReviewDialog } from "@/components/dashboard/LabourReviewDialog";
 import { useDayLabour } from "@/hooks/useDayLabour";
+import { StockWastageDialog } from "@/components/dashboard/StockWastageDialog";
+import { useDayStockAdjustments } from "@/hooks/useDayStock";
 import { useDailyExpenses } from "@/hooks/useDailyExpenses";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -104,6 +106,8 @@ export function DailyCompletionStrip({ date }: Props) {
   const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
   const [labourDialogOpen, setLabourDialogOpen] = useState(false);
   const { data: dayLabour } = useDayLabour(date, selectedLocationId);
+  const [stockDialogOpen, setStockDialogOpen] = useState(false);
+  const { data: dayAdjustments = [] } = useDayStockAdjustments(date, selectedLocationId);
   const { data: dayExpenses = [] } = useDailyExpenses(date, selectedLocationId);
   const { entries, upsert, isSaving } = useDailyLedger(date, date, selectedLocationId);
   const ledger = entries.get(date);
@@ -180,6 +184,24 @@ export function DailyCompletionStrip({ date }: Props) {
       ]
         .filter(Boolean)
         .join(" • ");
+
+  // Stock / wastage: amber until explicitly reviewed; does not block Close Day in this stage
+  const stockReviewed = ledger?.stock_reviewed === true;
+  const invalidAdjustments = dayAdjustments.filter((a) => a.isInvalid).length;
+  const stockState: TileState =
+    invalidAdjustments > 0 ? "warn" : stockReviewed ? "ok" : "warn";
+  const stockDetail =
+    invalidAdjustments > 0
+      ? `${invalidAdjustments} adjustment${invalidAdjustments > 1 ? "s" : ""} need review`
+      : stockReviewed
+        ? dayAdjustments.length === 0
+          ? "No wastage / adjustments"
+          : `${dayAdjustments.length} adjustment${dayAdjustments.length > 1 ? "s" : ""} • ${dayAdjustments
+              .reduce((sum, a) => sum + Math.abs(Number(a.quantity) || 0), 0)
+              .toFixed(2)} items adjusted`
+        : dayAdjustments.length > 0
+          ? `${dayAdjustments.length} recorded • not reviewed`
+          : "Not reviewed yet";
 
   const blockers: string[] = [];
   if (!salesOk) blockers.push("Sales");
@@ -352,9 +374,27 @@ export function DailyCompletionStrip({ date }: Props) {
           <Tile
             label="Stock / Wastage"
             icon={Package}
-            state="unknown"
-            detail="Not checked yet"
-            onClick={() => navigate("/stock")}
+            state={stockState}
+            detail={stockDetail}
+            onClick={() => setStockDialogOpen(true)}
+            action={
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 h-9 w-full"
+                disabled={!selectedLocationId}
+                title={
+                  selectedLocationId ? undefined : "Select a location to record wastage."
+                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!selectedLocationId) return;
+                  setStockDialogOpen(true);
+                }}
+              >
+                {stockReviewed ? "View stock" : "Review stock"}
+              </Button>
+            }
           />
           <Tile
             label="Close Day"
@@ -384,6 +424,13 @@ export function DailyCompletionStrip({ date }: Props) {
           />
         </div>
       </CardContent>
+
+      <StockWastageDialog
+        open={stockDialogOpen}
+        onOpenChange={setStockDialogOpen}
+        date={date}
+        locationId={selectedLocationId}
+      />
 
       <LabourReviewDialog
         open={labourDialogOpen}
