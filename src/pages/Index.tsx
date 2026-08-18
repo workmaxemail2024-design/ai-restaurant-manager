@@ -32,6 +32,8 @@ import { cn } from "@/lib/utils";
 import { DataHealthPanel } from "@/components/dashboard/DataHealthPanel";
 import { DailyControlCentre, useSelectedPeriodLabel } from "@/components/dashboard/DailyControlCentre";
 import { DailyCompletionStrip } from "@/components/dashboard/DailyCompletionStrip";
+import { DailyFinancialSummary } from "@/components/dashboard/DailyFinancialSummary";
+
 import { OwnerInsightsPanel } from "@/components/dashboard/OwnerInsightsPanel";
 import type { OperatingHours } from "@/components/locations/OperatingHoursEditor";
 
@@ -149,6 +151,14 @@ const Index = () => {
         )}
 
         {isSingleDay && <DailyCompletionStrip date={startDate} />}
+
+        <DailyFinancialSummary
+          startDate={startDate}
+          endDate={endDate}
+          locationId={selectedLocationId}
+          periodLabel={periodLabel}
+        />
+
 
         <StockWastageDialog
           open={stockReviewOpen}
