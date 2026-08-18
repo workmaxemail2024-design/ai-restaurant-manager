@@ -106,23 +106,37 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
           )}
         </div>
 
-        {/* Revenue block */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* 1. Revenue — the headline figure */}
+        <div className="grid gap-3 grid-cols-1 lg:grid-cols-3">
           <Stat
-            label="Gross Sales / Revenue"
+            label="Revenue"
             value={formatCurrency(data.revenue)}
-            sub={data.revenue > 0 ? undefined : "No sales recorded"}
+            size="hero"
+            sub={data.revenue > 0 ? "Gross sales" : "No sales recorded"}
           />
           <Stat
             label="Orders"
             value={data.orders != null ? String(data.orders) : "—"}
+            size="sm"
             sub={data.aov != null ? `AOV ${formatCurrency(data.aov)}` : "AOV —"}
           />
-          <Stat label="Covers" value={data.covers != null ? String(data.covers) : "—"} />
+          <Stat
+            label="Covers"
+            size="sm"
+            value={data.covers != null ? String(data.covers) : "—"}
+          />
+        </div>
+
+        {/* 2. Costs in order of impact: Labour → Food/COGS → Expenses → Overheads */}
+        <p className="mt-4 mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Costs
+        </p>
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
           <Stat
             label="Labour Cost"
             value={data.labourCost > 0 ? formatCurrency(data.labourCost) : "—"}
             tone="cost"
+            estimated={data.labourSource === "manual" || (data.labourSource === "attendance" && !data.labourConfirmed)}
             sub={[
               data.labourHours > 0 ? `${data.labourHours.toFixed(1)}h` : null,
               data.labourPct != null ? `${data.labourPct.toFixed(1)}% of revenue` : null,
@@ -137,14 +151,11 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
               .filter(Boolean)
               .join(" • ")}
           />
-        </div>
-
-        {/* Cost block */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
           <Stat
-            label={data.foodCostIsEstimated ? "Estimated Food Cost" : "Cost of Goods / Food Cost"}
+            label={data.foodCostIsEstimated ? "Estimated Food Cost" : "Food Cost / COGS"}
             value={formatCurrency(data.foodCost)}
             tone="cost"
+            estimated={data.foodCostIsEstimated}
             sub={[
               data.foodCostPct != null ? `${data.foodCostPct.toFixed(1)}% of revenue` : null,
               data.foodCostIsEstimated
@@ -155,16 +166,6 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
             ]
               .filter(Boolean)
               .join(" • ")}
-          />
-          <Stat
-            label="Supplier Purchases"
-            value={data.purchaseOrderCount > 0 ? formatCurrency(data.purchases) : "—"}
-            tone="cost"
-            sub={
-              data.purchaseOrderCount > 0
-                ? `${data.purchaseOrderCount} received order${data.purchaseOrderCount > 1 ? "s" : ""} (not in profit)`
-                : "No received purchase orders"
-            }
           />
           <Stat
             label="Other Daily Expenses"
@@ -184,12 +185,14 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
           />
         </div>
 
-        {/* Profit */}
-        <div className="grid grid-cols-2 gap-3 mt-3">
+        {/* 3. Result */}
+        <div className="grid gap-3 grid-cols-1 lg:grid-cols-3 mt-4">
           <Stat
-            label="Estimated Operating Profit"
+            label="Operating Profit"
             value={formatCurrency(data.operatingProfit)}
             tone={profitTone}
+            size="hero"
+            estimated={!data.isComplete || data.foodCostIsEstimated}
             sub="Revenue − food cost − labour − expenses − overheads"
           />
           <Stat
@@ -198,6 +201,18 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
               data.operatingMarginPct != null ? `${data.operatingMarginPct.toFixed(1)}%` : "—"
             }
             tone={profitTone}
+            estimated={!data.isComplete || data.foodCostIsEstimated}
+          />
+          <Stat
+            label="Supplier Purchases"
+            value={data.purchaseOrderCount > 0 ? formatCurrency(data.purchases) : "—"}
+            tone="cost"
+            size="sm"
+            sub={
+              data.purchaseOrderCount > 0
+                ? `${data.purchaseOrderCount} received order${data.purchaseOrderCount > 1 ? "s" : ""} (not in profit)`
+                : "No received purchase orders"
+            }
           />
         </div>
 
