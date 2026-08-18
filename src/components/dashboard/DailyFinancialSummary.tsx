@@ -85,7 +85,21 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
     );
   }
 
-  const profitTone = data.operatingProfit >= 0 ? "profit-positive" : "profit-negative";
+  // Result is only "confirmed" when the essential inputs are sufficiently complete:
+  // real revenue, real (non-estimated) food cost, labour cost present and reviewed,
+  // and overheads configured.
+  const isIndicative =
+    !data.isComplete ||
+    data.foodCostIsEstimated ||
+    data.labourCost <= 0 ||
+    !data.labourConfirmed ||
+    !data.hasOverheads;
+
+  const profitTone = isIndicative
+    ? "default"
+    : data.operatingProfit >= 0
+      ? "profit-positive"
+      : "profit-negative";
 
   return (
     <Card className="mt-4">
