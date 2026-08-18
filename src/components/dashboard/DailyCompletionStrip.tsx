@@ -245,8 +245,8 @@ export function DailyCompletionStrip({ date }: Props) {
   return (
     <Card className="mt-4">
       <CardContent className="p-4 sm:p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Daily Completion</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-base font-semibold">Daily Completion</h3>
           {closeBlocked ? (
             <span className="text-xs font-medium text-destructive">{blockerMessage}</span>
           ) : (
