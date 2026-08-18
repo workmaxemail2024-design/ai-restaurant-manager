@@ -203,14 +203,23 @@ export function DailyCompletionStrip({ date }: Props) {
           ? `${dayAdjustments.length} recorded • not reviewed`
           : "Not reviewed yet";
 
+  // Close Day blocking rules (Stage 2E)
+  const salesBlocked = !salesOk;
+  const labourBlocked = !labourOk || !labourConfirmed;
+  const coversBlocked = !coversOk;
+  const expensesBlocked = !expensesOk;
+  const stockBlocked = !stockReviewed;
+
   const blockers: string[] = [];
-  if (!salesOk) blockers.push("Sales");
-  if (!labourOk) blockers.push("Labour");
-  if (!coversOk) blockers.push("Covers");
+  if (salesBlocked) blockers.push("Sales");
+  if (labourBlocked) blockers.push(labourOk ? "Labour review" : "Labour");
+  if (coversBlocked) blockers.push("Covers");
+  if (expensesBlocked) blockers.push("Expenses review");
+  if (stockBlocked) blockers.push("Stock / Wastage review");
   const closeBlocked = !isClosed && blockers.length > 0;
   const blockerMessage =
     blockers.length > 0
-      ? `Complete ${blockers.join(", ").replace(/, ([^,]*)$/, " and $1")} before closing this day`
+      ? `Outstanding: ${blockers.join(", ").replace(/, ([^,]*)$/, " and $1")}`
       : "";
 
   const handleCloseDay = () => {
@@ -226,8 +235,12 @@ export function DailyCompletionStrip({ date }: Props) {
       manual_revenue: ledger?.manual_revenue ?? null,
       manual_orders: ledger?.manual_orders ?? null,
       covers_unknown: ledger?.covers_unknown ?? false,
+      expenses_confirmed: ledger?.expenses_confirmed ?? false,
+      labour_confirmed: ledger?.labour_confirmed ?? false,
+      stock_reviewed: ledger?.stock_reviewed ?? false,
     });
   };
+
 
   return (
     <Card className="mt-4">
