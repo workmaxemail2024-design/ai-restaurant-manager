@@ -274,7 +274,7 @@ export function DailyCompletionStrip({ date }: Props) {
               <Button
                 size="sm"
                 variant="outline"
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 onClick={(e) => {
                   e.stopPropagation();
                   setLabourDialogOpen(true);
@@ -310,7 +310,7 @@ export function DailyCompletionStrip({ date }: Props) {
               <Button
                 size="sm"
                 variant="outline"
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 disabled={!selectedLocationId}
                 title={
                   selectedLocationId
@@ -347,7 +347,7 @@ export function DailyCompletionStrip({ date }: Props) {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-9 flex-1"
+                  className="h-10 flex-1"
                   disabled={!selectedLocationId}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -361,7 +361,7 @@ export function DailyCompletionStrip({ date }: Props) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-9 flex-1 text-xs"
+                    className="h-10 flex-1 text-xs"
                     disabled={isSaving}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -399,7 +399,7 @@ export function DailyCompletionStrip({ date }: Props) {
               <Button
                 size="sm"
                 variant="outline"
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 disabled={!selectedLocationId}
                 title={
                   selectedLocationId ? undefined : "Select a location to record wastage."
@@ -429,7 +429,7 @@ export function DailyCompletionStrip({ date }: Props) {
               <Button
                 size="sm"
                 variant={isClosed ? "outline" : "default"}
-                className="mt-2 h-9 w-full"
+                className="mt-2 h-10 w-full"
                 disabled={isSaving || closeBlocked}
                 onClick={(e) => {
                   e.stopPropagation();
