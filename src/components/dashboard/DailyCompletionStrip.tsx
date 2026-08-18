@@ -73,7 +73,7 @@ function Tile({
         if (onClick && (e.key === "Enter" || e.key === " ")) onClick();
       }}
       className={cn(
-        "min-w-[150px] flex-1 rounded-lg border p-3 min-h-[92px] flex flex-col justify-between transition-colors",
+        "rounded-lg border p-3 min-h-[104px] flex flex-col justify-between transition-colors",
         STATE_STYLES[state],
         blocking && "ring-2 ring-destructive ring-offset-1 ring-offset-background",
         onClick && "cursor-pointer hover:opacity-90"
