@@ -33,6 +33,8 @@ import { DataHealthPanel } from "@/components/dashboard/DataHealthPanel";
 import { DailyControlCentre, useSelectedPeriodLabel } from "@/components/dashboard/DailyControlCentre";
 import { DailyCompletionStrip } from "@/components/dashboard/DailyCompletionStrip";
 import { DailyFinancialSummary } from "@/components/dashboard/DailyFinancialSummary";
+import { DailyActionsBar } from "@/components/dashboard/DailyActionsBar";
+import { DailyBookingsWidget } from "@/components/dashboard/DailyBookingsWidget";
 
 import { OwnerInsightsPanel } from "@/components/dashboard/OwnerInsightsPanel";
 import type { OperatingHours } from "@/components/locations/OperatingHoursEditor";
@@ -98,60 +100,25 @@ const Index = () => {
 
       <PermissionFilteredSidebar />
 
-      <main className="ml-64 p-8">
-        <Header showRestaurantSwitcher={false} />
+      <main className="ml-64 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
+        <Header showRestaurantSwitcher={false} showScopeSelectors={false} />
 
+        {/* 1. Where am I? What date? — single primary location + date control */}
         <DailyControlCentre />
 
-        {isSingleDay && (
-          <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-2">
-            <Button
-              size="lg"
-              className="h-14 px-6 text-base w-full sm:w-auto"
-              disabled={!selectedLocationId}
-              onClick={() => setQuickDocOpen(true)}
-            >
-              <Camera className="h-5 w-5 mr-2" />
-              Take Photo / Upload Supplier Doc
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-14 px-6 text-base w-full sm:w-auto"
-              onClick={() => setQuickExpenseOpen(true)}
-            >
-              <Plus className="h-5 w-5 mr-2" />
-              Add Expense
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-14 px-6 text-base w-full sm:w-auto"
-              onClick={() => setLabourReviewOpen(true)}
-            >
-              <Clock className="h-5 w-5 mr-2" />
-              Review Labour
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-14 px-6 text-base w-full sm:w-auto"
-              disabled={!selectedLocationId}
-              onClick={() => setStockReviewOpen(true)}
-            >
-              <Package className="h-5 w-5 mr-2" />
-              Review Stock / Record Wastage
-            </Button>
-            {!selectedLocationId && (
-              <span className="text-sm text-muted-foreground">
-                Select a location to record a supplier delivery.
-              </span>
-            )}
-          </div>
-        )}
-
+        {/* 2. What is missing? */}
         {isSingleDay && <DailyCompletionStrip date={startDate} />}
 
+        {/* 3. What do I need to do? */}
+        <DailyActionsBar
+          locationId={selectedLocationId}
+          onSupplierDoc={() => setQuickDocOpen(true)}
+          onExpense={() => setQuickExpenseOpen(true)}
+          onLabour={() => setLabourReviewOpen(true)}
+          onStock={() => setStockReviewOpen(true)}
+        />
+
+        {/* 4. How did we perform? */}
         <DailyFinancialSummary
           startDate={startDate}
           endDate={endDate}
@@ -159,6 +126,15 @@ const Index = () => {
           periodLabel={periodLabel}
         />
 
+        <div className="mt-4">
+          <DailyBookingsWidget
+            startDate={startDate}
+            endDate={endDate}
+            locationId={selectedLocationId}
+            periodLabel={periodLabel}
+            isSingleDay={isSingleDay}
+          />
+        </div>
 
         <StockWastageDialog
           open={stockReviewOpen}
@@ -197,7 +173,7 @@ const Index = () => {
         </div>
 
         {/* Top Metrics Row */}
-        <div className="grid grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
           <MetricCard
             title={isSingleDay ? "Revenue" : "Revenue (period)"}
             value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)}
@@ -259,9 +235,9 @@ const Index = () => {
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-6 mt-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
           {/* Main Content - 2 columns */}
-          <div className="col-span-2 space-y-6">
+          <div className="xl:col-span-2 space-y-6">
             {/* Today's Bookings */}
             <Card className="animate-fade-in" style={{ animationDelay: "200ms" }}>
               <CardContent className="p-5">
@@ -304,7 +280,7 @@ const Index = () => {
                 </div>
                 <button className="text-sm text-primary hover:underline" onClick={() => navigate('/locations')}>View All</button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {locations.slice(0, 4).map((location, index) => (
                   <LocationCard
                     key={location.id}
