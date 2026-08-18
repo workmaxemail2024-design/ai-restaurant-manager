@@ -305,7 +305,9 @@ export function DailyCompletionStrip({ date }: Props) {
             icon={FileText}
             state={docsState}
             detail={docsDetail}
-            onClick={() => navigate("/documents")}
+            onClick={() =>
+              selectedLocationId ? setDocDialogOpen(true) : navigate("/documents")
+            }
             action={
               <Button
                 size="sm"
