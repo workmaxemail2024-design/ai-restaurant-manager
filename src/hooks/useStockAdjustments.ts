@@ -144,13 +144,26 @@ export function useStockVariance(locationId?: string) {
         adjustmentTotals.set(key, (adjustmentTotals.get(key) || 0) + Number(adj.quantity));
       });
 
+      // Theoretical usage from sales × recipes (recalculated, never a stored deduction)
+      const { data: usage } = await supabase.rpc("get_theoretical_usage", {
+        p_location_id: locationId ?? null,
+        p_start: null,
+        p_end: null,
+      });
+      const usageTotals = new Map<string, number>();
+      ((usage || []) as any[]).forEach((u) => {
+        usageTotals.set(u.ingredient_id, Number(u.quantity_used || 0));
+      });
+
       // Calculate variance for each stock item
       const varianceItems: VarianceItem[] = (stockLevels || []).map((stock) => {
         const key = `${stock.ingredient_id}-${stock.location_id}`;
         const totalAdjustments = adjustmentTotals.get(key) || 0;
+        const theoreticalUsage = usageTotals.get(stock.ingredient_id) || 0;
         const actualQuantity = Number(stock.quantity);
-        // Expected = actual + adjustments (since adjustments reduced stock)
-        const expectedQuantity = actualQuantity + totalAdjustments;
+        // Expected = recorded stock less theoretical usage from dishes sold,
+        // plus adjustments already recorded (wastage/breakage etc.)
+        const expectedQuantity = actualQuantity - theoreticalUsage + totalAdjustments;
         const variance = actualQuantity - expectedQuantity;
         const variancePercent = expectedQuantity > 0 ? (variance / expectedQuantity) * 100 : 0;
 
