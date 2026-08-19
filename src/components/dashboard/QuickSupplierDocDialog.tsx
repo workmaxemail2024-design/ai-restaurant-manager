@@ -21,6 +21,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useUploadDocument } from "@/hooks/useDocuments";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -178,18 +179,12 @@ export function QuickSupplierDocDialog({ open, onOpenChange, date, locationId }:
 
           <div className="space-y-2">
             <Label>Supplier (required)</Label>
-            <Select value={supplierId} onValueChange={setSupplierId}>
-              <SelectTrigger className="h-12">
-                <SelectValue placeholder="Select supplier" />
-              </SelectTrigger>
-              <SelectContent className="z-[60]">
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SupplierSelect
+              value={supplierId}
+              onValueChange={setSupplierId}
+              triggerClassName="h-12"
+              contentClassName="z-[60]"
+            />
           </div>
 
           <div className="space-y-2">

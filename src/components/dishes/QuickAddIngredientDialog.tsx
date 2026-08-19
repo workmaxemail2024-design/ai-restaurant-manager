@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateIngredient, type PackUnit, type StorageType, type UnitType } from "@/hooks/useIngredients";
-import { useSuppliers } from "@/hooks/useSuppliers";
+import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 
 interface Props {
   open: boolean;
@@ -33,7 +33,6 @@ const STORAGE_TYPES: { value: StorageType; label: string }[] = [
 /** Uses the existing ingredients architecture — no separate ingredient system. */
 export function QuickAddIngredientDialog({ open, onOpenChange, initialName, onCreated }: Props) {
   const createIngredient = useCreateIngredient();
-  const { data: suppliers = [] } = useSuppliers();
 
   const [name, setName] = useState("");
   const [packUnit, setPackUnit] = useState<PackUnit>("g");
@@ -128,13 +127,12 @@ export function QuickAddIngredientDialog({ open, onOpenChange, initialName, onCr
           </p>
           <div>
             <Label>Supplier (optional)</Label>
-            <Select value={supplierId} onValueChange={setSupplierId}>
-              <SelectTrigger><SelectValue placeholder="No supplier" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">No supplier</SelectItem>
-                {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SupplierSelect
+              value={supplierId}
+              onValueChange={setSupplierId}
+              noneOption={{ value: "_none", label: "No supplier" }}
+              placeholder="No supplier"
+            />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

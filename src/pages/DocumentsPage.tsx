@@ -58,6 +58,7 @@ import {
   DocumentFilters,
 } from "@/hooks/useDocuments";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -528,19 +529,12 @@ function UploadForm({ locations, suppliers, defaultLocationId, onSuccess }: Uplo
       {/* Supplier */}
       <div className="space-y-2">
         <Label>Supplier (optional)</Label>
-        <Select value={supplierId} onValueChange={setSupplierId}>
-          <SelectTrigger>
-            <SelectValue placeholder="None" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">None</SelectItem>
-            {suppliers.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SupplierSelect
+          value={supplierId}
+          onValueChange={setSupplierId}
+          noneOption={{ value: "none", label: "None" }}
+          placeholder="None"
+        />
       </div>
 
       {/* Document Date */}
