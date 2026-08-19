@@ -191,29 +191,15 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
           </p>
         )}
 
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg border p-3">
-            <p className="text-xs text-muted-foreground">Total hours</p>
-            <p className="text-lg font-semibold">{totalHours.toFixed(2)}</p>
-          </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-xs text-muted-foreground">Labour cost</p>
-            <p className="text-lg font-semibold">
-              {canSeeCosts ? formatCurrency(totalCost) : "—"}
-            </p>
-            {canSeeCosts && (data?.salaryCost ?? 0) > 0 && (
-              <p className="text-[11px] text-muted-foreground">
-                {formatCurrency(data?.hourlyCost ?? 0)} hourly + {formatCurrency(data?.salaryCost ?? 0)} salary
-              </p>
-            )}
-          </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-xs text-muted-foreground">Labour % of revenue</p>
-            <p className="text-lg font-semibold">
-              {canSeeCosts && labourPct != null ? `${labourPct.toFixed(1)}%` : "—"}
-            </p>
-          </div>
-        </div>
+        <LabourTotals
+          totalHours={totalHours}
+          totalCost={totalCost}
+          hourlyCost={data?.hourlyCost ?? 0}
+          salaryCost={data?.salaryCost ?? 0}
+          deptCosts={deptCosts}
+          labourPct={labourPct}
+          canSeeCosts={canSeeCosts}
+        />
 
         {issues.length > 0 && (
           <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm flex items-start gap-2">
@@ -223,6 +209,8 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
             </span>
           </div>
         )}
+
+        <LabourEvidenceCard date={date} locationId={locationId} disabled={!canEdit} />
 
         {salariedRows.length > 0 && (
           <div className="rounded-lg border p-3 space-y-2">
@@ -237,6 +225,7 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
                 <span className="flex items-center gap-2">
                   {s.staffName}
                   <Badge variant="secondary">Salary</Badge>
+                  <Badge variant="outline">{departmentLabel(s.department)}</Badge>
                 </span>
                 <span className="text-muted-foreground text-xs">
                   {s.derivation}
@@ -249,93 +238,119 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
 
         <Separator />
 
+        {/* Employee-level hours entry, grouped by department */}
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-semibold">
+              {rows.length === 0 ? "No attendance imported yet" : "Add employees who worked"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Select everyone who worked and enter their hours. Cost is calculated from each
+              employee's stored pay details.
+            </p>
+          </div>
+
+          {!locationId ? (
+            <p className="text-sm text-muted-foreground">
+              Select a single location to record employee hours.
+            </p>
+          ) : entryStaff.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              All active staff at this location already have hours recorded for this day.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {STAFF_DEPARTMENTS.filter((d) => (groupedEntryStaff[d.value] ?? []).length > 0).map((dept) => (
+                <div key={dept.value} className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {dept.label}
+                  </p>
+                  {(groupedEntryStaff[dept.value] ?? []).map((s: any) => {
+                    const entry = entries2[s.id];
+                    const selected = !!entry?.selected;
+                    const hours = Number(entry?.hours);
+                    const isSalary = s.pay_type === "salary";
+                    const lineCost =
+                      !isSalary && Number.isFinite(hours) && hours > 0 && s.hourly_rate != null
+                        ? hours * Number(s.hourly_rate)
+                        : null;
+                    return (
+                      <div
+                        key={s.id}
+                        className={cn(
+                          "flex flex-wrap items-center gap-3 rounded-lg border p-3",
+                          selected && "border-primary/50 bg-primary/5"
+                        )}
+                      >
+                        <Checkbox
+                          checked={selected}
+                          disabled={!canEdit}
+                          onCheckedChange={(v) =>
+                            setEntries((p) => ({
+                              ...p,
+                              [s.id]: { hours: p[s.id]?.hours ?? "", selected: v === true },
+                            }))
+                          }
+                        />
+                        <div className="min-w-[9rem] flex-1">
+                          <p className="font-medium text-sm">
+                            {s.first_name} {s.last_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {isSalary ? "Salary" : "Hourly"}
+                            </Badge>
+                            {canSeeCosts && !isSalary && s.hourly_rate != null && (
+                              <>{formatCurrency(Number(s.hourly_rate))}/h</>
+                            )}
+                            {isSalary && <>allocated from salary</>}
+                          </p>
+                        </div>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step={0.25}
+                          placeholder="Hours"
+                          className="h-12 w-28 text-base"
+                          disabled={!canEdit || !selected}
+                          value={entry?.hours ?? ""}
+                          onChange={(e) =>
+                            setEntries((p) => ({
+                              ...p,
+                              [s.id]: { hours: e.target.value, selected: true },
+                            }))
+                          }
+                        />
+                        <div className="w-24 text-right text-sm font-medium">
+                          {canSeeCosts && lineCost != null ? formatCurrency(lineCost) : isSalary ? "—" : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+
+              <Button
+                className="h-12 px-6"
+                disabled={!canEdit || !locationId || addManual.isPending || selectedCount === 0}
+                onClick={saveSelectedHours}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Save hours for {selectedCount} employee{selectedCount === 1 ? "" : "s"}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <Separator />
+
         {isLoading ? (
           <p className="text-sm text-muted-foreground py-6 text-center">Loading attendance…</p>
         ) : rows.length === 0 ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-dashed p-3">
-              <p className="text-sm font-semibold">No attendance imported yet</p>
-              <p className="text-sm text-muted-foreground">
-                Actual labour normally arrives from Captiva POS. If it hasn't been imported,
-                enter the hours actually worked below and confirm labour.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-              <div className="flex-1">
-                <Label htmlFor="manual-hours">Total labour hours for the day</Label>
-                <Input
-                  id="manual-hours"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step={0.25}
-                  className="h-12 text-base"
-                  value={manualHours}
-                  onChange={(e) => setManualHours(e.target.value)}
-                  disabled={!canEdit}
-                />
-              </div>
-              <Button
-                className="h-12 px-6"
-                onClick={saveManualHours}
-                disabled={!canEdit || isSaving}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Save hours
-              </Button>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label>Or record per-staff hours</Label>
-              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                <div className="flex-1">
-                  <Select value={staffId} onValueChange={setStaffId} disabled={!canEdit || !locationId}>
-                    <SelectTrigger className="h-12 text-base">
-                      <SelectValue placeholder="Select staff member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeStaff.map((s: any) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.first_name} {s.last_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="w-full sm:w-32">
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step={0.25}
-                    placeholder="Hours"
-                    className="h-12 text-base"
-                    value={staffHours}
-                    onChange={(e) => setStaffHours(e.target.value)}
-                    disabled={!canEdit || !locationId}
-                  />
-                </div>
-                <Button
-                  variant="outline"
-                  className="h-12 px-6"
-                  disabled={!canEdit || !locationId || addManual.isPending}
-                  onClick={addStaffHours}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-              </div>
-              {!locationId && (
-                <p className="text-xs text-muted-foreground">
-                  Select a single location to record per-staff hours.
-                </p>
-              )}
-            </div>
-          </div>
+          <p className="text-sm text-muted-foreground">No recorded hours for this day yet.</p>
         ) : (
+
 
           <div className="space-y-3">
             {rows.map((row) => {
