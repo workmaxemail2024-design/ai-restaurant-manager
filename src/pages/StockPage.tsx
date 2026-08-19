@@ -44,15 +44,35 @@ export default function StockPage() {
       key: "quantity", 
       header: "Quantity",
       render: (item: StockLevel) => {
-        const isLow = Number(item.quantity) < 10;
+        // Low/Critical is only shown when a genuine reorder threshold is configured.
+        const status = getStockStatus(Number(item.quantity), item.ingredients?.reorder_point);
         return (
           <div className="flex items-center gap-2">
             <span>{Number(item.quantity).toFixed(2)}</span>
             <span className="text-muted-foreground text-sm">{item.ingredients?.unit}</span>
-            {isLow && <Badge variant="destructive">Low</Badge>}
+            {status.state === "critical" && (
+              <Badge variant="destructive" title={status.reason}>Critical</Badge>
+            )}
+            {status.state === "low" && (
+              <Badge variant="outline" className="border-amber-500 text-amber-600" title={status.reason}>
+                Low
+              </Badge>
+            )}
           </div>
         );
       }
+    },
+    {
+      key: "reorder_point",
+      header: "Reorder point",
+      render: (item: StockLevel) =>
+        item.ingredients?.reorder_point != null ? (
+          <span className="font-mono text-sm">
+            {Number(item.ingredients.reorder_point).toFixed(2)} {item.ingredients?.unit}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Not set</span>
+        ),
     },
     { 
       key: "updated_at", 
