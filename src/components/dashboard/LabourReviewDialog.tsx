@@ -78,14 +78,40 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
 
   const [edits, setEdits] = useState<Record<string, { clock_in: string; clock_out: string }>>({});
   const [manualHours, setManualHours] = useState<string>("");
+  const [staffId, setStaffId] = useState<string>("");
+  const [staffHours, setStaffHours] = useState<string>("");
+
+  const addManual = useAddManualAttendance();
+  const { data: staffList = [] } = useStaff(locationId ?? undefined);
+  const activeStaff = staffList.filter((s: any) => s.status === "active");
+
+  const addStaffHours = () => {
+    const hours = Number(staffHours);
+    if (!staffId || !locationId || !Number.isFinite(hours) || hours <= 0) {
+      toast({ title: "Select a staff member and enter hours", variant: "destructive" });
+      return;
+    }
+    addManual.mutate(
+      { staff_id: staffId, location_id: locationId, date, hours },
+      {
+        onSuccess: () => {
+          setStaffId("");
+          setStaffHours("");
+        },
+      }
+    );
+  };
 
   useEffect(() => {
     if (open) {
       setEdits({});
+      setStaffId("");
+      setStaffHours("");
       setManualHours(ledger?.labour_hours ? String(ledger.labour_hours) : "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, date, locationId]);
+
 
   const saveRow = (id: string) => {
     const row = rows.find((r) => r.id === id);
