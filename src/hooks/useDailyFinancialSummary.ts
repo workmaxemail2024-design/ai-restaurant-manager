@@ -321,6 +321,8 @@ export function useDailyFinancialSummary(
         labourHours,
         labourPct,
         labourSource,
+        hourlyLabourCost,
+        salariedLabourCost,
         labourConfirmed,
         foodCost,
         foodCostPct,
