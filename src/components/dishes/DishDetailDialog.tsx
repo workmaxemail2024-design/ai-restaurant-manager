@@ -15,6 +15,7 @@ import { useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, useU
 import { useIngredients, calculateBaseCost, getBaseUnit } from "@/hooks/useIngredients";
 import { usePOSMappings } from "@/hooks/usePOS";
 import { Link2, AlertCircle } from "lucide-react";
+import { QuickAddIngredientDialog } from "@/components/dishes/QuickAddIngredientDialog";
 
 interface Props {
   dish: Dish | null;
