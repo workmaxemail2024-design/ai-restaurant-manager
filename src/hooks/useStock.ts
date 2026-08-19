@@ -8,7 +8,7 @@ export interface StockLevel {
   location_id: string;
   quantity: number;
   updated_at: string;
-  ingredients?: { name: string; unit: string; reorder_point: number | null; par_level: number | null };
+  ingredients?: { name: string; unit: string; reorder_point: number | null; par_level: number | null; item_type?: string | null };
   locations?: { name: string };
 }
 
