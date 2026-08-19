@@ -343,7 +343,21 @@ export default function AttendancePage() {
         )}
 
         {/* Attendance History */}
-        <DataTable data={attendance} columns={columns} isLoading={isLoading} />
+        {!isLoading && attendance.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="p-6 text-center space-y-1">
+              <p className="text-sm font-semibold">No attendance imported yet</p>
+              <p className="text-sm text-muted-foreground">
+                Actual labour normally comes from Captiva POS. If it hasn't arrived, review the day
+                from the Daily Control Centre to enter total or per-staff hours and confirm labour.
+                Clock In here is optional.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <DataTable data={attendance} columns={columns} isLoading={isLoading} />
+        )}
+
       </div>
     </PageLayout>
   );
