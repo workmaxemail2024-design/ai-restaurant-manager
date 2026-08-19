@@ -51,6 +51,7 @@ export default function StaffPage() {
     first_name: "", last_name: "", role: "waiter", hourly_rate: 0,
     status: "active", location_id: null, email: null, phone: null,
     captiva_operator_code: null, contract_type: "part_time",
+    pay_type: "hourly", annual_salary: null,
     max_hours_per_week: undefined, min_hours_per_week: undefined,
   });
 
@@ -61,14 +62,19 @@ export default function StaffPage() {
 
   // Summary stats
   const activeStaff = staff.filter(s => s.status === "active");
-  const totalWeeklyCost = activeStaff.reduce((sum, s) => sum + (s.hourly_rate * s.max_hours_per_week), 0);
-  const avgRate = activeStaff.length > 0 ? activeStaff.reduce((sum, s) => sum + s.hourly_rate, 0) / activeStaff.length : 0;
+  const hourlyStaff = activeStaff.filter(s => (s.pay_type ?? "hourly") === "hourly");
+  const salariedStaff = activeStaff.filter(s => s.pay_type === "salary");
+  const totalWeeklyCost =
+    hourlyStaff.reduce((sum, s) => sum + (s.hourly_rate * s.max_hours_per_week), 0) +
+    salariedStaff.reduce((sum, s) => sum + salaryDailyCost(s.annual_salary) * 7, 0);
+  const avgRate = hourlyStaff.length > 0 ? hourlyStaff.reduce((sum, s) => sum + s.hourly_rate, 0) / hourlyStaff.length : 0;
 
   const resetForm = () => {
     setForm({
       first_name: "", last_name: "", role: "waiter", hourly_rate: 0,
       status: "active", location_id: null, email: null, phone: null,
       captiva_operator_code: null, contract_type: "part_time",
+      pay_type: "hourly", annual_salary: null,
       max_hours_per_week: undefined, min_hours_per_week: undefined,
     });
     setEditingStaff(null);
@@ -93,6 +99,8 @@ export default function StaffPage() {
       location_id: item.location_id, email: item.email, phone: item.phone,
       captiva_operator_code: item.captiva_operator_code,
       contract_type: item.contract_type || "part_time",
+      pay_type: item.pay_type || "hourly",
+      annual_salary: item.annual_salary ?? null,
       max_hours_per_week: item.max_hours_per_week ?? undefined,
       min_hours_per_week: item.min_hours_per_week ?? undefined,
     });
@@ -133,9 +141,16 @@ export default function StaffPage() {
       )
     },
     {
-      key: "hourly_rate", header: `Rate (${currencySymbol}/h)`,
+      key: "hourly_rate", header: `Pay`,
       render: (item: Staff) => (
-        <span className="font-mono">{formatCurrency(item.hourly_rate)}</span>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="capitalize">{item.pay_type === "salary" ? "Salary" : "Hourly"}</Badge>
+          <span className="font-mono">
+            {item.pay_type === "salary"
+              ? item.annual_salary != null ? `${formatCurrency(item.annual_salary)}/yr` : "—"
+              : `${formatCurrency(item.hourly_rate)}/h`}
+          </span>
+        </div>
       ),
     },
     {
@@ -215,9 +230,37 @@ export default function StaffPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Hourly Rate ({currencySymbol})</Label>
-                  <Input type="number" step="0.01" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: parseFloat(e.target.value) || 0 })} />
+                  <Label>Pay Type</Label>
+                  <Select
+                    value={form.pay_type || "hourly"}
+                    onValueChange={(v) => setForm({ ...form, pay_type: v as PayType })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hourly">Hourly</SelectItem>
+                      <SelectItem value="salary">Salary</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                {form.pay_type === "salary" ? (
+                  <div className="space-y-2">
+                    <Label>Annual Salary ({currencySymbol})</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={form.annual_salary ?? ""}
+                      onChange={(e) => setForm({ ...form, annual_salary: e.target.value === "" ? null : parseFloat(e.target.value) || 0 })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Labour cost is allocated as {SALARY_METHOD_LABEL.toLowerCase()}.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Hourly Rate ({currencySymbol})</Label>
+                    <Input type="number" step="0.01" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Location</Label>
                   <Select value={form.location_id || "_none"} onValueChange={(v) => setForm({ ...form, location_id: v === "_none" ? null : v })}>
