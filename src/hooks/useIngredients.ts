@@ -211,3 +211,9 @@ export function useDeleteIngredient() {
     },
   });
 }
+
+/**
+ * Inventory master alias. Same data as `useIngredients`, named for the wider
+ * model (recipe ingredients + direct-sale products + operational consumables).
+ */
+export const useInventoryItems = useIngredients;
