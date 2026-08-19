@@ -170,7 +170,10 @@ export function useStockVariance(locationId?: string) {
       });
       const usageTotals = new Map<string, number>();
       ((usage || []) as any[]).forEach((u) => {
-        usageTotals.set(u.ingredient_id, Number(u.quantity_used || 0));
+        usageTotals.set(
+          u.ingredient_id,
+          (usageTotals.get(u.ingredient_id) || 0) + Number(u.quantity_used || 0),
+        );
       });
 
       const items: VarianceItem[] = stocks.map((stock) => {

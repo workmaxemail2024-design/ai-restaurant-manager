@@ -94,7 +94,10 @@ export function useInventoryForecast(locationId?: string | null) {
       // Theoretical usage recalculated from sales × recipes (never a stored deduction).
       const usageByIngredient = new Map<string, number>();
       ((usageRes.data || []) as any[]).forEach((u) => {
-        usageByIngredient.set(u.ingredient_id, Number(u.quantity_used || 0));
+        usageByIngredient.set(
+          u.ingredient_id,
+          (usageByIngredient.get(u.ingredient_id) || 0) + Number(u.quantity_used || 0),
+        );
       });
 
       const recipeIngredientIds = new Set(
