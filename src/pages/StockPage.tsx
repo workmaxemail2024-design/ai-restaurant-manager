@@ -139,17 +139,15 @@ export default function StockPage() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label>Ingredient</Label>
-                    <Select value={formData.ingredient_id} onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select ingredient" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ingredients.map((ing) => (
-                          <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Inventory item</Label>
+                    <InventoryItemSelect
+                      value={formData.ingredient_id || undefined}
+                      onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}
+                      placeholder="Select inventory item"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Includes recipe ingredients, direct-sale products and operational consumables.
+                    </p>
                   </div>
                   <div>
                     <Label>Location</Label>
@@ -164,6 +162,7 @@ export default function StockPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div>
                     <Label htmlFor="quantity">Quantity</Label>
                     <Input
