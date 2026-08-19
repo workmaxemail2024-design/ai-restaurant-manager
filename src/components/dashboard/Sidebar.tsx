@@ -78,7 +78,7 @@ const navSections: NavSection[] = [
     title: "Inventory",
     icon: Warehouse,
     items: [
-      { icon: Package, label: "Ingredients", path: "/ingredients" },
+      { icon: Package, label: "Inventory Items", path: "/ingredients" },
       { icon: Warehouse, label: "Stock Levels", path: "/stock" },
       { icon: TrendingUp, label: "Forecasting", path: "/inventory/forecast" },
     ]

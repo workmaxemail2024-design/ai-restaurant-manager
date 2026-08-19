@@ -94,7 +94,7 @@ const navSections: NavSection[] = [
     icon: Warehouse,
     permission: 'inventory',
     items: [
-      { icon: Package, label: "Ingredients", path: "/ingredients", permission: { resource: 'inventory', action: 'view' } },
+      { icon: Package, label: "Inventory Items", path: "/ingredients", permission: { resource: 'inventory', action: 'view' } },
       { icon: Warehouse, label: "Stock Levels", path: "/stock", permission: { resource: 'inventory', action: 'view' } },
       { icon: TrendingUp, label: "Forecasting", path: "/inventory/forecast", permission: { resource: 'ai_features', action: 'view' } },
     ]
