@@ -93,6 +93,10 @@ export default function StockPage() {
             <ClipboardList className="h-4 w-4" />
             Adjustments
           </TabsTrigger>
+          <TabsTrigger value="usage" className="flex items-center gap-2">
+            <Calculator className="h-4 w-4" />
+            Theoretical Usage
+          </TabsTrigger>
           <TabsTrigger value="variance" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             Variance Report
