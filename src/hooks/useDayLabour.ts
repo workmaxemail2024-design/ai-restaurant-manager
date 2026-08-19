@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useRestaurant } from "@/contexts/RestaurantContext";
-import { normalisePayType, salaryDailyCost, describeLabourDerivation, type PayType } from "@/lib/labour";
+import { normalisePayType, normaliseDepartment, salaryDailyCost, describeLabourDerivation, type PayType, type StaffDepartment } from "@/lib/labour";
 
 export interface DayAttendanceRow {
   id: string;
@@ -18,6 +18,7 @@ export interface DayAttendanceRow {
   issue: "open" | "negative" | "long" | null;
   payType: PayType;
   annualSalary: number | null;
+  department: StaffDepartment;
   derivation: string;
 }
 
@@ -27,6 +28,7 @@ export interface SalariedLabourRow {
   staffName: string;
   annualSalary: number | null;
   cost: number;
+  department: StaffDepartment;
   derivation: string;
 }
 
@@ -77,13 +79,13 @@ export function useDayLabour(date: string, locationId: string | null) {
       // staff_safe masks hourly_rate for users without permission
       let staffMap = new Map<
         string,
-        { name: string; rate: number | null; payType: PayType; annualSalary: number | null }
+        { name: string; rate: number | null; payType: PayType; annualSalary: number | null; department: StaffDepartment }
       >();
       let canSeeRates = false;
       if (staffIds.length > 0) {
         const { data: staff } = await supabase
           .from("staff_safe")
-          .select("id, first_name, last_name, hourly_rate, pay_type, annual_salary")
+          .select("id, first_name, last_name, hourly_rate, pay_type, annual_salary, department")
           .in("id", staffIds);
         for (const s of staff ?? []) {
           const rate = (s as any).hourly_rate;
@@ -94,6 +96,7 @@ export function useDayLabour(date: string, locationId: string | null) {
             rate: rate != null ? Number(rate) : null,
             payType: normalisePayType((s as any).pay_type),
             annualSalary: salary != null ? Number(salary) : null,
+            department: normaliseDepartment((s as any).department),
           });
         }
       }
@@ -101,7 +104,7 @@ export function useDayLabour(date: string, locationId: string | null) {
       // Salaried staff are allocated a daily share of salary regardless of attendance.
       let salariedQuery = supabase
         .from("staff_safe")
-        .select("id, first_name, last_name, annual_salary, pay_type, location_id")
+        .select("id, first_name, last_name, annual_salary, pay_type, location_id, department")
         .eq("pay_type", "salary")
         .eq("status", "active");
       if (locationId) salariedQuery = salariedQuery.eq("location_id", locationId);
@@ -115,6 +118,7 @@ export function useDayLabour(date: string, locationId: string | null) {
           staffName: `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim() || "Unknown",
           annualSalary: annual,
           cost: salaryDailyCost(annual),
+          department: normaliseDepartment(s.department),
           derivation: describeLabourDerivation({ payType: "salary", annualSalary: annual, days: 1 }),
         };
       });
@@ -148,6 +152,7 @@ export function useDayLabour(date: string, locationId: string | null) {
           issue: computeIssue(hours, r.clock_out),
           payType,
           annualSalary: info?.annualSalary ?? null,
+          department: info?.department ?? "other",
           derivation: describeLabourDerivation({
             payType,
             hours,

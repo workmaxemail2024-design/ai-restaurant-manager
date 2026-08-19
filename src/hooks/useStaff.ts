@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { normalisePayType, type PayType } from "@/lib/labour";
+import { normalisePayType, normaliseDepartment, type PayType, type StaffDepartment } from "@/lib/labour";
 
 export type StaffRole = "chef" | "waiter" | "manager" | "host" | "bartender" | "kitchen_assistant" | "cleaner";
 export type StaffStatus = "active" | "inactive" | "on_leave";
 export type AttendanceSource = "manual" | "pos" | "auto";
 export type ContractType = "full_time" | "part_time" | "casual";
-export type { PayType };
+export type { PayType, StaffDepartment };
 
 export interface Staff {
   id: string;
@@ -23,6 +23,7 @@ export interface Staff {
   contract_type: ContractType;
   pay_type: PayType;
   annual_salary: number | null;
+  department: StaffDepartment;
   max_hours_per_week: number;
   min_hours_per_week: number | null;
   created_at: string;
@@ -81,6 +82,7 @@ export type StaffInsert = {
   contract_type?: ContractType;
   pay_type?: PayType;
   annual_salary?: number | null;
+  department?: StaffDepartment | null;
   max_hours_per_week?: number;
   min_hours_per_week?: number | null;
 };
@@ -123,6 +125,7 @@ export function useStaff(locationId?: string | null) {
         contract_type: (s as any).contract_type || 'full_time',
         pay_type: normalisePayType((s as any).pay_type),
         annual_salary: (s as any).annual_salary ?? null,
+        department: normaliseDepartment((s as any).department),
         hourly_rate: Number((s as any).hourly_rate ?? 0),
         max_hours_per_week: (s as any).max_hours_per_week ?? 40,
         min_hours_per_week: (s as any).min_hours_per_week ?? null,
