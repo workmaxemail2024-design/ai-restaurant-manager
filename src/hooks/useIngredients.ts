@@ -18,6 +18,9 @@ export interface Ingredient {
   pack_size: number | null;
   pack_unit: PackUnit | null;
   cost_per_pack: number | null;
+  reorder_point: number | null;
+  par_level: number | null;
+  shelf_life_days: number | null;
   created_at: string;
   updated_at: string;
   suppliers?: { name: string } | null;
@@ -33,6 +36,9 @@ export type IngredientInsert = {
   pack_size?: number | null;
   pack_unit?: PackUnit | null;
   cost_per_pack?: number | null;
+  reorder_point?: number | null;
+  par_level?: number | null;
+  shelf_life_days?: number | null;
 };
 
 // Calculate cost per base unit (g for weight, ml for volume, each for count)
