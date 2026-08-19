@@ -11,7 +11,8 @@ import { Plus, Package, ClipboardList, BarChart3, Calculator } from "lucide-reac
 import { EmptyState } from "@/components/common/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { useStockLevels, useUpdateStock, StockLevel } from "@/hooks/useStock";
-import { useIngredients } from "@/hooks/useIngredients";
+import { useIngredients, itemTypeLabel } from "@/hooks/useIngredients";
+import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
