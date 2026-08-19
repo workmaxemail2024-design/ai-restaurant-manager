@@ -31,6 +31,7 @@ export interface ForecastRow {
   wastageReason: string;
   reorderQty: number | null;
   hasRecipeLink: boolean;
+  itemType: string;
 }
 
 export interface ForecastResult {
@@ -57,7 +58,7 @@ export function useInventoryForecast(locationId?: string | null) {
       const [ingredientsRes, stockRes, usageRes, posDaysRes, recipeRes] = await Promise.all([
         supabase
           .from("ingredients")
-          .select("id, name, unit, reorder_point, par_level, shelf_life_days")
+          .select("id, name, unit, reorder_point, par_level, shelf_life_days, item_type, linked_dish_id")
           .order("name"),
         supabase.from("stock_levels").select("ingredient_id, location_id, quantity"),
         supabase.rpc("get_theoretical_usage", {
@@ -144,7 +145,15 @@ export function useInventoryForecast(locationId?: string | null) {
           wastageRisk: risk,
           wastageReason: reason,
           reorderQty,
-          hasRecipeLink: recipeIngredientIds.has(ing.id),
+          // Direct-sale items are "linked" through their POS product, operational
+          // consumables never need a recipe link.
+          hasRecipeLink:
+            ing.item_type === "direct_sale"
+              ? !!ing.linked_dish_id
+              : ing.item_type === "operational"
+                ? true
+                : recipeIngredientIds.has(ing.id),
+          itemType: ing.item_type || "recipe_ingredient",
         };
       });
 
