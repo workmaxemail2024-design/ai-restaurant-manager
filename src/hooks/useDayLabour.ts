@@ -193,3 +193,43 @@ export function useUpdateAttendanceTimes() {
       toast({ title: "Could not update attendance", description: e.message, variant: "destructive" }),
   });
 }
+
+/**
+ * Record actual worked hours for one staff member on a past day when no POS
+ * attendance was imported. Stored as a normal manual attendance record so all
+ * existing labour calculations apply unchanged.
+ */
+export function useAddManualAttendance() {
+  const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
+  return useMutation({
+    mutationFn: async (input: {
+      staff_id: string;
+      location_id: string;
+      date: string;
+      hours: number;
+    }) => {
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
+      const clockIn = new Date(`${input.date}T09:00:00`);
+      const clockOut = new Date(clockIn.getTime() + input.hours * 3_600_000);
+      const { error } = await supabase.from("staff_attendance").insert({
+        restaurant_id: currentRestaurant.id,
+        staff_id: input.staff_id,
+        location_id: input.location_id,
+        clock_in: clockIn.toISOString(),
+        clock_out: clockOut.toISOString(),
+        source: "manual",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["day-labour"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      toast({ title: "Labour hours recorded" });
+    },
+    onError: (e: Error) =>
+      toast({ title: "Could not record hours", description: e.message, variant: "destructive" }),
+  });
+}
+
