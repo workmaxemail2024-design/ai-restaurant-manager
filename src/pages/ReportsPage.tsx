@@ -56,6 +56,7 @@ import {
 } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
 
 // ─── Missing field labels ───
 const MISSING_LABELS: Record<MissingField, string> = {
@@ -933,7 +934,7 @@ export default function ReportsPage() {
       if (!restaurantId) return new Map<string, { hours: number; cost: number }>();
       let q = supabase
         .from("staff_attendance")
-        .select("clock_in, clock_out, staff_id, staff(hourly_rate)")
+        .select("clock_in, clock_out, staff_id, staff(hourly_rate, pay_type, annual_salary)")
         .eq("restaurant_id", restaurantId)
         .gte("clock_in", `${startDate}T00:00:00`)
         .lte("clock_in", `${endDate}T23:59:59`)
@@ -943,11 +944,24 @@ export default function ReportsPage() {
       const dayMap = new Map<string, { hours: number; cost: number }>();
       for (const rec of data || []) {
         if (!rec.clock_in || !rec.clock_out) continue;
+        if (isSalariedStaffRow(rec.staff)) continue;
         const day = rec.clock_in.split("T")[0];
         const hours = (new Date(rec.clock_out).getTime() - new Date(rec.clock_in).getTime()) / (1000 * 60 * 60);
         const rate = Number((rec.staff as any)?.hourly_rate) || 0;
         const existing = dayMap.get(day) || { hours: 0, cost: 0 };
         dayMap.set(day, { hours: existing.hours + hours, cost: existing.cost + hours * rate });
+      }
+      // Salaried staff: allocate an equal daily share to every day in the range.
+      const alloc = await fetchSalaryAllocation(restaurantId, selectedLocationId ?? null, startDate, endDate);
+      if (alloc.perDay > 0) {
+        const cursor = new Date(`${startDate}T00:00:00`);
+        const last = new Date(`${endDate}T00:00:00`);
+        while (cursor <= last) {
+          const day = cursor.toISOString().split("T")[0];
+          const existing = dayMap.get(day) || { hours: 0, cost: 0 };
+          dayMap.set(day, { hours: existing.hours, cost: existing.cost + alloc.perDay });
+          cursor.setDate(cursor.getDate() + 1);
+        }
       }
       return dayMap;
     },
