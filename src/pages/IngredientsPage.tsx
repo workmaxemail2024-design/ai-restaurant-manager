@@ -23,6 +23,7 @@ import {
   getBaseUnit
 } from "@/hooks/useIngredients";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { formatCurrency } from "@/lib/currency";
 
 const unitOptions: UnitType[] = ["kg", "g", "L", "ml", "oz", "each"];
