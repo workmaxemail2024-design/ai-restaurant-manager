@@ -197,13 +197,16 @@ export default function AttendancePage() {
 
   return (
     <PageLayout
-      title="Attendance"
-      description="Actual labour worked — clock-in/out records that drive cost calculations"
+      title="Actual Labour / Attendance"
+      description="Actual hours worked — imported from Captiva POS where available, or reviewed and entered manually after the day"
       action={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><LogIn className="mr-2 h-4 w-4" /> Clock In</Button>
+            <Button size="sm" variant="outline">
+              <LogIn className="mr-2 h-4 w-4" /> Clock In (optional)
+            </Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle>Clock In Staff</DialogTitle>
