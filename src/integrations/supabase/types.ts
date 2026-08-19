@@ -732,6 +732,8 @@ export type Database = {
           created_at: string
           default_cost_price: number
           id: string
+          item_type: string
+          linked_dish_id: string | null
           name: string
           pack_size: number | null
           pack_unit: string | null
@@ -750,6 +752,8 @@ export type Database = {
           created_at?: string
           default_cost_price?: number
           id?: string
+          item_type?: string
+          linked_dish_id?: string | null
           name: string
           pack_size?: number | null
           pack_unit?: string | null
@@ -768,6 +772,8 @@ export type Database = {
           created_at?: string
           default_cost_price?: number
           id?: string
+          item_type?: string
+          linked_dish_id?: string | null
           name?: string
           pack_size?: number | null
           pack_unit?: string | null
@@ -782,6 +788,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ingredients_linked_dish_id_fkey"
+            columns: ["linked_dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ingredients_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -2704,6 +2717,7 @@ export type Database = {
           ingredient_id: string
           ingredient_name: string
           quantity_used: number
+          usage_source: string
         }[]
       }
       get_user_permissions: { Args: never; Returns: Json }

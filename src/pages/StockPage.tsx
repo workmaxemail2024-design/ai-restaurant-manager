@@ -11,7 +11,8 @@ import { Plus, Package, ClipboardList, BarChart3, Calculator } from "lucide-reac
 import { EmptyState } from "@/components/common/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { useStockLevels, useUpdateStock, StockLevel } from "@/hooks/useStock";
-import { useIngredients } from "@/hooks/useIngredients";
+import { useIngredients, itemTypeLabel } from "@/hooks/useIngredients";
+import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
@@ -33,14 +34,22 @@ export default function StockPage() {
   const columns = [
     { 
       key: "ingredients", 
-      header: "Ingredient",
+      header: "Item",
       render: (item: StockLevel) => item.ingredients?.name || "-"
+    },
+    {
+      key: "item_type",
+      header: "Type",
+      render: (item: StockLevel) => (
+        <Badge variant="secondary">{itemTypeLabel(item.ingredients?.item_type)}</Badge>
+      ),
     },
     { 
       key: "locations", 
       header: "Location",
       render: (item: StockLevel) => item.locations?.name || "-"
     },
+
     { 
       key: "quantity", 
       header: "Quantity",
@@ -103,7 +112,7 @@ export default function StockPage() {
   };
 
   return (
-    <PageLayout title="Inventory / Stock" subtitle="Monitor stock levels, adjustments, and variances">
+    <PageLayout title="Inventory / Stock" subtitle="All inventory items — ingredients, direct-sale products and consumables">
       <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes"]} className="mb-4" />
       <Tabs defaultValue="levels" className="space-y-4">
         <TabsList>
@@ -139,17 +148,15 @@ export default function StockPage() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label>Ingredient</Label>
-                    <Select value={formData.ingredient_id} onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select ingredient" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ingredients.map((ing) => (
-                          <SelectItem key={ing.id} value={ing.id}>{ing.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Inventory item</Label>
+                    <InventoryItemSelect
+                      value={formData.ingredient_id || undefined}
+                      onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}
+                      placeholder="Select inventory item"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Includes recipe ingredients, direct-sale products and operational consumables.
+                    </p>
                   </div>
                   <div>
                     <Label>Location</Label>
@@ -164,6 +171,7 @@ export default function StockPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
                   <div>
                     <Label htmlFor="quantity">Quantity</Label>
                     <Input
@@ -186,9 +194,10 @@ export default function StockPage() {
           </div>
 
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-            Physical stock on hand. Imported sales are never deducted from these figures — see
-            Theoretical Usage for consumption derived from recipes. Low and Critical only appear once a
-            reorder point is set on the ingredient.
+            Physical stock on hand for every inventory item — recipe ingredients, direct-sale products and
+            operational consumables. Imported sales are never deducted from these figures — see
+            Theoretical Usage for consumption derived from recipes and direct-sale mappings. Low and
+            Critical only appear once a reorder point is set on the item.
           </div>
 
           <DataTable

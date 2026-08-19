@@ -7,6 +7,44 @@ export type StorageType = "freezer" | "fridge" | "dry";
 export type PackUnit = "each" | "g" | "kg" | "ml" | "L";
 export type PurchaseUnit = "each" | "g" | "kg" | "ml" | "L" | "case";
 
+/**
+ * Inventory item classification. The inventory master holds ALL restaurant stock,
+ * not just food used in recipes. Existing records default to `recipe_ingredient`
+ * so current recipes and theoretical usage keep working unchanged.
+ */
+export type InventoryItemType = "recipe_ingredient" | "direct_sale" | "operational";
+
+export const INVENTORY_ITEM_TYPES: {
+  value: InventoryItemType;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "recipe_ingredient",
+    label: "Recipe ingredient",
+    description: "Used inside dish recipes (chicken breast, cream, potatoes). Usage = dish sales × recipe quantity.",
+  },
+  {
+    value: "direct_sale",
+    label: "Direct sale item",
+    description: "Sold as-is (bottled beer, wine, cans). Usage = quantity sold on the POS — no recipe needed.",
+  },
+  {
+    value: "operational",
+    label: "Operational / consumable",
+    description: "Napkins, takeaway boxes, cleaning chemicals. Usage comes from manual adjustments and counts.",
+  },
+];
+
+export function itemTypeLabel(t?: InventoryItemType | string | null): string {
+  return INVENTORY_ITEM_TYPES.find((i) => i.value === t)?.label || "Recipe ingredient";
+}
+
+/** Only recipe ingredients may be added to a dish recipe. */
+export function isRecipeIngredient(item: { item_type?: string | null }): boolean {
+  return (item.item_type ?? "recipe_ingredient") === "recipe_ingredient";
+}
+
 export interface Ingredient {
   id: string;
   name: string;
@@ -14,6 +52,8 @@ export interface Ingredient {
   supplier_id: string | null;
   storage_type: StorageType;
   default_cost_price: number;
+  item_type: InventoryItemType;
+  linked_dish_id: string | null;
   purchase_unit: PurchaseUnit | null;
   pack_size: number | null;
   pack_unit: PackUnit | null;
@@ -32,6 +72,8 @@ export type IngredientInsert = {
   supplier_id?: string | null;
   storage_type: StorageType;
   default_cost_price: number;
+  item_type?: InventoryItemType;
+  linked_dish_id?: string | null;
   purchase_unit?: PurchaseUnit | null;
   pack_size?: number | null;
   pack_unit?: PackUnit | null;
@@ -40,6 +82,7 @@ export type IngredientInsert = {
   par_level?: number | null;
   shelf_life_days?: number | null;
 };
+
 
 // Calculate cost per base unit (g for weight, ml for volume, each for count)
 export function calculateBaseCost(ingredient: Ingredient): number {
@@ -168,3 +211,9 @@ export function useDeleteIngredient() {
     },
   });
 }
+
+/**
+ * Inventory master alias. Same data as `useIngredients`, named for the wider
+ * model (recipe ingredients + direct-sale products + operational consumables).
+ */
+export const useInventoryItems = useIngredients;

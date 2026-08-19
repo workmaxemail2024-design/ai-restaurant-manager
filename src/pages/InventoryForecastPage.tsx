@@ -196,7 +196,7 @@ export default function InventoryForecastPage() {
               <BarChart3 className="h-5 w-5" /> Days Until Stockout
             </CardTitle>
             <CardDescription>
-              Only ingredients with enough usage history are shown
+              Only inventory items with enough usage history are shown
               {unforecastable > 0 ? ` — ${unforecastable} excluded for insufficient usage data` : ""}
             </CardDescription>
           </CardHeader>
@@ -224,9 +224,9 @@ export default function InventoryForecastPage() {
               </ResponsiveContainer>
             ) : (
               <div className="h-[300px] flex flex-col items-center justify-center text-center text-muted-foreground">
-                <p>No ingredient has enough usage history to forecast a stockout date.</p>
+                <p>No inventory item has enough usage history to forecast a stockout date.</p>
                 <p className="text-sm">
-                  Record at least {MIN_USAGE_DAYS} days of sales and link dish recipes to ingredients.
+                  Record at least {MIN_USAGE_DAYS} days of sales, and link recipes or direct-sale products to inventory items.
                 </p>
               </div>
             )}
@@ -240,7 +240,7 @@ export default function InventoryForecastPage() {
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5" /> AI Analysis
               </CardTitle>
-              <CardDescription>Based only on ingredients with sufficient usage history</CardDescription>
+              <CardDescription>Based only on inventory items with sufficient usage history</CardDescription>
             </div>
             <Button onClick={generateAIInsight} disabled={loadingInsight || forecastableItems.length === 0}>
               {loadingInsight ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -267,7 +267,7 @@ export default function InventoryForecastPage() {
               <Calendar className="h-5 w-5" /> Stock & Reorder Detail
             </CardTitle>
             <CardDescription>
-              Stock on hand is physical. Usage is recalculated from sales × recipes and never deducted
+              Stock on hand is physical. Usage is recalculated from sales — recipes for ingredients, units sold for direct-sale items — and never deducted
               from stock.
             </CardDescription>
           </CardHeader>
@@ -276,7 +276,7 @@ export default function InventoryForecastPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="text-left py-2">Ingredient</th>
+                    <th className="text-left py-2">Item</th>
                     <th className="text-right py-2">Stock on hand</th>
                     <th className="text-right py-2">Reorder point</th>
                     <th className="text-right py-2">Avg daily usage</th>
@@ -365,7 +365,7 @@ export default function InventoryForecastPage() {
                 </tbody>
               </table>
               {rows.length === 0 && !isLoading && (
-                <p className="text-center py-8 text-muted-foreground">No ingredients recorded yet.</p>
+                <p className="text-center py-8 text-muted-foreground">No inventory items recorded yet.</p>
               )}
             </div>
           </CardContent>

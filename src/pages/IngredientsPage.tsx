@@ -20,8 +20,12 @@ import {
   PackUnit,
   PurchaseUnit,
   calculateBaseCost,
-  getBaseUnit
+  getBaseUnit,
+  INVENTORY_ITEM_TYPES,
+  itemTypeLabel,
+  type InventoryItemType
 } from "@/hooks/useIngredients";
+import { useDishes } from "@/hooks/useDishes";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { formatCurrency } from "@/lib/currency";
@@ -38,6 +42,7 @@ interface FormData extends IngredientInsert {
 export default function IngredientsPage() {
   const { data: ingredients = [], isLoading } = useIngredients();
   const { data: suppliers = [] } = useSuppliers();
+  const { data: dishes = [] } = useDishes();
   const createIngredient = useCreateIngredient();
   const updateIngredient = useUpdateIngredient();
   const deleteIngredient = useDeleteIngredient();
@@ -48,6 +53,8 @@ export default function IngredientsPage() {
     name: "", 
     unit: "each", 
     storage_type: "dry", 
+    item_type: "recipe_ingredient", 
+    linked_dish_id: null, 
     default_cost_price: 0,
     use_pack_pricing: false,
     pack_size: null,
@@ -77,6 +84,13 @@ export default function IngredientsPage() {
 
   const columns = [
     { key: "name", header: "Name" },
+    {
+      key: "item_type",
+      header: "Type",
+      render: (item: Ingredient) => (
+        <Badge variant="outline">{itemTypeLabel(item.item_type)}</Badge>
+      )
+    },
     { key: "unit", header: "Unit" },
     { 
       key: "storage_type", 
@@ -117,6 +131,8 @@ export default function IngredientsPage() {
       name: formData.name,
       unit: formData.unit,
       storage_type: formData.storage_type,
+      item_type: formData.item_type,
+      linked_dish_id: formData.item_type === "direct_sale" ? formData.linked_dish_id ?? null : null,
       supplier_id: formData.supplier_id,
       default_cost_price: formData.use_pack_pricing ? calculatedBaseCost : formData.default_cost_price,
       pack_size: formData.use_pack_pricing ? formData.pack_size : null,
@@ -143,6 +159,8 @@ export default function IngredientsPage() {
       name: item.name, 
       unit: item.unit, 
       storage_type: item.storage_type,
+      item_type: (item.item_type as InventoryItemType) || "recipe_ingredient",
+      linked_dish_id: item.linked_dish_id ?? null,
       supplier_id: item.supplier_id,
       default_cost_price: Number(item.default_cost_price),
       use_pack_pricing: hasPackPricing,
@@ -164,6 +182,8 @@ export default function IngredientsPage() {
       name: "", 
       unit: "each", 
       storage_type: "dry", 
+      item_type: "recipe_ingredient", 
+      linked_dish_id: null, 
       default_cost_price: 0,
       use_pack_pricing: false,
       pack_size: null,
@@ -180,17 +200,17 @@ export default function IngredientsPage() {
   const costError = formData.use_pack_pricing && formData.cost_per_pack !== null && formData.cost_per_pack < 0;
 
   return (
-    <PageLayout title="Ingredients" subtitle="Manage your inventory ingredients">
+    <PageLayout title="Inventory Items" subtitle="Ingredients, direct-sale products and operational consumables">
       <div className="flex justify-end mb-4">
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>
             <Button onClick={() => setIsOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" /> Add Ingredient
+              <Plus className="h-4 w-4 mr-2" /> Add Inventory Item
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{editingItem ? "Edit Ingredient" : "Add Ingredient"}</DialogTitle>
+              <DialogTitle>{editingItem ? "Edit Inventory Item" : "Add Inventory Item"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -202,6 +222,49 @@ export default function IngredientsPage() {
                   required
                 />
               </div>
+              <div>
+                <Label>Item type</Label>
+                <Select
+                  value={formData.item_type || "recipe_ingredient"}
+                  onValueChange={(v: InventoryItemType) => setFormData({ ...formData, item_type: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INVENTORY_ITEM_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {INVENTORY_ITEM_TYPES.find((t) => t.value === (formData.item_type || "recipe_ingredient"))?.description}
+                </p>
+              </div>
+
+              {formData.item_type === "direct_sale" && (
+                <div>
+                  <Label>Linked sale product (optional)</Label>
+                  <Select
+                    value={formData.linked_dish_id || "_none"}
+                    onValueChange={(v) => setFormData({ ...formData, linked_dish_id: v === "_none" ? null : v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select product" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      <SelectItem value="_none">Not linked</SelectItem>
+                      {dishes.map((d: any) => (
+                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Link the POS product so 1 unit sold counts as 1 unit consumed — no fake recipe needed.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Recipe Unit</Label>
@@ -336,7 +399,7 @@ export default function IngredientsPage() {
                   <p className="text-sm font-medium">Stock thresholds (optional)</p>
                   <p className="text-xs text-muted-foreground">
                     Low and Critical alerts, reorder suggestions and wastage risk only appear for
-                    ingredients where these are set.
+                    items where these are set.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">

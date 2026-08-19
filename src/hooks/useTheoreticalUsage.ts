@@ -3,7 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 
 /**
- * Theoretical ingredient consumption derived from recorded sales × recipe quantities.
+ * Theoretical consumption derived from recorded sales.
+
+ * - Recipe ingredients: dish sales × recipe quantity.
+ * - Direct sale items: POS quantity sold (1 bottle sold = 1 bottle consumed).
+ * - Operational consumables: no sales source; they move via adjustments/counts only.
  *
  * This is ALWAYS recalculated from the authoritative `sales` rows — it never writes
  * stock deductions — so re-importing / re-syncing the same Captiva sales data can
@@ -17,6 +21,8 @@ export interface TheoreticalUsageRow {
   quantity_used: number;
   cost: number;
   dishes_sold: number;
+  /** 'recipe' = dish sales × recipe qty; 'direct_sale' = POS units sold. */
+  usage_source: "recipe" | "direct_sale";
 }
 
 export function useTheoreticalUsage(params: {
@@ -50,6 +56,7 @@ export function useTheoreticalUsage(params: {
         quantity_used: Number(r.quantity_used || 0),
         cost: Number(r.cost || 0),
         dishes_sold: Number(r.dishes_sold || 0),
+        usage_source: (r.usage_source || "recipe") as "recipe" | "direct_sale",
       })) as TheoreticalUsageRow[];
     },
   });

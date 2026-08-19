@@ -31,6 +31,7 @@ export interface ForecastRow {
   wastageReason: string;
   reorderQty: number | null;
   hasRecipeLink: boolean;
+  itemType: string;
 }
 
 export interface ForecastResult {
@@ -57,7 +58,7 @@ export function useInventoryForecast(locationId?: string | null) {
       const [ingredientsRes, stockRes, usageRes, posDaysRes, recipeRes] = await Promise.all([
         supabase
           .from("ingredients")
-          .select("id, name, unit, reorder_point, par_level, shelf_life_days")
+          .select("id, name, unit, reorder_point, par_level, shelf_life_days, item_type, linked_dish_id")
           .order("name"),
         supabase.from("stock_levels").select("ingredient_id, location_id, quantity"),
         supabase.rpc("get_theoretical_usage", {
@@ -93,7 +94,10 @@ export function useInventoryForecast(locationId?: string | null) {
       // Theoretical usage recalculated from sales × recipes (never a stored deduction).
       const usageByIngredient = new Map<string, number>();
       ((usageRes.data || []) as any[]).forEach((u) => {
-        usageByIngredient.set(u.ingredient_id, Number(u.quantity_used || 0));
+        usageByIngredient.set(
+          u.ingredient_id,
+          (usageByIngredient.get(u.ingredient_id) || 0) + Number(u.quantity_used || 0),
+        );
       });
 
       const recipeIngredientIds = new Set(
@@ -144,7 +148,15 @@ export function useInventoryForecast(locationId?: string | null) {
           wastageRisk: risk,
           wastageReason: reason,
           reorderQty,
-          hasRecipeLink: recipeIngredientIds.has(ing.id),
+          // Direct-sale items are "linked" through their POS product, operational
+          // consumables never need a recipe link.
+          hasRecipeLink:
+            ing.item_type === "direct_sale"
+              ? !!ing.linked_dish_id
+              : ing.item_type === "operational"
+                ? true
+                : recipeIngredientIds.has(ing.id),
+          itemType: ing.item_type || "recipe_ingredient",
         };
       });
 
@@ -161,18 +173,18 @@ export function useInventoryForecast(locationId?: string | null) {
         },
         {
           key: "recipes",
-          label: "Recipes linked to ingredients",
+          label: "Usage sources linked",
           ok: recipeIngredientIds.size > 0,
           detail:
             recipeIngredientIds.size > 0
-              ? `${recipeIngredientIds.size} ingredients are used in dish recipes.`
-              : "No dish recipes reference ingredients, so usage cannot be derived.",
+              ? `${recipeIngredientIds.size} items are used in dish recipes; direct-sale items use their POS product.`
+              : "No dish recipes or direct-sale product links exist, so usage cannot be derived.",
         },
         {
           key: "counts",
           label: "Physical stock counts",
           ok: withStock > 0,
-          detail: `${withStock} of ${rows.length} ingredients have a recorded stock level.`,
+          detail: `${withStock} of ${rows.length} inventory items have a recorded stock level.`,
         },
         {
           key: "thresholds",
