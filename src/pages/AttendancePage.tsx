@@ -11,6 +11,7 @@ import { useStaffShifts } from "@/hooks/useShifts";
 import { useLocations } from "@/hooks/useLocations";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { useLocation } from "@/contexts/LocationContext";
+import { LabourEvidenceCard } from "@/components/dashboard/LabourEvidenceCard";
 import { format, parseISO, differenceInMinutes } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/currency";
@@ -241,6 +242,8 @@ export default function AttendancePage() {
       }
     >
       <div className="space-y-4">
+        <LabourEvidenceCard date={startDate} locationId={selectedLocationId ?? null} />
+
         {/* Planned vs Actual Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           <Card>
