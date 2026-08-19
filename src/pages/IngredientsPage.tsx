@@ -53,7 +53,10 @@ export default function IngredientsPage() {
     pack_size: null,
     pack_unit: "kg",
     cost_per_pack: null,
-    purchase_unit: "each"
+    purchase_unit: "each",
+    reorder_point: null,
+    par_level: null,
+    shelf_life_days: null
   });
 
   // Calculate base cost from form data for preview
@@ -119,7 +122,10 @@ export default function IngredientsPage() {
       pack_size: formData.use_pack_pricing ? formData.pack_size : null,
       pack_unit: formData.use_pack_pricing ? formData.pack_unit : null,
       cost_per_pack: formData.use_pack_pricing ? formData.cost_per_pack : null,
-      purchase_unit: formData.purchase_unit
+      purchase_unit: formData.purchase_unit,
+      reorder_point: formData.reorder_point ?? null,
+      par_level: formData.par_level ?? null,
+      shelf_life_days: formData.shelf_life_days ?? null
     };
     
     if (editingItem) {
@@ -143,7 +149,10 @@ export default function IngredientsPage() {
       pack_size: item.pack_size ? Number(item.pack_size) : null,
       pack_unit: (item.pack_unit as PackUnit) || "kg",
       cost_per_pack: item.cost_per_pack ? Number(item.cost_per_pack) : null,
-      purchase_unit: (item.purchase_unit as PurchaseUnit) || "each"
+      purchase_unit: (item.purchase_unit as PurchaseUnit) || "each",
+      reorder_point: item.reorder_point !== null && item.reorder_point !== undefined ? Number(item.reorder_point) : null,
+      par_level: item.par_level !== null && item.par_level !== undefined ? Number(item.par_level) : null,
+      shelf_life_days: item.shelf_life_days ?? null
     });
     setIsOpen(true);
   };
@@ -160,7 +169,10 @@ export default function IngredientsPage() {
       pack_size: null,
       pack_unit: "kg",
       cost_per_pack: null,
-      purchase_unit: "each"
+      purchase_unit: "each",
+      reorder_point: null,
+      par_level: null,
+      shelf_life_days: null
     });
   };
 
@@ -318,6 +330,54 @@ export default function IngredientsPage() {
                   <p className="text-xs text-muted-foreground mt-1">Direct cost per {formData.unit}</p>
                 </div>
               )}
+
+              <div className="rounded-md border p-3 space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Stock thresholds (optional)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Low and Critical alerts, reorder suggestions and wastage risk only appear for
+                    ingredients where these are set.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="reorder_point">Reorder point ({formData.unit})</Label>
+                    <Input
+                      id="reorder_point"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Not set"
+                      value={formData.reorder_point ?? ""}
+                      onChange={(e) => setFormData({ ...formData, reorder_point: e.target.value ? parseFloat(e.target.value) : null })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="par_level">Par level ({formData.unit})</Label>
+                    <Input
+                      id="par_level"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Not set"
+                      value={formData.par_level ?? ""}
+                      onChange={(e) => setFormData({ ...formData, par_level: e.target.value ? parseFloat(e.target.value) : null })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="shelf_life_days">Shelf life (days)</Label>
+                  <Input
+                    id="shelf_life_days"
+                    type="number"
+                    step="1"
+                    min="0"
+                    placeholder="Not set"
+                    value={formData.shelf_life_days ?? ""}
+                    onChange={(e) => setFormData({ ...formData, shelf_life_days: e.target.value ? parseInt(e.target.value, 10) : null })}
+                  />
+                </div>
+              </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
