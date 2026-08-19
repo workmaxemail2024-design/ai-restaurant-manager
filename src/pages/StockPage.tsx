@@ -112,7 +112,7 @@ export default function StockPage() {
   };
 
   return (
-    <PageLayout title="Inventory / Stock" subtitle="Monitor stock levels, adjustments, and variances">
+    <PageLayout title="Inventory / Stock" subtitle="All inventory items — ingredients, direct-sale products and consumables">
       <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes"]} className="mb-4" />
       <Tabs defaultValue="levels" className="space-y-4">
         <TabsList>
@@ -194,9 +194,10 @@ export default function StockPage() {
           </div>
 
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-            Physical stock on hand. Imported sales are never deducted from these figures — see
-            Theoretical Usage for consumption derived from recipes. Low and Critical only appear once a
-            reorder point is set on the ingredient.
+            Physical stock on hand for every inventory item — recipe ingredients, direct-sale products and
+            operational consumables. Imported sales are never deducted from these figures — see
+            Theoretical Usage for consumption derived from recipes and direct-sale mappings. Low and
+            Critical only appear once a reorder point is set on the item.
           </div>
 
           <DataTable

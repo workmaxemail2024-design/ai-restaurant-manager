@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, AlertTriangle, Package } from "lucide-react";
 import { useStockAdjustments, useCreateStockAdjustment, AdjustmentType } from "@/hooks/useStockAdjustments";
-import { useIngredients } from "@/hooks/useIngredients";
+import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { format } from "date-fns";
@@ -26,7 +26,6 @@ const ADJUSTMENT_TYPES: { value: AdjustmentType; label: string; color: string }[
 export function StockAdjustmentLog() {
   const { selectedLocationId } = useLocation();
   const { data: adjustments = [], isLoading } = useStockAdjustments(selectedLocationId);
-  const { data: ingredients = [] } = useIngredients();
   const { data: locations = [] } = useLocations();
   const createAdjustment = useCreateStockAdjustment();
 
@@ -87,22 +86,11 @@ export function StockAdjustmentLog() {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <Label>Ingredient</Label>
-                <Select
-                  value={formData.ingredient_id}
+                <Label>Inventory item</Label>
+                <InventoryItemSelect
+                  value={formData.ingredient_id || undefined}
                   onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select ingredient" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ingredients.map((ing) => (
-                      <SelectItem key={ing.id} value={ing.id}>
-                        {ing.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
 
               <div>
