@@ -2000,6 +2000,7 @@ export type Database = {
       }
       staff: {
         Row: {
+          annual_salary: number | null
           captiva_operator_code: string | null
           contract_type: Database["public"]["Enums"]["contract_type"]
           created_at: string
@@ -2011,6 +2012,7 @@ export type Database = {
           location_id: string | null
           max_hours_per_week: number
           min_hours_per_week: number | null
+          pay_type: Database["public"]["Enums"]["pay_type"]
           phone: string | null
           restaurant_id: string | null
           role: Database["public"]["Enums"]["staff_role"]
@@ -2018,6 +2020,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          annual_salary?: number | null
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
@@ -2029,6 +2032,7 @@ export type Database = {
           location_id?: string | null
           max_hours_per_week?: number
           min_hours_per_week?: number | null
+          pay_type?: Database["public"]["Enums"]["pay_type"]
           phone?: string | null
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"]
@@ -2036,6 +2040,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          annual_salary?: number | null
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
@@ -2047,6 +2052,7 @@ export type Database = {
           location_id?: string | null
           max_hours_per_week?: number
           min_hours_per_week?: number | null
+          pay_type?: Database["public"]["Enums"]["pay_type"]
           phone?: string | null
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"]
@@ -2562,6 +2568,7 @@ export type Database = {
       }
       staff_safe: {
         Row: {
+          annual_salary: number | null
           captiva_operator_code: string | null
           contract_type: Database["public"]["Enums"]["contract_type"] | null
           created_at: string | null
@@ -2573,6 +2580,7 @@ export type Database = {
           location_id: string | null
           max_hours_per_week: number | null
           min_hours_per_week: number | null
+          pay_type: Database["public"]["Enums"]["pay_type"] | null
           phone: string | null
           restaurant_id: string | null
           role: Database["public"]["Enums"]["staff_role"] | null
@@ -2580,6 +2588,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          annual_salary?: never
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"] | null
           created_at?: string | null
@@ -2591,6 +2600,7 @@ export type Database = {
           location_id?: string | null
           max_hours_per_week?: number | null
           min_hours_per_week?: number | null
+          pay_type?: Database["public"]["Enums"]["pay_type"] | null
           phone?: never
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
@@ -2598,6 +2608,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          annual_salary?: never
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"] | null
           created_at?: string | null
@@ -2609,6 +2620,7 @@ export type Database = {
           location_id?: string | null
           max_hours_per_week?: number | null
           min_hours_per_week?: number | null
+          pay_type?: Database["public"]["Enums"]["pay_type"] | null
           phone?: never
           restaurant_id?: string | null
           role?: Database["public"]["Enums"]["staff_role"] | null
@@ -2696,6 +2708,7 @@ export type Database = {
     Enums: {
       attendance_source: "manual" | "pos" | "auto"
       contract_type: "full_time" | "part_time" | "casual"
+      pay_type: "hourly" | "salary"
       reservation_source: "phone" | "walk_in" | "online" | "staff"
       reservation_status:
         | "inquiry"
@@ -2848,6 +2861,7 @@ export const Constants = {
     Enums: {
       attendance_source: ["manual", "pos", "auto"],
       contract_type: ["full_time", "part_time", "casual"],
+      pay_type: ["hourly", "salary"],
       reservation_source: ["phone", "walk_in", "online", "staff"],
       reservation_status: [
         "inquiry",
