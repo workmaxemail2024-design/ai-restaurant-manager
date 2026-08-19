@@ -16,6 +16,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
 import { VarianceReport } from "@/components/inventory/VarianceReport";
+import { TheoreticalUsageReport } from "@/components/inventory/TheoreticalUsageReport";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 
 export default function StockPage() {
