@@ -175,6 +175,10 @@ export default function StockPage() {
           <StockAdjustmentLog />
         </TabsContent>
 
+        <TabsContent value="usage">
+          <TheoreticalUsageReport />
+        </TabsContent>
+
         <TabsContent value="variance">
           <VarianceReport />
         </TabsContent>
