@@ -2004,6 +2004,7 @@ export type Database = {
           captiva_operator_code: string | null
           contract_type: Database["public"]["Enums"]["contract_type"]
           created_at: string
+          department: string | null
           email: string | null
           first_name: string
           hourly_rate: number
@@ -2024,6 +2025,7 @@ export type Database = {
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
+          department?: string | null
           email?: string | null
           first_name: string
           hourly_rate?: number
@@ -2044,6 +2046,7 @@ export type Database = {
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"]
           created_at?: string
+          department?: string | null
           email?: string | null
           first_name?: string
           hourly_rate?: number
@@ -2572,6 +2575,7 @@ export type Database = {
           captiva_operator_code: string | null
           contract_type: Database["public"]["Enums"]["contract_type"] | null
           created_at: string | null
+          department: string | null
           email: string | null
           first_name: string | null
           hourly_rate: number | null
@@ -2592,6 +2596,7 @@ export type Database = {
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"] | null
           created_at?: string | null
+          department?: string | null
           email?: never
           first_name?: string | null
           hourly_rate?: never
@@ -2612,6 +2617,7 @@ export type Database = {
           captiva_operator_code?: string | null
           contract_type?: Database["public"]["Enums"]["contract_type"] | null
           created_at?: string | null
+          department?: string | null
           email?: never
           first_name?: string | null
           hourly_rate?: never

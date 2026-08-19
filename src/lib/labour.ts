@@ -66,3 +66,28 @@ export function describeLabourDerivation(input: {
   if (input.hours == null || input.hourlyRate == null) return "Worked hours × hourly rate";
   return `${input.hours.toFixed(2)} h × hourly rate`;
 }
+
+/* ------------------------------------------------------------------ *
+ * Staff department / area (Floor, Kitchen, Management, Other)
+ * ------------------------------------------------------------------ */
+
+export type StaffDepartment = "floor" | "kitchen" | "management" | "other";
+
+export const STAFF_DEPARTMENTS: { value: StaffDepartment; label: string }[] = [
+  { value: "floor", label: "Floor" },
+  { value: "kitchen", label: "Kitchen" },
+  { value: "management", label: "Management" },
+  { value: "other", label: "Other" },
+];
+
+/** Existing records may have no department: they safely group under "Other". */
+export function normaliseDepartment(value: unknown): StaffDepartment {
+  return value === "floor" || value === "kitchen" || value === "management" || value === "other"
+    ? value
+    : "other";
+}
+
+export function departmentLabel(value: unknown): string {
+  const key = normaliseDepartment(value);
+  return STAFF_DEPARTMENTS.find((d) => d.value === key)?.label ?? "Other";
+}

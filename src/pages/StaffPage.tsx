@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Plus, Link2, AlertCircle } from "lucide-react";
 import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInsert, StaffRole, StaffStatus, ContractType, PayType } from "@/hooks/useStaff";
-import { salaryDailyCost, SALARY_METHOD_LABEL } from "@/lib/labour";
+import { STAFF_DEPARTMENTS, departmentLabel, type StaffDepartment, salaryDailyCost, SALARY_METHOD_LABEL } from "@/lib/labour";
 import { useLocations } from "@/hooks/useLocations";
 import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
 import { Badge } from "@/components/ui/badge";
@@ -52,7 +52,7 @@ export default function StaffPage() {
     first_name: "", last_name: "", role: "waiter", hourly_rate: 0,
     status: "active", location_id: null, email: null, phone: null,
     captiva_operator_code: null, contract_type: "part_time",
-    pay_type: "hourly", annual_salary: null,
+    pay_type: "hourly", annual_salary: null, department: "other",
     max_hours_per_week: undefined, min_hours_per_week: undefined,
   });
 
@@ -75,7 +75,7 @@ export default function StaffPage() {
       first_name: "", last_name: "", role: "waiter", hourly_rate: 0,
       status: "active", location_id: null, email: null, phone: null,
       captiva_operator_code: null, contract_type: "part_time",
-      pay_type: "hourly", annual_salary: null,
+      pay_type: "hourly", annual_salary: null, department: "other",
       max_hours_per_week: undefined, min_hours_per_week: undefined,
     });
     setEditingStaff(null);
@@ -102,6 +102,7 @@ export default function StaffPage() {
       contract_type: item.contract_type || "part_time",
       pay_type: item.pay_type || "hourly",
       annual_salary: item.annual_salary ?? null,
+      department: item.department ?? "other",
       max_hours_per_week: item.max_hours_per_week ?? undefined,
       min_hours_per_week: item.min_hours_per_week ?? undefined,
     });
@@ -155,6 +156,10 @@ export default function StaffPage() {
       ),
     },
     {
+      key: "department", header: "Department",
+      render: (item: Staff) => <span className="text-sm">{departmentLabel(item.department)}</span>,
+    },
+    {
       key: "contract", header: "Contract",
       render: (item: Staff) => (
         <div className="text-sm">
@@ -165,6 +170,7 @@ export default function StaffPage() {
         </div>
       ),
     },
+
     {
       key: "location", header: "Location",
       render: (item: Staff) => item.locations?.name || (
@@ -283,6 +289,22 @@ export default function StaffPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label>Department / Area</Label>
+                  <Select
+                    value={form.department || "other"}
+                    onValueChange={(v) => setForm({ ...form, department: v as StaffDepartment })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STAFF_DEPARTMENTS.map((d) => (
+                        <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Contracted Hours (per week)</Label>
                   <Input type="number" step="1" min="0" max="168" placeholder="e.g., 40"
