@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Plus, Link2, AlertCircle } from "lucide-react";
-import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInsert, StaffRole, StaffStatus, ContractType } from "@/hooks/useStaff";
+import { useStaff, useCreateStaff, useUpdateStaff, useDeleteStaff, Staff, StaffInsert, StaffRole, StaffStatus, ContractType, PayType } from "@/hooks/useStaff";
+import { salaryDailyCost, SALARY_METHOD_LABEL } from "@/lib/labour";
 import { useLocations } from "@/hooks/useLocations";
 import { usePOSMappings, useUpdatePOSMapping } from "@/hooks/usePOS";
 import { Badge } from "@/components/ui/badge";
