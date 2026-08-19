@@ -161,17 +161,44 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
               </div>
             ) : (
               <>
+                <p className="text-sm text-muted-foreground">
+                  Quantities are the amount consumed when <strong>one</strong> unit of this dish is sold
+                  (e.g. 1 each chicken breast, 250 g potato, 80 ml cream).
+                </p>
+
                 <form onSubmit={handleAddIngredient} className="flex gap-2 items-end">
                   <div className="flex-1">
                     <Label>Ingredient</Label>
-                    <Select value={recipeForm.ingredient_id} onValueChange={(v) => setRecipeForm({ ...recipeForm, ingredient_id: v })}>
+                    <Select
+                      value={recipeForm.ingredient_id}
+                      onValueChange={(v) => {
+                        if (v === "_new") {
+                          setQuickAddOpen(true);
+                          return;
+                        }
+                        setRecipeForm({ ...recipeForm, ingredient_id: v });
+                      }}
+                    >
                       <SelectTrigger><SelectValue placeholder="Select ingredient" /></SelectTrigger>
                       <SelectContent>
-                        {ingredients.map((ing) => {
+                        <div className="p-1 sticky top-0 bg-popover z-10">
+                          <Input
+                            placeholder="Search ingredients..."
+                            value={ingredientSearch}
+                            onChange={(e) => setIngredientSearch(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            className="h-8"
+                          />
+                        </div>
+                        <SelectItem value="_new">+ Add new ingredient</SelectItem>
+                        {filteredIngredients.map((ing) => {
                           const bc = calculateBaseCost(ing);
                           const bu = getBaseUnit(ing.pack_unit);
                           return <SelectItem key={ing.id} value={ing.id}>{ing.name} — {formatCurrency(bc)}/{bu}</SelectItem>;
                         })}
+                        {filteredIngredients.length === 0 && (
+                          <p className="px-2 py-3 text-sm text-muted-foreground">No matching ingredient</p>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -182,6 +209,17 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
                   </div>
                   <Button type="submit" disabled={addIngredient.isPending || !recipeForm.ingredient_id}>Add</Button>
                 </form>
+
+                <QuickAddIngredientDialog
+                  open={quickAddOpen}
+                  onOpenChange={setQuickAddOpen}
+                  initialName={ingredientSearch}
+                  onCreated={(id) => {
+                    setRecipeForm({ ingredient_id: id, quantity: 0 });
+                    setIngredientSearch("");
+                  }}
+                />
+
 
                 <div className="border rounded-lg divide-y">
                   <div className="grid grid-cols-5 gap-2 p-3 bg-muted/50 text-xs font-medium text-muted-foreground uppercase">
