@@ -34,14 +34,22 @@ export default function StockPage() {
   const columns = [
     { 
       key: "ingredients", 
-      header: "Ingredient",
+      header: "Item",
       render: (item: StockLevel) => item.ingredients?.name || "-"
+    },
+    {
+      key: "item_type",
+      header: "Type",
+      render: (item: StockLevel) => (
+        <Badge variant="secondary">{itemTypeLabel(item.ingredients?.item_type)}</Badge>
+      ),
     },
     { 
       key: "locations", 
       header: "Location",
       render: (item: StockLevel) => item.locations?.name || "-"
     },
+
     { 
       key: "quantity", 
       header: "Quantity",
