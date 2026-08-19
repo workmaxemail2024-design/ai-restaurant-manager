@@ -10,6 +10,7 @@ import { Plus, ChevronRight, Check, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, useReceiveDelivery, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
+import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients } from "@/hooks/useIngredients";
 import { useLocation } from "@/contexts/LocationContext";
@@ -153,16 +154,10 @@ export default function PurchaseOrdersPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <Label>Supplier</Label>
-                <Select value={formData.supplier_id} onValueChange={(v) => setFormData({ ...formData, supplier_id: v })} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select supplier" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map((sup) => (
-                      <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SupplierSelect
+                  value={formData.supplier_id || undefined}
+                  onValueChange={(v) => setFormData({ ...formData, supplier_id: v })}
+                />
               </div>
               <div>
                 <Label>Location</Label>
