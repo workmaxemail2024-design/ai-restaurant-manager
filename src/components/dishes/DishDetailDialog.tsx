@@ -40,6 +40,11 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
   const updateDish = useUpdateDish();
 
   const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0 });
+  const [ingredientSearch, setIngredientSearch] = useState("");
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const filteredIngredients = ingredients.filter((i) =>
+    i.name.toLowerCase().includes(ingredientSearch.trim().toLowerCase())
+  );
   const [directCost, setDirectCost] = useState<number>(0);
   const [useDirect, setUseDirect] = useState<boolean>(false);
   const [itemType, setItemType] = useState<string>("food");
