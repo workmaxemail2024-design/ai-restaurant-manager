@@ -1,11 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { normalisePayType, type PayType } from "@/lib/labour";
 
 export type StaffRole = "chef" | "waiter" | "manager" | "host" | "bartender" | "kitchen_assistant" | "cleaner";
 export type StaffStatus = "active" | "inactive" | "on_leave";
 export type AttendanceSource = "manual" | "pos" | "auto";
 export type ContractType = "full_time" | "part_time" | "casual";
+export type { PayType };
 
 export interface Staff {
   id: string;
@@ -19,12 +21,15 @@ export interface Staff {
   phone: string | null;
   captiva_operator_code?: string | null;
   contract_type: ContractType;
+  pay_type: PayType;
+  annual_salary: number | null;
   max_hours_per_week: number;
   min_hours_per_week: number | null;
   created_at: string;
   updated_at: string;
   locations?: { name: string } | null;
 }
+
 
 export interface StaffShift {
   id: string;
