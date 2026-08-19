@@ -2686,6 +2686,17 @@ export type Database = {
         Args: { p_ingredient_id: string }
         Returns: number
       }
+      get_theoretical_usage: {
+        Args: { p_end?: string; p_location_id?: string; p_start?: string }
+        Returns: {
+          base_unit: string
+          cost: number
+          dishes_sold: number
+          ingredient_id: string
+          ingredient_name: string
+          quantity_used: number
+        }[]
+      }
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
