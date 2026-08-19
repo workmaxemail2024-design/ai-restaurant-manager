@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
+import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
 
 interface HourlyRevenue {
   time: string;
@@ -176,7 +177,7 @@ export function useDashboardOverview(locationId?: string | null) {
 
       let attendanceQuery = supabase
         .from("staff_attendance")
-        .select("clock_in, clock_out, staff_id, staff!inner(hourly_rate)")
+        .select("clock_in, clock_out, staff_id, staff!inner(hourly_rate, pay_type, annual_salary)")
         .eq("restaurant_id", restaurantId)
         .gte("clock_in", rangeStartDateTime)
         .lte("clock_in", rangeEndDateTime);
@@ -192,6 +193,7 @@ export function useDashboardOverview(locationId?: string | null) {
 
       if (attendanceData) {
         for (const record of attendanceData) {
+          if (isSalariedStaffRow(record.staff)) continue;
           const clockIn = new Date(record.clock_in);
           const clockOut = record.clock_out ? new Date(record.clock_out) : new Date();
           const hoursWorked = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
@@ -199,6 +201,10 @@ export function useDashboardOverview(locationId?: string | null) {
           labourTodayCost += hoursWorked * hourlyRate;
         }
       }
+
+      labourTodayCost += (
+        await fetchSalaryAllocation(restaurantId, locationId ?? null, startDate, endDate)
+      ).total;
 
       const labourTodayPct = hasLabourToday && revenueToday > 0 
         ? (labourTodayCost / revenueToday) * 100 

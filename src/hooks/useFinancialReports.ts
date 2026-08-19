@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { startOfMonth, endOfMonth, format, subMonths, differenceInHours } from "date-fns";
+import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
 
 export interface ProfitLossData {
   month: string;
@@ -88,7 +89,7 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
         // Fetch labour cost from staff attendance
         let attendanceQuery = supabase
           .from("staff_attendance")
-          .select("clock_in, clock_out, staff_id, staff(hourly_rate)")
+          .select("clock_in, clock_out, staff_id, staff(hourly_rate, pay_type, annual_salary)")
           .eq("restaurant_id", restaurantId)
           .gte("clock_in", monthStart.toISOString())
           .lte("clock_in", monthEnd.toISOString());
@@ -100,12 +101,20 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
         const { data: attendance } = await attendanceQuery;
         let labourCost = 0;
         attendance?.forEach((att) => {
-          if (att.clock_in && att.clock_out) {
+          if (att.clock_in && att.clock_out && !isSalariedStaffRow(att.staff)) {
             const hours = differenceInHours(new Date(att.clock_out), new Date(att.clock_in));
             const rate = (att.staff as any)?.hourly_rate || 0;
             labourCost += hours * rate;
           }
         });
+        labourCost += (
+          await fetchSalaryAllocation(
+            restaurantId,
+            selectedLocationId ?? null,
+            format(monthStart, "yyyy-MM-dd"),
+            format(monthEnd, "yyyy-MM-dd")
+          )
+        ).total;
 
         // Fetch overheads
         let overheadsQuery = supabase
@@ -189,7 +198,7 @@ export function useCashFlowSummary(monthsBack: number = 6) {
         // Cash Out: Payroll from attendance
         let attendanceQuery = supabase
           .from("staff_attendance")
-          .select("clock_in, clock_out, staff(hourly_rate)")
+          .select("clock_in, clock_out, staff(hourly_rate, pay_type, annual_salary)")
           .eq("restaurant_id", restaurantId)
           .gte("clock_in", monthStart.toISOString())
           .lte("clock_in", monthEnd.toISOString());
@@ -201,12 +210,20 @@ export function useCashFlowSummary(monthsBack: number = 6) {
         const { data: attendance } = await attendanceQuery;
         let cashOutPayroll = 0;
         attendance?.forEach((att) => {
-          if (att.clock_in && att.clock_out) {
+          if (att.clock_in && att.clock_out && !isSalariedStaffRow(att.staff)) {
             const hours = differenceInHours(new Date(att.clock_out), new Date(att.clock_in));
             const rate = (att.staff as any)?.hourly_rate || 0;
             cashOutPayroll += hours * rate;
           }
         });
+        cashOutPayroll += (
+          await fetchSalaryAllocation(
+            restaurantId,
+            selectedLocationId ?? null,
+            format(monthStart, "yyyy-MM-dd"),
+            format(monthEnd, "yyyy-MM-dd")
+          )
+        ).total;
 
         // Cash Out: Overheads
         let overheadsQuery = supabase

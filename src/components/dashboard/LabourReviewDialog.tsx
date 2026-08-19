@@ -55,6 +55,7 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
   const ledger = entries.get(date);
 
   const rows = data?.rows ?? [];
+  const salariedRows = data?.salariedRows ?? [];
   const issues = rows.filter((r) => r.issue !== null);
   const totalHours = (data?.totalHours ?? 0) || (rows.length === 0 ? ledger?.labour_hours ?? 0 : 0);
   const totalCost = data?.totalCost ?? 0;
@@ -127,7 +128,7 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
     if (confirmed) onOpenChange(false);
   };
 
-  const hasLabourData = rows.length > 0 || (ledger?.labour_hours ?? 0) > 0;
+  const hasLabourData = rows.length > 0 || salariedRows.length > 0 || (ledger?.labour_hours ?? 0) > 0;
   const isConfirmed = ledger?.labour_confirmed === true;
 
   return (
@@ -157,6 +158,11 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
             <p className="text-lg font-semibold">
               {canSeeCosts ? formatCurrency(totalCost) : "—"}
             </p>
+            {canSeeCosts && (data?.salaryCost ?? 0) > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                {formatCurrency(data?.hourlyCost ?? 0)} hourly + {formatCurrency(data?.salaryCost ?? 0)} salary
+              </p>
+            )}
           </div>
           <div className="rounded-lg border p-3">
             <p className="text-xs text-muted-foreground">Labour % of revenue</p>
@@ -172,6 +178,29 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
             <span>
               {issues.length} record{issues.length > 1 ? "s" : ""} need attention before confirming.
             </span>
+          </div>
+        )}
+
+        {salariedRows.length > 0 && (
+          <div className="rounded-lg border p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Salaried staff (allocated)</p>
+              <p className="text-sm font-semibold">
+                {canSeeCosts ? formatCurrency(data?.salaryCost ?? 0) : "—"}
+              </p>
+            </div>
+            {salariedRows.map((s) => (
+              <div key={s.staffId} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  {s.staffName}
+                  <Badge variant="secondary">Salary</Badge>
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {s.derivation}
+                  {canSeeCosts && <> · {formatCurrency(s.cost)}</>}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -227,6 +256,7 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <span className="font-semibold">{row.staffName}</span>
+                      <Badge variant="secondary">{row.payType === "salary" ? "Salary" : "Hourly"}</Badge>
                       {row.issue && (
                         <Badge variant="outline" className="border-warning text-warning">
                           {ISSUE_LABEL[row.issue]}
@@ -235,9 +265,11 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {row.hours != null ? `${row.hours.toFixed(2)} h` : "—"}
-                      {canSeeCosts && row.hourlyRate != null && (
+                      {canSeeCosts && row.payType === "hourly" && row.hourlyRate != null && (
                         <> · {formatCurrency(row.hourlyRate)}/h</>
                       )}
+                      {row.payType === "salary" && <> · hours not priced hourly</>}
+                      <div className="text-xs">{row.derivation}</div>
                       {canSeeCosts && row.cost != null && (
                         <> · <span className="font-medium text-foreground">{formatCurrency(row.cost)}</span></>
                       )}

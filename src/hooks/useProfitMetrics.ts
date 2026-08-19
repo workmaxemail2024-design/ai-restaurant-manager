@@ -4,6 +4,7 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { calculateOverheadForRange, type Overhead, type OverheadFrequency } from "./useOverheads";
 import { differenceInDays, parseISO } from "date-fns";
+import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
 
 export type DateRange = 'today' | '7d' | '30d';
 
@@ -90,7 +91,7 @@ export function useProfitMetrics(locationId?: string | null) {
 
       let attendanceQuery = supabase
         .from("staff_attendance")
-        .select("clock_in, clock_out, staff_id, location_id, staff(hourly_rate)")
+        .select("clock_in, clock_out, staff_id, location_id, staff(hourly_rate, pay_type, annual_salary)")
         .eq("restaurant_id", restaurantId)
         .gte("clock_in", startDateTime)
         .lte("clock_in", endDateTime)
@@ -103,7 +104,7 @@ export function useProfitMetrics(locationId?: string | null) {
       let labourCost = 0;
       if (attendance) {
         for (const record of attendance) {
-          if (record.clock_in && record.clock_out && record.staff) {
+          if (record.clock_in && record.clock_out && record.staff && !isSalariedStaffRow(record.staff)) {
             const hours = (new Date(record.clock_out).getTime() - new Date(record.clock_in).getTime()) / (1000 * 60 * 60);
             const rate = Number((record.staff as { hourly_rate: number }).hourly_rate) || 0;
             labourCost += hours * rate;
@@ -111,7 +112,11 @@ export function useProfitMetrics(locationId?: string | null) {
         }
       }
 
-      const labourPct = revenue > 0 && hasLabour ? (labourCost / revenue) * 100 : null;
+      // Salaried staff: allocated from salary, not from attendance hours.
+      const salaryAlloc = await fetchSalaryAllocation(restaurantId, locationId ?? null, startDate, endDate);
+      labourCost += salaryAlloc.total;
+
+      const labourPct = revenue > 0 && (hasLabour || salaryAlloc.total > 0) ? (labourCost / revenue) * 100 : null;
 
       // 4. Overhead cost - using the new calculation engine
       let overheadsQuery = supabase

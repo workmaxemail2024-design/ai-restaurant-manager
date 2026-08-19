@@ -154,6 +154,9 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
             sub={[
               data.labourHours > 0 ? `${data.labourHours.toFixed(1)}h` : null,
               data.labourPct != null ? `${data.labourPct.toFixed(1)}% of revenue` : null,
+              data.salariedLabourCost > 0
+                ? `${formatCurrency(data.hourlyLabourCost)} hourly + ${formatCurrency(data.salariedLabourCost)} salary`
+                : null,
               data.labourSource === "manual"
                 ? "Manual hours"
                 : data.labourSource === "attendance"
@@ -162,6 +165,7 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
                     : "Attendance not reviewed"
                   : "No labour data",
             ]
+
               .filter(Boolean)
               .join(" • ")}
           />
