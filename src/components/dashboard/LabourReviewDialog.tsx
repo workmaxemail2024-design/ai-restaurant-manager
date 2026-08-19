@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -34,6 +35,9 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { formatCurrency } from "@/lib/currency";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { LabourEvidenceCard } from "@/components/dashboard/LabourEvidenceCard";
+import { STAFF_DEPARTMENTS, departmentLabel, type StaffDepartment } from "@/lib/labour";
+import { LabourTotals } from "@/components/dashboard/LabourTotals";
 
 
 interface Props {
@@ -77,37 +81,53 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
   const labourPct = revenue > 0 && totalCost > 0 ? (totalCost / revenue) * 100 : null;
 
   const [edits, setEdits] = useState<Record<string, { clock_in: string; clock_out: string }>>({});
-  const [manualHours, setManualHours] = useState<string>("");
-  const [staffId, setStaffId] = useState<string>("");
-  const [staffHours, setStaffHours] = useState<string>("");
+  const [entries2, setEntries] = useState<Record<string, { hours: string; selected: boolean }>>({});
 
   const addManual = useAddManualAttendance();
   const { data: staffList = [] } = useStaff(locationId ?? undefined);
   const activeStaff = staffList.filter((s: any) => s.status === "active");
 
-  const addStaffHours = () => {
-    const hours = Number(staffHours);
-    if (!staffId || !locationId || !Number.isFinite(hours) || hours <= 0) {
-      toast({ title: "Select a staff member and enter hours", variant: "destructive" });
+  // Staff without a recorded attendance row for this day can have hours entered.
+  const recordedStaffIds = new Set(rows.map((r) => r.staff_id));
+  const entryStaff = activeStaff.filter((s: any) => !recordedStaffIds.has(s.id));
+  const groupedEntryStaff = entryStaff.reduce<Record<string, any[]>>((acc, s: any) => {
+    const key = s.department ?? "other";
+    (acc[key] ??= []).push(s);
+    return acc;
+  }, {});
+  const selectedCount = Object.values(entries2).filter((e) => e.selected).length;
+
+  // Labour cost per department: hourly worked cost + allocated salaried cost.
+  const deptCosts = (() => {
+    const totals: Record<StaffDepartment, number> = { floor: 0, kitchen: 0, management: 0, other: 0 };
+    for (const r of rows) if (r.cost != null) totals[r.department] += r.cost;
+    for (const s of salariedRows) totals[s.department] += s.cost;
+    return totals;
+  })();
+
+  const saveSelectedHours = async () => {
+    if (!locationId) return;
+    const picks = Object.entries(entries2).filter(([, e]) => e.selected);
+    const invalid = picks.filter(([, e]) => !(Number(e.hours) > 0));
+    if (picks.length === 0 || invalid.length > 0) {
+      toast({ title: "Enter hours for every selected employee", variant: "destructive" });
       return;
     }
-    addManual.mutate(
-      { staff_id: staffId, location_id: locationId, date, hours },
-      {
-        onSuccess: () => {
-          setStaffId("");
-          setStaffHours("");
-        },
-      }
-    );
+    for (const [id, e] of picks) {
+      await addManual.mutateAsync({
+        staff_id: id,
+        location_id: locationId,
+        date,
+        hours: Number(e.hours),
+      });
+    }
+    setEntries({});
   };
 
   useEffect(() => {
     if (open) {
       setEdits({});
-      setStaffId("");
-      setStaffHours("");
-      setManualHours(ledger?.labour_hours ? String(ledger.labour_hours) : "");
+      setEntries({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, date, locationId]);
@@ -127,27 +147,6 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
       return;
     }
     updateTimes.mutate({ id, clock_in: inISO, clock_out: outISO });
-  };
-
-  const saveManualHours = () => {
-    const hours = Number(manualHours);
-    if (!Number.isFinite(hours) || hours < 0) {
-      toast({ title: "Enter valid hours", variant: "destructive" });
-      return;
-    }
-    upsert({
-      entry_date: date,
-      location_id: locationId,
-      covers: ledger?.covers ?? 0,
-      labour_hours: hours,
-      additional_expenses: ledger?.additional_expenses ?? 0,
-      notes: ledger?.notes ?? "",
-      is_closed: ledger?.is_closed ?? false,
-      manual_revenue: ledger?.manual_revenue ?? null,
-      manual_orders: ledger?.manual_orders ?? null,
-      covers_unknown: ledger?.covers_unknown ?? false,
-    });
-    toast({ title: "Manual labour hours saved" });
   };
 
   const confirmLabour = (confirmed: boolean) => {
