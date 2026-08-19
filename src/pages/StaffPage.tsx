@@ -156,6 +156,10 @@ export default function StaffPage() {
       ),
     },
     {
+      key: "department", header: "Department",
+      render: (item: Staff) => <span className="text-sm">{departmentLabel(item.department)}</span>,
+    },
+    {
       key: "contract", header: "Contract",
       render: (item: Staff) => (
         <div className="text-sm">
@@ -166,6 +170,7 @@ export default function StaffPage() {
         </div>
       ),
     },
+
     {
       key: "location", header: "Location",
       render: (item: Staff) => item.locations?.name || (
