@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { AlertTriangle, CheckCircle2, Clock, Save } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Plus, Save } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,13 +14,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useDayLabour, useUpdateAttendanceTimes, LONG_SHIFT_HOURS } from "@/hooks/useDayLabour";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useDayLabour,
+  useUpdateAttendanceTimes,
+  useAddManualAttendance,
+  LONG_SHIFT_HOURS,
+} from "@/hooks/useDayLabour";
 import { useDailyLedger } from "@/hooks/useDailyLedger";
 import { useDashboardOverview } from "@/hooks/useDashboardOverview";
+import { useStaff } from "@/hooks/useStaff";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatCurrency } from "@/lib/currency";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
 
 interface Props {
   open: boolean;
@@ -64,14 +78,40 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
 
   const [edits, setEdits] = useState<Record<string, { clock_in: string; clock_out: string }>>({});
   const [manualHours, setManualHours] = useState<string>("");
+  const [staffId, setStaffId] = useState<string>("");
+  const [staffHours, setStaffHours] = useState<string>("");
+
+  const addManual = useAddManualAttendance();
+  const { data: staffList = [] } = useStaff(locationId ?? undefined);
+  const activeStaff = staffList.filter((s: any) => s.status === "active");
+
+  const addStaffHours = () => {
+    const hours = Number(staffHours);
+    if (!staffId || !locationId || !Number.isFinite(hours) || hours <= 0) {
+      toast({ title: "Select a staff member and enter hours", variant: "destructive" });
+      return;
+    }
+    addManual.mutate(
+      { staff_id: staffId, location_id: locationId, date, hours },
+      {
+        onSuccess: () => {
+          setStaffId("");
+          setStaffHours("");
+        },
+      }
+    );
+  };
 
   useEffect(() => {
     if (open) {
       setEdits({});
+      setStaffId("");
+      setStaffHours("");
       setManualHours(ledger?.labour_hours ? String(ledger.labour_hours) : "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, date, locationId]);
+
 
   const saveRow = (id: string) => {
     const row = rows.find((r) => r.id === id);
@@ -128,7 +168,10 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
     if (confirmed) onOpenChange(false);
   };
 
-  const hasLabourData = rows.length > 0 || salariedRows.length > 0 || (ledger?.labour_hours ?? 0) > 0;
+  // Clock-in/out in RestaurantAI is optional: a manager may confirm a reviewed day
+  // even when no attendance was imported (e.g. hours recorded manually or none worked).
+  const hasLabourData = true;
+
   const isConfirmed = ledger?.labour_confirmed === true;
 
   return (
@@ -209,13 +252,18 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
         {isLoading ? (
           <p className="text-sm text-muted-foreground py-6 text-center">Loading attendance…</p>
         ) : rows.length === 0 ? (
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              No attendance records for this day. Enter manual labour hours instead.
-            </p>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-dashed p-3">
+              <p className="text-sm font-semibold">No attendance imported yet</p>
+              <p className="text-sm text-muted-foreground">
+                Actual labour normally arrives from Captiva POS. If it hasn't been imported,
+                enter the hours actually worked below and confirm labour.
+              </p>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
               <div className="flex-1">
-                <Label htmlFor="manual-hours">Manual labour hours</Label>
+                <Label htmlFor="manual-hours">Total labour hours for the day</Label>
                 <Input
                   id="manual-hours"
                   type="number"
@@ -237,8 +285,58 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
                 Save hours
               </Button>
             </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label>Or record per-staff hours</Label>
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                <div className="flex-1">
+                  <Select value={staffId} onValueChange={setStaffId} disabled={!canEdit || !locationId}>
+                    <SelectTrigger className="h-12 text-base">
+                      <SelectValue placeholder="Select staff member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeStaff.map((s: any) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.first_name} {s.last_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-full sm:w-32">
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step={0.25}
+                    placeholder="Hours"
+                    className="h-12 text-base"
+                    value={staffHours}
+                    onChange={(e) => setStaffHours(e.target.value)}
+                    disabled={!canEdit || !locationId}
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  className="h-12 px-6"
+                  disabled={!canEdit || !locationId || addManual.isPending}
+                  onClick={addStaffHours}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+              {!locationId && (
+                <p className="text-xs text-muted-foreground">
+                  Select a single location to record per-staff hours.
+                </p>
+              )}
+            </div>
           </div>
         ) : (
+
           <div className="space-y-3">
             {rows.map((row) => {
               const edit = edits[row.id];

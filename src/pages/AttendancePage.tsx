@@ -197,13 +197,16 @@ export default function AttendancePage() {
 
   return (
     <PageLayout
-      title="Attendance"
-      description="Actual labour worked — clock-in/out records that drive cost calculations"
+      title="Actual Labour / Attendance"
+      description="Actual hours worked — imported from Captiva POS where available, or reviewed and entered manually after the day"
       action={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><LogIn className="mr-2 h-4 w-4" /> Clock In</Button>
+            <Button size="sm" variant="outline">
+              <LogIn className="mr-2 h-4 w-4" /> Clock In (optional)
+            </Button>
           </DialogTrigger>
+
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle>Clock In Staff</DialogTitle>
@@ -340,7 +343,21 @@ export default function AttendancePage() {
         )}
 
         {/* Attendance History */}
-        <DataTable data={attendance} columns={columns} isLoading={isLoading} />
+        {!isLoading && attendance.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="p-6 text-center space-y-1">
+              <p className="text-sm font-semibold">No attendance imported yet</p>
+              <p className="text-sm text-muted-foreground">
+                Actual labour normally comes from Captiva POS. If it hasn't arrived, review the day
+                from the Daily Control Centre to enter total or per-staff hours and confirm labour.
+                Clock In here is optional.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <DataTable data={attendance} columns={columns} isLoading={isLoading} />
+        )}
+
       </div>
     </PageLayout>
   );
