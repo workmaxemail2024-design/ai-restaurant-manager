@@ -168,7 +168,10 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
     if (confirmed) onOpenChange(false);
   };
 
-  const hasLabourData = rows.length > 0 || salariedRows.length > 0 || (ledger?.labour_hours ?? 0) > 0;
+  // Clock-in/out in RestaurantAI is optional: a manager may confirm a reviewed day
+  // even when no attendance was imported (e.g. hours recorded manually or none worked).
+  const hasLabourData = true;
+
   const isConfirmed = ledger?.labour_confirmed === true;
 
   return (
