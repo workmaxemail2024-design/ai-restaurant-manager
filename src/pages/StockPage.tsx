@@ -18,6 +18,7 @@ import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
 import { VarianceReport } from "@/components/inventory/VarianceReport";
 import { TheoreticalUsageReport } from "@/components/inventory/TheoreticalUsageReport";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
+import { getStockStatus } from "@/lib/inventoryStatus";
 
 export default function StockPage() {
   const { selectedLocationId } = useLocation();
@@ -182,6 +183,12 @@ export default function StockPage() {
                 </form>
               </DialogContent>
             </Dialog>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            Physical stock on hand. Imported sales are never deducted from these figures — see
+            Theoretical Usage for consumption derived from recipes. Low and Critical only appear once a
+            reorder point is set on the ingredient.
           </div>
 
           <DataTable
