@@ -90,7 +90,14 @@ export function DishCategorySection({
     <TableRow key={dish.id} className={cn("group", compact && "h-9")}>
       <TableCell className={cn("font-medium", compact ? "py-1.5" : "py-2")}>
         <div className="flex flex-col gap-1">
-          <span>{dish.name}</span>
+          <button
+            type="button"
+            onClick={() => onViewRecipe(dish)}
+            className="text-left hover:underline underline-offset-2 focus-visible:outline-none focus-visible:underline"
+            title="Open dish details"
+          >
+            {dish.name}
+          </button>
           <DishMenuBadges dishId={dish.id} maxShow={2} />
         </div>
       </TableCell>

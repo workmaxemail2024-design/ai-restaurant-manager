@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Package, ClipboardList, BarChart3 } from "lucide-react";
+import { Plus, Package, ClipboardList, BarChart3, Calculator } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { useStockLevels, useUpdateStock, StockLevel } from "@/hooks/useStock";
@@ -16,6 +16,7 @@ import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
 import { VarianceReport } from "@/components/inventory/VarianceReport";
+import { TheoreticalUsageReport } from "@/components/inventory/TheoreticalUsageReport";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 
 export default function StockPage() {
@@ -93,6 +94,10 @@ export default function StockPage() {
             <ClipboardList className="h-4 w-4" />
             Adjustments
           </TabsTrigger>
+          <TabsTrigger value="usage" className="flex items-center gap-2">
+            <Calculator className="h-4 w-4" />
+            Theoretical Usage
+          </TabsTrigger>
           <TabsTrigger value="variance" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             Variance Report
@@ -169,6 +174,10 @@ export default function StockPage() {
 
         <TabsContent value="adjustments">
           <StockAdjustmentLog />
+        </TabsContent>
+
+        <TabsContent value="usage">
+          <TheoreticalUsageReport />
         </TabsContent>
 
         <TabsContent value="variance">
