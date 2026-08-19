@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { calculateOverheadForRange, type Overhead } from "./useOverheads";
+import { normalisePayType, allocateSalaryCost } from "@/lib/labour";
 
 /** Default assumption used ONLY when recipe coverage is too low to be trusted. */
 export const ESTIMATED_FOOD_COST_PCT = 30;
@@ -17,6 +18,10 @@ export interface DailyFinancialSummary {
   labourHours: number;
   labourPct: number | null;
   labourSource: "attendance" | "manual" | "none";
+  /** Hourly staff: worked hours x rate. */
+  hourlyLabourCost: number;
+  /** Salaried staff: annual salary / 365 x days in period. */
+  salariedLabourCost: number;
   labourConfirmed: boolean;
 
   foodCost: number;
@@ -124,12 +129,14 @@ export function useDailyFinancialSummary(
         const staffIds = Array.from(new Set(attendance.map((a) => a.staff_id)));
         const { data: staffRows } = await supabase
           .from("staff_safe")
-          .select("id, hourly_rate")
+          .select("id, hourly_rate, pay_type")
           .in("id", staffIds);
         const rates = new Map<string, number>();
         for (const s of staffRows ?? []) {
-          const rate = (s as { hourly_rate: number | null }).hourly_rate;
-          if (rate != null) rates.set((s as { id: string }).id, Number(rate));
+          const row = s as { id: string; hourly_rate: number | null; pay_type: string | null };
+          // Salaried staff are allocated separately — never priced from attendance hours.
+          if (normalisePayType(row.pay_type) === "salary") continue;
+          if (row.hourly_rate != null) rates.set(row.id, Number(row.hourly_rate));
         }
         for (const a of attendance) {
           if (!a.clock_out) continue;
@@ -150,6 +157,25 @@ export function useDailyFinancialSummary(
           labourSource = "manual";
         }
       }
+      // ---------- Salaried labour allocation ----------
+      let salariedQ = supabase
+        .from("staff_safe")
+        .select("id, annual_salary, pay_type, status, location_id")
+        .eq("pay_type", "salary")
+        .eq("status", "active");
+      if (locationId) salariedQ = salariedQ.eq("location_id", locationId);
+      const { data: salariedStaff } = await salariedQ;
+      const hourlyLabourCost = labourCost;
+      const salariedLabourCost = allocateSalaryCost(
+        (salariedStaff ?? []).map((s: any) => ({
+          id: s.id,
+          annual_salary: s.annual_salary != null ? Number(s.annual_salary) : null,
+        })),
+        startDate,
+        endDate
+      );
+      labourCost = hourlyLabourCost + salariedLabourCost;
+
       const labourPct = revenue > 0 && labourCost > 0 ? (labourCost / revenue) * 100 : null;
 
       // ---------- Food cost (recipe-based, estimate only when labelled) ----------
