@@ -18,7 +18,7 @@ export function useStockLevels(locationId?: string) {
     queryFn: async () => {
       let query = supabase
         .from("stock_levels")
-        .select("*, ingredients(name, unit, reorder_point, par_level), locations(name)")
+        .select("*, ingredients(name, unit, reorder_point, par_level, item_type), locations(name)")
         .order("updated_at", { ascending: false });
       
       if (locationId) {
