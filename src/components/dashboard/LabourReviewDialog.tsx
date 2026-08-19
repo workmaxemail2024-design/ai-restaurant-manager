@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
-import { AlertTriangle, CheckCircle2, Clock, Save } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Plus, Save } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,13 +14,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { useDayLabour, useUpdateAttendanceTimes, LONG_SHIFT_HOURS } from "@/hooks/useDayLabour";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useDayLabour,
+  useUpdateAttendanceTimes,
+  useAddManualAttendance,
+  LONG_SHIFT_HOURS,
+} from "@/hooks/useDayLabour";
 import { useDailyLedger } from "@/hooks/useDailyLedger";
 import { useDashboardOverview } from "@/hooks/useDashboardOverview";
+import { useStaff } from "@/hooks/useStaff";
 import { usePermissions } from "@/hooks/usePermissions";
 import { formatCurrency } from "@/lib/currency";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
 
 interface Props {
   open: boolean;
