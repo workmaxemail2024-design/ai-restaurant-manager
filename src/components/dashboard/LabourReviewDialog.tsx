@@ -16,13 +16,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   useDayLabour,
   useUpdateAttendanceTimes,
   useAddManualAttendance,
@@ -434,6 +427,16 @@ export function LabourReviewDialog({ open, onOpenChange, date, locationId }: Pro
             })}
           </div>
         )}
+
+        <LabourTotals
+          totalHours={totalHours}
+          totalCost={totalCost}
+          hourlyCost={data?.hourlyCost ?? 0}
+          salaryCost={data?.salaryCost ?? 0}
+          deptCosts={deptCosts}
+          labourPct={labourPct}
+          canSeeCosts={canSeeCosts}
+        />
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" className="h-12 px-6" onClick={() => onOpenChange(false)}>
