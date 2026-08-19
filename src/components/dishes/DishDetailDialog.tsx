@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import type { Dish } from "@/hooks/useDishes";
 import { useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, useUpdateDish } from "@/hooks/useDishes";
-import { useIngredients, calculateBaseCost, getBaseUnit } from "@/hooks/useIngredients";
+import { useIngredients, calculateBaseCost, getBaseUnit, isRecipeIngredient } from "@/hooks/useIngredients";
 import { usePOSMappings } from "@/hooks/usePOS";
 import { Link2, AlertCircle } from "lucide-react";
 import { QuickAddIngredientDialog } from "@/components/dishes/QuickAddIngredientDialog";
@@ -43,8 +43,12 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
   const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0 });
   const [ingredientSearch, setIngredientSearch] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const filteredIngredients = ingredients.filter((i) =>
-    i.name.toLowerCase().includes(ingredientSearch.trim().toLowerCase())
+  // Recipe selectors only offer items valid as recipe ingredients — direct-sale
+  // products and operational consumables never get fake recipes.
+  const filteredIngredients = ingredients.filter(
+    (i) =>
+      isRecipeIngredient(i) &&
+      i.name.toLowerCase().includes(ingredientSearch.trim().toLowerCase())
   );
   const [directCost, setDirectCost] = useState<number>(0);
   const [useDirect, setUseDirect] = useState<boolean>(false);

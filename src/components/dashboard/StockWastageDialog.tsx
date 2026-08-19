@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useIngredients } from "@/hooks/useIngredients";
+import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect";
 import { useDailyLedger } from "@/hooks/useDailyLedger";
 import {
   DAY_STOCK_REASONS,
@@ -162,18 +163,12 @@ export function StockWastageDialog({ open, onOpenChange, date, locationId }: Pro
 
           <div>
             <Label>Item</Label>
-            <Select value={ingredientId} onValueChange={setIngredientId}>
-              <SelectTrigger className="h-12 text-base">
-                <SelectValue placeholder="Choose an ingredient" />
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                {ingredients.map((i) => (
-                  <SelectItem key={i.id} value={i.id} className="h-11">
-                    {i.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <InventoryItemSelect
+              value={ingredientId || undefined}
+              onValueChange={setIngredientId}
+              placeholder="Choose an inventory item"
+              triggerClassName="h-12 text-base"
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
