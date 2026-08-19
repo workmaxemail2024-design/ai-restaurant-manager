@@ -96,15 +96,28 @@ export function useCreateStockAdjustment() {
   });
 }
 
-// Variance report data: expected vs actual stock
+/**
+ * Variance report data.
+ *
+ * Physical (counted) stock and theoretical stock are kept strictly separate:
+ *   theoretical = last counted quantity
+ *               + deliveries received since the count
+ *               - theoretical recipe consumption since the count
+ *               - adjustments / waste since the count
+ * Imported sales are never permanently deducted from physical stock.
+ */
 export interface VarianceItem {
   ingredient_id: string;
   ingredient_name: string;
   unit: string;
   location_id: string;
   location_name: string;
-  expected_quantity: number;
-  actual_quantity: number;
+  counted_at: string;
+  counted_quantity: number;
+  deliveries: number;
+  consumption: number;
+  adjustments: number;
+  theoretical_quantity: number;
   variance: number;
   variance_percent: number;
 }
@@ -113,41 +126,46 @@ export function useStockVariance(locationId?: string) {
   return useQuery({
     queryKey: ["stock-variance", locationId],
     queryFn: async () => {
-      // Get current stock levels
+      // Physical counts (authoritative actual stock)
       let stockQuery = supabase
         .from("stock_levels")
         .select("*, ingredients(name, unit), locations(name)");
-
-      if (locationId) {
-        stockQuery = stockQuery.eq("location_id", locationId);
-      }
-
+      if (locationId) stockQuery = stockQuery.eq("location_id", locationId);
       const { data: stockLevels, error: stockError } = await stockQuery;
       if (stockError) throw stockError;
 
-      // Get adjustments to calculate expected (what stock should be without adjustments)
+      const stocks = stockLevels || [];
+      if (stocks.length === 0) return [] as VarianceItem[];
+
+      // Earliest count date bounds every "since last count" window.
+      const earliestCount = stocks.reduce(
+        (min, s) => (s.updated_at < min ? s.updated_at : min),
+        stocks[0].updated_at as string,
+      );
+
+      // Adjustments / waste recorded since the earliest count
       let adjustmentsQuery = supabase
         .from("stock_adjustments")
-        .select("ingredient_id, location_id, quantity");
-
-      if (locationId) {
-        adjustmentsQuery = adjustmentsQuery.eq("location_id", locationId);
-      }
-
+        .select("ingredient_id, location_id, quantity, created_at")
+        .gte("created_at", earliestCount);
+      if (locationId) adjustmentsQuery = adjustmentsQuery.eq("location_id", locationId);
       const { data: adjustments, error: adjError } = await adjustmentsQuery;
       if (adjError) throw adjError;
 
-      // Build adjustment totals map
-      const adjustmentTotals = new Map<string, number>();
-      adjustments?.forEach((adj) => {
-        const key = `${adj.ingredient_id}-${adj.location_id}`;
-        adjustmentTotals.set(key, (adjustmentTotals.get(key) || 0) + Number(adj.quantity));
-      });
+      // Deliveries received since the earliest count
+      let deliveriesQuery = supabase
+        .from("purchase_order_items")
+        .select(
+          "ingredient_id, quantity, purchase_orders!inner(location_id, status, received_at)",
+        )
+        .gte("purchase_orders.received_at", earliestCount);
+      if (locationId) deliveriesQuery = deliveriesQuery.eq("purchase_orders.location_id", locationId);
+      const { data: deliveries } = await deliveriesQuery;
 
-      // Theoretical usage from sales × recipes (recalculated, never a stored deduction)
+      // Theoretical consumption, always recalculated from sales × recipes.
       const { data: usage } = await supabase.rpc("get_theoretical_usage", {
         p_location_id: locationId ?? null,
-        p_start: null,
+        p_start: earliestCount.split("T")[0],
         p_end: null,
       });
       const usageTotals = new Map<string, number>();
@@ -155,17 +173,37 @@ export function useStockVariance(locationId?: string) {
         usageTotals.set(u.ingredient_id, Number(u.quantity_used || 0));
       });
 
-      // Calculate variance for each stock item
-      const varianceItems: VarianceItem[] = (stockLevels || []).map((stock) => {
-        const key = `${stock.ingredient_id}-${stock.location_id}`;
-        const totalAdjustments = adjustmentTotals.get(key) || 0;
-        const theoreticalUsage = usageTotals.get(stock.ingredient_id) || 0;
-        const actualQuantity = Number(stock.quantity);
-        // Expected = recorded stock less theoretical usage from dishes sold,
-        // plus adjustments already recorded (wastage/breakage etc.)
-        const expectedQuantity = actualQuantity - theoreticalUsage + totalAdjustments;
-        const variance = actualQuantity - expectedQuantity;
-        const variancePercent = expectedQuantity > 0 ? (variance / expectedQuantity) * 100 : 0;
+      const items: VarianceItem[] = stocks.map((stock) => {
+        const countedAt = stock.updated_at as string;
+        const countedQuantity = Number(stock.quantity);
+
+        const adjustmentTotal = (adjustments || [])
+          .filter(
+            (a) =>
+              a.ingredient_id === stock.ingredient_id &&
+              a.location_id === stock.location_id &&
+              a.created_at >= countedAt,
+          )
+          .reduce((sum, a) => sum + Number(a.quantity || 0), 0);
+
+        const deliveryTotal = ((deliveries || []) as any[])
+          .filter(
+            (d) =>
+              d.ingredient_id === stock.ingredient_id &&
+              d.purchase_orders?.received_at &&
+              d.purchase_orders.received_at >= countedAt,
+          )
+          .reduce((sum, d) => sum + Number(d.quantity || 0), 0);
+
+        const consumption = usageTotals.get(stock.ingredient_id) || 0;
+
+        const theoreticalQuantity = Math.max(
+          0,
+          countedQuantity + deliveryTotal - consumption - adjustmentTotal,
+        );
+        const variance = countedQuantity - theoreticalQuantity;
+        const variancePercent =
+          theoreticalQuantity > 0 ? (variance / theoreticalQuantity) * 100 : 0;
 
         return {
           ingredient_id: stock.ingredient_id,
@@ -173,15 +211,22 @@ export function useStockVariance(locationId?: string) {
           unit: stock.ingredients?.unit || "",
           location_id: stock.location_id,
           location_name: stock.locations?.name || "Unknown",
-          expected_quantity: expectedQuantity,
-          actual_quantity: actualQuantity,
+          counted_at: countedAt,
+          counted_quantity: countedQuantity,
+          deliveries: deliveryTotal,
+          consumption,
+          adjustments: adjustmentTotal,
+          theoretical_quantity: theoreticalQuantity,
           variance,
           variance_percent: variancePercent,
         };
       });
 
-      // Filter to only show items with variance
-      return varianceItems.filter((item) => item.variance !== 0);
+      // Only rows where theoretical movement has occurred since the count.
+      return items.filter(
+        (i) => i.deliveries > 0 || i.consumption > 0 || i.adjustments > 0,
+      );
     },
   });
 }
+

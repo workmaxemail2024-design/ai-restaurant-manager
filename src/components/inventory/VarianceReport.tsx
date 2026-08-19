@@ -30,6 +30,12 @@ export function VarianceReport() {
         <h3 className="font-semibold">Stock Variance Report</h3>
       </div>
 
+      <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+        Theoretical stock = last counted quantity + deliveries received − recipe consumption −
+        adjustments/waste, all measured since the last count. It is compared against the counted
+        (physical) figure, which imported sales never reduce. Record a fresh count to clear a variance.
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -57,7 +63,7 @@ export function VarianceReport() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total Lost Quantity
+              Unexplained shortfall
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -72,9 +78,9 @@ export function VarianceReport() {
       {varianceItems.length === 0 ? (
         <div className="text-center py-8 border rounded-md bg-muted/30">
           <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-500" />
-          <p className="text-muted-foreground">No stock variances detected</p>
+          <p className="text-muted-foreground">No stock movement since the last count</p>
           <p className="text-sm text-muted-foreground">
-            Expected stock matches actual stock levels
+            Theoretical stock matches the counted figures
           </p>
         </div>
       ) : (
@@ -84,8 +90,12 @@ export function VarianceReport() {
               <TableRow>
                 <TableHead>Ingredient</TableHead>
                 <TableHead>Location</TableHead>
-                <TableHead className="text-right">Expected</TableHead>
-                <TableHead className="text-right">Actual</TableHead>
+                <TableHead>Counted</TableHead>
+                <TableHead className="text-right">Counted qty</TableHead>
+                <TableHead className="text-right">Deliveries</TableHead>
+                <TableHead className="text-right">Consumption</TableHead>
+                <TableHead className="text-right">Adjustments</TableHead>
+                <TableHead className="text-right">Theoretical</TableHead>
                 <TableHead className="text-right">Variance</TableHead>
                 <TableHead className="text-right">%</TableHead>
               </TableRow>
@@ -99,11 +109,23 @@ export function VarianceReport() {
                   <TableRow key={`${item.ingredient_id}-${item.location_id}`}>
                     <TableCell className="font-medium">{item.ingredient_name}</TableCell>
                     <TableCell>{item.location_name}</TableCell>
-                    <TableCell className="text-right font-mono">
-                      {item.expected_quantity.toFixed(2)} {item.unit}
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(item.counted_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right font-mono">
-                      {item.actual_quantity.toFixed(2)} {item.unit}
+                      {item.counted_quantity.toFixed(2)} {item.unit}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {item.deliveries.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {item.consumption.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {item.adjustments.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      {item.theoretical_quantity.toFixed(2)} {item.unit}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">

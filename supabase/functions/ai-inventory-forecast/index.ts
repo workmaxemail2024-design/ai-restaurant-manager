@@ -73,8 +73,13 @@ serve(async (req) => {
       });
     }
 
-    const forecasts = ingredients.map((ing: IngredientUsage) => {
-      const avgUsage = ing.avgDailyUsage || 1;
+    // Only ingredients with genuine measured usage can be forecast.
+    const forecastable = ingredients.filter(
+      (ing: IngredientUsage) => Number(ing.avgDailyUsage) > 0,
+    );
+
+    const forecasts = forecastable.map((ing: IngredientUsage) => {
+      const avgUsage = Number(ing.avgDailyUsage);
       const daysUntilStockout = ing.currentStock / avgUsage;
       
       // Calculate trend (increasing/decreasing usage)
@@ -96,7 +101,9 @@ serve(async (req) => {
       const expectedUsage = avgUsage * 7;
       const actualUsage = ing.recentUsage?.slice(-7).reduce((a, b) => a + b, 0) || expectedUsage;
       const variance = ((actualUsage - expectedUsage) / expectedUsage) * 100;
-      const anomaly = Math.abs(variance) > 20;
+      // Anomalies need real recent-usage samples, never inferred from a flat average.
+      const hasSamples = (ing.recentUsage?.length || 0) >= 7;
+      const anomaly = hasSamples && Math.abs(variance) > 20;
 
       return {
         ingredientId: ing.ingredientId,

@@ -735,8 +735,11 @@ export type Database = {
           name: string
           pack_size: number | null
           pack_unit: string | null
+          par_level: number | null
           purchase_unit: string | null
+          reorder_point: number | null
           restaurant_id: string | null
+          shelf_life_days: number | null
           storage_type: Database["public"]["Enums"]["storage_type"]
           supplier_id: string | null
           unit: Database["public"]["Enums"]["unit_type"]
@@ -750,8 +753,11 @@ export type Database = {
           name: string
           pack_size?: number | null
           pack_unit?: string | null
+          par_level?: number | null
           purchase_unit?: string | null
+          reorder_point?: number | null
           restaurant_id?: string | null
+          shelf_life_days?: number | null
           storage_type?: Database["public"]["Enums"]["storage_type"]
           supplier_id?: string | null
           unit?: Database["public"]["Enums"]["unit_type"]
@@ -765,8 +771,11 @@ export type Database = {
           name?: string
           pack_size?: number | null
           pack_unit?: string | null
+          par_level?: number | null
           purchase_unit?: string | null
+          reorder_point?: number | null
           restaurant_id?: string | null
+          shelf_life_days?: number | null
           storage_type?: Database["public"]["Enums"]["storage_type"]
           supplier_id?: string | null
           unit?: Database["public"]["Enums"]["unit_type"]

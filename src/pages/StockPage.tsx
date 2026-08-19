@@ -18,6 +18,7 @@ import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
 import { VarianceReport } from "@/components/inventory/VarianceReport";
 import { TheoreticalUsageReport } from "@/components/inventory/TheoreticalUsageReport";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
+import { getStockStatus } from "@/lib/inventoryStatus";
 
 export default function StockPage() {
   const { selectedLocationId } = useLocation();
@@ -44,15 +45,35 @@ export default function StockPage() {
       key: "quantity", 
       header: "Quantity",
       render: (item: StockLevel) => {
-        const isLow = Number(item.quantity) < 10;
+        // Low/Critical is only shown when a genuine reorder threshold is configured.
+        const status = getStockStatus(Number(item.quantity), item.ingredients?.reorder_point);
         return (
           <div className="flex items-center gap-2">
             <span>{Number(item.quantity).toFixed(2)}</span>
             <span className="text-muted-foreground text-sm">{item.ingredients?.unit}</span>
-            {isLow && <Badge variant="destructive">Low</Badge>}
+            {status.state === "critical" && (
+              <Badge variant="destructive" title={status.reason}>Critical</Badge>
+            )}
+            {status.state === "low" && (
+              <Badge variant="outline" className="border-amber-500 text-amber-600" title={status.reason}>
+                Low
+              </Badge>
+            )}
           </div>
         );
       }
+    },
+    {
+      key: "reorder_point",
+      header: "Reorder point",
+      render: (item: StockLevel) =>
+        item.ingredients?.reorder_point != null ? (
+          <span className="font-mono text-sm">
+            {Number(item.ingredients.reorder_point).toFixed(2)} {item.ingredients?.unit}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Not set</span>
+        ),
     },
     { 
       key: "updated_at", 
@@ -162,6 +183,12 @@ export default function StockPage() {
                 </form>
               </DialogContent>
             </Dialog>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            Physical stock on hand. Imported sales are never deducted from these figures — see
+            Theoretical Usage for consumption derived from recipes. Low and Critical only appear once a
+            reorder point is set on the ingredient.
           </div>
 
           <DataTable
