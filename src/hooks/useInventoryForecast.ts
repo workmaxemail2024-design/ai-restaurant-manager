@@ -173,18 +173,18 @@ export function useInventoryForecast(locationId?: string | null) {
         },
         {
           key: "recipes",
-          label: "Recipes linked to ingredients",
+          label: "Usage sources linked",
           ok: recipeIngredientIds.size > 0,
           detail:
             recipeIngredientIds.size > 0
-              ? `${recipeIngredientIds.size} ingredients are used in dish recipes.`
-              : "No dish recipes reference ingredients, so usage cannot be derived.",
+              ? `${recipeIngredientIds.size} items are used in dish recipes; direct-sale items use their POS product.`
+              : "No dish recipes or direct-sale product links exist, so usage cannot be derived.",
         },
         {
           key: "counts",
           label: "Physical stock counts",
           ok: withStock > 0,
-          detail: `${withStock} of ${rows.length} ingredients have a recorded stock level.`,
+          detail: `${withStock} of ${rows.length} inventory items have a recorded stock level.`,
         },
         {
           key: "thresholds",
