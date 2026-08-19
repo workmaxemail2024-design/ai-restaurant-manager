@@ -79,6 +79,8 @@ export type StaffInsert = {
   phone?: string | null;
   captiva_operator_code?: string | null;
   contract_type?: ContractType;
+  pay_type?: PayType;
+  annual_salary?: number | null;
   max_hours_per_week?: number;
   min_hours_per_week?: number | null;
 };
@@ -119,6 +121,9 @@ export function useStaff(locationId?: string | null) {
         ...s,
         // Provide defaults for new fields until types regenerate
         contract_type: (s as any).contract_type || 'full_time',
+        pay_type: normalisePayType((s as any).pay_type),
+        annual_salary: (s as any).annual_salary ?? null,
+        hourly_rate: Number((s as any).hourly_rate ?? 0),
         max_hours_per_week: (s as any).max_hours_per_week ?? 40,
         min_hours_per_week: (s as any).min_hours_per_week ?? null,
         locations: s.location_id ? locationsMap[s.location_id] || null : null
