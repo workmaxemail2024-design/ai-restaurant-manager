@@ -397,6 +397,8 @@ export type Database = {
       }
       dishes: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           captiva_external_id: string | null
           category: string | null
           created_at: string
@@ -406,6 +408,7 @@ export type Database = {
           is_active: boolean
           item_type: string
           location_id: string | null
+          merged_into_id: string | null
           name: string
           needs_review: boolean
           restaurant_id: string | null
@@ -415,6 +418,8 @@ export type Database = {
           use_direct_cost: boolean
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
@@ -424,6 +429,7 @@ export type Database = {
           is_active?: boolean
           item_type?: string
           location_id?: string | null
+          merged_into_id?: string | null
           name: string
           needs_review?: boolean
           restaurant_id?: string | null
@@ -433,6 +439,8 @@ export type Database = {
           use_direct_cost?: boolean
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
@@ -442,6 +450,7 @@ export type Database = {
           is_active?: boolean
           item_type?: string
           location_id?: string | null
+          merged_into_id?: string | null
           name?: string
           needs_review?: boolean
           restaurant_id?: string | null
@@ -456,6 +465,13 @@ export type Database = {
             columns: ["location_id"]
             isOneToOne: false
             referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dishes_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
             referencedColumns: ["id"]
           },
           {
@@ -2771,6 +2787,17 @@ export type Database = {
           p_restaurant_id: string
         }
         Returns: string
+      }
+      merge_dishes: {
+        Args: {
+          p_duplicate_id: string
+          p_master_id: string
+          p_use_duplicate_category?: boolean
+          p_use_duplicate_name?: boolean
+          p_use_duplicate_price?: boolean
+          p_use_duplicate_recipe?: boolean
+        }
+        Returns: Json
       }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       user_belongs_to_restaurant: {
