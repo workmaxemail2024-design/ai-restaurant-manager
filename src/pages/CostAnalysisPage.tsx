@@ -365,7 +365,7 @@ export default function CostAnalysisPage() {
           </div>
         )}
 
-        {!isLoading && !dishesError && dishes.length === 0 && (
+        {!isLoading && !dishesError && allDishes.length === 0 && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No dishes found</AlertTitle>
@@ -373,7 +373,7 @@ export default function CostAnalysisPage() {
           </Alert>
         )}
 
-        {!isLoading && dishes.length > 0 && (
+        {!isLoading && allDishes.length > 0 && (
           <>
             {/* Filters */}
             <Card>
