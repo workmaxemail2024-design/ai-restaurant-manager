@@ -2,7 +2,7 @@
 // Order of checks is important — modifiers first (strongest signal), then
 // specific food/drink dept names, then broader keyword search.
 
-export type PosItemType = 'food' | 'drink' | 'modifier' | 'other';
+export type PosItemType = 'food' | 'drink' | 'side' | 'modifier' | 'other';
 export type DrinkType = 'alcoholic' | 'non_alcoholic' | 'unknown';
 
 // Exact / substring matches on the DEPARTMENT column
@@ -101,12 +101,13 @@ export function inferDrinkType(
   return 'unknown';
 }
 
-export const ITEM_TYPES: PosItemType[] = ['food', 'drink', 'modifier', 'other'];
+export const ITEM_TYPES: PosItemType[] = ['food', 'drink', 'side', 'modifier', 'other'];
 
 export const ITEM_TYPE_LABEL: Record<PosItemType, string> = {
   food: 'Food',
   drink: 'Drink',
-  modifier: 'Modifier / Side',
+  side: 'Side',
+  modifier: 'Modifier',
   other: 'Other',
 };
 

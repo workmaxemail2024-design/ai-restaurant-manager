@@ -582,7 +582,7 @@ export interface ExternalPOSItem {
   department: string | null;
   mapped_dish_id: string | null;
   needs_review: boolean;
-  manual_type: 'food' | 'drink' | 'modifier' | 'other' | null;
+  manual_type: 'food' | 'drink' | 'side' | 'modifier' | 'other' | null;
   manual_drink_type: 'alcoholic' | 'non_alcoholic' | 'unknown' | null;
   last_qty: number | null;
   last_gross: number | null;
@@ -634,7 +634,7 @@ export function useAllExternalPOSItems() {
 export function useUpdateExternalPOSItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { id: string; mapped_dish_id?: string | null; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'modifier' | 'other' | null; manual_drink_type?: 'alcoholic' | 'non_alcoholic' | 'unknown' | null }) => {
+    mutationFn: async (params: { id: string; mapped_dish_id?: string | null; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'side' | 'modifier' | 'other' | null; manual_drink_type?: 'alcoholic' | 'non_alcoholic' | 'unknown' | null }) => {
       const update: Record<string, unknown> = {};
       if (params.mapped_dish_id !== undefined) update.mapped_dish_id = params.mapped_dish_id;
       if (params.needs_review !== undefined) update.needs_review = params.needs_review;
@@ -651,6 +651,8 @@ export function useUpdateExternalPOSItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["external-pos-items"] });
+      queryClient.invalidateQueries({ queryKey: ["external-pos-items-catalogue"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-breakdown-classification"] });
       queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
       queryClient.invalidateQueries({ queryKey: ["dishes"] });
       toast({ title: "POS item updated" });
@@ -664,7 +666,7 @@ export function useUpdateExternalPOSItem() {
 export function useBulkUpdateExternalPOSItems() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (params: { ids: string[]; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'modifier' | 'other' | null; manual_drink_type?: 'alcoholic' | 'non_alcoholic' | 'unknown' | null }) => {
+    mutationFn: async (params: { ids: string[]; needs_review?: boolean; manual_type?: 'food' | 'drink' | 'side' | 'modifier' | 'other' | null; manual_drink_type?: 'alcoholic' | 'non_alcoholic' | 'unknown' | null }) => {
       if (!params.ids.length) return 0;
       const update: Record<string, unknown> = {};
       if (params.needs_review !== undefined) update.needs_review = params.needs_review;
@@ -679,6 +681,8 @@ export function useBulkUpdateExternalPOSItems() {
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ["external-pos-items"] });
+      queryClient.invalidateQueries({ queryKey: ["external-pos-items-catalogue"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-breakdown-classification"] });
       toast({ title: `${count} item(s) updated` });
     },
     onError: (error) => {

@@ -25,41 +25,15 @@ import { formatCurrency } from "@/lib/currency";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useRestaurant } from "@/contexts/RestaurantContext";
-import { inferItemType, inferDrinkType } from "@/lib/posItemClassification";
+import {
+  resolveProductClass,
+  toStoredClassification,
+  PRODUCT_CLASS_LABEL,
+  PRODUCT_CLASS_OPTIONS,
+  type ProductClass,
+} from "@/lib/productClassification";
+import { ProductTypeBadge } from "@/components/products/ProductTypeBadge";
 import { Button } from "@/components/ui/button";
-
-type Classification =
-  | "food"
-  | "alcoholic"
-  | "non_alcoholic"
-  | "modifier"
-  | "ingredient"
-  | "ignore";
-
-const CLASSIFICATION_LABELS: Record<Classification, string> = {
-  food: "Food",
-  alcoholic: "Alcoholic drink",
-  non_alcoholic: "Non-alcoholic drink",
-  modifier: "Modifier / Side",
-  ingredient: "Ingredient / Stock",
-  ignore: "Ignore / Other",
-};
-
-function classificationToUpdate(c: Classification) {
-  switch (c) {
-    case "food":
-      return { manual_type: "food" as const, manual_drink_type: null };
-    case "alcoholic":
-      return { manual_type: "drink" as const, manual_drink_type: "alcoholic" as const };
-    case "non_alcoholic":
-      return { manual_type: "drink" as const, manual_drink_type: "non_alcoholic" as const };
-    case "modifier":
-      return { manual_type: "modifier" as const, manual_drink_type: null };
-    case "ingredient":
-    case "ignore":
-      return { manual_type: "other" as const, manual_drink_type: null };
-  }
-}
 
 export default function ProductIntelligencePage() {
   const { data: locations = [] } = useLocations();
@@ -130,11 +104,14 @@ export default function ProductIntelligencePage() {
   const classified = useMemo(() => {
     return rows.map((r) => {
       const cat = catByExt.get(r.external_item_id);
-      const explicitType = cat?.manual_type as string | undefined;
-      const type = explicitType || inferItemType(r.department, r.item_name);
-      const drink =
-        cat?.manual_drink_type ||
-        (type === "drink" ? inferDrinkType(r.department, r.item_name) : "unknown");
+      // Historical rows inherit the CURRENT canonical classification of the
+      // mapped product rather than whatever was guessed at import time.
+      const resolved = resolveProductClass({
+        department: r.department,
+        name: r.item_name,
+        manualType: cat?.manual_type ?? null,
+        manualDrinkType: cat?.manual_drink_type ?? null,
+      });
       const dish = dishByExt.get(r.external_item_id);
       const hasCost =
         !!dish &&
@@ -144,9 +121,8 @@ export default function ProductIntelligencePage() {
       return {
         ...r,
         catId: cat?.id as string | undefined,
-        type,
-        drink,
-        manualType: explicitType as string | undefined,
+        productClass: resolved.productClass,
+        isManual: resolved.isManual,
         needs_review: !!cat?.needs_review,
         is_new: isNew,
         has_cost: hasCost,
@@ -169,20 +145,17 @@ export default function ProductIntelligencePage() {
       food: { gross: 0, qty: 0 },
       alcoholic: { gross: 0, qty: 0 },
       non_alcoholic: { gross: 0, qty: 0 },
+      side: { gross: 0, qty: 0 },
       modifier: { gross: 0, qty: 0 },
       other: { gross: 0, qty: 0 },
     };
     for (const r of classified) {
       let bucket = "other";
-      if (r.type === "food") bucket = "food";
-      else if (r.type === "modifier") bucket = "modifier";
-      else if (r.type === "drink")
-        bucket =
-          r.drink === "alcoholic"
-            ? "alcoholic"
-            : r.drink === "non_alcoholic"
-            ? "non_alcoholic"
-            : "other";
+      if (r.productClass === "food") bucket = "food";
+      else if (r.productClass === "side") bucket = "side";
+      else if (r.productClass === "modifier") bucket = "modifier";
+      else if (r.productClass === "drink_alcoholic") bucket = "alcoholic";
+      else if (r.productClass === "drink_non_alcoholic") bucket = "non_alcoholic";
       t[bucket].gross += Number(r.gross_sales);
       t[bucket].qty += Number(r.quantity_sold);
     }
@@ -208,7 +181,7 @@ export default function ProductIntelligencePage() {
   const newProducts = classified.filter((r) => r.is_new);
   const needsReview = classified.filter((r) => r.needs_review);
   const missingCost = classified.filter(
-    (r) => !r.has_cost && r.type !== "modifier" && r.type !== "other",
+    (r) => !r.has_cost && r.productClass !== "modifier" && r.productClass !== "other",
   );
   const worthCostingFirst = [...missingCost]
     .sort((a, b) => b.gross_sales - a.gross_sales)
@@ -229,15 +202,13 @@ export default function ProductIntelligencePage() {
     });
   const clearSel = () => setSelected(new Set());
 
-  const setRowClassification = async (catId: string, c: Classification) => {
-    const upd = classificationToUpdate(c);
-    await updateOne.mutateAsync({ id: catId, ...upd, needs_review: false });
+  const setRowClassification = (catId: string, c: ProductClass) => {
+    updateOne.mutate({ id: catId, ...toStoredClassification(c), needs_review: false });
   };
-  const setBulkClassification = async (c: Classification) => {
+  const setBulkClassification = async (c: ProductClass) => {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    const upd = classificationToUpdate(c);
-    await bulkUpdate.mutateAsync({ ids, ...upd, needs_review: false });
+    await bulkUpdate.mutateAsync({ ids, ...toStoredClassification(c), needs_review: false });
     clearSel();
   };
   const markRowReviewed = async (catId: string) => {
@@ -294,25 +265,19 @@ export default function ProductIntelligencePage() {
                 <TableCell className="font-medium">{r.item_name}</TableCell>
                 <TableCell className="text-muted-foreground text-sm">{r.department}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="text-xs">
-                    {r.type === "drink"
-                      ? r.drink === "alcoholic"
-                        ? "Alcoholic"
-                        : r.drink === "non_alcoholic"
-                        ? "Non-alc"
-                        : "Drink"
-                      : r.type}
-                  </Badge>
-                  {!r.manualType && (
-                    <span className="ml-1 text-[10px] text-muted-foreground">(auto)</span>
-                  )}
+                  <ProductTypeBadge
+                    value={r.productClass}
+                    isManual={r.isManual}
+                    disabled={!r.catId || updateOne.isPending}
+                    onChange={(c) => r.catId && setRowClassification(r.catId, c)}
+                  />
                 </TableCell>
                 <TableCell className="text-right">{r.quantity_sold}</TableCell>
                 <TableCell className="text-right">{formatCurrency(Number(r.gross_sales))}</TableCell>
                 <TableCell className="text-xs space-x-1">
                   {r.is_new && <Badge variant="outline">New</Badge>}
                   {r.needs_review && <Badge className="bg-warning/15 text-warning">Review</Badge>}
-                  {!r.has_cost && r.type !== "modifier" && r.type !== "other" && (
+                  {!r.has_cost && r.productClass !== "modifier" && r.productClass !== "other" && (
                     <Badge variant="outline" className="text-warning border-warning/40">
                       No cost
                     </Badge>
@@ -320,31 +285,6 @@ export default function ProductIntelligencePage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
-                    {r.catId && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={updateOne.isPending}
-                          >
-                            Set type
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Classify as</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((c) => (
-                            <DropdownMenuItem
-                              key={c}
-                              onClick={() => setRowClassification(r.catId!, c)}
-                            >
-                              {CLASSIFICATION_LABELS[c]}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
                     {r.catId && r.needs_review && (
                       <Button
                         size="sm"
@@ -375,7 +315,8 @@ export default function ProductIntelligencePage() {
         <Info className="h-4 w-4" />
         <AlertDescription>
           <strong>Historical aggregate data</strong> — period totals, not daily transactions. Does
-          not affect daily dashboard, reports, labour %, AOV, or profit.
+          not affect daily dashboard, reports, labour %, AOV, or profit. Product types shown here
+          are the shared canonical classification: changing one updates Menu Performance too.
         </AlertDescription>
       </Alert>
 
@@ -445,11 +386,12 @@ export default function ProductIntelligencePage() {
                 </span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <CardContent className="grid grid-cols-2 md:grid-cols-6 gap-3">
               <TypeCard label="Food" data={byType.food} />
               <TypeCard label="Alcoholic drinks" data={byType.alcoholic} />
               <TypeCard label="Non-alcoholic" data={byType.non_alcoholic} />
-              <TypeCard label="Modifiers / sides" data={byType.modifier} />
+              <TypeCard label="Sides" data={byType.side} />
+              <TypeCard label="Modifiers" data={byType.modifier} />
               <TypeCard label="Other / unclassified" data={byType.other} />
             </CardContent>
           </Card>
@@ -467,9 +409,9 @@ export default function ProductIntelligencePage() {
                 <DropdownMenuContent align="start">
                   <DropdownMenuLabel>Classify as</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {(Object.keys(CLASSIFICATION_LABELS) as Classification[]).map((c) => (
+                  {PRODUCT_CLASS_OPTIONS.map((c) => (
                     <DropdownMenuItem key={c} onClick={() => setBulkClassification(c)}>
-                      {CLASSIFICATION_LABELS[c]}
+                      {PRODUCT_CLASS_LABEL[c]}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
