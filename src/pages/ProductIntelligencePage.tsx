@@ -142,11 +142,7 @@ export default function ProductIntelligencePage() {
 
   // Archived products stay in historical aggregates (totals below) but are
   // hidden from the working tables unless explicitly shown.
-  const [showArchived, setShowArchived] = useState(false);
-  const visible = useMemo(
-    () => (showArchived ? classified : classified.filter((r) => !r.archived)),
-    [classified, showArchived],
-  );
+  const visible = useMemo(() => classified.filter((r) => !r.archived), [classified]);
   const archivedCount = useMemo(() => classified.filter((r) => r.archived).length, [classified]);
 
   const totals = useMemo(() => {
