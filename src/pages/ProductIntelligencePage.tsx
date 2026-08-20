@@ -33,6 +33,7 @@ import {
   type ProductClass,
 } from "@/lib/productClassification";
 import { ProductTypeBadge } from "@/components/products/ProductTypeBadge";
+import { ProductActionsMenu } from "@/components/products/ProductActionsMenu";
 import { Button } from "@/components/ui/button";
 
 export default function ProductIntelligencePage() {
