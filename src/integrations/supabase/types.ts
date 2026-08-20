@@ -555,8 +555,11 @@ export type Database = {
       }
       external_pos_items: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           created_at: string
           department: string | null
+          display_name: string | null
           external_item_id: string
           external_item_name: string | null
           id: string
@@ -564,9 +567,11 @@ export type Database = {
           last_qty: number | null
           last_seen_at: string | null
           location_id: string
+          manual_department: string | null
           manual_drink_type: string | null
           manual_type: string | null
           mapped_dish_id: string | null
+          merged_into_id: string | null
           needs_review: boolean
           pos_provider: string
           restaurant_id: string
@@ -574,8 +579,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           department?: string | null
+          display_name?: string | null
           external_item_id: string
           external_item_name?: string | null
           id?: string
@@ -583,9 +591,11 @@ export type Database = {
           last_qty?: number | null
           last_seen_at?: string | null
           location_id: string
+          manual_department?: string | null
           manual_drink_type?: string | null
           manual_type?: string | null
           mapped_dish_id?: string | null
+          merged_into_id?: string | null
           needs_review?: boolean
           pos_provider: string
           restaurant_id: string
@@ -593,8 +603,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           created_at?: string
           department?: string | null
+          display_name?: string | null
           external_item_id?: string
           external_item_name?: string | null
           id?: string
@@ -602,9 +615,11 @@ export type Database = {
           last_qty?: number | null
           last_seen_at?: string | null
           location_id?: string
+          manual_department?: string | null
           manual_drink_type?: string | null
           manual_type?: string | null
           mapped_dish_id?: string | null
+          merged_into_id?: string | null
           needs_review?: boolean
           pos_provider?: string
           restaurant_id?: string
@@ -617,6 +632,13 @@ export type Database = {
             columns: ["mapped_dish_id"]
             isOneToOne: false
             referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_pos_items_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "external_pos_items"
             referencedColumns: ["id"]
           },
         ]

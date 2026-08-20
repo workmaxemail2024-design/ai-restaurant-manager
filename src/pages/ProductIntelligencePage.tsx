@@ -33,6 +33,7 @@ import {
   type ProductClass,
 } from "@/lib/productClassification";
 import { ProductTypeBadge } from "@/components/products/ProductTypeBadge";
+import { ProductActionsMenu } from "@/components/products/ProductActionsMenu";
 import { Button } from "@/components/ui/button";
 
 export default function ProductIntelligencePage() {
@@ -62,9 +63,11 @@ export default function ProductIntelligencePage() {
     queryKey: ["external-pos-items-catalogue", currentRestaurant?.id, locationId ?? "all"],
     enabled: !!currentRestaurant,
     queryFn: async () => {
-      let q = supabase
+      let q = (supabase as any)
         .from("external_pos_items")
-        .select("id, external_item_id, mapped_dish_id, needs_review, manual_type, manual_drink_type, source")
+        .select(
+          "id, location_id, external_item_id, external_item_name, department, display_name, manual_department, mapped_dish_id, needs_review, manual_type, manual_drink_type, archived_at, source",
+        )
         .eq("restaurant_id", currentRestaurant!.id);
       if (locationId) q = q.eq("location_id", locationId);
       const { data, error } = await q;
@@ -104,11 +107,13 @@ export default function ProductIntelligencePage() {
   const classified = useMemo(() => {
     return rows.map((r) => {
       const cat = catByExt.get(r.external_item_id);
-      // Historical rows inherit the CURRENT canonical classification of the
-      // mapped product rather than whatever was guessed at import time.
+      // Historical rows inherit the CURRENT canonical name / department /
+      // classification rather than whatever was captured at import time.
+      const department = cat?.manual_department ?? r.department;
+      const itemName = cat?.display_name ?? r.item_name;
       const resolved = resolveProductClass({
-        department: r.department,
-        name: r.item_name,
+        department,
+        name: itemName,
         manualType: cat?.manual_type ?? null,
         manualDrinkType: cat?.manual_drink_type ?? null,
       });
@@ -120,7 +125,11 @@ export default function ProductIntelligencePage() {
       const isNew = cat?.source === "captiva_historical" && !cat?.mapped_dish_id;
       return {
         ...r,
+        item_name: itemName,
+        department,
         catId: cat?.id as string | undefined,
+        cat,
+        archived: !!cat?.archived_at,
         productClass: resolved.productClass,
         isManual: resolved.isManual,
         needs_review: !!cat?.needs_review,
@@ -130,6 +139,11 @@ export default function ProductIntelligencePage() {
       };
     });
   }, [rows, catByExt, dishByExt]);
+
+  // Archived products stay in historical aggregates (totals below) but are
+  // hidden from the working tables unless explicitly shown.
+  const visible = useMemo(() => classified.filter((r) => !r.archived), [classified]);
+  const archivedCount = useMemo(() => classified.filter((r) => r.archived).length, [classified]);
 
   const totals = useMemo(() => {
     const t = { gross: 0, qty: 0, count: classified.length };
@@ -163,24 +177,25 @@ export default function ProductIntelligencePage() {
   }, [classified]);
 
   const topByRevenue = useMemo(
-    () => [...classified].sort((a, b) => b.gross_sales - a.gross_sales).slice(0, 15),
-    [classified],
+    () => [...visible].sort((a, b) => b.gross_sales - a.gross_sales).slice(0, 15),
+    [visible],
   );
   const topByQty = useMemo(
-    () => [...classified].sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 15),
-    [classified],
+    () => [...visible].sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 15),
+    [visible],
   );
   const lowSellers = useMemo(
     () =>
-      [...classified]
+      [...visible]
         .filter((r) => r.quantity_sold > 0)
         .sort((a, b) => a.quantity_sold - b.quantity_sold)
         .slice(0, 15),
-    [classified],
+    [visible],
   );
-  const newProducts = classified.filter((r) => r.is_new);
-  const needsReview = classified.filter((r) => r.needs_review);
-  const missingCost = classified.filter(
+  const newProducts = visible.filter((r) => r.is_new);
+  const needsReview = visible.filter((r) => r.needs_review);
+  const archivedProducts = classified.filter((r) => r.archived);
+  const missingCost = visible.filter(
     (r) => !r.has_cost && r.productClass !== "modifier" && r.productClass !== "other",
   );
   const worthCostingFirst = [...missingCost]
@@ -275,6 +290,7 @@ export default function ProductIntelligencePage() {
                 <TableCell className="text-right">{r.quantity_sold}</TableCell>
                 <TableCell className="text-right">{formatCurrency(Number(r.gross_sales))}</TableCell>
                 <TableCell className="text-xs space-x-1">
+                  {r.archived && <Badge variant="outline" className="text-muted-foreground">Archived</Badge>}
                   {r.is_new && <Badge variant="outline">New</Badge>}
                   {r.needs_review && <Badge className="bg-warning/15 text-warning">Review</Badge>}
                   {!r.has_cost && r.productClass !== "modifier" && r.productClass !== "other" && (
@@ -295,6 +311,26 @@ export default function ProductIntelligencePage() {
                         <Check className="h-3 w-3 mr-1" /> Reviewed
                       </Button>
                     )}
+                    <ProductActionsMenu
+                      item={
+                        r.cat
+                          ? {
+                              id: r.cat.id,
+                              external_item_id: r.cat.external_item_id,
+                              location_id: r.cat.location_id,
+                              mapped_dish_id: r.cat.mapped_dish_id,
+                              external_item_name: r.cat.external_item_name,
+                              display_name: r.cat.display_name ?? null,
+                              department: r.cat.department,
+                              manual_department: r.cat.manual_department ?? null,
+                              productClass: r.productClass,
+                              needs_review: r.needs_review,
+                              archived_at: r.cat.archived_at ?? null,
+                            }
+                          : null
+                      }
+                      fallbackName={r.item_name}
+                    />
                   </div>
                 </TableCell>
               </TableRow>
@@ -440,8 +476,20 @@ export default function ProductIntelligencePage() {
               <TabsTrigger value="cost">
                 Worth costing first ({worthCostingFirst.length})
               </TabsTrigger>
-              <TabsTrigger value="all">All ({classified.length})</TabsTrigger>
+              <TabsTrigger value="all">All ({visible.length})</TabsTrigger>
+              <TabsTrigger value="archived">Archived ({archivedCount})</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="archived">
+              <Alert className="mb-3">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Archived products stay attached to historical totals but are hidden from the
+                  active views. Restore one from its actions menu.
+                </AlertDescription>
+              </Alert>
+              {renderProductTable(archivedProducts, "No archived products")}
+            </TabsContent>
 
             <TabsContent value="top-revenue">{renderProductTable(topByRevenue)}</TabsContent>
             <TabsContent value="top-qty">{renderProductTable(topByQty)}</TabsContent>

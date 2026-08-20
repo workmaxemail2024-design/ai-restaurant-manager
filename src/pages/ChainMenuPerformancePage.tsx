@@ -46,9 +46,13 @@ import {
   type ProductClass,
 } from '@/lib/productClassification';
 import { ProductTypeBadge } from '@/components/products/ProductTypeBadge';
+import {
+  ProductActionsMenu,
+  type CanonicalProductActionTarget,
+} from '@/components/products/ProductActionsMenu';
 
 type StatusFilter = 'all' | 'mapped' | 'unmapped' | 'auto-review';
-type BucketTab = 'sold' | 'zero' | 'review' | 'modifiers' | 'sides' | 'all';
+type BucketTab = 'sold' | 'zero' | 'review' | 'modifiers' | 'sides' | 'all' | 'archived';
 type TypeFilter =
   | 'all'
   | 'food'
@@ -63,6 +67,7 @@ type ChartMode = 'food_drink' | 'food' | 'drink' | 'alcoholic' | 'non_alcoholic'
 interface Row {
   id: string;
   extId: string | null;
+  ext: ExternalPOSItem | null;
   name: string;
   department: string | null;
   productClass: ProductClass;
@@ -73,6 +78,7 @@ interface Row {
   basePrice: number;
   category: string | null;
   needsReview: boolean;
+  archived: boolean;
 }
 
 export default function ChainMenuPerformancePage() {
@@ -114,18 +120,21 @@ export default function ChainMenuPerformancePage() {
       const dishSales = (sales || []).filter((s) => s.dish_id === dish.id);
       const qty = dishSales.reduce((sum, s) => sum + s.quantity, 0);
       const rev = dishSales.reduce((sum, s) => sum + Number(s.total_price), 0);
-      const ext = extByDish.get(dish.id);
-      const dept = ext?.department ?? null;
+      const ext = extByDish.get(dish.id) ?? null;
+      const rawDept = ext?.department ?? null;
+      const dept = ext?.manual_department ?? rawDept;
+      const name = ext?.display_name ?? dish.name;
       const resolved = resolveProductClass({
         department: dept,
-        name: dish.name,
+        name,
         manualType: ext?.manual_type ?? null,
         manualDrinkType: ext?.manual_drink_type ?? null,
       });
       return {
         id: dish.id,
         extId: ext?.id ?? null,
-        name: dish.name,
+        ext,
+        name,
         department: dept,
         productClass: resolved.productClass,
         inferredClass: resolved.inferredClass,
@@ -135,21 +144,26 @@ export default function ChainMenuPerformancePage() {
         basePrice: dish.selling_price,
         category: dish.category,
         needsReview: ext?.needs_review ?? false,
+        archived: !!ext?.archived_at,
       };
     });
   }, [dishes, sales, extByDish]);
 
+  const archivedCount = useMemo(() => rows.filter((r) => r.archived).length, [rows]);
+
   const buckets = useMemo(() => {
-    const modifiers = rows.filter((r) => r.productClass === 'modifier');
-    const sides = rows.filter((r) => r.productClass === 'side');
-    const nonMod = rows.filter((r) => r.productClass !== 'modifier');
+    // Archived products are excluded from every active view / count.
+    const active = rows.filter((r) => !r.archived);
+    const modifiers = active.filter((r) => r.productClass === 'modifier');
+    const sides = active.filter((r) => r.productClass === 'side');
+    const nonMod = active.filter((r) => r.productClass !== 'modifier');
     const sold = nonMod.filter((r) => r.quantity > 0);
     const zero = nonMod.filter((r) => r.quantity === 0);
-    const review = rows.filter((r) => r.needsReview);
-    const alcoholic = rows.filter((r) => r.productClass === 'drink_alcoholic');
-    const nonAlcoholic = rows.filter((r) => r.productClass === 'drink_non_alcoholic');
-    const food = rows.filter((r) => r.productClass === 'food');
-    const unclassified = rows.filter((r) => !r.isManual && (r.productClass === 'other' || r.productClass === 'drink'));
+    const review = active.filter((r) => r.needsReview);
+    const alcoholic = active.filter((r) => r.productClass === 'drink_alcoholic');
+    const nonAlcoholic = active.filter((r) => r.productClass === 'drink_non_alcoholic');
+    const food = active.filter((r) => r.productClass === 'food');
+    const unclassified = active.filter((r) => !r.isManual && (r.productClass === 'other' || r.productClass === 'drink'));
     return {
       sold: sold.length,
       zero: zero.length,
@@ -160,12 +174,13 @@ export default function ChainMenuPerformancePage() {
       alcoholic: alcoholic.length,
       nonAlcoholic: nonAlcoholic.length,
       unclassified: unclassified.length,
-      all: rows.length,
+      archived: archivedCount,
+      all: active.length,
     };
-  }, [rows]);
+  }, [rows, archivedCount]);
 
   const underperformers = useMemo(() => {
-    const peers = rows.filter((r) => (r.productClass === 'food' || isDrinkClass(r.productClass)) && r.quantity > 0);
+    const peers = rows.filter((r) => !r.archived && (r.productClass === 'food' || isDrinkClass(r.productClass)) && r.quantity > 0);
     if (peers.length < 4) return [] as Row[];
     const qtys = peers.map((r) => r.quantity).sort((a, b) => a - b);
     const q1 = qtys[Math.floor(qtys.length * 0.25)];
@@ -187,12 +202,14 @@ export default function ChainMenuPerformancePage() {
   };
 
   const filtered = useMemo(() => {
-    let list = rows;
+    // Archived items are hidden everywhere except the dedicated Archived tab.
+    let list = tab === 'archived' ? rows.filter((r) => r.archived) : rows.filter((r) => !r.archived);
     if (tab === 'sold') list = list.filter((r) => r.quantity > 0 && r.productClass !== 'modifier');
     else if (tab === 'zero') list = list.filter((r) => r.quantity === 0 && r.productClass !== 'modifier');
     else if (tab === 'review') list = list.filter((r) => r.needsReview);
     else if (tab === 'modifiers') list = list.filter((r) => r.productClass === 'modifier');
     else if (tab === 'sides') list = list.filter((r) => r.productClass === 'side');
+
 
     if (!includeModifiers && tab !== 'modifiers' && tab !== 'all' && typeFilter !== 'modifier') {
       list = list.filter((r) => r.productClass !== 'modifier');
@@ -250,8 +267,28 @@ export default function ChainMenuPerformancePage() {
     updateOne.mutate({ id: extId, ...toStoredClassification(c), needs_review: false });
   };
 
+  const toActionTarget = (r: Row): CanonicalProductActionTarget | null => {
+    if (!r.ext) return null;
+    return {
+      id: r.ext.id,
+      external_item_id: r.ext.external_item_id,
+      location_id: r.ext.location_id,
+      mapped_dish_id: r.ext.mapped_dish_id,
+      external_item_name: r.ext.external_item_name,
+      display_name: r.ext.display_name ?? null,
+      department: r.ext.department,
+      manual_department: r.ext.manual_department ?? null,
+      productClass: r.productClass,
+      needs_review: r.needsReview,
+      archived_at: r.ext.archived_at ?? null,
+    };
+  };
+
+
+
   const chartData = useMemo(() => {
     const pool = rows.filter((r) => {
+      if (r.archived) return false;
       if (r.quantity <= 0) return false;
       if (r.productClass === 'modifier') return includeModifiers && chartMode === 'food_drink';
       switch (chartMode) {
@@ -392,7 +429,7 @@ export default function ChainMenuPerformancePage() {
         <Card>
           <CardHeader>
             <CardTitle>Item Performance</CardTitle>
-            <CardDescription>Click any Type badge to set the shared classification — it applies everywhere, including Product Intelligence</CardDescription>
+            <CardDescription>Click any Type badge to set the shared classification — it applies everywhere, including Product Intelligence. Use the row actions to edit, archive or delete a product.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Tabs value={tab} onValueChange={(v) => setTab(v as BucketTab)}>
@@ -403,6 +440,7 @@ export default function ChainMenuPerformancePage() {
                 <TabsTrigger value="modifiers">Modifiers ({buckets.modifiers})</TabsTrigger>
                 <TabsTrigger value="sides">Sides ({buckets.sides})</TabsTrigger>
                 <TabsTrigger value="all">All ({buckets.all})</TabsTrigger>
+                <TabsTrigger value="archived">Archived ({buckets.archived})</TabsTrigger>
               </TabsList>
             </Tabs>
 
@@ -507,6 +545,7 @@ export default function ChainMenuPerformancePage() {
                         <td className="py-3 px-2 text-right">{formatCurrency(r.basePrice)}</td>
                         <td className="py-3 px-2 text-center">
                           <div className="flex flex-col items-center gap-1">
+                            {r.archived && <Badge variant="outline" className="text-muted-foreground">Archived</Badge>}
                             {r.needsReview ? (
                               <Badge className="bg-yellow-500/20 text-yellow-600">Needs review</Badge>
                             ) : (
@@ -522,11 +561,14 @@ export default function ChainMenuPerformancePage() {
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {r.extId && r.needsReview && (
-                            <Button size="sm" variant="ghost" onClick={() => updateOne.mutate({ id: r.extId!, needs_review: false })} disabled={updateOne.isPending}>
-                              Mark reviewed
-                            </Button>
-                          )}
+                          <div className="flex items-center justify-end gap-1">
+                            {r.extId && r.needsReview && (
+                              <Button size="sm" variant="ghost" onClick={() => updateOne.mutate({ id: r.extId!, needs_review: false })} disabled={updateOne.isPending}>
+                                Mark reviewed
+                              </Button>
+                            )}
+                            <ProductActionsMenu item={toActionTarget(r)} fallbackName={r.name} />
+                          </div>
                         </td>
                       </tr>
                     );
