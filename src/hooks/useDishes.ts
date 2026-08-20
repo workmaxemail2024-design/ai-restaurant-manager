@@ -19,6 +19,11 @@ export interface Dish {
   is_active: boolean | null;
   direct_cost: number | null;
   use_direct_cost: boolean | null;
+  /** Set when the dish was archived (hidden from active views, history kept). */
+  archived_at: string | null;
+  archived_by: string | null;
+  /** Set when this dish was merged into a master canonical dish. */
+  merged_into_id: string | null;
   locations?: { name: string } | null;
   /** Computed cost (recipe or direct). null = no cost configured. */
   dish_cost: number | null;
