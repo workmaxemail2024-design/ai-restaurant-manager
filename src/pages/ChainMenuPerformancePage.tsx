@@ -521,6 +521,7 @@ export default function ChainMenuPerformancePage() {
                         <td className="py-3 px-2 text-right">{formatCurrency(r.basePrice)}</td>
                         <td className="py-3 px-2 text-center">
                           <div className="flex flex-col items-center gap-1">
+                            {r.archived && <Badge variant="outline" className="text-muted-foreground">Archived</Badge>}
                             {r.needsReview ? (
                               <Badge className="bg-yellow-500/20 text-yellow-600">Needs review</Badge>
                             ) : (
@@ -536,11 +537,14 @@ export default function ChainMenuPerformancePage() {
                           </div>
                         </td>
                         <td className="py-3 px-2 text-right">
-                          {r.extId && r.needsReview && (
-                            <Button size="sm" variant="ghost" onClick={() => updateOne.mutate({ id: r.extId!, needs_review: false })} disabled={updateOne.isPending}>
-                              Mark reviewed
-                            </Button>
-                          )}
+                          <div className="flex items-center justify-end gap-1">
+                            {r.extId && r.needsReview && (
+                              <Button size="sm" variant="ghost" onClick={() => updateOne.mutate({ id: r.extId!, needs_review: false })} disabled={updateOne.isPending}>
+                                Mark reviewed
+                              </Button>
+                            )}
+                            <ProductActionsMenu item={toActionTarget(r)} fallbackName={r.name} />
+                          </div>
                         </td>
                       </tr>
                     );
