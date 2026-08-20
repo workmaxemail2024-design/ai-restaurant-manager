@@ -176,7 +176,7 @@ export default function ChainMenuPerformancePage() {
   }, [rows, archivedCount]);
 
   const underperformers = useMemo(() => {
-    const peers = rows.filter((r) => (r.productClass === 'food' || isDrinkClass(r.productClass)) && r.quantity > 0);
+    const peers = rows.filter((r) => !r.archived && (r.productClass === 'food' || isDrinkClass(r.productClass)) && r.quantity > 0);
     if (peers.length < 4) return [] as Row[];
     const qtys = peers.map((r) => r.quantity).sort((a, b) => a - b);
     const q1 = qtys[Math.floor(qtys.length * 0.25)];
