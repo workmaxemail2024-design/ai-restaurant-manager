@@ -405,7 +405,7 @@ export default function ChainMenuPerformancePage() {
         <Card>
           <CardHeader>
             <CardTitle>Item Performance</CardTitle>
-            <CardDescription>Click any Type badge to set the shared classification — it applies everywhere, including Product Intelligence</CardDescription>
+            <CardDescription>Click any Type badge to set the shared classification — it applies everywhere, including Product Intelligence. Use the row actions to edit, archive or delete a product.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Tabs value={tab} onValueChange={(v) => setTab(v as BucketTab)}>
@@ -416,6 +416,7 @@ export default function ChainMenuPerformancePage() {
                 <TabsTrigger value="modifiers">Modifiers ({buckets.modifiers})</TabsTrigger>
                 <TabsTrigger value="sides">Sides ({buckets.sides})</TabsTrigger>
                 <TabsTrigger value="all">All ({buckets.all})</TabsTrigger>
+                <TabsTrigger value="archived">Archived ({buckets.archived})</TabsTrigger>
               </TabsList>
             </Tabs>
 
