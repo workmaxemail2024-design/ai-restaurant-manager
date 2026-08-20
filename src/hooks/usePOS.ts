@@ -652,7 +652,7 @@ export function useUpdateExternalPOSItem() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["external-pos-items"] });
       queryClient.invalidateQueries({ queryKey: ["external-pos-items-catalogue"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-breakdown"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-breakdown-classification"] });
       queryClient.invalidateQueries({ queryKey: ["pos-sales-imports"] });
       queryClient.invalidateQueries({ queryKey: ["dishes"] });
       toast({ title: "POS item updated" });
@@ -682,7 +682,7 @@ export function useBulkUpdateExternalPOSItems() {
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ["external-pos-items"] });
       queryClient.invalidateQueries({ queryKey: ["external-pos-items-catalogue"] });
-      queryClient.invalidateQueries({ queryKey: ["daily-breakdown"] });
+      queryClient.invalidateQueries({ queryKey: ["daily-breakdown-classification"] });
       toast({ title: `${count} item(s) updated` });
     },
     onError: (error) => {
