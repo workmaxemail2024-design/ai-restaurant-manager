@@ -267,6 +267,25 @@ export default function ChainMenuPerformancePage() {
     updateOne.mutate({ id: extId, ...toStoredClassification(c), needs_review: false });
   };
 
+  const toActionTarget = (r: Row): CanonicalProductActionTarget | null => {
+    if (!r.ext) return null;
+    return {
+      id: r.ext.id,
+      external_item_id: r.ext.external_item_id,
+      location_id: r.ext.location_id,
+      mapped_dish_id: r.ext.mapped_dish_id,
+      external_item_name: r.ext.external_item_name,
+      display_name: r.ext.display_name ?? null,
+      department: r.ext.department,
+      manual_department: r.ext.manual_department ?? null,
+      productClass: r.productClass,
+      needs_review: r.needsReview,
+      archived_at: r.ext.archived_at ?? null,
+    };
+  };
+
+
+
   const chartData = useMemo(() => {
     const pool = rows.filter((r) => {
       if (r.quantity <= 0) return false;
