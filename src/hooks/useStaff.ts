@@ -52,6 +52,12 @@ export interface StaffAttendance {
   clock_in: string;
   clock_out: string | null;
   source: AttendanceSource;
+  is_corrected?: boolean | null;
+  original_clock_in?: string | null;
+  original_clock_out?: string | null;
+  original_source?: string | null;
+  corrected_at?: string | null;
+  corrected_by?: string | null;
   created_at: string;
   staff?: { first_name: string; last_name: string };
   locations?: { name: string };
