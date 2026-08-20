@@ -293,6 +293,7 @@ export default function ProductIntelligencePage() {
                 <TableCell className="text-right">{r.quantity_sold}</TableCell>
                 <TableCell className="text-right">{formatCurrency(Number(r.gross_sales))}</TableCell>
                 <TableCell className="text-xs space-x-1">
+                  {r.archived && <Badge variant="outline" className="text-muted-foreground">Archived</Badge>}
                   {r.is_new && <Badge variant="outline">New</Badge>}
                   {r.needs_review && <Badge className="bg-warning/15 text-warning">Review</Badge>}
                   {!r.has_cost && r.productClass !== "modifier" && r.productClass !== "other" && (
@@ -313,6 +314,26 @@ export default function ProductIntelligencePage() {
                         <Check className="h-3 w-3 mr-1" /> Reviewed
                       </Button>
                     )}
+                    <ProductActionsMenu
+                      item={
+                        r.cat
+                          ? {
+                              id: r.cat.id,
+                              external_item_id: r.cat.external_item_id,
+                              location_id: r.cat.location_id,
+                              mapped_dish_id: r.cat.mapped_dish_id,
+                              external_item_name: r.cat.external_item_name,
+                              display_name: r.cat.display_name ?? null,
+                              department: r.cat.department,
+                              manual_department: r.cat.manual_department ?? null,
+                              productClass: r.productClass,
+                              needs_review: r.needs_review,
+                              archived_at: r.cat.archived_at ?? null,
+                            }
+                          : null
+                      }
+                      fallbackName={r.item_name}
+                    />
                   </div>
                 </TableCell>
               </TableRow>
