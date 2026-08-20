@@ -198,12 +198,14 @@ export default function ChainMenuPerformancePage() {
   };
 
   const filtered = useMemo(() => {
-    let list = rows;
+    // Archived items are hidden everywhere except the dedicated Archived tab.
+    let list = tab === 'archived' ? rows.filter((r) => r.archived) : rows.filter((r) => !r.archived);
     if (tab === 'sold') list = list.filter((r) => r.quantity > 0 && r.productClass !== 'modifier');
     else if (tab === 'zero') list = list.filter((r) => r.quantity === 0 && r.productClass !== 'modifier');
     else if (tab === 'review') list = list.filter((r) => r.needsReview);
     else if (tab === 'modifiers') list = list.filter((r) => r.productClass === 'modifier');
     else if (tab === 'sides') list = list.filter((r) => r.productClass === 'side');
+
 
     if (!includeModifiers && tab !== 'modifiers' && tab !== 'all' && typeFilter !== 'modifier') {
       list = list.filter((r) => r.productClass !== 'modifier');
