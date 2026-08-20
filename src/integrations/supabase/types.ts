@@ -2105,9 +2105,15 @@ export type Database = {
         Row: {
           clock_in: string
           clock_out: string | null
+          corrected_at: string | null
+          corrected_by: string | null
           created_at: string
           id: string
+          is_corrected: boolean
           location_id: string
+          original_clock_in: string | null
+          original_clock_out: string | null
+          original_source: string | null
           restaurant_id: string | null
           source: Database["public"]["Enums"]["attendance_source"]
           staff_id: string
@@ -2115,9 +2121,15 @@ export type Database = {
         Insert: {
           clock_in: string
           clock_out?: string | null
+          corrected_at?: string | null
+          corrected_by?: string | null
           created_at?: string
           id?: string
+          is_corrected?: boolean
           location_id: string
+          original_clock_in?: string | null
+          original_clock_out?: string | null
+          original_source?: string | null
           restaurant_id?: string | null
           source?: Database["public"]["Enums"]["attendance_source"]
           staff_id: string
@@ -2125,9 +2137,15 @@ export type Database = {
         Update: {
           clock_in?: string
           clock_out?: string | null
+          corrected_at?: string | null
+          corrected_by?: string | null
           created_at?: string
           id?: string
+          is_corrected?: boolean
           location_id?: string
+          original_clock_in?: string | null
+          original_clock_out?: string | null
+          original_source?: string | null
           restaurant_id?: string | null
           source?: Database["public"]["Enums"]["attendance_source"]
           staff_id?: string
