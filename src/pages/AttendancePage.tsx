@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Clock, LogIn, LogOut, AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
+import { Clock, LogIn, LogOut, AlertTriangle, TrendingDown, TrendingUp, Pencil } from "lucide-react";
 import { useStaff, useStaffAttendance, useClockIn, useClockOut, StaffAttendance } from "@/hooks/useStaff";
 import { useStaffShifts } from "@/hooks/useShifts";
 import { useLocations } from "@/hooks/useLocations";
@@ -16,6 +16,9 @@ import { format, parseISO, differenceInMinutes } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
+import { describeAttendanceSource } from "@/lib/attendanceSource";
+import { AttendanceCorrectionDialog } from "@/components/staff/AttendanceCorrectionDialog";
 
 const LONG_SHIFT_THRESHOLD = 10; // hours
 const VARIANCE_THRESHOLD = 2; // hours difference to flag
@@ -30,6 +33,11 @@ export default function AttendancePage() {
   const { data: shifts = [] } = useStaffShifts(queryStartDate, queryEndDate);
   const clockIn = useClockIn();
   const clockOut = useClockOut();
+
+  const { hasPermission } = usePermissions();
+  const canEditAttendance = hasPermission("staff", "edit");
+  const canDeleteAttendance = hasPermission("staff", "admin");
+  const [editingRecord, setEditingRecord] = useState<StaffAttendance | null>(null);
 
   const [open, setOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState("");
@@ -182,16 +190,33 @@ export default function AttendancePage() {
     },
     { 
       key: "source", header: "Source",
-      render: (item: StaffAttendance) => (
-        <Badge variant="secondary" className="capitalize text-[10px]">{item.source}</Badge>
-      )
+      render: (item: StaffAttendance) => {
+        const info = describeAttendanceSource(item);
+        return (
+          <Badge
+            variant={info.kind === "override" ? "outline" : "secondary"}
+            className={cn("text-[10px]", info.kind === "override" && "border-warning text-warning")}
+          >
+            {info.label}
+          </Badge>
+        );
+      }
     },
     {
       key: "actions", header: "",
-      render: (item: StaffAttendance) => !item.clock_out && (
-        <Button size="sm" variant="outline" onClick={() => clockOut.mutate(item.id)} disabled={clockOut.isPending}>
-          <LogOut className="mr-1 h-3 w-3" /> Out
-        </Button>
+      render: (item: StaffAttendance) => (
+        <div className="flex justify-end gap-1">
+          {!item.clock_out && (
+            <Button size="sm" variant="outline" onClick={() => clockOut.mutate(item.id)} disabled={clockOut.isPending}>
+              <LogOut className="mr-1 h-3 w-3" /> Out
+            </Button>
+          )}
+          {canEditAttendance && (
+            <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingRecord(item)}>
+              <Pencil className="mr-1 h-3 w-3" /> Edit
+            </Button>
+          )}
+        </div>
       )
     }
   ];
@@ -360,6 +385,16 @@ export default function AttendancePage() {
         ) : (
           <DataTable data={attendance} columns={columns} isLoading={isLoading} />
         )}
+
+        <AttendanceCorrectionDialog
+          record={editingRecord}
+          open={!!editingRecord}
+          onOpenChange={(o) => !o && setEditingRecord(null)}
+          staff={staff}
+          locations={locations}
+          canEdit={canEditAttendance}
+          canDelete={canDeleteAttendance}
+        />
 
       </div>
     </PageLayout>
