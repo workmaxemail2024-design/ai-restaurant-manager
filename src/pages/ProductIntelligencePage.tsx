@@ -106,11 +106,13 @@ export default function ProductIntelligencePage() {
   const classified = useMemo(() => {
     return rows.map((r) => {
       const cat = catByExt.get(r.external_item_id);
-      // Historical rows inherit the CURRENT canonical classification of the
-      // mapped product rather than whatever was guessed at import time.
+      // Historical rows inherit the CURRENT canonical name / department /
+      // classification rather than whatever was captured at import time.
+      const department = cat?.manual_department ?? r.department;
+      const itemName = cat?.display_name ?? r.item_name;
       const resolved = resolveProductClass({
-        department: r.department,
-        name: r.item_name,
+        department,
+        name: itemName,
         manualType: cat?.manual_type ?? null,
         manualDrinkType: cat?.manual_drink_type ?? null,
       });
@@ -122,7 +124,11 @@ export default function ProductIntelligencePage() {
       const isNew = cat?.source === "captiva_historical" && !cat?.mapped_dish_id;
       return {
         ...r,
+        item_name: itemName,
+        department,
         catId: cat?.id as string | undefined,
+        cat,
+        archived: !!cat?.archived_at,
         productClass: resolved.productClass,
         isManual: resolved.isManual,
         needs_review: !!cat?.needs_review,
@@ -132,6 +138,15 @@ export default function ProductIntelligencePage() {
       };
     });
   }, [rows, catByExt, dishByExt]);
+
+  // Archived products stay in historical aggregates (totals below) but are
+  // hidden from the working tables unless explicitly shown.
+  const [showArchived, setShowArchived] = useState(false);
+  const visible = useMemo(
+    () => (showArchived ? classified : classified.filter((r) => !r.archived)),
+    [classified, showArchived],
+  );
+  const archivedCount = useMemo(() => classified.filter((r) => r.archived).length, [classified]);
 
   const totals = useMemo(() => {
     const t = { gross: 0, qty: 0, count: classified.length };
