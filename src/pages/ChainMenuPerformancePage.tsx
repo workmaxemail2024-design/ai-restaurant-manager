@@ -288,6 +288,7 @@ export default function ChainMenuPerformancePage() {
 
   const chartData = useMemo(() => {
     const pool = rows.filter((r) => {
+      if (r.archived) return false;
       if (r.quantity <= 0) return false;
       if (r.productClass === 'modifier') return includeModifiers && chartMode === 'food_drink';
       switch (chartMode) {
