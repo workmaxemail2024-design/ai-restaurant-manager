@@ -584,6 +584,13 @@ export interface ExternalPOSItem {
   needs_review: boolean;
   manual_type: 'food' | 'drink' | 'side' | 'modifier' | 'other' | null;
   manual_drink_type: 'alcoholic' | 'non_alcoholic' | 'unknown' | null;
+  /** Manual name override; external_item_name keeps the raw imported value. */
+  display_name: string | null;
+  /** Manual department override; department keeps the raw imported value. */
+  manual_department: string | null;
+  archived_at: string | null;
+  /** Groundwork for a future Merge Product action. */
+  merged_into_id: string | null;
   last_qty: number | null;
   last_gross: number | null;
   last_seen_at: string | null;
