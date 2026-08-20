@@ -63,6 +63,7 @@ type ChartMode = 'food_drink' | 'food' | 'drink' | 'alcoholic' | 'non_alcoholic'
 interface Row {
   id: string;
   extId: string | null;
+  ext: ExternalPOSItem | null;
   name: string;
   department: string | null;
   productClass: ProductClass;
@@ -73,6 +74,7 @@ interface Row {
   basePrice: number;
   category: string | null;
   needsReview: boolean;
+  archived: boolean;
 }
 
 export default function ChainMenuPerformancePage() {
