@@ -46,6 +46,10 @@ import {
   type ProductClass,
 } from '@/lib/productClassification';
 import { ProductTypeBadge } from '@/components/products/ProductTypeBadge';
+import {
+  ProductActionsMenu,
+  type CanonicalProductActionTarget,
+} from '@/components/products/ProductActionsMenu';
 
 type StatusFilter = 'all' | 'mapped' | 'unmapped' | 'auto-review';
 type BucketTab = 'sold' | 'zero' | 'review' | 'modifiers' | 'sides' | 'all' | 'archived';
