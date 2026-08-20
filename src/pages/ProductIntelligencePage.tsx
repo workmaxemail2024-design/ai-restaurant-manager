@@ -479,8 +479,20 @@ export default function ProductIntelligencePage() {
               <TabsTrigger value="cost">
                 Worth costing first ({worthCostingFirst.length})
               </TabsTrigger>
-              <TabsTrigger value="all">All ({classified.length})</TabsTrigger>
+              <TabsTrigger value="all">All ({visible.length})</TabsTrigger>
+              <TabsTrigger value="archived">Archived ({archivedCount})</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="archived">
+              <Alert className="mb-3">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Archived products stay attached to historical totals but are hidden from the
+                  active views. Restore one from its actions menu.
+                </AlertDescription>
+              </Alert>
+              {renderProductTable(archivedProducts, "No archived products")}
+            </TabsContent>
 
             <TabsContent value="top-revenue">{renderProductTable(topByRevenue)}</TabsContent>
             <TabsContent value="top-qty">{renderProductTable(topByQty)}</TabsContent>
