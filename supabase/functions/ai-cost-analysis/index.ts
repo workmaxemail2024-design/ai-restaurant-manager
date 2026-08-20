@@ -39,7 +39,7 @@ serve(async (req) => {
       });
     }
 
-    const { dishes, restaurant_id } = await req.json();
+    const { dishes, restaurant_id, coverage } = await req.json();
 
     // Verify user belongs to restaurant if provided
     if (restaurant_id) {
