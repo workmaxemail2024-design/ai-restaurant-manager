@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronRight, Pencil, Trash2, Eye, Link2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Eye, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { DishMenuBadges } from "@/components/menus/DishMenuBadges";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import type { Dish } from "@/hooks/useDishes";
+import { DishActionsMenu } from "@/components/dishes/DishActionsMenu";
 
 interface DishCategorySectionProps {
   category: string;
@@ -18,6 +19,8 @@ interface DishCategorySectionProps {
   onDelete: (dish: Dish) => void;
   onViewRecipe: (dish: Dish) => void;
   sessionKey: string;
+  /** Candidate dishes for the merge picker in the row actions menu. */
+  allDishes?: Dish[];
 }
 
 // Drink sub-categories for special handling
@@ -31,6 +34,7 @@ export function DishCategorySection({
   onDelete,
   onViewRecipe,
   sessionKey,
+  allDishes = [],
 }: DishCategorySectionProps) {
   const storageKey = `dish-category-expanded-${sessionKey}-${category}`;
   const [isOpen, setIsOpen] = useState(() => {
@@ -98,6 +102,11 @@ export function DishCategorySection({
           >
             {dish.name}
           </button>
+          {dish.archived_at && (
+            <Badge variant="outline" className="w-fit text-[10px] py-0">
+              {dish.merged_into_id ? "Merged" : "Archived"}
+            </Badge>
+          )}
           <DishMenuBadges dishId={dish.id} maxShow={2} />
         </div>
       </TableCell>
@@ -139,7 +148,7 @@ export function DishCategorySection({
         )}
       </TableCell>
       <TableCell className={cn("text-right", compact ? "py-1.5" : "py-2")}>
-        <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-0.5">
           <Button
             variant="ghost"
             size="icon"
@@ -158,15 +167,7 @@ export function DishCategorySection({
           >
             <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={() => onDelete(dish)}
-            title="Delete dish"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <DishActionsMenu dish={dish} onEdit={onViewRecipe} allDishes={allDishes} />
         </div>
       </TableCell>
     </TableRow>

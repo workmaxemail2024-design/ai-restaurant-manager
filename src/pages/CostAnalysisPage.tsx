@@ -15,6 +15,7 @@ import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { DishDetailDialog } from "@/components/dishes/DishDetailDialog";
+import { DishActionsMenu } from "@/components/dishes/DishActionsMenu";
 import { supabase } from "@/integrations/supabase/client";
 import {
   TrendingUp, TrendingDown, AlertTriangle, Sparkles, Loader2, Percent,
@@ -79,7 +80,14 @@ export default function CostAnalysisPage() {
   const [locationFilter, setLocationFilter] = useState<string>("_global");
   const effectiveLocationId = locationFilter === "_global" ? selectedLocationId : locationFilter === "_all" ? null : locationFilter;
 
-  const { data: dishes = [], isLoading, error: dishesError } = useDishes(effectiveLocationId);
+  const { data: allDishes = [], isLoading, error: dishesError } = useDishes(effectiveLocationId, {
+    includeArchived: true,
+  });
+  // Archived dishes are hidden from every active view, metric and ranking, but
+  // remain reachable through the Archived filter for restore / maintenance.
+  const activeDishes = useMemo(() => allDishes.filter((d) => !d.archived_at), [allDishes]);
+  const archivedDishes = useMemo(() => allDishes.filter((d) => !!d.archived_at), [allDishes]);
+  const dishes = activeDishes;
   const { data: locations = [] } = useLocations();
   const { data: menus = [] } = useMenus(effectiveLocationId, "active");
   const { data: sales = [] } = useSales(startDate, endDate, effectiveLocationId);
@@ -185,6 +193,18 @@ export default function CostAnalysisPage() {
     });
   }, [dishes, salesByDish]);
 
+  // Separate rows for the Archived view (never part of metrics)
+  const archivedRows = useMemo(
+    () =>
+      archivedDishes.map((d) => ({
+        id: d.id,
+        dish: d,
+        name: d.name,
+        category: d.category || d.department || "Uncategorized",
+      })),
+    [archivedDishes]
+  );
+
   const categories = useMemo(
     () => Array.from(new Set(rows.map((r) => r.category))).sort((a, b) => a.localeCompare(b)),
     [rows]
@@ -225,6 +245,7 @@ export default function CostAnalysisPage() {
       if (statusFilter === "missing" && r.cost !== null) return false;
       if (statusFilter === "needs_review" && r.status !== "needs_review") return false;
       if (statusFilter === "duplicates" && !r.isDuplicate) return false;
+      if (statusFilter === "archived") return false;
       if (q && !r.name.toLowerCase().includes(q) && !r.category.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -344,7 +365,7 @@ export default function CostAnalysisPage() {
           </div>
         )}
 
-        {!isLoading && !dishesError && dishes.length === 0 && (
+        {!isLoading && !dishesError && allDishes.length === 0 && (
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No dishes found</AlertTitle>
@@ -352,7 +373,7 @@ export default function CostAnalysisPage() {
           </Alert>
         )}
 
-        {!isLoading && dishes.length > 0 && (
+        {!isLoading && allDishes.length > 0 && (
           <>
             {/* Filters */}
             <Card>
@@ -397,6 +418,7 @@ export default function CostAnalysisPage() {
                       <SelectItem value="missing">Missing cost</SelectItem>
                       <SelectItem value="needs_review">Needs review</SelectItem>
                       <SelectItem value="duplicates">Possible duplicates</SelectItem>
+                      <SelectItem value="archived">Archived ({archivedDishes.length})</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -423,7 +445,7 @@ export default function CostAnalysisPage() {
                   <span>
                     These share a name and location with another canonical dish (typically one manual/menu record plus one
                     POS-imported record). They are counted once in every metric and are not treated as separate recipes.
-                    Nothing has been merged automatically.
+                    Nothing has been merged automatically — use the row actions to merge a duplicate into its master.
                   </span>
                   <Button size="sm" variant="outline" onClick={() => setStatusFilter("duplicates")}>Review duplicates</Button>
                 </AlertDescription>
@@ -605,6 +627,7 @@ export default function CostAnalysisPage() {
                         <SortHeader label="Margin %" k="marginPercent" />
                         <SortHeader label="Sales qty" k="salesQty" />
                         <SortHeader label="Status" k="status" />
+                        <th className="py-2 font-medium text-right w-10"><span className="sr-only">Actions</span></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -648,11 +671,14 @@ export default function CostAnalysisPage() {
                             {r.salesQty !== null ? r.salesQty : <span className="text-muted-foreground">—</span>}
                           </td>
                           <td className="py-2 text-right">{statusBadge(r.status)}</td>
+                          <td className="py-2 text-right">
+                            <DishActionsMenu dish={r.dish} onEdit={openDish} allDishes={allDishes} />
+                          </td>
                         </tr>
                       ))}
                       {sorted.length === 0 && (
                         <tr>
-                          <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                          <td colSpan={9} className="py-8 text-center text-muted-foreground">
                             No dishes match the current filters.
                           </td>
                         </tr>
@@ -667,6 +693,65 @@ export default function CostAnalysisPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Archived dishes — hidden from every active view and metric */}
+            {statusFilter === "archived" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Archived dishes ({archivedRows.length})</CardTitle>
+                  <CardDescription>
+                    Recipes, POS mappings and historical sales links are preserved. Restore a dish to bring it back into
+                    Cost Analysis and Dishes.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-muted-foreground text-xs uppercase">
+                          <th className="py-2 font-medium text-left">Dish</th>
+                          <th className="py-2 font-medium text-right">Selling price</th>
+                          <th className="py-2 font-medium text-right">Status</th>
+                          <th className="py-2 font-medium text-right w-10"><span className="sr-only">Actions</span></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {archivedRows.map((r) => (
+                          <tr key={r.id} className="border-b hover:bg-muted/40">
+                            <td className="py-2">
+                              <button
+                                type="button"
+                                onClick={() => openDish(r.dish)}
+                                className="font-medium text-left hover:underline underline-offset-2"
+                              >
+                                {r.name}
+                              </button>
+                              <div className="text-xs text-muted-foreground">{r.category}</div>
+                            </td>
+                            <td className="py-2 text-right">{formatCurrency(Number(r.dish.selling_price))}</td>
+                            <td className="py-2 text-right">
+                              <Badge variant="outline">
+                                {r.dish.merged_into_id ? "Merged" : "Archived"}
+                              </Badge>
+                            </td>
+                            <td className="py-2 text-right">
+                              <DishActionsMenu dish={r.dish} onEdit={openDish} allDishes={allDishes} />
+                            </td>
+                          </tr>
+                        ))}
+                        {archivedRows.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                              No archived dishes.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>

@@ -34,7 +34,14 @@ type CategoryFilter = "all" | string;
 
 export default function DishesPage() {
   const { selectedLocationId } = useLocation();
-  const { data: dishes = [], isLoading } = useDishes(selectedLocationId);
+  const { data: allDishes = [], isLoading } = useDishes(selectedLocationId, { includeArchived: true });
+  const [showArchived, setShowArchived] = useState(false);
+  // Archived dishes stay out of the normal working view but keep every link.
+  const dishes = useMemo(
+    () => allDishes.filter((d) => (showArchived ? !!d.archived_at : !d.archived_at)),
+    [allDishes, showArchived]
+  );
+  const archivedCount = useMemo(() => allDishes.filter((d) => !!d.archived_at).length, [allDishes]);
   const { data: locations = [] } = useLocations();
   const { data: ingredients = [] } = useIngredients();
   const { data: posMappings = [] } = usePOSMappings(undefined, "captiva");
@@ -331,6 +338,14 @@ export default function DishesPage() {
               </SelectContent>
             </Select>
             <Button
+              variant={showArchived ? "default" : "outline"}
+              size="sm"
+              className="h-9"
+              onClick={() => setShowArchived(!showArchived)}
+            >
+              Archived{archivedCount > 0 ? ` (${archivedCount})` : ""}
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               className="h-9"
@@ -380,7 +395,9 @@ export default function DishesPage() {
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground mb-4">
                   {dishSearch || categoryFilter !== "all" 
-                    ? "No dishes match your search criteria" 
+                    ? "No dishes match your search criteria"
+                    : showArchived
+                    ? "No archived dishes."
                     : "No dishes yet. Add your first dish to get started."}
                 </p>
                 {(dishSearch || categoryFilter !== "all") && (
@@ -405,6 +422,7 @@ export default function DishesPage() {
                   onDelete={handleDeleteDish}
                   onViewRecipe={handleViewRecipe}
                   sessionKey={sessionKey}
+                  allDishes={allDishes}
                 />
               ))}
             </div>

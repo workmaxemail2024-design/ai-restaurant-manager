@@ -19,6 +19,11 @@ export interface Dish {
   is_active: boolean | null;
   direct_cost: number | null;
   use_direct_cost: boolean | null;
+  /** Set when the dish was archived (hidden from active views, history kept). */
+  archived_at: string | null;
+  archived_by: string | null;
+  /** Set when this dish was merged into a master canonical dish. */
+  merged_into_id: string | null;
   locations?: { name: string } | null;
   /** Computed cost (recipe or direct). null = no cost configured. */
   dish_cost: number | null;
@@ -49,9 +54,15 @@ export type DishInsert = {
   use_direct_cost?: boolean | null;
 };
 
-export function useDishes(locationId?: string | null) {
+export interface UseDishesOptions {
+  /** Include archived / merged dishes (needed by maintenance views). */
+  includeArchived?: boolean;
+}
+
+export function useDishes(locationId?: string | null, options: UseDishesOptions = {}) {
+  const includeArchived = !!options.includeArchived;
   return useQuery({
-    queryKey: ["dishes", locationId],
+    queryKey: ["dishes", locationId, includeArchived ? "with-archived" : "active"],
     queryFn: async () => {
       let query = supabase
         .from("dishes")
@@ -60,6 +71,9 @@ export function useDishes(locationId?: string | null) {
 
       if (locationId) {
         query = query.eq("location_id", locationId);
+      }
+      if (!includeArchived) {
+        query = query.is("archived_at", null);
       }
 
       const { data, error } = await query;
