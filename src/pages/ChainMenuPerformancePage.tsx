@@ -48,7 +48,7 @@ import {
 import { ProductTypeBadge } from '@/components/products/ProductTypeBadge';
 
 type StatusFilter = 'all' | 'mapped' | 'unmapped' | 'auto-review';
-type BucketTab = 'sold' | 'zero' | 'review' | 'modifiers' | 'sides' | 'all';
+type BucketTab = 'sold' | 'zero' | 'review' | 'modifiers' | 'sides' | 'all' | 'archived';
 type TypeFilter =
   | 'all'
   | 'food'
