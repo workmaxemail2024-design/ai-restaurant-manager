@@ -148,16 +148,18 @@ export default function ChainMenuPerformancePage() {
   const archivedCount = useMemo(() => rows.filter((r) => r.archived).length, [rows]);
 
   const buckets = useMemo(() => {
-    const modifiers = rows.filter((r) => r.productClass === 'modifier');
-    const sides = rows.filter((r) => r.productClass === 'side');
-    const nonMod = rows.filter((r) => r.productClass !== 'modifier');
+    // Archived products are excluded from every active view / count.
+    const active = rows.filter((r) => !r.archived);
+    const modifiers = active.filter((r) => r.productClass === 'modifier');
+    const sides = active.filter((r) => r.productClass === 'side');
+    const nonMod = active.filter((r) => r.productClass !== 'modifier');
     const sold = nonMod.filter((r) => r.quantity > 0);
     const zero = nonMod.filter((r) => r.quantity === 0);
-    const review = rows.filter((r) => r.needsReview);
-    const alcoholic = rows.filter((r) => r.productClass === 'drink_alcoholic');
-    const nonAlcoholic = rows.filter((r) => r.productClass === 'drink_non_alcoholic');
-    const food = rows.filter((r) => r.productClass === 'food');
-    const unclassified = rows.filter((r) => !r.isManual && (r.productClass === 'other' || r.productClass === 'drink'));
+    const review = active.filter((r) => r.needsReview);
+    const alcoholic = active.filter((r) => r.productClass === 'drink_alcoholic');
+    const nonAlcoholic = active.filter((r) => r.productClass === 'drink_non_alcoholic');
+    const food = active.filter((r) => r.productClass === 'food');
+    const unclassified = active.filter((r) => !r.isManual && (r.productClass === 'other' || r.productClass === 'drink'));
     return {
       sold: sold.length,
       zero: zero.length,
@@ -168,9 +170,10 @@ export default function ChainMenuPerformancePage() {
       alcoholic: alcoholic.length,
       nonAlcoholic: nonAlcoholic.length,
       unclassified: unclassified.length,
-      all: rows.length,
+      archived: archivedCount,
+      all: active.length,
     };
-  }, [rows]);
+  }, [rows, archivedCount]);
 
   const underperformers = useMemo(() => {
     const peers = rows.filter((r) => (r.productClass === 'food' || isDrinkClass(r.productClass)) && r.quantity > 0);
