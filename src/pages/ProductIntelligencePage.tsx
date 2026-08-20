@@ -62,9 +62,11 @@ export default function ProductIntelligencePage() {
     queryKey: ["external-pos-items-catalogue", currentRestaurant?.id, locationId ?? "all"],
     enabled: !!currentRestaurant,
     queryFn: async () => {
-      let q = supabase
+      let q = (supabase as any)
         .from("external_pos_items")
-        .select("id, external_item_id, mapped_dish_id, needs_review, manual_type, manual_drink_type, source")
+        .select(
+          "id, location_id, external_item_id, external_item_name, department, display_name, manual_department, mapped_dish_id, needs_review, manual_type, manual_drink_type, archived_at, source",
+        )
         .eq("restaurant_id", currentRestaurant!.id);
       if (locationId) q = q.eq("location_id", locationId);
       const { data, error } = await q;
