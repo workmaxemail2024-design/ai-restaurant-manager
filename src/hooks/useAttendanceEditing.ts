@@ -97,7 +97,7 @@ export function useCorrectAttendance() {
               clock_out: record.clock_out,
               source: record.source,
             },
-            new_values: changes,
+            new_values: { ...changes },
           },
         });
       }
