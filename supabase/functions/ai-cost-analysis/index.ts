@@ -39,7 +39,7 @@ serve(async (req) => {
       });
     }
 
-    const { dishes, restaurant_id } = await req.json();
+    const { dishes, restaurant_id, coverage } = await req.json();
 
     // Verify user belongs to restaurant if provided
     if (restaurant_id) {
@@ -102,10 +102,11 @@ serve(async (req) => {
           },
           {
             role: "user",
-            content: `Analyze these food costs:
+            content: `Analyze these food costs. Only dishes with real recipe or direct cost data are included — never assume anything about excluded dishes.
 
 SUMMARY:
-- Total dishes: ${dishes.length}
+- Dishes analysed (costed only): ${dishes.length}
+- Dishes excluded for incomplete cost data: ${coverage?.missing ?? 0} (cost coverage ${coverage?.coveragePercent ?? "unknown"}%)
 - Average food cost: ${avgFoodCost.toFixed(1)}%
 - Average margin: ${avgMargin.toFixed(1)}%
 - Total gross profit: ${formatEUR(totalProfit)}
