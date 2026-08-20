@@ -97,7 +97,12 @@ export function useCorrectAttendance() {
               clock_out: record.clock_out,
               source: record.source,
             },
-            new_values: { ...changes },
+            new_values: {
+              staff_id: changes.staff_id,
+              location_id: changes.location_id,
+              clock_in: changes.clock_in,
+              clock_out: changes.clock_out,
+            },
           },
         });
       }
