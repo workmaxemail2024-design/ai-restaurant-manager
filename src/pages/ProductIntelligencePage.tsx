@@ -180,24 +180,25 @@ export default function ProductIntelligencePage() {
   }, [classified]);
 
   const topByRevenue = useMemo(
-    () => [...classified].sort((a, b) => b.gross_sales - a.gross_sales).slice(0, 15),
-    [classified],
+    () => [...visible].sort((a, b) => b.gross_sales - a.gross_sales).slice(0, 15),
+    [visible],
   );
   const topByQty = useMemo(
-    () => [...classified].sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 15),
-    [classified],
+    () => [...visible].sort((a, b) => b.quantity_sold - a.quantity_sold).slice(0, 15),
+    [visible],
   );
   const lowSellers = useMemo(
     () =>
-      [...classified]
+      [...visible]
         .filter((r) => r.quantity_sold > 0)
         .sort((a, b) => a.quantity_sold - b.quantity_sold)
         .slice(0, 15),
-    [classified],
+    [visible],
   );
-  const newProducts = classified.filter((r) => r.is_new);
-  const needsReview = classified.filter((r) => r.needs_review);
-  const missingCost = classified.filter(
+  const newProducts = visible.filter((r) => r.is_new);
+  const needsReview = visible.filter((r) => r.needs_review);
+  const archivedProducts = classified.filter((r) => r.archived);
+  const missingCost = visible.filter(
     (r) => !r.has_cost && r.productClass !== "modifier" && r.productClass !== "other",
   );
   const worthCostingFirst = [...missingCost]
