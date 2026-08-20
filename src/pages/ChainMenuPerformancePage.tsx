@@ -116,18 +116,21 @@ export default function ChainMenuPerformancePage() {
       const dishSales = (sales || []).filter((s) => s.dish_id === dish.id);
       const qty = dishSales.reduce((sum, s) => sum + s.quantity, 0);
       const rev = dishSales.reduce((sum, s) => sum + Number(s.total_price), 0);
-      const ext = extByDish.get(dish.id);
-      const dept = ext?.department ?? null;
+      const ext = extByDish.get(dish.id) ?? null;
+      const rawDept = ext?.department ?? null;
+      const dept = ext?.manual_department ?? rawDept;
+      const name = ext?.display_name ?? dish.name;
       const resolved = resolveProductClass({
         department: dept,
-        name: dish.name,
+        name,
         manualType: ext?.manual_type ?? null,
         manualDrinkType: ext?.manual_drink_type ?? null,
       });
       return {
         id: dish.id,
         extId: ext?.id ?? null,
-        name: dish.name,
+        ext,
+        name,
         department: dept,
         productClass: resolved.productClass,
         inferredClass: resolved.inferredClass,
@@ -137,9 +140,12 @@ export default function ChainMenuPerformancePage() {
         basePrice: dish.selling_price,
         category: dish.category,
         needsReview: ext?.needs_review ?? false,
+        archived: !!ext?.archived_at,
       };
     });
   }, [dishes, sales, extByDish]);
+
+  const archivedCount = useMemo(() => rows.filter((r) => r.archived).length, [rows]);
 
   const buckets = useMemo(() => {
     const modifiers = rows.filter((r) => r.productClass === 'modifier');
