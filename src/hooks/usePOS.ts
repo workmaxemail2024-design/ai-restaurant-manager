@@ -19,8 +19,10 @@ export interface POSIntegration {
   location_id: string;
   restaurant_id: string | null;
   pos_provider: string;
-  api_key: string | null;
-  api_secret: string | null;
+  api_key?: string | null;
+  api_secret?: string | null;
+  has_api_key?: boolean;
+  has_api_secret?: boolean;
   webhook_url: string | null;
   status: string;
   last_sync_time: string | null;
@@ -108,7 +110,7 @@ export function usePOSIntegrations(locationId?: string) {
       return data?.map(p => ({
         ...p,
         locations: p.location_id ? locationsMap[p.location_id] || null : null
-      })) as POSIntegration[];
+      })) as unknown as POSIntegration[];
     },
   });
 }
