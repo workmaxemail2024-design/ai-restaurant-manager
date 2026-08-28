@@ -564,6 +564,17 @@ serve(async (req) => {
 
     const integration = integrationRows[0] as Integration;
 
+    // The tenant is taken from the integration record, never from the request body.
+    if (caller.kind === "user") {
+      const allowed =
+        !!integration.restaurant_id &&
+        (await userHasPermission(adminClient, caller.userId, integration.restaurant_id, "pos", "view"));
+      if (!allowed) {
+        return unauthorized("Not authorised for this POS integration", corsHeaders, 403);
+      }
+    }
+
+
     const settings = (integration.settings || {}) as Record<string, unknown>;
     const settingsSimulate = settings.simulate === true || settings.simulate === "true";
     const isSimulationMode = simulate === true || settingsSimulate || globalSimulateMode;
