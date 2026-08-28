@@ -497,6 +497,21 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // B3 — DISABLED LEGACY INGEST PATH.
+  // This endpoint wrote directly to public.sales without an idempotency key,
+  // so retries/replays could duplicate revenue. The canonical Captiva sales
+  // ingest is: Captiva XLS import (UI) or pos-sync-captiva -> pos-apply-import.
+  // Kept in the repo for reference only; it must not accept traffic.
+  if (req.method !== "OPTIONS") {
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: "This ingest endpoint is retired. Use the Captiva XLS import or pos-sync-captiva -> pos-apply-import.",
+      }),
+      { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
 
