@@ -508,13 +508,21 @@ serve(async (req) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
+  // AUTHORIZATION: internal (service-role / cron) or a signed-in user who is
+  // verified against the integration's own restaurant further below.
+  const caller = await resolveCaller(req);
+  if (caller.kind === "none") {
+    return unauthorized(caller.reason, corsHeaders);
+  }
+
   try {
-    const { integration_id, location_id, restaurant_id, test_mode, simulate } = await req.json();
+    const { integration_id, location_id, test_mode, simulate } = await req.json();
 
     console.log("=== CAPTIVA SYNC START ===");
-    console.log("Request:", { integration_id, location_id, restaurant_id, test_mode, simulate });
+    console.log("Request:", { integration_id, location_id, test_mode, simulate, caller: caller.kind });
 
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
+
 
     let integrationQuery = adminClient
       .from("pos_integrations")
