@@ -39,33 +39,14 @@ serve(async (req) => {
   }
 
   try {
-    // Accept either a logged-in user JWT or the service-role key (used by cron and by pos-sync-captiva auto-apply)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Accept either a logged-in user JWT or the service-role key (used by cron
+    // and by pos-sync-captiva auto-apply). User callers are verified against the
+    // integration's own restaurant below — never against a body-supplied tenant.
+    const caller = await resolveCaller(req);
+    if (caller.kind === "none") {
+      return unauthorized(caller.reason, corsHeaders);
     }
 
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
-    const token = authHeader.replace("Bearer ", "").trim();
-    const isServiceRole = serviceRoleKey && token === serviceRoleKey;
-
-    if (!isServiceRole) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-        { global: { headers: { Authorization: authHeader } } }
-      );
-      const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
-      if (claimsError || !claims?.claims) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
 
     const body = await req.json();
     const { integration_id, date_from, date_to, preview_only } = body;
