@@ -154,10 +154,43 @@ serve(async (req) => {
       );
     }
 
-    // Verify signature if secret is available (skip for demo and simulation)
-    if (integration.api_secret && signature && !isSimulationMode) {
-      console.log("Signature verification skipped (demo mode)");
+    // AUTHENTICATION — fail closed.
+    // The webhook is only trusted when the integration has a shared secret AND
+    // the request carries a matching HMAC-SHA256 signature over the raw body.
+    if (!integration.api_secret) {
+      console.error("Rejecting Captiva webhook: no shared secret configured for integration", integration.id);
+      await adminClient.from("pos_sync_logs").insert({
+        location_id: integration.location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "webhook_auth_failed",
+        message: "Webhook rejected: no shared secret configured for this integration",
+        status: "fail",
+        details: { store_id: storeId },
+      });
+      return new Response(
+        JSON.stringify({ success: false, error: "Webhook authentication is not configured" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    if (!(await verifyCaptivaSignature(rawBody, signature || "", integration.api_secret))) {
+      console.error("Rejecting Captiva webhook: invalid signature");
+      await adminClient.from("pos_sync_logs").insert({
+        location_id: integration.location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "webhook_auth_failed",
+        message: "Webhook rejected: missing or invalid signature",
+        status: "fail",
+        details: { store_id: storeId },
+      });
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid webhook signature" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
 
     // Process different event types
     switch (eventType.toLowerCase()) {
