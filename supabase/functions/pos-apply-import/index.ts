@@ -92,7 +92,17 @@ serve(async (req) => {
       );
     }
 
+    // Tenant comes from the integration record; user callers must be members
+    // of that restaurant with POS edit rights.
+    if (caller.kind === "user") {
+      const allowed = await userHasPermission(adminClient, caller.userId, restaurantId, "pos", "edit");
+      if (!allowed) {
+        return unauthorized("Not authorised to apply POS imports for this integration", corsHeaders, 403);
+      }
+    }
+
     // Fetch pending imports for the date range
+
     // Use sync_status NOT in ['applied'] to include both 'pending' and 'unmapped'
     const { data: imports, error: importError } = await adminClient
       .from("pos_sales_import")
