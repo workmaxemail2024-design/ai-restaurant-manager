@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveCaller, userHasPermission, unauthorized } from "../_shared/posAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -95,34 +96,15 @@ serve(async (req) => {
     const { integration_id, date_from, date_to, location_id, auto_apply, diagnostic_user_id, diagnostic_format_test } = body;
 
     // Verify auth: accept either a logged-in user JWT OR the service-role key
-    // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely).
+    // A user caller is verified against the integration's own restaurant below.
+    const caller = await resolveCaller(req);
+    if (caller.kind === "none") {
+      return unauthorized(caller.reason, corsHeaders);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
-    const token = authHeader?.replace("Bearer ", "").trim() ?? "";
-    const isServiceRole = serviceRoleKey && token === serviceRoleKey;
-
-    if (!isServiceRole) {
-      const supabase = createClient(
-        supabaseUrl,
-        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-        { global: { headers: { Authorization: authHeader } } }
-      );
-      const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
-      if (claimsError || !claims?.claims) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
 
     if (!integration_id || !date_from || !date_to || !location_id) {
       return new Response(
@@ -146,6 +128,16 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: "Integration not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Tenant is resolved from the integration record, never from the body.
+    if (caller.kind === "user") {
+      const allowed =
+        !!integration.restaurant_id &&
+        (await userHasPermission(adminClient, caller.userId, integration.restaurant_id, "pos", "edit"));
+      if (!allowed) {
+        return unauthorized("Not authorised for this POS integration", corsHeaders, 403);
+      }
     }
 
     const settings = integration.settings as CaptivaSettings;
