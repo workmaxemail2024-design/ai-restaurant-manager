@@ -64,7 +64,7 @@ export function useStaffWithContracts() {
     queryKey: ["staff-with-contracts"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("staff")
+        .from("staff_safe")
         .select("id, first_name, last_name, role, status, location_id, contract_type, max_hours_per_week, min_hours_per_week, hourly_rate")
         .eq("status", "active")
         .order("last_name");
@@ -148,7 +148,7 @@ export function useGenerateDraftRoster() {
     mutationFn: async ({ weekStart, locationId }: { weekStart: Date; locationId: string }) => {
       // Fetch active staff with contract info
       const { data: staff, error: staffError } = await supabase
-        .from("staff")
+        .from("staff_safe")
         .select("id, first_name, last_name, role, contract_type, max_hours_per_week, min_hours_per_week")
         .eq("status", "active");
 

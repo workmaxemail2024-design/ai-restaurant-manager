@@ -113,6 +113,17 @@ export function useUploadDocument() {
     mutationFn: async (input: UploadDocumentInput) => {
       if (!restaurantId) throw new Error("No restaurant selected");
 
+      // Client-side guard mirroring the storage policy (25 MB, known document types)
+      const MAX_BYTES = 25 * 1024 * 1024;
+      const ALLOWED_EXT = ["jpg","jpeg","png","heic","heif","webp","gif","pdf","xls","xlsx","csv","txt"];
+      const ext = (input.file.name.split(".").pop() || "").toLowerCase();
+      if (input.file.size > MAX_BYTES) {
+        throw new Error("File is too large. The maximum document size is 25 MB.");
+      }
+      if (!ALLOWED_EXT.includes(ext)) {
+        throw new Error("Unsupported file type. Upload a photo, PDF, spreadsheet or CSV.");
+      }
+
       // Generate a unique document ID for storage path
       const documentId = crypto.randomUUID();
       const locationFolder = input.locationId || "all";
