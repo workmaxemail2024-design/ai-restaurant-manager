@@ -64,7 +64,35 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Demo data action: ${action} for restaurant: ${restaurant_id}`);
+    // AUTHORIZATION: the caller must be a signed-in owner (settings admin) of the
+    // restaurant named in the request. A restaurant_id in the body is NEVER trusted
+    // on its own. Destructive actions additionally require the pilot guard to be off.
+    const caller = await resolveCaller(req);
+    if (caller.kind !== "user") {
+      return unauthorized("This endpoint requires a signed-in owner", corsHeaders, 403);
+    }
+
+    const isOwner = await userHasPermission(adminClient, caller.userId, restaurant_id, "settings", "admin");
+    if (!isOwner) {
+      console.warn(`Blocked demo-data ${action} by user ${caller.userId} on restaurant ${restaurant_id}`);
+      return unauthorized("Not authorised to manage demo data for this restaurant", corsHeaders, 403);
+    }
+
+    const destructive = action === "reset" || action === "prepare_live_pos";
+    const demoToolsEnabled = (Deno.env.get("ENABLE_DEMO_TOOLS") ?? "").toLowerCase() === "true";
+    if (destructive && !demoToolsEnabled) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            "Destructive demo/reset actions are disabled for pilot use. Set ENABLE_DEMO_TOOLS=true to re-enable them.",
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Demo data action: ${action} for restaurant: ${restaurant_id} by ${caller.userId}`);
+
 
     if (action === "get_status") {
       // Check if demo mode is enabled
