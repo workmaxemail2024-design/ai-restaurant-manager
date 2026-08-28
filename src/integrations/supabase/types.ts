@@ -2604,6 +2604,7 @@ export type Database = {
           location_id: string | null
           pos_provider: string | null
           restaurant_id: string | null
+          settings: Json | null
           status: string | null
           updated_at: string | null
           webhook_url: string | null
@@ -2624,6 +2625,7 @@ export type Database = {
           location_id?: string | null
           pos_provider?: string | null
           restaurant_id?: string | null
+          settings?: never
           status?: string | null
           updated_at?: string | null
           webhook_url?: string | null
@@ -2644,6 +2646,7 @@ export type Database = {
           location_id?: string | null
           pos_provider?: string | null
           restaurant_id?: string | null
+          settings?: never
           status?: string | null
           updated_at?: string | null
           webhook_url?: string | null
