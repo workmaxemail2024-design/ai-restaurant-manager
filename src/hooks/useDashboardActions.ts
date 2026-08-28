@@ -102,7 +102,7 @@ export function useDashboardActions(locationId?: string | null) {
       const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
 
       let staffQuery = supabase
-        .from("staff")
+        .from("staff_safe")
         .select("id, first_name, last_name, contract_type, max_hours_per_week, min_hours_per_week")
         .eq("restaurant_id", restaurantId)
         .eq("status", "active");
