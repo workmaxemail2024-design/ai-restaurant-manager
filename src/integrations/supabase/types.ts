@@ -2589,43 +2589,61 @@ export type Database = {
     Views: {
       pos_integrations_safe: {
         Row: {
-          api_key: string | null
-          api_secret: string | null
           created_at: string | null
+          has_api_key: boolean | null
+          has_api_secret: boolean | null
           id: string | null
+          last_successful_sync_at: string | null
+          last_sync_attempt_at: string | null
+          last_sync_error: string | null
+          last_sync_status: string | null
           last_sync_time: string | null
+          last_test_error: string | null
+          last_test_status: string | null
+          last_tested_at: string | null
           location_id: string | null
           pos_provider: string | null
           restaurant_id: string | null
-          settings: Json | null
           status: string | null
           updated_at: string | null
           webhook_url: string | null
         }
         Insert: {
-          api_key?: never
-          api_secret?: never
           created_at?: string | null
+          has_api_key?: never
+          has_api_secret?: never
           id?: string | null
+          last_successful_sync_at?: string | null
+          last_sync_attempt_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
           last_sync_time?: string | null
+          last_test_error?: string | null
+          last_test_status?: string | null
+          last_tested_at?: string | null
           location_id?: string | null
           pos_provider?: string | null
           restaurant_id?: string | null
-          settings?: Json | null
           status?: string | null
           updated_at?: string | null
           webhook_url?: string | null
         }
         Update: {
-          api_key?: never
-          api_secret?: never
           created_at?: string | null
+          has_api_key?: never
+          has_api_secret?: never
           id?: string | null
+          last_successful_sync_at?: string | null
+          last_sync_attempt_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
           last_sync_time?: string | null
+          last_test_error?: string | null
+          last_test_status?: string | null
+          last_tested_at?: string | null
           location_id?: string | null
           pos_provider?: string | null
           restaurant_id?: string | null
-          settings?: Json | null
           status?: string | null
           updated_at?: string | null
           webhook_url?: string | null
@@ -2799,6 +2817,11 @@ export type Database = {
         }
         Returns: Json
       }
+      restaurant_has_members: {
+        Args: { _restaurant_id: string }
+        Returns: boolean
+      }
+      storage_doc_restaurant_id: { Args: { _name: string }; Returns: string }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       user_belongs_to_restaurant: {
         Args: { _restaurant_id: string }
@@ -2811,6 +2834,7 @@ export type Database = {
       }
       user_has_pos_admin: { Args: never; Returns: boolean }
       user_is_manager_or_owner: { Args: never; Returns: boolean }
+      user_is_owner: { Args: never; Returns: boolean }
     }
     Enums: {
       attendance_source: "manual" | "pos" | "auto"
