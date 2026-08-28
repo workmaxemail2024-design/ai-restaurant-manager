@@ -109,8 +109,25 @@ serve(async (req) => {
       );
     }
 
-    // Verify webhook signature if secret is configured
-    if (integration.api_secret) {
+    // Verify webhook signature. FAIL CLOSED: no shared secret configured =>
+    // the endpoint cannot authenticate the caller, so the request is rejected.
+    if (!integration.api_secret) {
+      console.error(`Webhook secret not configured for ${provider} at location ${location} — rejecting`);
+      await supabase.from("pos_sync_logs").insert({
+        location_id: location,
+        pos_provider: provider,
+        event_type: "webhook_auth_failed",
+        message: "Webhook rejected: no shared secret configured for this integration",
+        status: "fail",
+        details: { timestamp: new Date().toISOString() },
+      });
+      return new Response(
+        JSON.stringify({ error: "Webhook authentication is not configured for this integration" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    {
       const isValid = await verifyWebhookSignature(
         rawBody,
         webhookSignature || "",
@@ -119,7 +136,7 @@ serve(async (req) => {
 
       if (!isValid) {
         console.error("Invalid webhook signature for provider:", provider);
-        
+
         // Log failed authentication attempt
         await supabase.from("pos_sync_logs").insert({
           location_id: location,
@@ -135,10 +152,8 @@ serve(async (req) => {
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-    } else {
-      // Log warning that webhook secret is not configured
-      console.warn(`Webhook secret not configured for ${provider} at location ${location}`);
     }
+
 
     // Log the webhook
     await supabase.from("pos_sync_logs").insert({
