@@ -1,16 +1,24 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { format, subDays } from "https://esm.sh/date-fns@3.6.0";
+import { resolveCaller, isInternal, unauthorized } from "../_shared/posAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  // Scheduled job only: requires the cron secret or the service-role key.
+  const caller = await resolveCaller(req);
+  if (!isInternal(caller)) {
+    return unauthorized("This endpoint is restricted to scheduled internal runs", corsHeaders, 403);
+  }
+
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
