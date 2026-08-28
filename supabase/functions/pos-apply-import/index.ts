@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveCaller, userHasPermission, unauthorized } from "../_shared/posAuth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,33 +41,14 @@ serve(async (req) => {
   }
 
   try {
-    // Accept either a logged-in user JWT or the service-role key (used by cron and by pos-sync-captiva auto-apply)
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Accept either a logged-in user JWT or the service-role key (used by cron
+    // and by pos-sync-captiva auto-apply). User callers are verified against the
+    // integration's own restaurant below — never against a body-supplied tenant.
+    const caller = await resolveCaller(req);
+    if (caller.kind === "none") {
+      return unauthorized(caller.reason, corsHeaders);
     }
 
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
-    const token = authHeader.replace("Bearer ", "").trim();
-    const isServiceRole = serviceRoleKey && token === serviceRoleKey;
-
-    if (!isServiceRole) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-        { global: { headers: { Authorization: authHeader } } }
-      );
-      const { data: claims, error: claimsError } = await supabase.auth.getClaims(token);
-      if (claimsError || !claims?.claims) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
 
     const body = await req.json();
     const { integration_id, date_from, date_to, preview_only } = body;
@@ -109,7 +92,17 @@ serve(async (req) => {
       );
     }
 
+    // Tenant comes from the integration record; user callers must be members
+    // of that restaurant with POS edit rights.
+    if (caller.kind === "user") {
+      const allowed = await userHasPermission(adminClient, caller.userId, restaurantId, "pos", "edit");
+      if (!allowed) {
+        return unauthorized("Not authorised to apply POS imports for this integration", corsHeaders, 403);
+      }
+    }
+
     // Fetch pending imports for the date range
+
     // Use sync_status NOT in ['applied'] to include both 'pending' and 'unmapped'
     const { data: imports, error: importError } = await adminClient
       .from("pos_sales_import")

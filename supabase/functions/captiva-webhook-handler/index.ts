@@ -6,6 +6,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-captiva-signature",
 };
 
+// HMAC-SHA256 verification of the raw request body against the integration secret.
+async function verifyCaptivaSignature(rawBody: string, signature: string, secret: string): Promise<boolean> {
+  if (!signature || !secret) return false;
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const bytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+    const expected = Array.from(new Uint8Array(bytes))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const provided = signature.replace(/^sha256=/i, "").trim().toLowerCase();
+    if (provided.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+    return diff === 0;
+  } catch (err) {
+    console.error("Signature verification error:", err);
+    return false;
+  }
+}
+
 // ============ SIMULATION DATA GENERATOR ============
 function generateSimulatedWebhookOrder() {
   const now = new Date();
@@ -154,10 +180,43 @@ serve(async (req) => {
       );
     }
 
-    // Verify signature if secret is available (skip for demo and simulation)
-    if (integration.api_secret && signature && !isSimulationMode) {
-      console.log("Signature verification skipped (demo mode)");
+    // AUTHENTICATION — fail closed.
+    // The webhook is only trusted when the integration has a shared secret AND
+    // the request carries a matching HMAC-SHA256 signature over the raw body.
+    if (!integration.api_secret) {
+      console.error("Rejecting Captiva webhook: no shared secret configured for integration", integration.id);
+      await adminClient.from("pos_sync_logs").insert({
+        location_id: integration.location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "webhook_auth_failed",
+        message: "Webhook rejected: no shared secret configured for this integration",
+        status: "fail",
+        details: { store_id: storeId },
+      });
+      return new Response(
+        JSON.stringify({ success: false, error: "Webhook authentication is not configured" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    if (!(await verifyCaptivaSignature(rawBody, signature || "", integration.api_secret))) {
+      console.error("Rejecting Captiva webhook: invalid signature");
+      await adminClient.from("pos_sync_logs").insert({
+        location_id: integration.location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "webhook_auth_failed",
+        message: "Webhook rejected: missing or invalid signature",
+        status: "fail",
+        details: { store_id: storeId },
+      });
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid webhook signature" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
 
     // Process different event types
     switch (eventType.toLowerCase()) {

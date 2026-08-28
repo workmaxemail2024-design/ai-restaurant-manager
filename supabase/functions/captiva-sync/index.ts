@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveCaller, userHasPermission, unauthorized } from "../_shared/posAuth.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -508,13 +510,21 @@ serve(async (req) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
+  // AUTHORIZATION: internal (service-role / cron) or a signed-in user who is
+  // verified against the integration's own restaurant further below.
+  const caller = await resolveCaller(req);
+  if (caller.kind === "none") {
+    return unauthorized(caller.reason, corsHeaders);
+  }
+
   try {
-    const { integration_id, location_id, restaurant_id, test_mode, simulate } = await req.json();
+    const { integration_id, location_id, test_mode, simulate } = await req.json();
 
     console.log("=== CAPTIVA SYNC START ===");
-    console.log("Request:", { integration_id, location_id, restaurant_id, test_mode, simulate });
+    console.log("Request:", { integration_id, location_id, test_mode, simulate, caller: caller.kind });
 
     const globalSimulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
+
 
     let integrationQuery = adminClient
       .from("pos_integrations")
@@ -555,6 +565,17 @@ serve(async (req) => {
     }
 
     const integration = integrationRows[0] as Integration;
+
+    // The tenant is taken from the integration record, never from the request body.
+    if (caller.kind === "user") {
+      const allowed =
+        !!integration.restaurant_id &&
+        (await userHasPermission(adminClient, caller.userId, integration.restaurant_id, "pos", "view"));
+      if (!allowed) {
+        return unauthorized("Not authorised for this POS integration", corsHeaders, 403);
+      }
+    }
+
 
     const settings = (integration.settings || {}) as Record<string, unknown>;
     const settingsSimulate = settings.simulate === true || settings.simulate === "true";
