@@ -6,6 +6,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-captiva-signature",
 };
 
+// HMAC-SHA256 verification of the raw request body against the integration secret.
+async function verifyCaptivaSignature(rawBody: string, signature: string, secret: string): Promise<boolean> {
+  if (!signature || !secret) return false;
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const bytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+    const expected = Array.from(new Uint8Array(bytes))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const provided = signature.replace(/^sha256=/i, "").trim().toLowerCase();
+    if (provided.length !== expected.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
+    return diff === 0;
+  } catch (err) {
+    console.error("Signature verification error:", err);
+    return false;
+  }
+}
+
 // ============ SIMULATION DATA GENERATOR ============
 function generateSimulatedWebhookOrder() {
   const now = new Date();
