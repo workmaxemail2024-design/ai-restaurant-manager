@@ -204,26 +204,34 @@ serve(async (req) => {
       
       // Check if there's at least one mapped item for detailed insertion
       const mappedItems = saleImports.filter(imp => imp.mapped_dish_id);
-      
+
+      // IDEMPOTENCY (B3): every sale row is keyed to the staged import row it came
+      // from (pos_import_id) and written with UPSERT. The partial unique index
+      // sales_pos_import_id_uniq guarantees one sale per staged row, so retrying
+      // after a crash / double-click / network failure UPDATES the existing sale
+      // instead of adding a second copy. This is safe even if the function dies
+      // before the sync_status='applied' update below.
       if (mappedItems.length > 0) {
         // Insert individual line items as sales
         for (const imp of mappedItems) {
           const quantity = imp.mapped_quantity || 1;
           const itemPrice = Number(imp.mapped_total_price || 0);
-          
+
           const { error: insertError } = await adminClient
             .from("sales")
-            .insert({
+            .upsert({
               location_id: integration.location_id,
               restaurant_id: restaurantId,
               dish_id: imp.mapped_dish_id,
               quantity: quantity,
               total_price: itemPrice,
               sale_date: saleDate,
-            });
+              source: integration.pos_provider,
+              pos_import_id: imp.id,
+            }, { onConflict: "pos_import_id" });
 
           if (insertError) {
-            console.error("Failed to insert mapped sale item:", insertError);
+            console.error("Failed to upsert mapped sale item:", insertError);
           }
         }
       } else {
@@ -266,20 +274,23 @@ serve(async (req) => {
         if (fallbackDishId) {
           const { error: insertError } = await adminClient
             .from("sales")
-            .insert({
+            .upsert({
               location_id: integration.location_id,
               restaurant_id: restaurantId,
               dish_id: fallbackDishId,
               quantity: 1,
               total_price: saleTotal,
               sale_date: saleDate,
-            });
+              source: integration.pos_provider,
+              pos_import_id: primaryImport.id,
+            }, { onConflict: "pos_import_id" });
 
           if (insertError) {
-            console.error("Failed to insert unmapped sale:", insertError);
+            console.error("Failed to upsert unmapped sale:", insertError);
           }
         }
       }
+
 
       // Update all import records for this sale to 'applied'
       const importIds = saleImports.map(imp => imp.id);
