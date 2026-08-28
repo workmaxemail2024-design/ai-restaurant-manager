@@ -2821,6 +2821,10 @@ export type Database = {
         Args: { _restaurant_id: string }
         Returns: boolean
       }
+      storage_doc_extension_allowed: {
+        Args: { _name: string }
+        Returns: boolean
+      }
       storage_doc_restaurant_id: { Args: { _name: string }; Returns: string }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       user_belongs_to_restaurant: {
