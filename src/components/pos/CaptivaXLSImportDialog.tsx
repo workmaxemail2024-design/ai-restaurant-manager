@@ -334,15 +334,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
 
       let appliedCount = 0;
       if (mode === "apply") {
-        // Wipe any prior POS-sourced sales for this location+date so re-apply is idempotent
-        await supabase
-          .from("sales")
-          .delete()
-          .eq("restaurant_id", currentRestaurant.id)
-          .eq("location_id", locationId)
-          .eq("sale_date", dateStr)
-          .eq("source", provider);
-
+        // IDEMPOTENCY (B3): each sale row is keyed to its staged pos_sales_import
+        // row (pos_import_id, partial-unique in the database), so re-importing the
+        // same day UPDATES the same sale rows in place instead of adding copies.
+        // Re-importing a corrected file therefore yields corrected — not additive —
+        // totals, and an interrupted import can simply be re-run.
         const saleRows = (stagedRows || [])
           .filter((s: any) => s.mapped_dish_id && ((s.mapped_quantity ?? 0) > 0 || (s.mapped_total_price ?? 0) > 0))
           .map((s: any) => ({
@@ -355,12 +351,33 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
             source: provider,
             pos_import_id: s.id,
           }));
+
         if (saleRows.length) {
-          const { error: insErr } = await supabase.from("sales").insert(saleRows);
+          const { error: insErr } = await supabase
+            .from("sales")
+            .upsert(saleRows, { onConflict: "pos_import_id" });
           if (insErr) throw insErr;
           appliedCount = saleRows.length;
         }
+
+        // Remove sales for this day/location that the corrected file no longer
+        // contains (e.g. a product was dropped). Done AFTER the upsert so there is
+        // never a window where the day has no revenue.
+        const keepIds = saleRows.map((r) => r.pos_import_id);
+        let staleQuery = supabase
+          .from("sales")
+          .delete()
+          .eq("restaurant_id", currentRestaurant.id)
+          .eq("location_id", locationId)
+          .eq("sale_date", dateStr)
+          .eq("source", provider);
+        if (keepIds.length) {
+          staleQuery = staleQuery.not("pos_import_id", "in", `(${keepIds.join(",")})`);
+        }
+        const { error: staleErr } = await staleQuery;
+        if (staleErr) throw staleErr;
       }
+
 
       // 5) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs)
       const parsedOrders = orderCountInput.trim() ? parseInt(orderCountInput, 10) : null;
