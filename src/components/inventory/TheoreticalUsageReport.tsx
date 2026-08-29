@@ -20,7 +20,8 @@ export function TheoreticalUsageReport() {
     endDate,
   });
 
-  const totalCost = rows.reduce((s, r) => s + r.cost, 0);
+  const totalCost = rows.reduce((s, r) => s + (r.cost ?? 0), 0);
+  const unknownCount = rows.filter((r) => r.usage_source === "recipe_needs_review").length;
 
   return (
     <div className="space-y-4">
@@ -40,6 +41,14 @@ export function TheoreticalUsageReport() {
           never double-deducts.
         </span>
       </div>
+
+      {unknownCount > 0 && (
+        <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+          {unknownCount} inventory item{unknownCount === 1 ? " has" : "s have"} a recipe line with a missing or
+          incompatible unit. Their usage and cost are reported as unknown — never as zero — until the recipe
+          units are corrected.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
@@ -86,15 +95,21 @@ export function TheoreticalUsageReport() {
                 <TableRow key={`${r.ingredient_id}-${r.usage_source}`}>
                   <TableCell className="font-medium">{r.ingredient_name}</TableCell>
                   <TableCell>
-                    <Badge variant="secondary">
-                      {r.usage_source === "direct_sale" ? "Direct sale" : "Recipe"}
-                    </Badge>
+                    {r.usage_source === "recipe_needs_review" ? (
+                      <Badge variant="secondary" className="bg-warning/15 text-warning">Needs review</Badge>
+                    ) : (
+                      <Badge variant="secondary">
+                        {r.usage_source === "direct_sale" ? "Direct sale" : "Recipe"}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-mono">{r.dishes_sold.toFixed(0)}</TableCell>
                   <TableCell className="text-right font-mono">
-                    {r.quantity_used.toFixed(2)} {r.base_unit}
+                    {r.quantity_used === null ? "Unknown" : `${r.quantity_used.toFixed(2)} ${r.base_unit}`}
                   </TableCell>
-                  <TableCell className="text-right font-mono">{formatCurrency(r.cost)}</TableCell>
+                  <TableCell className="text-right font-mono">
+                    {r.cost === null ? "Unknown" : formatCurrency(r.cost)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
