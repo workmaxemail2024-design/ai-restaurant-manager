@@ -2763,6 +2763,10 @@ export type Database = {
         Args: { p_date: string; p_staff_id: string }
         Returns: number
       }
+      convert_recipe_qty: {
+        Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
+        Returns: number
+      }
       create_default_automation_rules: {
         Args: { p_restaurant_id: string }
         Returns: undefined
@@ -2786,6 +2790,10 @@ export type Database = {
       get_ingredient_base_cost: {
         Args: { p_ingredient_id: string }
         Returns: number
+      }
+      get_ingredient_cost_unit: {
+        Args: { p_ingredient_id: string }
+        Returns: string
       }
       get_latest_ingredient_price: {
         Args: { p_ingredient_id: string }
@@ -2826,6 +2834,7 @@ export type Database = {
         }
         Returns: Json
       }
+      normalize_unit: { Args: { _u: string }; Returns: string }
       restaurant_has_members: {
         Args: { _restaurant_id: string }
         Returns: boolean
@@ -2836,6 +2845,7 @@ export type Database = {
       }
       storage_doc_restaurant_id: { Args: { _name: string }; Returns: string }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
+      unit_factor: { Args: { _u: string }; Returns: number }
       user_belongs_to_restaurant: {
         Args: { _restaurant_id: string }
         Returns: boolean
