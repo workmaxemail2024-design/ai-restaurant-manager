@@ -114,7 +114,7 @@ export function useDishIngredients(dishId: string | null) {
         .select("*, ingredients(name, unit)")
         .eq("dish_id", dishId);
       if (error) throw error;
-      return data as DishIngredient[];
+      return (data || []) as unknown as DishIngredient[];
     },
     enabled: !!dishId,
   });
