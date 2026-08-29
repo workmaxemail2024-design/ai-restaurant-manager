@@ -40,9 +40,12 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
   const removeIngredient = useRemoveDishIngredient();
   const updateDish = useUpdateDish();
 
-  const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0 });
+  const [recipeForm, setRecipeForm] = useState<{ ingredient_id: string; quantity: number; unit: string }>(
+    { ingredient_id: "", quantity: 0, unit: "" }
+  );
   const [ingredientSearch, setIngredientSearch] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [editing, setEditing] = useState<Record<string, { quantity: number; unit: string }>>({});
   // Recipe selectors only offer items valid as recipe ingredients — direct-sale
   // products and operational consumables never get fake recipes.
   const filteredIngredients = ingredients.filter(
@@ -68,13 +71,34 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
 
   if (!dish) return null;
 
-  const recipeCost = dishIngredients.reduce((sum, item) => {
-    const ing = ingredients.find(i => i.id === item.ingredient_id);
-    const base = ing ? calculateBaseCost(ing) : 0;
-    return sum + base * Number(item.quantity);
-  }, 0);
+  const selectedIngredient = ingredients.find((i) => i.id === recipeForm.ingredient_id);
+  const selectedCostUnit = getIngredientCostUnit(selectedIngredient);
+  const selectedUnitOptions = compatibleUnits(selectedCostUnit);
 
-  const effectiveCost = useDirect ? (directCost || null) : (dishIngredients.length > 0 ? recipeCost : null);
+  // Line costs use the SAME conversion as the database (convert to the
+  // ingredient's costing unit first). Unconvertible lines are unknown, not 0.
+  const lines = dishIngredients.map((item) => {
+    const ing = ingredients.find((i) => i.id === item.ingredient_id);
+    const costUnit = getIngredientCostUnit(ing);
+    const unitCost = ing ? calculateBaseCost(ing) : 0;
+    const converted = convertRecipeQty(ing, Number(item.quantity), item.unit);
+    return {
+      item,
+      ing,
+      costUnit,
+      unitCost,
+      lineCost: converted === null ? null : converted * unitCost,
+      invalid: converted === null,
+    };
+  });
+  const hasInvalidLine = lines.some((l) => l.invalid);
+  const recipeCost = hasInvalidLine
+    ? null
+    : lines.reduce((sum, l) => sum + (l.lineCost || 0), 0);
+
+  const effectiveCost = useDirect
+    ? (directCost || null)
+    : (dishIngredients.length > 0 ? recipeCost : null);
   const price = Number(dish.selling_price);
   const margin = effectiveCost !== null && price > 0 ? ((price - effectiveCost) / price) * 100 : null;
   const foodCostPct = effectiveCost !== null && price > 0 ? (effectiveCost / price) * 100 : null;
@@ -84,10 +108,11 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
 
   const handleAddIngredient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recipeForm.ingredient_id || recipeForm.quantity <= 0) return;
+    if (!recipeForm.ingredient_id || recipeForm.quantity <= 0 || !recipeForm.unit) return;
     await addIngredient.mutateAsync({ dish_id: dish.id, ...recipeForm });
-    setRecipeForm({ ingredient_id: "", quantity: 0 });
+    setRecipeForm({ ingredient_id: "", quantity: 0, unit: "" });
   };
+
 
   const saveOverview = () => {
     updateDish.mutate({
