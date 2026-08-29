@@ -185,8 +185,16 @@ export function useDeleteDish() {
 export function useAddDishIngredient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { dish_id: string; ingredient_id: string; quantity: number }) => {
-      const { error } = await supabase.from("dish_ingredients").insert(data);
+    mutationFn: async (data: {
+      dish_id: string;
+      ingredient_id: string;
+      quantity: number;
+      /** Required: recipe quantities are always unit-explicit. */
+      unit: string;
+    }) => {
+      const { error } = await supabase
+        .from("dish_ingredients")
+        .insert({ ...data, needs_unit_review: false } as any);
       if (error) throw error;
     },
     onSuccess: (_, variables) => {
@@ -199,6 +207,29 @@ export function useAddDishIngredient() {
     },
   });
 }
+
+/** Edit an existing recipe line's quantity / unit (clears the needs-review flag). */
+export function useUpdateDishIngredient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: { id: string; dish_id: string; quantity: number; unit: string }) => {
+      const { error } = await supabase
+        .from("dish_ingredients")
+        .update({ quantity: data.quantity, unit: data.unit, needs_unit_review: false } as any)
+        .eq("id", data.id);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["dish-ingredients", variables.dish_id] });
+      queryClient.invalidateQueries({ queryKey: ["dishes"] });
+      toast({ title: "Recipe line updated" });
+    },
+    onError: (error) => {
+      toast({ title: "Error updating recipe line", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 
 export function useRemoveDishIngredient() {
   const queryClient = useQueryClient();
