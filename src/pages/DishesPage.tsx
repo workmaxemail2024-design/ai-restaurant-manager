@@ -60,7 +60,7 @@ export default function DishesPage() {
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [editingItem, setEditingItem] = useState<Dish | null>(null);
   const [formData, setFormData] = useState<DishInsert>({ name: "", category: "", selling_price: 0 });
-  const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0 });
+  const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0, unit: "" });
   const [mappingSearch, setMappingSearch] = useState("");
   const [mappingStatusFilter, setMappingStatusFilter] = useState<MappingStatusFilter>("all");
   const [showSimOnlyMappings, setShowSimOnlyMappings] = useState(false);
@@ -173,9 +173,10 @@ export default function DishesPage() {
 
   const handleAddIngredient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedDish) {
+    // Recipe lines are always unit-explicit; the Dish Detail dialog is the editor.
+    if (selectedDish && recipeForm.unit) {
       await addIngredient.mutateAsync({ dish_id: selectedDish.id, ...recipeForm });
-      setRecipeForm({ ingredient_id: "", quantity: 0 });
+      setRecipeForm({ ingredient_id: "", quantity: 0, unit: "" });
     }
   };
 
