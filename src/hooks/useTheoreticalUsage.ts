@@ -18,11 +18,12 @@ export interface TheoreticalUsageRow {
   ingredient_id: string;
   ingredient_name: string;
   base_unit: string;
-  quantity_used: number;
-  cost: number;
+  /** null = unknown (recipe line has a missing/incompatible unit). Never coerced to 0. */
+  quantity_used: number | null;
+  cost: number | null;
   dishes_sold: number;
-  /** 'recipe' = dish sales × recipe qty; 'direct_sale' = POS units sold. */
-  usage_source: "recipe" | "direct_sale";
+  /** 'recipe' = dish sales × recipe qty; 'direct_sale' = POS units sold; 'recipe_needs_review' = unit unknown. */
+  usage_source: "recipe" | "direct_sale" | "recipe_needs_review";
 }
 
 export function useTheoreticalUsage(params: {
@@ -53,10 +54,10 @@ export function useTheoreticalUsage(params: {
         ingredient_id: r.ingredient_id,
         ingredient_name: r.ingredient_name,
         base_unit: r.base_unit,
-        quantity_used: Number(r.quantity_used || 0),
-        cost: Number(r.cost || 0),
+        quantity_used: r.quantity_used === null || r.quantity_used === undefined ? null : Number(r.quantity_used),
+        cost: r.cost === null || r.cost === undefined ? null : Number(r.cost),
         dishes_sold: Number(r.dishes_sold || 0),
-        usage_source: (r.usage_source || "recipe") as "recipe" | "direct_sale",
+        usage_source: (r.usage_source || "recipe") as TheoreticalUsageRow["usage_source"],
       })) as TheoreticalUsageRow[];
     },
   });

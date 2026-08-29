@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import type { Dish } from "@/hooks/useDishes";
-import { useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, useUpdateDish } from "@/hooks/useDishes";
-import { useIngredients, calculateBaseCost, getBaseUnit, isRecipeIngredient } from "@/hooks/useIngredients";
+import { useDishIngredients, useAddDishIngredient, useUpdateDishIngredient, useRemoveDishIngredient, useUpdateDish } from "@/hooks/useDishes";
+import { useIngredients, calculateBaseCost, isRecipeIngredient } from "@/hooks/useIngredients";
+import { compatibleUnits, convertRecipeQty, getIngredientCostUnit } from "@/lib/units";
 import { usePOSMappings } from "@/hooks/usePOS";
 import { Link2, AlertCircle } from "lucide-react";
 import { QuickAddIngredientDialog } from "@/components/dishes/QuickAddIngredientDialog";
@@ -37,12 +38,16 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
   const { data: ingredients = [] } = useIngredients();
   const { data: mappings = [] } = usePOSMappings(undefined, "captiva");
   const addIngredient = useAddDishIngredient();
+  const updateIngredientLine = useUpdateDishIngredient();
   const removeIngredient = useRemoveDishIngredient();
   const updateDish = useUpdateDish();
 
-  const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0 });
+  const [recipeForm, setRecipeForm] = useState<{ ingredient_id: string; quantity: number; unit: string }>(
+    { ingredient_id: "", quantity: 0, unit: "" }
+  );
   const [ingredientSearch, setIngredientSearch] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [editing, setEditing] = useState<Record<string, { quantity: number; unit: string }>>({});
   // Recipe selectors only offer items valid as recipe ingredients — direct-sale
   // products and operational consumables never get fake recipes.
   const filteredIngredients = ingredients.filter(
@@ -68,13 +73,34 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
 
   if (!dish) return null;
 
-  const recipeCost = dishIngredients.reduce((sum, item) => {
-    const ing = ingredients.find(i => i.id === item.ingredient_id);
-    const base = ing ? calculateBaseCost(ing) : 0;
-    return sum + base * Number(item.quantity);
-  }, 0);
+  const selectedIngredient = ingredients.find((i) => i.id === recipeForm.ingredient_id);
+  const selectedCostUnit = getIngredientCostUnit(selectedIngredient);
+  const selectedUnitOptions = compatibleUnits(selectedCostUnit);
 
-  const effectiveCost = useDirect ? (directCost || null) : (dishIngredients.length > 0 ? recipeCost : null);
+  // Line costs use the SAME conversion as the database (convert to the
+  // ingredient's costing unit first). Unconvertible lines are unknown, not 0.
+  const lines = dishIngredients.map((item) => {
+    const ing = ingredients.find((i) => i.id === item.ingredient_id);
+    const costUnit = getIngredientCostUnit(ing);
+    const unitCost = ing ? calculateBaseCost(ing) : 0;
+    const converted = convertRecipeQty(ing, Number(item.quantity), item.unit);
+    return {
+      item,
+      ing,
+      costUnit,
+      unitCost,
+      lineCost: converted === null ? null : converted * unitCost,
+      invalid: converted === null,
+    };
+  });
+  const hasInvalidLine = lines.some((l) => l.invalid);
+  const recipeCost = hasInvalidLine
+    ? null
+    : lines.reduce((sum, l) => sum + (l.lineCost || 0), 0);
+
+  const effectiveCost = useDirect
+    ? (directCost || null)
+    : (dishIngredients.length > 0 ? recipeCost : null);
   const price = Number(dish.selling_price);
   const margin = effectiveCost !== null && price > 0 ? ((price - effectiveCost) / price) * 100 : null;
   const foodCostPct = effectiveCost !== null && price > 0 ? (effectiveCost / price) * 100 : null;
@@ -84,10 +110,11 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
 
   const handleAddIngredient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recipeForm.ingredient_id || recipeForm.quantity <= 0) return;
+    if (!recipeForm.ingredient_id || recipeForm.quantity <= 0 || !recipeForm.unit) return;
     await addIngredient.mutateAsync({ dish_id: dish.id, ...recipeForm });
-    setRecipeForm({ ingredient_id: "", quantity: 0 });
+    setRecipeForm({ ingredient_id: "", quantity: 0, unit: "" });
   };
+
 
   const saveOverview = () => {
     updateDish.mutate({
@@ -172,12 +199,12 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Quantities are the amount consumed when <strong>one</strong> unit of this dish is sold
-                  (e.g. 1 each chicken breast, 250 g potato, 80 ml cream).
+                  Quantities are the amount consumed when <strong>one</strong> unit of this dish is sold.
+                  Always pick the unit you are entering (e.g. 0.25 kg or 250 g — both cost the same).
                 </p>
 
-                <form onSubmit={handleAddIngredient} className="flex gap-2 items-end">
-                  <div className="flex-1">
+                <form onSubmit={handleAddIngredient} className="flex gap-2 items-end flex-wrap">
+                  <div className="flex-1 min-w-[200px]">
                     <Label>Ingredient</Label>
                     <Select
                       value={recipeForm.ingredient_id}
@@ -186,7 +213,9 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
                           setQuickAddOpen(true);
                           return;
                         }
-                        setRecipeForm({ ...recipeForm, ingredient_id: v });
+                        const ing = ingredients.find((i) => i.id === v);
+                        const opts = compatibleUnits(getIngredientCostUnit(ing));
+                        setRecipeForm({ ...recipeForm, ingredient_id: v, unit: opts[0] || "" });
                       }}
                     >
                       <SelectTrigger><SelectValue placeholder="Select ingredient" /></SelectTrigger>
@@ -203,8 +232,12 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
                         <SelectItem value="_new">+ Add new ingredient</SelectItem>
                         {filteredIngredients.map((ing) => {
                           const bc = calculateBaseCost(ing);
-                          const bu = getBaseUnit(ing.pack_unit);
-                          return <SelectItem key={ing.id} value={ing.id}>{ing.name} — {formatCurrency(bc)}/{bu}</SelectItem>;
+                          const cu = getIngredientCostUnit(ing);
+                          return (
+                            <SelectItem key={ing.id} value={ing.id}>
+                              {ing.name} — {cu ? `${formatCurrency(bc)}/${cu}` : "unit unknown"}
+                            </SelectItem>
+                          );
                         })}
                         {filteredIngredients.length === 0 && (
                           <p className="px-2 py-3 text-sm text-muted-foreground">No matching ingredient</p>
@@ -212,63 +245,152 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="w-32">
-                    <Label>Qty ({recipeForm.ingredient_id ? getBaseUnit(ingredients.find(i => i.id === recipeForm.ingredient_id)?.pack_unit) : "unit"})</Label>
+                  <div className="w-28">
+                    <Label>Quantity</Label>
                     <Input type="number" step="0.01" min="0" value={recipeForm.quantity}
                       onChange={(e) => setRecipeForm({ ...recipeForm, quantity: parseFloat(e.target.value) || 0 })} />
                   </div>
-                  <Button type="submit" disabled={addIngredient.isPending || !recipeForm.ingredient_id}>Add</Button>
+                  <div className="w-28">
+                    <Label>Unit</Label>
+                    <Select
+                      value={recipeForm.unit || undefined}
+                      onValueChange={(v) => setRecipeForm({ ...recipeForm, unit: v })}
+                      disabled={selectedUnitOptions.length === 0}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Unit" /></SelectTrigger>
+                      <SelectContent>
+                        {selectedUnitOptions.map((u) => (
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={addIngredient.isPending || !recipeForm.ingredient_id || !recipeForm.unit}
+                  >
+                    Add
+                  </Button>
                 </form>
+
+                {recipeForm.ingredient_id && selectedUnitOptions.length === 0 && (
+                  <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+                    This inventory item has no reliable purchase unit, so recipe quantities can't be
+                    converted safely. Set its pack size, pack unit and pack cost first.
+                  </div>
+                )}
 
                 <QuickAddIngredientDialog
                   open={quickAddOpen}
                   onOpenChange={setQuickAddOpen}
                   initialName={ingredientSearch}
                   onCreated={(id) => {
-                    setRecipeForm({ ingredient_id: id, quantity: 0 });
+                    const ing = ingredients.find((i) => i.id === id);
+                    const opts = compatibleUnits(getIngredientCostUnit(ing));
+                    setRecipeForm({ ingredient_id: id, quantity: 0, unit: opts[0] || "" });
                     setIngredientSearch("");
                   }}
                 />
 
-
                 <div className="border rounded-lg divide-y">
-                  <div className="grid grid-cols-5 gap-2 p-3 bg-muted/50 text-xs font-medium text-muted-foreground uppercase">
-                    <span>Ingredient</span>
+                  <div className="grid grid-cols-6 gap-2 p-3 bg-muted/50 text-xs font-medium text-muted-foreground uppercase">
+                    <span className="col-span-2">Ingredient</span>
                     <span className="text-right">Qty</span>
                     <span className="text-right">Unit</span>
                     <span className="text-right">Unit cost</span>
                     <span className="text-right">Line cost</span>
                   </div>
-                  {dishIngredients.length === 0 ? (
+                  {lines.length === 0 ? (
                     <p className="p-4 text-muted-foreground text-center text-sm">No ingredients added yet. Cost will show as "Missing".</p>
                   ) : (
                     <>
-                      {dishIngredients.map((item) => {
-                        const ing = ingredients.find(i => i.id === item.ingredient_id);
-                        const bc = ing ? calculateBaseCost(ing) : 0;
-                        const bu = getBaseUnit(ing?.pack_unit);
-                        const line = bc * Number(item.quantity);
+                      {lines.map(({ item, ing, costUnit, unitCost, lineCost, invalid }) => {
+                        const opts = compatibleUnits(costUnit);
+                        const draft = editing[item.id];
+                        const qty = draft ? draft.quantity : Number(item.quantity);
+                        const unit = draft ? draft.unit : (item.unit || "");
+                        const dirty = !!draft && (draft.quantity !== Number(item.quantity) || draft.unit !== (item.unit || ""));
                         return (
-                          <div key={item.id} className="grid grid-cols-5 gap-2 p-3 items-center text-sm">
-                            <span className="font-medium">{item.ingredients?.name}</span>
-                            <span className="text-right">{Number(item.quantity).toFixed(2)}</span>
-                            <span className="text-right text-muted-foreground">{bu}</span>
-                            <span className="text-right text-muted-foreground">{formatCurrency(bc)}/{bu}</span>
+                          <div key={item.id} className="grid grid-cols-6 gap-2 p-3 items-center text-sm">
+                            <span className="font-medium col-span-2 flex items-center gap-2 flex-wrap">
+                              {item.ingredients?.name}
+                              {(item.needs_unit_review || invalid) && (
+                                <Badge variant="secondary" className="bg-warning/15 text-warning">Needs review</Badge>
+                              )}
+                            </span>
+                            <Input
+                              className="h-8 text-right"
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={qty}
+                              onChange={(e) =>
+                                setEditing({
+                                  ...editing,
+                                  [item.id]: { quantity: parseFloat(e.target.value) || 0, unit },
+                                })
+                              }
+                            />
+                            <Select
+                              value={unit || undefined}
+                              onValueChange={(v) => setEditing({ ...editing, [item.id]: { quantity: qty, unit: v } })}
+                              disabled={opts.length === 0}
+                            >
+                              <SelectTrigger className="h-8"><SelectValue placeholder="Set unit" /></SelectTrigger>
+                              <SelectContent>
+                                {opts.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <span className="text-right text-muted-foreground">
+                              {costUnit ? `${formatCurrency(unitCost)}/${costUnit}` : "unknown"}
+                            </span>
                             <div className="flex items-center justify-end gap-2">
-                              <span className="font-medium">{formatCurrency(line)}</span>
+                              <span className={cn("font-medium", invalid && "text-warning")}>
+                                {lineCost === null ? "Unknown" : formatCurrency(lineCost)}
+                              </span>
+                              {dirty && unit && (
+                                <Button
+                                  size="sm"
+                                  className="h-6 px-2"
+                                  onClick={async () => {
+                                    await updateIngredientLine.mutateAsync({
+                                      id: item.id,
+                                      dish_id: dish.id,
+                                      quantity: qty,
+                                      unit,
+                                    });
+                                    setEditing((prev) => {
+                                      const next = { ...prev };
+                                      delete next[item.id];
+                                      return next;
+                                    });
+                                  }}
+                                >
+                                  Save
+                                </Button>
+                              )}
                               <Button variant="ghost" size="sm" className="text-destructive h-6 w-6 p-0"
                                 onClick={() => removeIngredient.mutate({ id: item.id, dish_id: dish.id })}>×</Button>
                             </div>
                           </div>
                         );
                       })}
-                      <div className="grid grid-cols-5 gap-2 p-3 bg-muted/30 items-center border-t-2">
-                        <span className="font-semibold col-span-4">Total recipe cost</span>
-                        <span className="text-right font-semibold">{formatCurrency(recipeCost)}</span>
+                      <div className="grid grid-cols-6 gap-2 p-3 bg-muted/30 items-center border-t-2">
+                        <span className="font-semibold col-span-5">Total recipe cost</span>
+                        <span className={cn("text-right font-semibold", recipeCost === null && "text-warning")}>
+                          {recipeCost === null ? "Unknown" : formatCurrency(recipeCost)}
+                        </span>
                       </div>
+                      {hasInvalidLine && (
+                        <p className="p-3 text-sm text-warning">
+                          One or more recipe lines have a missing or incompatible unit. Cost is reported as
+                          unknown (never zero) until they are corrected.
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
+
               </>
             )}
           </TabsContent>
