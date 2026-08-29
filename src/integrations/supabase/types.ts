@@ -352,24 +352,30 @@ export type Database = {
           dish_id: string
           id: string
           ingredient_id: string
+          needs_unit_review: boolean
           quantity: number
           restaurant_id: string | null
+          unit: string | null
         }
         Insert: {
           created_at?: string
           dish_id: string
           id?: string
           ingredient_id: string
+          needs_unit_review?: boolean
           quantity?: number
           restaurant_id?: string | null
+          unit?: string | null
         }
         Update: {
           created_at?: string
           dish_id?: string
           id?: string
           ingredient_id?: string
+          needs_unit_review?: boolean
           quantity?: number
           restaurant_id?: string | null
+          unit?: string | null
         }
         Relationships: [
           {
