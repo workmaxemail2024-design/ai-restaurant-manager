@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import type { Dish } from "@/hooks/useDishes";
-import { useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, useUpdateDish } from "@/hooks/useDishes";
-import { useIngredients, calculateBaseCost, getBaseUnit, isRecipeIngredient } from "@/hooks/useIngredients";
+import { useDishIngredients, useAddDishIngredient, useUpdateDishIngredient, useRemoveDishIngredient, useUpdateDish } from "@/hooks/useDishes";
+import { useIngredients, calculateBaseCost, isRecipeIngredient } from "@/hooks/useIngredients";
+import { compatibleUnits, convertRecipeQty, getIngredientCostUnit } from "@/lib/units";
 import { usePOSMappings } from "@/hooks/usePOS";
 import { Link2, AlertCircle } from "lucide-react";
 import { QuickAddIngredientDialog } from "@/components/dishes/QuickAddIngredientDialog";
@@ -37,6 +38,7 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
   const { data: ingredients = [] } = useIngredients();
   const { data: mappings = [] } = usePOSMappings(undefined, "captiva");
   const addIngredient = useAddDishIngredient();
+  const updateIngredientLine = useUpdateDishIngredient();
   const removeIngredient = useRemoveDishIngredient();
   const updateDish = useUpdateDish();
 
