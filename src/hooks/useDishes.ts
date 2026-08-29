@@ -38,8 +38,13 @@ export interface DishIngredient {
   dish_id: string;
   ingredient_id: string;
   quantity: number;
+  /** Explicit unit for this recipe line (g/kg/oz/ml/L/each). null = unknown. */
+  unit: string | null;
+  /** True when the legacy unit could not be determined safely. */
+  needs_unit_review: boolean;
   ingredients?: { name: string; unit: string };
 }
+
 
 export type DishInsert = {
   name: string;
