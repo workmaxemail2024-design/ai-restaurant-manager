@@ -354,8 +354,8 @@ export function useOwnerIntelligence(locationId?: string | null) {
           insights.push({
             id: "trend-profit-down", type: "alert", severity: "critical", confidence: lastWeekData.hasLabour ? "high" : "low",
             category: "revenue",
-            title: "Profit Declining",
-            description: "Estimated profit has dropped for 3 consecutive weeks.",
+            title: "Contribution Trend Declining",
+            description: "Contribution (revenue − food − labour, before overheads and daily expenses) has dropped for 3 consecutive weeks.",
             action: "Review both revenue drivers and cost controls urgently.",
             missingData: !lastWeekData.hasLabour ? ["Labour data"] : undefined,
           });

@@ -29,7 +29,6 @@ import {
   CalendarDays,
   Receipt,
 } from "lucide-react";
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
 import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
 import { useRestaurant } from "@/contexts/RestaurantContext";
@@ -922,7 +921,6 @@ export default function ReportsPage() {
   const { selectedLocationId } = useLocation();
   const { currentRestaurant } = useRestaurant();
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
-  const { data: metrics, isLoading } = useDashboardMetrics(startDate, endDate, selectedLocationId);
   const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(startDate, endDate, selectedLocationId);
   const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(startDate, endDate, selectedLocationId);
 
