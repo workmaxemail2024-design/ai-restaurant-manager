@@ -310,7 +310,7 @@ export function DailyCompletionStrip({ date }: Props) {
             state={docsState}
             detail={docsDetail}
             onClick={() =>
-              selectedLocationId ? setDocDialogOpen(true) : navigate("/documents")
+              selectedLocationId ? setDocDialogOpen(true) : navigate("/operations/documents")
             }
             action={
               <Button
