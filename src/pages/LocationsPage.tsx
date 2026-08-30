@@ -9,6 +9,7 @@ import { Plus, Settings } from "lucide-react";
 import { useLocations, useCreateLocation, useUpdateLocation, useDeleteLocation, useUpdateOperatingHours, Location, LocationInsert } from "@/hooks/useLocations";
 import { OperatingHoursEditor, OperatingHours } from "@/components/locations/OperatingHoursEditor";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { LocationAccessPanel } from "@/components/locations/LocationAccessPanel";
 
 export default function LocationsPage() {
   const { data: locations = [], isLoading } = useLocations();
@@ -127,6 +128,8 @@ export default function LocationsPage() {
         onEdit={handleEdit}
         onDelete={(item) => deleteLocation.mutate(item.id)}
       />
+
+      <LocationAccessPanel />
 
       <Sheet open={!!hoursSheetLocation} onOpenChange={(open) => !open && setHoursSheetLocation(null)}>
         <SheetContent className="sm:max-w-md overflow-y-auto">
