@@ -106,3 +106,68 @@ export function unauthorized(message: string, headers: Record<string, string>, s
     headers: { ...headers, "Content-Type": "application/json" },
   });
 }
+
+/**
+ * Canonical location authorization for edge functions.
+ * Mirrors public.get_user_location_ids(): Owner/full-access users reach every
+ * location in their restaurant; everyone else only explicitly assigned ones.
+ * Never trust a client-supplied location_id without passing it through here.
+ */
+export async function userCanAccessLocation(
+  adminClient: SupabaseClient,
+  userId: string,
+  restaurantId: string,
+  locationId: string | null,
+): Promise<boolean> {
+  if (!restaurantId || !locationId) return false;
+
+  const { data: membership, error: mErr } = await adminClient
+    .from("user_restaurants")
+    .select("id, roles(permissions)")
+    .eq("user_id", userId)
+    .eq("restaurant_id", restaurantId)
+    .limit(1)
+    .maybeSingle();
+  if (mErr || !membership) return false;
+
+  const perms = ((membership as Record<string, unknown>).roles as
+    { permissions?: Record<string, unknown> } | null)?.permissions ?? {};
+
+  // Owner / full access: any location belonging to this restaurant.
+  if (perms.full_access === true) {
+    const { data: loc } = await adminClient
+      .from("locations")
+      .select("id")
+      .eq("id", locationId)
+      .eq("restaurant_id", restaurantId)
+      .maybeSingle();
+    return !!loc;
+  }
+
+  const { data: assignment } = await adminClient
+    .from("user_location_access")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("restaurant_id", restaurantId)
+    .eq("location_id", locationId)
+    .maybeSingle();
+  return !!assignment;
+}
+
+/** True when the user may operate across every location (Owner / full access). */
+export async function userHasAllLocationAccess(
+  adminClient: SupabaseClient,
+  userId: string,
+  restaurantId: string,
+): Promise<boolean> {
+  const { data } = await adminClient
+    .from("user_restaurants")
+    .select("id, roles(permissions)")
+    .eq("user_id", userId)
+    .eq("restaurant_id", restaurantId)
+    .limit(1)
+    .maybeSingle();
+  const perms = ((data as Record<string, unknown> | null)?.roles as
+    { permissions?: Record<string, unknown> } | null)?.permissions ?? {};
+  return perms.full_access === true;
+}
