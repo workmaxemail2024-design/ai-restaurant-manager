@@ -38,15 +38,13 @@ export function useAIInsights() {
         return stock && Number(stock.quantity) < 10;
       });
 
+      // Financial metrics are NOT computed here. ai-daily-summary derives revenue,
+      // orders, AOV, food cost/coverage, labour and profit from the canonical
+      // restaurant data so the AI never maintains a second calculation engine.
       const { data, error } = await supabase.functions.invoke("ai-daily-summary", {
         body: {
           restaurant_id: currentRestaurant.id,
-          revenue: metrics?.totalRevenue || 0,
-          foodCost: metrics?.foodCostPercent || 0,
-          // Gross margin (revenue − food cost). Labour/overheads are not deducted here.
-          profitMargin: metrics?.grossProfit ? (metrics.grossProfit / metrics.totalRevenue) * 100 : 0,
-          topDishes: metrics?.topDishes || [],
-          bottomDishes: metrics?.worstDishes || [],
+          date: yesterday,
           stockAlerts: lowStockItems.map(i => ({
             name: i.name,
             quantity: stockLevels.find(s => s.ingredient_id === i.id)?.quantity || 0,
