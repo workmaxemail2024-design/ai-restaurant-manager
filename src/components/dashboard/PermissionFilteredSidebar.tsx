@@ -49,6 +49,7 @@ interface NavItem {
   path: string;
   badge?: number;
   permission?: { resource: PermissionResource; action: 'view' | 'edit' | 'admin' };
+  ownerOnly?: boolean;
 }
 
 interface NavSection {
@@ -161,7 +162,7 @@ const navSections: NavSection[] = [
       { icon: Euro, label: "Financial / Overheads", path: "/settings/financial/overheads", permission: { resource: 'settings', action: 'view' } },
       { icon: Shield, label: "Role Builder", path: "/settings/roles", permission: { resource: 'settings', action: 'view' } },
       { icon: FileText, label: "Audit Log", path: "/settings/audit-log", permission: { resource: 'settings', action: 'admin' } },
-      { icon: Shield, label: "Backups", path: "/settings/backups", permission: { resource: 'settings', action: 'admin' } },
+      { icon: Shield, label: "Backup & Recovery", path: "/settings/backups", permission: { resource: 'settings', action: 'admin' }, ownerOnly: true },
     ]
   }
 ];
@@ -172,7 +173,7 @@ const bottomItems: NavItem[] = [
 
 export function PermissionFilteredSidebar() {
   const location = useLocation();
-  const { hasPermission, isLoading } = usePermissions();
+  const { hasPermission, hasFullAccess, isLoading } = usePermissions();
   const { signOut, user, currentRestaurant } = useRestaurant();
   const { data: pendingCount = 0 } = usePendingReservationCount();
 
@@ -269,6 +270,7 @@ export function PermissionFilteredSidebar() {
     ...section,
     items: section.items.filter(item => {
       if (isLoading) return true;
+      if (item.ownerOnly && !hasFullAccess()) return false;
       if (!item.permission) return true;
       return hasPermission(item.permission.resource, item.permission.action);
     })
