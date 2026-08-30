@@ -61,7 +61,7 @@ export function useAIInsights() {
     } finally {
       setDailySummaryLoading(false);
     }
-  }, [currentRestaurant?.id, metrics, ingredients, stockLevels]);
+  }, [currentRestaurant?.id, yesterday, ingredients, stockLevels]);
 
   // Stock Forecast
   const [stockForecast, setStockForecast] = useState<AIInsightResult | null>(null);
