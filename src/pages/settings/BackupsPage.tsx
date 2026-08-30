@@ -1,156 +1,101 @@
 import { PageLayout } from "@/components/common/PageLayout";
-import { useBackups, SystemBackup } from "@/hooks/useBackups";
-import { RequirePermission } from "@/components/RequirePermission";
-import { Button } from "@/components/ui/button";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Shield, Download, CheckCircle, XCircle, Clock, AlertTriangle, Loader2 } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
-
-function statusBadge(status: string) {
-  switch (status) {
-    case "success":
-      return <Badge className="bg-emerald-600 dark:bg-emerald-500 text-primary-foreground"><CheckCircle className="h-3 w-3 mr-1" />Success</Badge>;
-    case "failed":
-      return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Failed</Badge>;
-    case "pending":
-      return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
-    default:
-      return <Badge variant="outline">{status}</Badge>;
-  }
-}
-
-function formatBytes(bytes: number | null) {
-  if (!bytes) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Database, ShieldCheck, Info, Loader2 } from "lucide-react";
 
 export default function BackupsPage() {
-  const { backups, isLoading, createBackup, lastSuccessful, isStale, hasRecentFailure } = useBackups();
+  const { hasFullAccess, isLoading } = usePermissions();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-32">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!hasFullAccess()) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center">
+        <div className="text-muted-foreground text-lg mb-2">Access Denied</div>
+        <p className="text-sm text-muted-foreground/70">
+          Backup and recovery administration is restricted to the account owner.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <RequirePermission resource="settings" action="admin">
-      <PageLayout title="Backups" subtitle="Database backup management and monitoring">
-        <div className="grid gap-6 md:grid-cols-3 mb-6">
-          {/* Last backup card */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Last Successful Backup</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {lastSuccessful ? (
-                <div>
-                  <p className="text-2xl font-bold">
-                    {formatDistanceToNow(new Date(lastSuccessful.created_at), { addSuffix: true })}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(lastSuccessful.created_at), "PPpp")}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-2xl font-bold text-muted-foreground">No backups yet</p>
-              )}
-            </CardContent>
-          </Card>
+    <PageLayout
+      title="Backup & Recovery"
+      subtitle="How this restaurant's data is protected and recovered"
+    >
+      <Alert className="mb-6">
+        <Info className="h-4 w-4" />
+        <AlertTitle>Recovery is handled outside this application</AlertTitle>
+        <AlertDescription>
+          RestaurantAI does not create or store its own backups. Database recovery is
+          performed exclusively through the managed Supabase project backups for this
+          restaurant. No backup or restore action can be triggered from this page.
+        </AlertDescription>
+      </Alert>
 
-          {/* Status card */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isStale || hasRecentFailure ? (
-                <div className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  <span className="font-semibold">{hasRecentFailure ? "Last backup failed" : "No backup in 24h"}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle className="h-5 w-5" />
-                  <span className="font-semibold">Healthy</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Retention card */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Retention Policy</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">14 days</p>
-              <p className="text-xs text-muted-foreground">Daily backups retained automatically</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Manual backup */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Recent Backups</h2>
-          <Button
-            onClick={() => createBackup.mutate("manual")}
-            disabled={createBackup.isPending}
-          >
-            {createBackup.isPending ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</>
-            ) : (
-              <><Download className="h-4 w-4 mr-2" />Create Backup Now</>
-            )}
-          </Button>
-        </div>
-
-        {/* Backups list */}
+      <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      Loading backups…
-                    </TableCell>
-                  </TableRow>
-                ) : backups.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No backups yet. Create your first backup above.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  backups.map((b: SystemBackup) => (
-                    <TableRow key={b.id}>
-                      <TableCell className="font-medium">
-                        {format(new Date(b.created_at), "PPpp")}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">{b.backup_type}</Badge>
-                      </TableCell>
-                      <TableCell>{statusBadge(b.status)}</TableCell>
-                      <TableCell>{formatBytes(b.size_bytes)}</TableCell>
-                      <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
-                        {b.error_message || b.notes || "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Database className="h-4 w-4 text-muted-foreground" />
+              Where backups live
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              The full database — sales, labour, inventory, documents metadata and
+              settings — is backed up by the Supabase platform that hosts this project.
+            </p>
+            <p>
+              Recovery is performed by the project owner from the Supabase dashboard
+              under <span className="font-medium text-foreground">Database → Backups</span>,
+              using a daily physical backup or Point-in-Time Recovery where enabled.
+            </p>
           </CardContent>
         </Card>
-      </PageLayout>
-    </RequirePermission>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+              Who can recover data
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-muted-foreground">
+            <p>
+              Only the account owner with access to the Supabase project can restore
+              data. Managers and staff have no restore capability, in this application
+              or elsewhere.
+            </p>
+            <p>
+              If data loss is suspected, stop entering new data and contact the owner
+              immediately — restoring to an earlier point discards changes made after
+              that point.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="mt-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Before relying on recovery</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          <ul className="list-disc pl-5 space-y-1">
+            <li>Confirm the Supabase project plan includes daily backups, and enable Point-in-Time Recovery for finer-grained recovery.</li>
+            <li>Perform a test restore into a scratch project so the recovery path is proven, not assumed.</li>
+            <li>Note that Captiva POS remains the independent source of truth for sales and can be re-imported for any affected day.</li>
+          </ul>
+        </CardContent>
+      </Card>
+    </PageLayout>
   );
 }
