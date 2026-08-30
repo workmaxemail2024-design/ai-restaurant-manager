@@ -101,7 +101,49 @@ serve(async (req) => {
       }
     }
 
+    // C5 CLOSED-DAY PRE-CHECK — runs before any read/write of sales.
+    // Service-role calls bypass the DB triggers, so the check is explicit here.
+    // Single operating date  -> reject the whole run with a 409, nothing written.
+    // Multi-day batch range  -> closed dates are skipped and reported.
+    const closedDates: string[] = [];
+    {
+      const { data: closedRows, error: closedErr } = await adminClient
+        .from("daily_ledger_entries")
+        .select("entry_date, location_id")
+        .eq("restaurant_id", restaurantId)
+        .eq("is_closed", true)
+        .gte("entry_date", date_from)
+        .lte("entry_date", date_to);
+
+      if (closedErr) {
+        console.error("closed-day precheck failed:", closedErr);
+        return new Response(
+          JSON.stringify({ success: false, error: "Could not verify closed days" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      for (const row of closedRows ?? []) {
+        const r = row as { entry_date: string; location_id: string | null };
+        if (r.location_id === null || r.location_id === integration.location_id) {
+          if (!closedDates.includes(r.entry_date)) closedDates.push(r.entry_date);
+        }
+      }
+
+      if (date_from === date_to && closedDates.length > 0) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Day ${date_from} is closed. Reopen the day before importing.`,
+            closed_dates: closedDates,
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // Fetch pending imports for the date range
+
 
     // Use sync_status NOT in ['applied'] to include both 'pending' and 'unmapped'
     const { data: imports, error: importError } = await adminClient
