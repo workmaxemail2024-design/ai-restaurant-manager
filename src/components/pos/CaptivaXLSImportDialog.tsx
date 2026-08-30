@@ -181,12 +181,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     try {
       const dateStr = format(reportDate, "yyyy-MM-dd");
       const provider = "captiva_xls";
+
+      // C5 PRE-CHECK: a closed operating day rejects the whole import BEFORE any
+      // delete/upsert runs, so a rejected import leaves the data untouched.
+      const { data: closed, error: closedErr } = await supabase.rpc("day_is_closed", {
+        _restaurant_id: currentRestaurant.id,
+        _location_id: locationId,
+        _date: dateStr,
+      });
+      if (closedErr) throw closedErr;
+      if (closed) {
+        throw new Error(
+          `409 — Day ${dateStr} is closed. Reopen the day before importing.`
+        );
+      }
+
       const inferItemType = (dept: string): string => {
         const d = (dept || "").toLowerCase();
         if (/wine|beer|cocktail|spirit|drink|water|soft|coffee|tea|cappuccino|juice|bar|beverage/.test(d)) return "beverage";
         if (!d) return "other";
         return "food";
       };
+
 
       // 1) Upsert external POS items (Captiva product catalogue for this location)
       const catalogueRows = parsed.rows.map((r) => ({
