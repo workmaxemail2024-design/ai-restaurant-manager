@@ -267,21 +267,29 @@ serve(async (req) => {
     if (locFilter) resQuery = resQuery.eq("location_id", locFilter);
     const { count: reservationCount } = await resQuery;
 
-    const estimatedFoodCost = totalRevenue * 0.3;
-    const estimatedProfit = totalRevenue - estimatedFoodCost - totalLabourCost - expenses;
+    // Contribution after food + labour + daily expenses. Recurring overheads are NOT
+    // deducted here (that engine lives in the canonical Daily Financial Summary /
+    // Reports), so this is never called Gross Profit or Operating Profit. It is only
+    // produced when the food cost is reliable; otherwise it stays null.
+    const contributionProfit =
+      foodCost !== null ? totalRevenue - foodCost - totalLabourCost - expenses : null;
 
     const metricsJson = {
       date: targetDate,
       revenue: totalRevenue,
       orders: totalOrders,
+      items_sold: itemsSold,
       avg_order_value: avgOrderValue,
+      food_cost: foodCost,
       food_cost_pct: foodCostPct,
+      food_cost_known: foodCost !== null,
+      recipe_coverage_pct: recipeCoveragePct,
       labour_cost: totalLabourCost,
       labour_pct: labourPct,
       labour_hours: totalLabourHours,
       covers,
       expenses,
-      estimated_profit: estimatedProfit,
+      contribution_profit: contributionProfit,
       reservations: reservationCount || 0,
       top_dishes: topDishes,
       bottom_dishes: bottomDishes,
