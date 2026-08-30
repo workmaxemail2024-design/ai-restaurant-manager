@@ -29,6 +29,7 @@ import { DailyActionsBar } from "@/components/dashboard/DailyActionsBar";
 import { DailyBookingsWidget } from "@/components/dashboard/DailyBookingsWidget";
 
 import { OwnerInsightsPanel } from "@/components/dashboard/OwnerInsightsPanel";
+import { useLocationAccess } from "@/hooks/useLocationAccess";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -62,6 +63,7 @@ const Index = () => {
 
   // Same sales source + restaurant/date scoping as the Financial Summary,
   // so Location Status revenue can never disagree with the headline figures.
+  const { canViewAllLocations } = useLocationAccess();
   const { data: locationRevenue, isLoading: locationRevenueLoading } = useLocationRevenue(
     startDate,
     endDate
@@ -233,7 +235,9 @@ const Index = () => {
                         <MapPin className="h-4 w-4 text-primary" />
                         <h3 className="text-sm font-semibold">Location Status</h3>
                       </div>
-                      <button className="text-sm text-primary hover:underline" onClick={() => navigate('/locations')}>View All</button>
+                      {canViewAllLocations && (
+                        <button className="text-sm text-primary hover:underline" onClick={() => navigate('/locations')}>View All</button>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {visibleLocations.map((location, index) => (
@@ -253,7 +257,7 @@ const Index = () => {
                         />
                       ))}
                     </div>
-                    {selectedLocationId && (
+                    {selectedLocationId && canViewAllLocations && (
                       <p className="mt-2 text-xs text-muted-foreground">
                         Showing the selected location only. Switch to All Locations for cross-location status.
                       </p>
@@ -262,7 +266,7 @@ const Index = () => {
                 </div>
 
                 <div className="space-y-6">
-                  <OwnerInsightsPanel />
+                  {canViewAllLocations && <OwnerInsightsPanel />}
                   <DataHealthPanel locationId={selectedLocationId} />
                   <YesterdaySummaryWidget />
                   <ActionRequiredPanel locationId={selectedLocationId} />
