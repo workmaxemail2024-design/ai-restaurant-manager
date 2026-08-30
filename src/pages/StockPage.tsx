@@ -16,7 +16,6 @@ import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect"
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
-import { VarianceReport } from "@/components/inventory/VarianceReport";
 import { TheoreticalUsageReport } from "@/components/inventory/TheoreticalUsageReport";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 import { getStockStatus } from "@/lib/inventoryStatus";
@@ -128,10 +127,6 @@ export default function StockPage() {
             <Calculator className="h-4 w-4" />
             Theoretical Usage
           </TabsTrigger>
-          <TabsTrigger value="variance" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Variance Report
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="levels" className="space-y-4">
@@ -216,9 +211,6 @@ export default function StockPage() {
           <TheoreticalUsageReport />
         </TabsContent>
 
-        <TabsContent value="variance">
-          <VarianceReport />
-        </TabsContent>
       </Tabs>
     </PageLayout>
   );
