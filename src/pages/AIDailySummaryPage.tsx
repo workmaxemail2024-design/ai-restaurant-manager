@@ -350,10 +350,22 @@ function SummaryCard({
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <MetricChip label="Revenue" value={formatCurrency(m.revenue || 0)} />
-                  <MetricChip label="Orders" value={String(m.orders || 0)} />
-                  <MetricChip label="Avg Order" value={formatCurrency(m.avg_order_value || 0)} />
-                  <MetricChip label="Profit Est." value={formatCurrency(m.estimated_profit || 0)} />
+                  <MetricChip label="Orders" value={m.orders != null ? String(m.orders) : "—"} />
+                  <MetricChip
+                    label="Avg Order"
+                    value={m.avg_order_value != null ? formatCurrency(m.avg_order_value) : "—"}
+                  />
+                  <MetricChip
+                    label="Contribution (excl. overheads)"
+                    value={
+                      m.contribution_profit != null ? formatCurrency(m.contribution_profit) : "—"
+                    }
+                  />
                 </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Orders are canonical POS receipts. Contribution excludes recurring overheads —
+                  see Reports for Operating Profit.
+                </p>
               </div>
             )}
 
