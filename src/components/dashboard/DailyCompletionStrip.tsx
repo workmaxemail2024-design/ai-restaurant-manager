@@ -27,6 +27,7 @@ import { useDayLabour } from "@/hooks/useDayLabour";
 import { StockWastageDialog } from "@/components/dashboard/StockWastageDialog";
 import { useDayStockAdjustments } from "@/hooks/useDayStock";
 import { useDailyExpenses } from "@/hooks/useDailyExpenses";
+import { usePermissions } from "@/hooks/usePermissions";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
@@ -99,6 +100,8 @@ interface Props {
 
 export function DailyCompletionStrip({ date }: Props) {
   const navigate = useNavigate();
+  const { hasFullAccess } = usePermissions();
+  const isOwner = hasFullAccess();
   const { selectedLocationId } = useLocation();
   const { data: overview } = useDashboardOverview(selectedLocationId);
   const { data: dayDocs = [] } = useDayDocuments(date, selectedLocationId);
@@ -228,6 +231,8 @@ export function DailyCompletionStrip({ date }: Props) {
 
   const handleCloseDay = () => {
     if (closeBlocked) return;
+    // Reopening a closed day is an Owner-only correction.
+    if (isClosed && !isOwner) return;
     upsert({
       entry_date: date,
       location_id: selectedLocationId ?? null,
@@ -426,7 +431,9 @@ export function DailyCompletionStrip({ date }: Props) {
             state={isClosed ? "ok" : closeBlocked ? "missing" : "warn"}
             detail={
               isClosed
-                ? "Day closed"
+                ? isOwner
+                  ? "Day closed — Owner can reopen"
+                  : "Day closed — Owner only can reopen"
                 : closeBlocked
                   ? blockerMessage
                   : "Ready to close"
@@ -436,7 +443,12 @@ export function DailyCompletionStrip({ date }: Props) {
                 size="sm"
                 variant={isClosed ? "outline" : "default"}
                 className="mt-2 h-10 w-full"
-                disabled={isSaving || closeBlocked}
+                disabled={isSaving || closeBlocked || (isClosed && !isOwner)}
+                title={
+                  isClosed && !isOwner
+                    ? "Only an Owner can reopen a closed day"
+                    : undefined
+                }
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseDay();
