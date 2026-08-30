@@ -863,6 +863,7 @@ export type Database = {
           name: string
           operating_hours: Json | null
           restaurant_id: string | null
+          timezone: string
           updated_at: string
         }
         Insert: {
@@ -872,6 +873,7 @@ export type Database = {
           name: string
           operating_hours?: Json | null
           restaurant_id?: string | null
+          timezone?: string
           updated_at?: string
         }
         Update: {
@@ -881,6 +883,7 @@ export type Database = {
           name?: string
           operating_hours?: Json | null
           restaurant_id?: string | null
+          timezone?: string
           updated_at?: string
         }
         Relationships: [
@@ -2757,6 +2760,10 @@ export type Database = {
       }
     }
     Functions: {
+      assert_day_open: {
+        Args: { _date: string; _location_id: string; _restaurant_id: string }
+        Returns: undefined
+      }
       calculate_dish_cost: { Args: { p_dish_id: string }; Returns: number }
       calculate_dish_margin: { Args: { p_dish_id: string }; Returns: number }
       calculate_staff_score: {
@@ -2786,6 +2793,10 @@ export type Database = {
         }
         Returns: string
       }
+      day_is_closed: {
+        Args: { _date: string; _location_id: string; _restaurant_id: string }
+        Returns: boolean
+      }
       ensure_user_restaurant: { Args: never; Returns: Json }
       get_ingredient_base_cost: {
         Args: { p_ingredient_id: string }
@@ -2814,6 +2825,7 @@ export type Database = {
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
+      is_trusted_backend_session: { Args: never; Returns: boolean }
       log_audit_event: {
         Args: {
           p_data?: Json
@@ -2835,6 +2847,10 @@ export type Database = {
         Returns: Json
       }
       normalize_unit: { Args: { _u: string }; Returns: string }
+      operating_day: {
+        Args: { _location_id: string; _ts: string }
+        Returns: string
+      }
       restaurant_has_members: {
         Args: { _restaurant_id: string }
         Returns: boolean
