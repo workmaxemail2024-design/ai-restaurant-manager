@@ -59,8 +59,9 @@ export function YesterdaySummaryWidget() {
         <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
           <span>Rev: <span className="text-foreground font-medium">{formatCurrency(m.revenue || 0)}</span></span>
           <span>Orders: <span className="text-foreground font-medium">{m.orders || 0}</span></span>
-          <span>Profit: <span className="text-success font-medium">{formatCurrency(m.estimated_profit || 0)}</span></span>
+          <span>Est. Gross Profit: <span className="text-foreground font-medium">{formatCurrency(m.estimated_profit || 0)}</span></span>
         </div>
+        <p className="text-[10px] text-muted-foreground mb-1">Est. Gross Profit excludes overheads</p>
         <p className="text-xs text-muted-foreground line-clamp-2">
           {firstSentence || "View full summary →"}
         </p>

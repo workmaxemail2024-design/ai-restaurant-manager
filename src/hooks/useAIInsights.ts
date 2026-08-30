@@ -45,7 +45,8 @@ export function useAIInsights() {
           restaurant_id: currentRestaurant.id,
           revenue: metrics?.totalRevenue || 0,
           foodCost: metrics?.foodCostPercent || 0,
-          profitMargin: metrics?.totalProfit ? (metrics.totalProfit / metrics.totalRevenue) * 100 : 0,
+          // Gross margin (revenue − food cost). Labour/overheads are not deducted here.
+          profitMargin: metrics?.grossProfit ? (metrics.grossProfit / metrics.totalRevenue) * 100 : 0,
           topDishes: metrics?.topDishes || [],
           bottomDishes: metrics?.worstDishes || [],
           stockAlerts: lowStockItems.map(i => ({

@@ -3,14 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 
 interface DishMetric { name: string; quantity: number; revenue: number }
-interface LocationMetric { name: string; revenue: number; orders: number }
+interface LocationMetric { name: string; revenue: number; itemsSold: number }
 
 export interface DashboardMetrics {
   totalRevenue: number;
-  totalOrders: number;
-  avgOrderValue: number;
+  itemsSold: number;
+  avgItemValue: number;
   foodCostPercent: number;
-  totalProfit: number;
+  grossProfit: number;
   topDishes: DishMetric[];
   worstDishes: DishMetric[];
   locationPerformance: LocationMetric[];
@@ -29,10 +29,10 @@ export function useDashboardMetrics(startDate?: string, endDate?: string, locati
       if (!restaurantId) {
         return {
           totalRevenue: 0,
-          totalOrders: 0,
-          avgOrderValue: 0,
+          itemsSold: 0,
+          avgItemValue: 0,
           foodCostPercent: 0,
-          totalProfit: 0,
+          grossProfit: 0,
           topDishes: [],
           worstDishes: [],
           locationPerformance: [],
@@ -54,8 +54,10 @@ export function useDashboardMetrics(startDate?: string, endDate?: string, locati
       const { data: sales } = await query;
       
       const totalRevenue = sales?.reduce((sum, sale) => sum + Number(sale.total_price), 0) || 0;
-      const totalOrders = sales?.reduce((sum, sale) => sum + sale.quantity, 0) || 0;
-      const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+      // Items sold (sum of quantity). This is NOT the order/receipt count —
+      // canonical Orders come from pos_daily_summaries.order_count.
+      const itemsSold = sales?.reduce((sum, sale) => sum + sale.quantity, 0) || 0;
+      const avgItemValue = itemsSold > 0 ? totalRevenue / itemsSold : 0;
       
       // Calculate food cost (sum of dish costs * quantity)
       let totalCost = 0;
@@ -67,7 +69,7 @@ export function useDashboardMetrics(startDate?: string, endDate?: string, locati
       }
       
       const foodCostPercent = totalRevenue > 0 ? (totalCost / totalRevenue) * 100 : 0;
-      const totalProfit = totalRevenue - totalCost;
+      const grossProfit = totalRevenue - totalCost;
       
       // Top dishes by quantity
       const dishSales: Record<string, DishMetric> = {};
@@ -89,20 +91,20 @@ export function useDashboardMetrics(startDate?: string, endDate?: string, locati
       sales?.forEach((sale) => {
         const key = sale.location_id;
         if (!locationSales[key]) {
-          locationSales[key] = { name: (sale.locations as { name: string })?.name || "Unknown", revenue: 0, orders: 0 };
+          locationSales[key] = { name: (sale.locations as { name: string })?.name || "Unknown", revenue: 0, itemsSold: 0 };
         }
         locationSales[key].revenue += Number(sale.total_price);
-        locationSales[key].orders += sale.quantity;
+        locationSales[key].itemsSold += sale.quantity;
       });
       
       const locationPerformance = Object.values(locationSales).sort((a, b) => b.revenue - a.revenue);
       
       return {
         totalRevenue,
-        totalOrders,
-        avgOrderValue,
+        itemsSold,
+        avgItemValue,
         foodCostPercent,
-        totalProfit,
+        grossProfit,
         topDishes,
         worstDishes,
         locationPerformance,

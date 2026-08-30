@@ -67,13 +67,13 @@ export function ProfitLossReport() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Net Profit</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Operating Profit</CardTitle>
           </CardHeader>
           <CardContent>
             <div className={cn("text-2xl font-bold", totals.netProfit >= 0 ? "text-success" : "text-destructive")}>
               {formatCurrency(totals.netProfit)}
             </div>
-            <p className="text-xs text-muted-foreground">{avgNetMargin.toFixed(1)}% margin</p>
+            <p className="text-xs text-muted-foreground">{avgNetMargin.toFixed(1)}% margin · before daily expenses</p>
           </CardContent>
         </Card>
       </div>
@@ -82,7 +82,10 @@ export function ProfitLossReport() {
       <Card>
         <CardHeader>
           <CardTitle>Monthly Profit & Loss</CardTitle>
-          <CardDescription>Breakdown by month for the last 6 months</CardDescription>
+          <CardDescription>
+            Breakdown by month for the last 6 months. Operating Profit = revenue − food cost − labour −
+            overheads; ad-hoc daily expenses are not deducted here.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {pnlData.length === 0 ? (
@@ -97,7 +100,7 @@ export function ProfitLossReport() {
                   <TableHead className="text-right">Labour</TableHead>
                   <TableHead className="text-right">Overheads</TableHead>
                   <TableHead className="text-right">Gross Profit</TableHead>
-                  <TableHead className="text-right">Net Profit</TableHead>
+                  <TableHead className="text-right">Operating Profit</TableHead>
                   <TableHead className="text-right">Margin</TableHead>
                 </TableRow>
               </TableHeader>
