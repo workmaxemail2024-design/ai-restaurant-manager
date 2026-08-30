@@ -66,7 +66,7 @@ const navSections: NavSection[] = [
     permission: 'dashboard',
     items: [
       { icon: LayoutDashboard, label: "Dashboard", path: "/", permission: { resource: 'dashboard', action: 'view' } },
-      { icon: Store, label: "Locations", path: "/locations", permission: { resource: 'locations', action: 'view' } },
+      { icon: Store, label: "Locations", path: "/locations", permission: { resource: 'locations', action: 'view' }, ownerOnly: true },
     ]
   },
   {
@@ -147,8 +147,8 @@ const navSections: NavSection[] = [
     icon: BarChart3,
     permission: 'analytics',
     items: [
-      { icon: Store, label: "Multi-Location", path: "/analytics/multi-location", permission: { resource: 'analytics', action: 'view' } },
-      { icon: ChefHat, label: "Menu Performance", path: "/analytics/menu-performance", permission: { resource: 'analytics', action: 'view' } },
+      { icon: Store, label: "Multi-Location", path: "/analytics/multi-location", permission: { resource: 'analytics', action: 'view' }, ownerOnly: true },
+      { icon: ChefHat, label: "Menu Performance", path: "/analytics/menu-performance", permission: { resource: 'analytics', action: 'view' }, ownerOnly: true },
       { icon: TrendingUp, label: "Forecast", path: "/analytics/forecast", permission: { resource: 'analytics', action: 'view' } },
       { icon: BarChart3, label: "Product Intelligence", path: "/analytics/product-intelligence", permission: { resource: 'analytics', action: 'view' } },
     ]
