@@ -307,15 +307,25 @@ serve(async (req) => {
 
 Date: ${targetDate}
 Revenue: ${eurFmt.format(totalRevenue)}
-Orders: ${totalOrders}
-Average Order Value: ${eurFmt.format(avgOrderValue)}
-Food Cost: ~${foodCostPct}%
-Labour Cost: ${eurFmt.format(totalLabourCost)} (${labourPct.toFixed(1)}%)
+Orders (POS receipts): ${totalOrders ?? "Unknown"}
+Items sold: ${itemsSold}
+Average Order Value: ${avgOrderValue !== null ? eurFmt.format(avgOrderValue) : "Unknown"}
+Food Cost: ${
+        foodCost !== null
+          ? `${eurFmt.format(foodCost)} (${(foodCostPct ?? 0).toFixed(1)}% of revenue)`
+          : "Unknown — recipe cost coverage too low"
+      }
+Recipe cost coverage: ${recipeCoveragePct !== null ? `${recipeCoveragePct.toFixed(0)}%` : "Unknown"}
+Labour Cost: ${eurFmt.format(totalLabourCost)}${labourPct !== null ? ` (${labourPct.toFixed(1)}%)` : ""}
 Labour Hours: ${totalLabourHours.toFixed(1)}h
-Covers: ${covers || "Not recorded"}
+Covers: ${covers ?? "Not recorded"}
 Additional Expenses: ${eurFmt.format(expenses)}
-Estimated Profit: ${eurFmt.format(estimatedProfit)}
+Contribution after food, labour and daily expenses (excludes recurring overheads): ${
+        contributionProfit !== null ? eurFmt.format(contributionProfit) : "Unknown"
+      }
 Reservations: ${reservationCount || 0}
+
+Rules: never invent a food cost percentage, an order count or a profit figure. If a value is Unknown, say it is unknown and recommend the data capture needed. Do not describe the contribution figure as gross profit or operating profit.
 
 Top Dishes:
 ${topDishes.map((d) => `- ${d.name}: ${d.quantity} sold (${eurFmt.format(d.revenue)})`).join("\n")}
