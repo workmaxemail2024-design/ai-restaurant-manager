@@ -144,10 +144,13 @@ serve(async (req) => {
     const topDishes = sortedDishes.slice(0, 5);
     const bottomDishes = sortedDishes.length > 1 ? sortedDishes.slice(-3).reverse() : [];
 
-    // Labour (attendance)
+    // ---------- Labour: same rules as the canonical Daily Financial Summary ----------
+    // Hourly staff are priced from worked hours x their own rate (no assumed rate).
+    // Salaried staff are allocated annual_salary / 365 per day and are never
+    // priced from attendance hours.
     let attendanceQuery = adminClient
       .from("staff_attendance")
-      .select("clock_in, clock_out, staff(hourly_rate)")
+      .select("clock_in, clock_out, staff_id")
       .eq("restaurant_id", restaurant_id)
       .gte("clock_in", `${targetDate}T00:00:00`)
       .lte("clock_in", `${targetDate}T23:59:59`);
@@ -155,20 +158,80 @@ serve(async (req) => {
     const { data: attendanceData } = await attendanceQuery;
 
     let totalLabourHours = 0;
-    let totalLabourCost = 0;
-    for (const a of attendanceData || []) {
-      if (a.clock_in && a.clock_out) {
-        const hours = (new Date(a.clock_out).getTime() - new Date(a.clock_in).getTime()) / 3600000;
+    let hourlyLabourCost = 0;
+    const attendance = attendanceData || [];
+    if (attendance.length > 0) {
+      const staffIds = Array.from(new Set(attendance.map((a: any) => a.staff_id)));
+      const { data: staffRows } = await adminClient
+        .from("staff")
+        .select("id, hourly_rate, pay_type")
+        .in("id", staffIds);
+      const rates = new Map<string, number>();
+      for (const s of staffRows || []) {
+        const row = s as any;
+        if (String(row.pay_type || "hourly").toLowerCase() === "salary") continue;
+        if (row.hourly_rate != null) rates.set(row.id, Number(row.hourly_rate));
+      }
+      for (const a of attendance as any[]) {
+        if (!a.clock_in || !a.clock_out) continue;
+        const hours =
+          (new Date(a.clock_out).getTime() - new Date(a.clock_in).getTime()) / 3600000;
+        if (hours <= 0) continue;
         totalLabourHours += hours;
-        totalLabourCost += hours * (Number((a.staff as any)?.hourly_rate) || 12.5);
+        hourlyLabourCost += hours * (rates.get(a.staff_id) ?? 0);
       }
     }
-    const labourPct = totalRevenue > 0 ? (totalLabourCost / totalRevenue) * 100 : 0;
 
-    // Ledger (covers, expenses)
+    let salariedQuery = adminClient
+      .from("staff")
+      .select("id, annual_salary, pay_type, status, location_id")
+      .eq("restaurant_id", restaurant_id)
+      .eq("pay_type", "salary")
+      .eq("status", "active");
+    if (locFilter) salariedQuery = salariedQuery.eq("location_id", locFilter);
+    const { data: salariedStaff } = await salariedQuery;
+    const salariedLabourCost = (salariedStaff || []).reduce(
+      (s: number, r: any) => s + (r.annual_salary != null ? Number(r.annual_salary) / 365 : 0),
+      0
+    );
+
+    const totalLabourCost = hourlyLabourCost + salariedLabourCost;
+    const labourPct =
+      totalRevenue > 0 && totalLabourCost > 0 ? (totalLabourCost / totalRevenue) * 100 : null;
+
+    // ---------- Food cost: recipe-derived, unknown stays unknown ----------
+    // Uncosted dishes are NEVER treated as zero cost — they reduce coverage and,
+    // below 50% coverage, the food cost is reported as unknown/indicative.
+    const dishQty: Record<string, number> = {};
+    for (const s of sales) {
+      if (!s.dish_id) continue;
+      dishQty[s.dish_id] = (dishQty[s.dish_id] || 0) + Number(s.quantity || 0);
+    }
+    const dishIds = Object.keys(dishQty);
+    let recipeFoodCost = 0;
+    let dishesWithCost = 0;
+    for (const dishId of dishIds) {
+      const { data: costData } = await adminClient.rpc("calculate_dish_cost", {
+        p_dish_id: dishId,
+      });
+      const cost = Number(costData) || 0;
+      if (cost > 0) {
+        dishesWithCost++;
+        recipeFoodCost += cost * dishQty[dishId];
+      }
+    }
+    const recipeCoveragePct =
+      dishIds.length > 0 ? (dishesWithCost / dishIds.length) * 100 : null;
+    const foodCostReliable =
+      dishIds.length > 0 && dishesWithCost / dishIds.length >= 0.5;
+    const foodCost = foodCostReliable ? recipeFoodCost : null;
+    const foodCostPct =
+      foodCost !== null && totalRevenue > 0 ? (foodCost / totalRevenue) * 100 : null;
+
+    // ---------- Ledger (covers fallback) + daily expenses ----------
     let ledgerQuery = adminClient
       .from("daily_ledger_entries")
-      .select("covers, additional_expenses")
+      .select("covers, covers_unknown, additional_expenses")
       .eq("restaurant_id", restaurant_id)
       .eq("entry_date", targetDate);
     if (locFilter) {
@@ -178,8 +241,21 @@ serve(async (req) => {
     }
     const { data: ledgerData } = await ledgerQuery.maybeSingle();
 
-    const covers = ledgerData?.covers ?? 0;
-    const expenses = Number(ledgerData?.additional_expenses) || 0;
+    const ledgerCovers = Number(ledgerData?.covers) || 0;
+    const covers =
+      posCovers != null && posCovers > 0 ? posCovers : ledgerCovers > 0 ? ledgerCovers : null;
+
+    let expenseQuery = adminClient
+      .from("daily_expenses")
+      .select("amount")
+      .eq("restaurant_id", restaurant_id)
+      .eq("entry_date", targetDate);
+    if (locFilter) expenseQuery = expenseQuery.eq("location_id", locFilter);
+    const { data: expenseRows } = await expenseQuery;
+    const expenses =
+      (expenseRows?.length ?? 0) > 0
+        ? (expenseRows || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+        : Number(ledgerData?.additional_expenses) || 0;
 
     // Reservations count
     let resQuery = adminClient
