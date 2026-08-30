@@ -17,6 +17,7 @@ interface ApplyResult {
   skipped_existing: number;     // Already applied
   total_revenue: number;
   error?: string;
+  skipped_closed_dates?: string[];
   // Legacy fields for backward compatibility
   skipped_unmapped: number;
 }
@@ -191,6 +192,7 @@ serve(async (req) => {
       skipped_existing: 0,
       total_revenue: 0,
       skipped_unmapped: 0, // For backward compatibility
+      skipped_closed_dates: closedDates,
     };
 
     // Calculate preview stats
