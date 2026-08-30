@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
-import { useDashboardMetrics } from "@/hooks/useDashboardMetrics";
 import { useStockLevels } from "@/hooks/useStock";
 import { useIngredients } from "@/hooks/useIngredients";
 import { useDishes } from "@/hooks/useDishes";
@@ -21,7 +20,6 @@ export interface AIInsightResult {
 export function useAIInsights() {
   const { currentRestaurant } = useRestaurant();
   const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
-  const { data: metrics } = useDashboardMetrics(yesterday);
   const { data: stockLevels = [] } = useStockLevels();
   const { data: ingredients = [] } = useIngredients();
   const { data: dishes = [] } = useDishes();
