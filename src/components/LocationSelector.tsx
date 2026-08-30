@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { useLocation } from '@/contexts/LocationContext';
 import { useLocations } from '@/hooks/useLocations';
+import { useLocationAccess } from '@/hooks/useLocationAccess';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPin } from 'lucide-react';
 
 export function LocationSelector() {
   const { selectedLocationId, setSelectedLocationId } = useLocation();
   const { data: locations = [], isLoading } = useLocations();
+  const { canViewAllLocations, isLoading: accessLoading } = useLocationAccess();
 
   // Guard: If selectedLocationId exists but isn't in current locations, reset to null
   useEffect(() => {
@@ -18,7 +20,7 @@ export function LocationSelector() {
     }
   }, [selectedLocationId, locations, setSelectedLocationId]);
 
-  if (isLoading) {
+  if (isLoading || accessLoading) {
     return (
       <div className="h-10 w-40 bg-secondary rounded-lg animate-pulse" />
     );
@@ -39,10 +41,21 @@ export function LocationSelector() {
     );
   }
 
+  // Non-owner with a single assigned location: no switcher, no "All locations".
+  if (!canViewAllLocations && locations.length === 1) {
+    return (
+      <div className="flex h-10 w-[180px] items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+        <span className="truncate">{locations[0].name}</span>
+      </div>
+    );
+  }
+
   // Compute controlled value
-  const currentValue = selectedLocationId || "all";
+  const currentValue = selectedLocationId || (canViewAllLocations ? "all" : locations[0].id);
 
   return (
+
     <Select
       value={currentValue}
       onValueChange={(value) => setSelectedLocationId(value === "all" ? null : value)}
@@ -52,7 +65,8 @@ export function LocationSelector() {
         <SelectValue placeholder="All locations" />
       </SelectTrigger>
       <SelectContent className="z-[100]">
-        <SelectItem value="all">All locations</SelectItem>
+        {canViewAllLocations && <SelectItem value="all">All locations</SelectItem>}
+
         {locations.map((location) => (
           <SelectItem key={location.id} value={location.id}>
             {location.name}

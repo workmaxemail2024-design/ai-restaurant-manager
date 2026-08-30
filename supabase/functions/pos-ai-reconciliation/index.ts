@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { userCanAccessLocation } from "../_shared/posAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,6 +71,26 @@ serve(async (req) => {
         });
       }
     }
+
+    // Location authorization: the tenant is resolved from the location row itself,
+    // never from the body, then checked against the caller's permitted locations.
+    {
+      const { data: locRow } = await supabase
+        .from("locations")
+        .select("id, restaurant_id")
+        .eq("id", location_id)
+        .maybeSingle();
+      const locOk = locRow
+        ? await userCanAccessLocation(supabase, user.id, locRow.restaurant_id as string, location_id)
+        : false;
+      if (!locOk) {
+        return new Response(JSON.stringify({ error: "Not authorised for this location" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
 
     // Get unmapped sales imports
     let query = supabase

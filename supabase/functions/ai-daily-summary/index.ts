@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { userCanAccessLocation, userHasAllLocationAccess } from "../_shared/posAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,6 +67,27 @@ serve(async (req) => {
 
     const targetDate = date || new Date(Date.now() - 86400000).toISOString().split("T")[0];
     const locFilter = location_id && location_id !== "all" ? location_id : null;
+
+    // Location authorization. A specific location must be one the caller is
+    // permitted to see; the chain-wide ("all") view is Owner/full-access only.
+    if (locFilter) {
+      const locOk = await userCanAccessLocation(adminClient, user.id, restaurant_id, locFilter);
+      if (!locOk) {
+        return new Response(JSON.stringify({ error: "Not authorised for this location" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      const allLoc = await userHasAllLocationAccess(adminClient, user.id, restaurant_id);
+      if (!allLoc) {
+        return new Response(JSON.stringify({ error: "A permitted location must be specified" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
 
     // Check if summary already exists
     let existingQuery = adminClient

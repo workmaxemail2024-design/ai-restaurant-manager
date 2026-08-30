@@ -53,6 +53,9 @@ import ReservationFloorPage from "./pages/ReservationFloorPage";
 import ReservationCustomersPage from "./pages/ReservationCustomersPage";
 import ReservationSettingsPage from "./pages/ReservationSettingsPage";
 
+import { RequireAllLocations } from "@/components/RequireAllLocations";
+import { LocationScopeEnforcer } from "@/components/LocationScopeEnforcer";
+
 const queryClient = new QueryClient();
 
 // Wrapper component for protected routes
@@ -65,6 +68,7 @@ const App = () => (
     <ThemeProvider>
       <RestaurantProvider>
         <LocationProvider>
+          <LocationScopeEnforcer />
           <DateRangeProvider>
             <TooltipProvider>
             <Toaster />
@@ -79,7 +83,7 @@ const App = () => (
               
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/locations" element={<ProtectedRoute><LocationsPage /></ProtectedRoute>} />
+              <Route path="/locations" element={<ProtectedRoute><RequireAllLocations><LocationsPage /></RequireAllLocations></ProtectedRoute>} />
               <Route path="/suppliers" element={<ProtectedRoute><SuppliersPage /></ProtectedRoute>} />
               <Route path="/ingredients" element={<ProtectedRoute><IngredientsPage /></ProtectedRoute>} />
               <Route path="/stock" element={<ProtectedRoute><StockPage /></ProtectedRoute>} />
@@ -105,8 +109,8 @@ const App = () => (
               <Route path="/ai/daily-summary" element={<ProtectedRoute><AIDailySummaryPage /></ProtectedRoute>} />
               <Route path="/ai/scheduling" element={<ProtectedRoute><AISchedulingPage /></ProtectedRoute>} />
               {/* Analytics Routes */}
-              <Route path="/analytics/multi-location" element={<ProtectedRoute><MultiLocationIntelligencePage /></ProtectedRoute>} />
-              <Route path="/analytics/menu-performance" element={<ProtectedRoute><ChainMenuPerformancePage /></ProtectedRoute>} />
+              <Route path="/analytics/multi-location" element={<ProtectedRoute><RequireAllLocations><MultiLocationIntelligencePage /></RequireAllLocations></ProtectedRoute>} />
+              <Route path="/analytics/menu-performance" element={<ProtectedRoute><RequireAllLocations><ChainMenuPerformancePage /></RequireAllLocations></ProtectedRoute>} />
               <Route path="/analytics/forecast" element={<ProtectedRoute><ForecastDashboardPage /></ProtectedRoute>} />
               <Route path="/analytics/product-intelligence" element={<ProtectedRoute><ProductIntelligencePage /></ProtectedRoute>} />
               {/* Automation Routes */}
