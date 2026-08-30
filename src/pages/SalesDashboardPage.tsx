@@ -38,13 +38,15 @@ export default function SalesDashboardPage() {
     return sales.reduce((sum, s) => sum + Number(s.total_price), 0);
   }, [sales]);
 
-  const totalOrders = useMemo(() => {
+  // NOTE: this is a count of POS sales lines, NOT receipts/orders.
+  // Canonical Orders = sum(pos_daily_summaries.order_count) — see useDashboardOverview.
+  const salesLines = useMemo(() => {
     return sales.length;
   }, [sales]);
 
-  const avgOrderValue = useMemo(() => {
-    return totalOrders > 0 ? totalRevenue / totalOrders : 0;
-  }, [totalRevenue, totalOrders]);
+  const avgLineValue = useMemo(() => {
+    return salesLines > 0 ? totalRevenue / salesLines : 0;
+  }, [totalRevenue, salesLines]);
 
   // Top 5 Dishes by revenue
   const topDishes = useMemo(() => {
@@ -150,8 +152,8 @@ export default function SalesDashboardPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Orders</p>
-                  <p className="text-3xl font-bold text-blue-600">{totalOrders}</p>
+                  <p className="text-sm text-muted-foreground">Sales Lines</p>
+                  <p className="text-3xl font-bold text-blue-600">{salesLines}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-blue-500/20 flex items-center justify-center">
                   <ShoppingCart className="h-6 w-6 text-blue-600" />
@@ -164,8 +166,8 @@ export default function SalesDashboardPage() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Avg Order Value</p>
-                  <p className="text-3xl font-bold text-purple-600">{formatCurrency(avgOrderValue)}</p>
+                  <p className="text-sm text-muted-foreground">Avg Sales Line Value</p>
+                  <p className="text-3xl font-bold text-purple-600">{formatCurrency(avgLineValue)}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-purple-500/20 flex items-center justify-center">
                   <TrendingUp className="h-6 w-6 text-purple-600" />
