@@ -161,7 +161,7 @@ const navSections: NavSection[] = [
       { icon: Euro, label: "Financial / Overheads", path: "/settings/financial/overheads", permission: { resource: 'settings', action: 'view' } },
       { icon: Shield, label: "Role Builder", path: "/settings/roles", permission: { resource: 'settings', action: 'view' } },
       { icon: FileText, label: "Audit Log", path: "/settings/audit-log", permission: { resource: 'settings', action: 'admin' } },
-      { icon: Shield, label: "Backups", path: "/settings/backups", permission: { resource: 'settings', action: 'admin' } },
+      { icon: Shield, label: "Backup & Recovery", path: "/settings/backups", permission: { resource: 'settings', action: 'admin' }, ownerOnly: true },
     ]
   }
 ];
