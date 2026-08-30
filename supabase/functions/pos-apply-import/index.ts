@@ -163,7 +163,11 @@ serve(async (req) => {
       );
     }
 
-    const importRecords = (imports || []) as ImportRecord[];
+    // Multi-day batch: drop rows that fall on a closed operating day. Reported below.
+    const importRecords = ((imports || []) as ImportRecord[]).filter(
+      (imp) => !imp.mapped_sale_date || !closedDates.includes(imp.mapped_sale_date),
+    );
+
 
     // Group imports by external_sale_id (each represents a receipt/transaction)
     // Each import row in the current system represents one sale/receipt with total
