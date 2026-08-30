@@ -94,13 +94,20 @@ serve(async (req) => {
     }
 
     // Tenant comes from the integration record; user callers must be members
-    // of that restaurant with POS edit rights.
+    // of that restaurant with POS edit rights and access to its location.
     if (caller.kind === "user") {
       const allowed = await userHasPermission(adminClient, caller.userId, restaurantId, "pos", "edit");
       if (!allowed) {
         return unauthorized("Not authorised to apply POS imports for this integration", corsHeaders, 403);
       }
+      const locOk = await userCanAccessLocation(
+        adminClient, caller.userId, restaurantId, integration.location_id,
+      );
+      if (!locOk) {
+        return unauthorized("Not authorised for this location", corsHeaders, 403);
+      }
     }
+
 
     // C5 CLOSED-DAY PRE-CHECK — runs before any read/write of sales.
     // Service-role calls bypass the DB triggers, so the check is explicit here.
