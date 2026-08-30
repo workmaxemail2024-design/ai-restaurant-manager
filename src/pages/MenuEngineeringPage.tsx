@@ -8,7 +8,7 @@ import { useSales } from "@/hooks/useSales";
 import { useLocation } from "@/contexts/LocationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Star, TrendingUp, TrendingDown, HelpCircle, Dog, Sparkles, Loader2 } from "lucide-react";
+import { Star, TrendingUp, TrendingDown, HelpCircle, Dog, Sparkles, Loader2, AlertTriangle } from "lucide-react";
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
 import { formatCurrency } from "@/lib/currency";
 
@@ -17,13 +17,14 @@ interface DishAnalysis {
   name: string;
   category: string;
   sellingPrice: number;
-  cost: number;
-  margin: number;
-  marginPercent: number;
+  /** null = dish has no reliable recipe/direct cost. Never treated as 0. */
+  cost: number | null;
+  margin: number | null;
+  marginPercent: number | null;
   salesVolume: number;
   revenue: number;
-  contribution: number;
-  classification: "star" | "plowhorse" | "puzzle" | "dog";
+  contribution: number | null;
+  classification: "star" | "plowhorse" | "puzzle" | "dog" | "uncosted";
 }
 
 export default function MenuEngineeringPage() {
@@ -43,16 +44,24 @@ export default function MenuEngineeringPage() {
         dishes.map(async (dish) => {
           // Get dish cost
           const { data: costData } = await supabase.rpc("calculate_dish_cost", { p_dish_id: dish.id });
-          const cost = costData || 0;
+          // NULL / 0 means "no reliable cost" — never treat it as a zero-cost dish,
+          // that would show a ~100% margin and inflate the averages.
+          const cost: number | null =
+            costData === null || costData === undefined || Number(costData) <= 0
+              ? null
+              : Number(costData);
           
           // Get sales volume
           const dishSales = sales.filter((s) => s.dish_id === dish.id);
           const salesVolume = dishSales.reduce((sum, s) => sum + s.quantity, 0);
           const revenue = dishSales.reduce((sum, s) => sum + Number(s.total_price), 0);
           
-          const margin = Number(dish.selling_price) - cost;
-          const marginPercent = Number(dish.selling_price) > 0 ? (margin / Number(dish.selling_price)) * 100 : 0;
-          const contribution = margin * salesVolume;
+          const margin = cost === null ? null : Number(dish.selling_price) - cost;
+          const marginPercent =
+            margin === null || Number(dish.selling_price) <= 0
+              ? null
+              : (margin / Number(dish.selling_price)) * 100;
+          const contribution = margin === null ? null : margin * salesVolume;
 
           return {
             id: dish.id,
@@ -70,14 +79,20 @@ export default function MenuEngineeringPage() {
         })
       );
 
-      // Calculate averages for classification
-      const avgMargin = analysis.reduce((sum, d) => sum + d.marginPercent, 0) / analysis.length || 0;
-      const avgVolume = analysis.reduce((sum, d) => sum + d.salesVolume, 0) / analysis.length || 0;
+      // Averages are built ONLY from dishes with a real cost.
+      const costed = analysis.filter((d) => d.marginPercent !== null);
+      const avgMargin = costed.length
+        ? costed.reduce((sum, d) => sum + (d.marginPercent as number), 0) / costed.length
+        : 0;
+      const avgVolume = costed.length
+        ? costed.reduce((sum, d) => sum + d.salesVolume, 0) / costed.length
+        : 0;
 
-      // Classify dishes
+      // Classify dishes — uncosted dishes are never classified.
       return analysis.map((dish) => ({
         ...dish,
-        classification: 
+        classification:
+          dish.marginPercent === null ? "uncosted" :
           dish.marginPercent >= avgMargin && dish.salesVolume >= avgVolume ? "star" :
           dish.marginPercent < avgMargin && dish.salesVolume >= avgVolume ? "plowhorse" :
           dish.marginPercent >= avgMargin && dish.salesVolume < avgVolume ? "puzzle" :
@@ -93,6 +108,7 @@ export default function MenuEngineeringPage() {
       case "plowhorse": return <TrendingUp className="h-4 w-4 text-blue-500" />;
       case "puzzle": return <HelpCircle className="h-4 w-4 text-purple-500" />;
       case "dog": return <Dog className="h-4 w-4 text-gray-500" />;
+      case "uncosted": return <AlertTriangle className="h-4 w-4 text-amber-500" />;
       default: return null;
     }
   };
@@ -113,6 +129,7 @@ export default function MenuEngineeringPage() {
       plowhorse: "secondary",
       puzzle: "outline",
       dog: "destructive",
+      uncosted: "outline",
     };
     return variants[classification] || "secondary";
   };
@@ -123,15 +140,27 @@ export default function MenuEngineeringPage() {
   const puzzles = dishAnalysis.filter((d) => d.classification === "puzzle");
   const dogs = dishAnalysis.filter((d) => d.classification === "dog");
 
-  // Calculate averages for reference lines
-  const avgMargin = dishAnalysis.reduce((sum, d) => sum + d.marginPercent, 0) / dishAnalysis.length || 0;
-  const avgVolume = dishAnalysis.reduce((sum, d) => sum + d.salesVolume, 0) / dishAnalysis.length || 0;
+  // Cost coverage — uncosted dishes are excluded from every average below.
+  const costedDishes = dishAnalysis.filter((d) => d.marginPercent !== null);
+  const uncostedDishes = dishAnalysis.filter((d) => d.marginPercent === null);
+  const coveragePct = dishAnalysis.length
+    ? (costedDishes.length / dishAnalysis.length) * 100
+    : 0;
+  const isEstimated = dishAnalysis.length > 0 && uncostedDishes.length > 0;
+
+  // Calculate averages for reference lines (costed dishes only)
+  const avgMargin = costedDishes.length
+    ? costedDishes.reduce((sum, d) => sum + (d.marginPercent as number), 0) / costedDishes.length
+    : 0;
+  const avgVolume = costedDishes.length
+    ? costedDishes.reduce((sum, d) => sum + d.salesVolume, 0) / costedDishes.length
+    : 0;
 
   const generateAIInsight = async () => {
     setLoadingInsight(true);
     try {
       const response = await supabase.functions.invoke("ai-menu-analysis", {
-        body: { dishes: dishAnalysis },
+        body: { dishes: costedDishes },
       });
       if (response.data?.insight) {
         setAiInsight(response.data.insight);
@@ -149,6 +178,33 @@ export default function MenuEngineeringPage() {
       description="Analyze menu performance using BCG matrix methodology"
     >
       <div className="space-y-6">
+        {/* Cost coverage — profitability is only as good as recipe coverage */}
+        {dishAnalysis.length > 0 && (
+          <div
+            className={
+              isEstimated
+                ? "rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
+                : "rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground"
+            }
+          >
+            <div className="flex items-start gap-2">
+              {isEstimated && <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />}
+              <div>
+                <span className="font-medium">
+                  Cost coverage: {coveragePct.toFixed(0)}% ({costedDishes.length} of {dishAnalysis.length} dishes costed)
+                </span>
+                {isEstimated && (
+                  <p className="text-muted-foreground mt-1">
+                    {uncostedDishes.length} dish{uncostedDishes.length === 1 ? "" : "es"} have no reliable
+                    recipe cost. They are excluded from margins, averages and classification, so all
+                    profitability figures on this page are <strong>Estimated</strong> until coverage reaches 100%.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="border-yellow-500/50 bg-yellow-500/5">
@@ -212,7 +268,7 @@ export default function MenuEngineeringPage() {
               <div className="h-[400px] flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            ) : dishAnalysis.length > 0 ? (
+            ) : costedDishes.length > 0 ? (
               <ResponsiveContainer width="100%" height={400}>
                 <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -304,10 +360,24 @@ export default function MenuEngineeringPage() {
                       <td className="py-2 font-medium">{dish.name}</td>
                       <td className="py-2">{dish.category}</td>
                       <td className="py-2 text-right">{formatCurrency(dish.sellingPrice)}</td>
-                      <td className="py-2 text-right">{formatCurrency(dish.cost)}</td>
-                      <td className="py-2 text-right">{dish.marginPercent.toFixed(1)}%</td>
+                      <td className="py-2 text-right">
+                        {dish.cost === null ? <span className="text-muted-foreground">—</span> : formatCurrency(dish.cost)}
+                      </td>
+                      <td className="py-2 text-right">
+                        {dish.marginPercent === null ? (
+                          <span className="text-muted-foreground">Unknown</span>
+                        ) : (
+                          `${dish.marginPercent.toFixed(1)}%`
+                        )}
+                      </td>
                       <td className="py-2 text-right">{dish.salesVolume}</td>
-                      <td className="py-2 text-right">{formatCurrency(dish.contribution)}</td>
+                      <td className="py-2 text-right">
+                        {dish.contribution === null ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          formatCurrency(dish.contribution)
+                        )}
+                      </td>
                       <td className="py-2 text-center">
                         <Badge variant={getClassificationBadge(dish.classification)} className="capitalize flex items-center gap-1 w-fit mx-auto">
                           {getClassificationIcon(dish.classification)}
