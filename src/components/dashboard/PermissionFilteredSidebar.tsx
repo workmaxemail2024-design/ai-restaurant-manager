@@ -173,7 +173,7 @@ const bottomItems: NavItem[] = [
 
 export function PermissionFilteredSidebar() {
   const location = useLocation();
-  const { hasPermission, isLoading } = usePermissions();
+  const { hasPermission, hasFullAccess, isLoading } = usePermissions();
   const { signOut, user, currentRestaurant } = useRestaurant();
   const { data: pendingCount = 0 } = usePendingReservationCount();
 
