@@ -71,6 +71,26 @@ serve(async (req) => {
       }
     }
 
+    // Location authorization: the tenant is resolved from the location row itself,
+    // never from the body, then checked against the caller's permitted locations.
+    {
+      const { data: locRow } = await supabase
+        .from("locations")
+        .select("id, restaurant_id")
+        .eq("id", location_id)
+        .maybeSingle();
+      const locOk = locRow
+        ? await userCanAccessLocation(supabase, user.id, locRow.restaurant_id as string, location_id)
+        : false;
+      if (!locOk) {
+        return new Response(JSON.stringify({ error: "Not authorised for this location" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+
     // Get unmapped sales imports
     let query = supabase
       .from("pos_sales_import")
