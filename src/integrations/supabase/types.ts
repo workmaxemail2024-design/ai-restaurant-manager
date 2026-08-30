@@ -2591,24 +2591,6 @@ export type Database = {
           },
         ]
       }
-      zztest_results: {
-        Row: {
-          cost: number | null
-          name: string | null
-          note: string | null
-        }
-        Insert: {
-          cost?: number | null
-          name?: string | null
-          note?: string | null
-        }
-        Update: {
-          cost?: number | null
-          name?: string | null
-          note?: string | null
-        }
-        Relationships: []
-      }
     }
     Views: {
       pos_integrations_safe: {
