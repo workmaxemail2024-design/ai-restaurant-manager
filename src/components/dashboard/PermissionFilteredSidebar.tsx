@@ -49,6 +49,7 @@ interface NavItem {
   path: string;
   badge?: number;
   permission?: { resource: PermissionResource; action: 'view' | 'edit' | 'admin' };
+  ownerOnly?: boolean;
 }
 
 interface NavSection {
