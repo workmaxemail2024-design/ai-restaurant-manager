@@ -100,9 +100,24 @@ serve(async (req) => {
 
     const sales = salesData || [];
     const totalRevenue = sales.reduce((s, r) => s + Number(r.total_price), 0);
-    const totalOrders = sales.reduce((s, r) => s + r.quantity, 0);
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const foodCostPct = totalRevenue > 0 ? 30 : 0; // Estimated
+    const itemsSold = sales.reduce((s, r) => s + Number(r.quantity || 0), 0);
+
+    // Orders = canonical POS receipt count (pos_daily_summaries), never item quantity.
+    let orderQuery = adminClient
+      .from("pos_daily_summaries")
+      .select("order_count, visitor_count")
+      .eq("restaurant_id", restaurant_id)
+      .eq("report_date", targetDate);
+    if (locFilter) orderQuery = orderQuery.eq("location_id", locFilter);
+    const { data: posSummaries } = await orderQuery;
+
+    let totalOrders: number | null = null;
+    let posCovers: number | null = null;
+    for (const s of posSummaries || []) {
+      if (s.order_count != null) totalOrders = (totalOrders ?? 0) + Number(s.order_count);
+      if (s.visitor_count != null) posCovers = (posCovers ?? 0) + Number(s.visitor_count);
+    }
+    const avgOrderValue = totalOrders && totalOrders > 0 ? totalRevenue / totalOrders : null;
 
     if (totalRevenue === 0) {
       return new Response(
