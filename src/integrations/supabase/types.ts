@@ -14,27 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      _c5_test: {
-        Row: {
-          detail: string | null
-          id: number
-          result: string | null
-          step: string | null
-        }
-        Insert: {
-          detail?: string | null
-          id?: number
-          result?: string | null
-          step?: string | null
-        }
-        Update: {
-          detail?: string | null
-          id?: number
-          result?: string | null
-          step?: string | null
-        }
-        Relationships: []
-      }
       audit_logs: {
         Row: {
           created_at: string
