@@ -65,7 +65,8 @@ export function LocationSelector() {
         <SelectValue placeholder="All locations" />
       </SelectTrigger>
       <SelectContent className="z-[100]">
-        <SelectItem value="all">All locations</SelectItem>
+        {canViewAllLocations && <SelectItem value="all">All locations</SelectItem>}
+
         {locations.map((location) => (
           <SelectItem key={location.id} value={location.id}>
             {location.name}
