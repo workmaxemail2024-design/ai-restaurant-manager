@@ -426,9 +426,9 @@ function buildFallbackSummary(m: any, date: string): string {
   const eurFmt = new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" });
   return `## Daily Summary — ${date}
 
-**Revenue:** ${eurFmt.format(m.revenue)} | **Orders:** ${m.orders} | **Avg Order:** ${eurFmt.format(m.avg_order_value)}
+**Revenue:** ${eurFmt.format(m.revenue)} | **Orders:** ${m.orders ?? "Unknown"} | **Avg Order:** ${m.avg_order_value != null ? eurFmt.format(m.avg_order_value) : "Unknown"}
 
-**Food Cost:** ~${m.food_cost_pct}% | **Labour:** ${eurFmt.format(m.labour_cost)} (${m.labour_pct.toFixed(1)}%) | **Estimated Profit:** ${eurFmt.format(m.estimated_profit)}
+**Food Cost:** ${m.food_cost_pct != null ? `${m.food_cost_pct.toFixed(1)}%` : "Unknown (low recipe coverage)"} | **Labour:** ${eurFmt.format(m.labour_cost)}${m.labour_pct != null ? ` (${m.labour_pct.toFixed(1)}%)` : ""} | **Contribution (excl. overheads):** ${m.contribution_profit != null ? eurFmt.format(m.contribution_profit) : "Unknown"}
 
 ### Top Dishes
 ${m.top_dishes.map((d: any) => `- ${d.name} — ${d.quantity} sold`).join("\n")}
