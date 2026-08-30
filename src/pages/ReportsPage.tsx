@@ -1185,7 +1185,7 @@ export default function ReportsPage() {
           {/* Accuracy Note */}
           <ReportsAccuracyNote locationId={selectedLocationId} />
 
-          {isLoading ? (
+          {dailyLoading ? (
             <div className="text-muted-foreground text-sm">Loading metrics…</div>
           ) : (
             <>
