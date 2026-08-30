@@ -270,6 +270,7 @@ export function PermissionFilteredSidebar() {
     ...section,
     items: section.items.filter(item => {
       if (isLoading) return true;
+      if (item.ownerOnly && !hasFullAccess()) return false;
       if (!item.permission) return true;
       return hasPermission(item.permission.resource, item.permission.action);
     })
