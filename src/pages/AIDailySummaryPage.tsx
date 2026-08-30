@@ -370,16 +370,35 @@ function SummaryCard({
             )}
 
             {/* Labour Notes */}
-            {!isNoData && (m.labour_hours > 0 || m.labour_pct > 0) && (
+            {!isNoData && (m.labour_hours > 0 || m.labour_cost > 0) && (
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                  <Users className="h-3 w-3" /> Labour
+                  <Users className="h-3 w-3" /> Labour & Food Cost
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {m.labour_hours > 0 && <MetricChip label="Hours" value={String(m.labour_hours)} />}
-                  <MetricChip label="Labour %" value={`${(m.labour_pct || 0).toFixed(1)}%`} />
-                  <MetricChip label="Food Cost %" value={`${m.food_cost_pct || 0}%`} />
+                  <MetricChip
+                    label="Labour %"
+                    value={m.labour_pct != null ? `${m.labour_pct.toFixed(1)}%` : "—"}
+                  />
+                  <MetricChip
+                    label="Food Cost %"
+                    value={
+                      m.food_cost_pct != null
+                        ? `${m.food_cost_pct.toFixed(1)}%`
+                        : "Unknown"
+                    }
+                  />
                 </div>
+                {m.food_cost_pct == null && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Food cost unknown — recipe cost coverage
+                    {m.recipe_coverage_pct != null
+                      ? ` is only ${Math.round(m.recipe_coverage_pct)}%`
+                      : " is unavailable"}
+                    . Complete dish recipes to unlock it.
+                  </p>
+                )}
               </div>
             )}
 
