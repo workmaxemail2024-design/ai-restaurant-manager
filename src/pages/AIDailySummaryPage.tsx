@@ -326,11 +326,13 @@ function SummaryCard({
                   </div>
                   <div className="flex items-center gap-1 hidden sm:flex">
                     <ShoppingBag className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-medium">{m.orders || 0}</span>
+                    <span className="font-medium">{m.orders != null ? m.orders : "—"}</span>
                   </div>
                   <div className="flex items-center gap-1 hidden md:flex">
                     <TrendingUp className="h-3 w-3 text-success" />
-                    <span className="font-medium text-success">{formatCurrency(m.estimated_profit || 0)}</span>
+                    <span className="font-medium text-success">
+                      {m.contribution_profit != null ? formatCurrency(m.contribution_profit) : "—"}
+                    </span>
                   </div>
                 </div>
               )}
@@ -348,24 +350,55 @@ function SummaryCard({
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <MetricChip label="Revenue" value={formatCurrency(m.revenue || 0)} />
-                  <MetricChip label="Orders" value={String(m.orders || 0)} />
-                  <MetricChip label="Avg Order" value={formatCurrency(m.avg_order_value || 0)} />
-                  <MetricChip label="Profit Est." value={formatCurrency(m.estimated_profit || 0)} />
+                  <MetricChip label="Orders" value={m.orders != null ? String(m.orders) : "—"} />
+                  <MetricChip
+                    label="Avg Order"
+                    value={m.avg_order_value != null ? formatCurrency(m.avg_order_value) : "—"}
+                  />
+                  <MetricChip
+                    label="Contribution (excl. overheads)"
+                    value={
+                      m.contribution_profit != null ? formatCurrency(m.contribution_profit) : "—"
+                    }
+                  />
                 </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Orders are canonical POS receipts. Contribution excludes recurring overheads —
+                  see Reports for Operating Profit.
+                </p>
               </div>
             )}
 
             {/* Labour Notes */}
-            {!isNoData && (m.labour_hours > 0 || m.labour_pct > 0) && (
+            {!isNoData && (m.labour_hours > 0 || m.labour_cost > 0) && (
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                  <Users className="h-3 w-3" /> Labour
+                  <Users className="h-3 w-3" /> Labour & Food Cost
                 </h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {m.labour_hours > 0 && <MetricChip label="Hours" value={String(m.labour_hours)} />}
-                  <MetricChip label="Labour %" value={`${(m.labour_pct || 0).toFixed(1)}%`} />
-                  <MetricChip label="Food Cost %" value={`${m.food_cost_pct || 0}%`} />
+                  <MetricChip
+                    label="Labour %"
+                    value={m.labour_pct != null ? `${m.labour_pct.toFixed(1)}%` : "—"}
+                  />
+                  <MetricChip
+                    label="Food Cost %"
+                    value={
+                      m.food_cost_pct != null
+                        ? `${m.food_cost_pct.toFixed(1)}%`
+                        : "Unknown"
+                    }
+                  />
                 </div>
+                {m.food_cost_pct == null && (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Food cost unknown — recipe cost coverage
+                    {m.recipe_coverage_pct != null
+                      ? ` is only ${Math.round(m.recipe_coverage_pct)}%`
+                      : " is unavailable"}
+                    . Complete dish recipes to unlock it.
+                  </p>
+                )}
               </div>
             )}
 

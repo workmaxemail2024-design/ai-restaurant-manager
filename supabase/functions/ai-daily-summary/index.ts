@@ -100,9 +100,24 @@ serve(async (req) => {
 
     const sales = salesData || [];
     const totalRevenue = sales.reduce((s, r) => s + Number(r.total_price), 0);
-    const totalOrders = sales.reduce((s, r) => s + r.quantity, 0);
-    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const foodCostPct = totalRevenue > 0 ? 30 : 0; // Estimated
+    const itemsSold = sales.reduce((s, r) => s + Number(r.quantity || 0), 0);
+
+    // Orders = canonical POS receipt count (pos_daily_summaries), never item quantity.
+    let orderQuery = adminClient
+      .from("pos_daily_summaries")
+      .select("order_count, visitor_count")
+      .eq("restaurant_id", restaurant_id)
+      .eq("report_date", targetDate);
+    if (locFilter) orderQuery = orderQuery.eq("location_id", locFilter);
+    const { data: posSummaries } = await orderQuery;
+
+    let totalOrders: number | null = null;
+    let posCovers: number | null = null;
+    for (const s of posSummaries || []) {
+      if (s.order_count != null) totalOrders = (totalOrders ?? 0) + Number(s.order_count);
+      if (s.visitor_count != null) posCovers = (posCovers ?? 0) + Number(s.visitor_count);
+    }
+    const avgOrderValue = totalOrders && totalOrders > 0 ? totalRevenue / totalOrders : null;
 
     if (totalRevenue === 0) {
       return new Response(
@@ -129,10 +144,13 @@ serve(async (req) => {
     const topDishes = sortedDishes.slice(0, 5);
     const bottomDishes = sortedDishes.length > 1 ? sortedDishes.slice(-3).reverse() : [];
 
-    // Labour (attendance)
+    // ---------- Labour: same rules as the canonical Daily Financial Summary ----------
+    // Hourly staff are priced from worked hours x their own rate (no assumed rate).
+    // Salaried staff are allocated annual_salary / 365 per day and are never
+    // priced from attendance hours.
     let attendanceQuery = adminClient
       .from("staff_attendance")
-      .select("clock_in, clock_out, staff(hourly_rate)")
+      .select("clock_in, clock_out, staff_id")
       .eq("restaurant_id", restaurant_id)
       .gte("clock_in", `${targetDate}T00:00:00`)
       .lte("clock_in", `${targetDate}T23:59:59`);
@@ -140,20 +158,80 @@ serve(async (req) => {
     const { data: attendanceData } = await attendanceQuery;
 
     let totalLabourHours = 0;
-    let totalLabourCost = 0;
-    for (const a of attendanceData || []) {
-      if (a.clock_in && a.clock_out) {
-        const hours = (new Date(a.clock_out).getTime() - new Date(a.clock_in).getTime()) / 3600000;
+    let hourlyLabourCost = 0;
+    const attendance = attendanceData || [];
+    if (attendance.length > 0) {
+      const staffIds = Array.from(new Set(attendance.map((a: any) => a.staff_id)));
+      const { data: staffRows } = await adminClient
+        .from("staff")
+        .select("id, hourly_rate, pay_type")
+        .in("id", staffIds);
+      const rates = new Map<string, number>();
+      for (const s of staffRows || []) {
+        const row = s as any;
+        if (String(row.pay_type || "hourly").toLowerCase() === "salary") continue;
+        if (row.hourly_rate != null) rates.set(row.id, Number(row.hourly_rate));
+      }
+      for (const a of attendance as any[]) {
+        if (!a.clock_in || !a.clock_out) continue;
+        const hours =
+          (new Date(a.clock_out).getTime() - new Date(a.clock_in).getTime()) / 3600000;
+        if (hours <= 0) continue;
         totalLabourHours += hours;
-        totalLabourCost += hours * (Number((a.staff as any)?.hourly_rate) || 12.5);
+        hourlyLabourCost += hours * (rates.get(a.staff_id) ?? 0);
       }
     }
-    const labourPct = totalRevenue > 0 ? (totalLabourCost / totalRevenue) * 100 : 0;
 
-    // Ledger (covers, expenses)
+    let salariedQuery = adminClient
+      .from("staff")
+      .select("id, annual_salary, pay_type, status, location_id")
+      .eq("restaurant_id", restaurant_id)
+      .eq("pay_type", "salary")
+      .eq("status", "active");
+    if (locFilter) salariedQuery = salariedQuery.eq("location_id", locFilter);
+    const { data: salariedStaff } = await salariedQuery;
+    const salariedLabourCost = (salariedStaff || []).reduce(
+      (s: number, r: any) => s + (r.annual_salary != null ? Number(r.annual_salary) / 365 : 0),
+      0
+    );
+
+    const totalLabourCost = hourlyLabourCost + salariedLabourCost;
+    const labourPct =
+      totalRevenue > 0 && totalLabourCost > 0 ? (totalLabourCost / totalRevenue) * 100 : null;
+
+    // ---------- Food cost: recipe-derived, unknown stays unknown ----------
+    // Uncosted dishes are NEVER treated as zero cost — they reduce coverage and,
+    // below 50% coverage, the food cost is reported as unknown/indicative.
+    const dishQty: Record<string, number> = {};
+    for (const s of sales) {
+      if (!s.dish_id) continue;
+      dishQty[s.dish_id] = (dishQty[s.dish_id] || 0) + Number(s.quantity || 0);
+    }
+    const dishIds = Object.keys(dishQty);
+    let recipeFoodCost = 0;
+    let dishesWithCost = 0;
+    for (const dishId of dishIds) {
+      const { data: costData } = await adminClient.rpc("calculate_dish_cost", {
+        p_dish_id: dishId,
+      });
+      const cost = Number(costData) || 0;
+      if (cost > 0) {
+        dishesWithCost++;
+        recipeFoodCost += cost * dishQty[dishId];
+      }
+    }
+    const recipeCoveragePct =
+      dishIds.length > 0 ? (dishesWithCost / dishIds.length) * 100 : null;
+    const foodCostReliable =
+      dishIds.length > 0 && dishesWithCost / dishIds.length >= 0.5;
+    const foodCost = foodCostReliable ? recipeFoodCost : null;
+    const foodCostPct =
+      foodCost !== null && totalRevenue > 0 ? (foodCost / totalRevenue) * 100 : null;
+
+    // ---------- Ledger (covers fallback) + daily expenses ----------
     let ledgerQuery = adminClient
       .from("daily_ledger_entries")
-      .select("covers, additional_expenses")
+      .select("covers, covers_unknown, additional_expenses")
       .eq("restaurant_id", restaurant_id)
       .eq("entry_date", targetDate);
     if (locFilter) {
@@ -163,8 +241,21 @@ serve(async (req) => {
     }
     const { data: ledgerData } = await ledgerQuery.maybeSingle();
 
-    const covers = ledgerData?.covers ?? 0;
-    const expenses = Number(ledgerData?.additional_expenses) || 0;
+    const ledgerCovers = Number(ledgerData?.covers) || 0;
+    const covers =
+      posCovers != null && posCovers > 0 ? posCovers : ledgerCovers > 0 ? ledgerCovers : null;
+
+    let expenseQuery = adminClient
+      .from("daily_expenses")
+      .select("amount")
+      .eq("restaurant_id", restaurant_id)
+      .eq("entry_date", targetDate);
+    if (locFilter) expenseQuery = expenseQuery.eq("location_id", locFilter);
+    const { data: expenseRows } = await expenseQuery;
+    const expenses =
+      (expenseRows?.length ?? 0) > 0
+        ? (expenseRows || []).reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+        : Number(ledgerData?.additional_expenses) || 0;
 
     // Reservations count
     let resQuery = adminClient
@@ -176,21 +267,29 @@ serve(async (req) => {
     if (locFilter) resQuery = resQuery.eq("location_id", locFilter);
     const { count: reservationCount } = await resQuery;
 
-    const estimatedFoodCost = totalRevenue * 0.3;
-    const estimatedProfit = totalRevenue - estimatedFoodCost - totalLabourCost - expenses;
+    // Contribution after food + labour + daily expenses. Recurring overheads are NOT
+    // deducted here (that engine lives in the canonical Daily Financial Summary /
+    // Reports), so this is never called Gross Profit or Operating Profit. It is only
+    // produced when the food cost is reliable; otherwise it stays null.
+    const contributionProfit =
+      foodCost !== null ? totalRevenue - foodCost - totalLabourCost - expenses : null;
 
     const metricsJson = {
       date: targetDate,
       revenue: totalRevenue,
       orders: totalOrders,
+      items_sold: itemsSold,
       avg_order_value: avgOrderValue,
+      food_cost: foodCost,
       food_cost_pct: foodCostPct,
+      food_cost_known: foodCost !== null,
+      recipe_coverage_pct: recipeCoveragePct,
       labour_cost: totalLabourCost,
       labour_pct: labourPct,
       labour_hours: totalLabourHours,
       covers,
       expenses,
-      estimated_profit: estimatedProfit,
+      contribution_profit: contributionProfit,
       reservations: reservationCount || 0,
       top_dishes: topDishes,
       bottom_dishes: bottomDishes,
@@ -208,15 +307,25 @@ serve(async (req) => {
 
 Date: ${targetDate}
 Revenue: ${eurFmt.format(totalRevenue)}
-Orders: ${totalOrders}
-Average Order Value: ${eurFmt.format(avgOrderValue)}
-Food Cost: ~${foodCostPct}%
-Labour Cost: ${eurFmt.format(totalLabourCost)} (${labourPct.toFixed(1)}%)
+Orders (POS receipts): ${totalOrders ?? "Unknown"}
+Items sold: ${itemsSold}
+Average Order Value: ${avgOrderValue !== null ? eurFmt.format(avgOrderValue) : "Unknown"}
+Food Cost: ${
+        foodCost !== null
+          ? `${eurFmt.format(foodCost)} (${(foodCostPct ?? 0).toFixed(1)}% of revenue)`
+          : "Unknown — recipe cost coverage too low"
+      }
+Recipe cost coverage: ${recipeCoveragePct !== null ? `${recipeCoveragePct.toFixed(0)}%` : "Unknown"}
+Labour Cost: ${eurFmt.format(totalLabourCost)}${labourPct !== null ? ` (${labourPct.toFixed(1)}%)` : ""}
 Labour Hours: ${totalLabourHours.toFixed(1)}h
-Covers: ${covers || "Not recorded"}
+Covers: ${covers ?? "Not recorded"}
 Additional Expenses: ${eurFmt.format(expenses)}
-Estimated Profit: ${eurFmt.format(estimatedProfit)}
+Contribution after food, labour and daily expenses (excludes recurring overheads): ${
+        contributionProfit !== null ? eurFmt.format(contributionProfit) : "Unknown"
+      }
 Reservations: ${reservationCount || 0}
+
+Rules: never invent a food cost percentage, an order count or a profit figure. If a value is Unknown, say it is unknown and recommend the data capture needed. Do not describe the contribution figure as gross profit or operating profit.
 
 Top Dishes:
 ${topDishes.map((d) => `- ${d.name}: ${d.quantity} sold (${eurFmt.format(d.revenue)})`).join("\n")}
@@ -317,9 +426,9 @@ function buildFallbackSummary(m: any, date: string): string {
   const eurFmt = new Intl.NumberFormat("en-IE", { style: "currency", currency: "EUR" });
   return `## Daily Summary — ${date}
 
-**Revenue:** ${eurFmt.format(m.revenue)} | **Orders:** ${m.orders} | **Avg Order:** ${eurFmt.format(m.avg_order_value)}
+**Revenue:** ${eurFmt.format(m.revenue)} | **Orders:** ${m.orders ?? "Unknown"} | **Avg Order:** ${m.avg_order_value != null ? eurFmt.format(m.avg_order_value) : "Unknown"}
 
-**Food Cost:** ~${m.food_cost_pct}% | **Labour:** ${eurFmt.format(m.labour_cost)} (${m.labour_pct.toFixed(1)}%) | **Estimated Profit:** ${eurFmt.format(m.estimated_profit)}
+**Food Cost:** ${m.food_cost_pct != null ? `${m.food_cost_pct.toFixed(1)}%` : "Unknown (low recipe coverage)"} | **Labour:** ${eurFmt.format(m.labour_cost)}${m.labour_pct != null ? ` (${m.labour_pct.toFixed(1)}%)` : ""} | **Contribution (excl. overheads):** ${m.contribution_profit != null ? eurFmt.format(m.contribution_profit) : "Unknown"}
 
 ### Top Dishes
 ${m.top_dishes.map((d: any) => `- ${d.name} — ${d.quantity} sold`).join("\n")}
