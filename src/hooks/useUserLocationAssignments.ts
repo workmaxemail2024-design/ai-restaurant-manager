@@ -3,6 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useRestaurant } from '@/contexts/RestaurantContext';
 import { toast } from 'sonner';
 
+// user_location_access was added after the generated Supabase types snapshot,
+// so it is accessed through an untyped client handle until types regenerate.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 export interface RestaurantMember {
   id: string;
   user_id: string;
@@ -50,7 +55,7 @@ export function useLocationAssignments() {
     queryKey: ['user-location-access', currentRestaurant?.id],
     enabled: !!currentRestaurant?.id,
     queryFn: async (): Promise<LocationAssignment[]> => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('user_location_access')
         .select('id, user_id, location_id')
         .eq('restaurant_id', currentRestaurant!.id);
@@ -71,14 +76,14 @@ export function useSetLocationAssignment() {
       enabled,
     }: { userId: string; locationId: string; enabled: boolean }) => {
       if (enabled) {
-        const { error } = await supabase.from('user_location_access').insert({
+        const { error } = await db.from('user_location_access').insert({
           user_id: userId,
           restaurant_id: currentRestaurant!.id,
           location_id: locationId,
         });
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { error } = await db
           .from('user_location_access')
           .delete()
           .eq('user_id', userId)
