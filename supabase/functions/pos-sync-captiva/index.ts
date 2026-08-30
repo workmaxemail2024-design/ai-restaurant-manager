@@ -138,7 +138,19 @@ serve(async (req) => {
       if (!allowed) {
         return unauthorized("Not authorised for this POS integration", corsHeaders, 403);
       }
+      // The requested location must be one the caller is permitted to operate on,
+      // and it must match the integration's own location.
+      if (location_id !== integration.location_id) {
+        return unauthorized("location_id does not match this POS integration", corsHeaders, 403);
+      }
+      const locOk = await userCanAccessLocation(
+        adminClient, caller.userId, integration.restaurant_id, location_id,
+      );
+      if (!locOk) {
+        return unauthorized("Not authorised for this location", corsHeaders, 403);
+      }
     }
+
 
     const settings = integration.settings as CaptivaSettings;
     // Prefer the new canonical field names from the Captiva API email; fall back to
