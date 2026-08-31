@@ -73,12 +73,12 @@ export function useUsersWithRoles() {
 }
 
 export function useMyMembershipRole() {
-  const { currentRestaurant } = useRestaurant();
+  const { currentRestaurant, user } = useRestaurant();
 
   return useQuery({
-    queryKey: ['my-membership-role', currentRestaurant?.id],
+    queryKey: ['my-membership-role', currentRestaurant?.id, user?.id],
     queryFn: async () => {
-      if (!currentRestaurant?.id) return null;
+      if (!currentRestaurant?.id || !user?.id) return null;
 
       const { data, error } = await supabase
         .from('user_restaurants')
@@ -87,7 +87,7 @@ export function useMyMembershipRole() {
           roles ( name )
         `)
         .eq('restaurant_id', currentRestaurant.id)
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '')
+        .eq('user_id', user.id)
         .maybeSingle();
 
       if (error) throw error;
@@ -97,7 +97,7 @@ export function useMyMembershipRole() {
       const roleName = (data as any).roles?.name ?? (data as any).role ?? null;
       return typeof roleName === 'string' ? roleName : null;
     },
-    enabled: !!currentRestaurant?.id
+    enabled: !!currentRestaurant?.id && !!user?.id
   });
 }
 
