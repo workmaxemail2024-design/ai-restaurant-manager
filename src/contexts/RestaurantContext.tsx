@@ -21,6 +21,8 @@ interface RestaurantContextType {
   permissions: Permissions | null;
   isLoading: boolean;
   isSwitching: boolean;
+  setupError: string | null;
+  retrySetup: () => Promise<void>;
   switchRestaurant: (restaurantId: string) => Promise<void>;
   createRestaurant: (name: string) => Promise<Restaurant | null>;
   updateRestaurant: (restaurantId: string, name: string) => Promise<boolean>;
@@ -39,17 +41,20 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   // Memoized function to load user data
   const loadUserData = useCallback(async (currentUser: User) => {
     console.log('[RestaurantContext] loadUserData called for user:', currentUser.id);
-    
+    setSetupError(null);
+
     try {
       // Call the backend function that ensures user has a restaurant
       const { data, error } = await supabase.rpc('ensure_user_restaurant');
       
       if (error) {
         console.error('[RestaurantContext] Error ensuring user restaurant:', error);
+        setSetupError(error.message || 'Could not set up your workspace.');
         setIsLoading(false);
         return;
       }
@@ -63,7 +68,14 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
           restaurant_name?: string;
           role_id?: string;
           permissions?: Permissions;
+          error?: string;
         };
+
+        if (result.error) {
+          setSetupError(result.error);
+          setIsLoading(false);
+          return;
+        }
         
         // If we got permissions from ensure_user_restaurant, use them
         if (result.permissions) {
@@ -87,6 +99,7 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
 
         if (restError) {
           console.error('[RestaurantContext] Error loading user restaurants:', restError);
+          setSetupError(restError.message);
         } else if (userRests && userRests.length > 0) {
           const restaurants = userRests.map((ur: any) => ur.restaurants).filter(Boolean);
           setUserRestaurants(restaurants);
@@ -100,14 +113,25 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
             setCurrentRestaurant(restaurants[0]);
             console.log('[RestaurantContext] Set current restaurant (fallback):', restaurants[0].name);
           }
+        } else {
+          setSetupError('No restaurant workspace is linked to your account yet.');
         }
       }
     } catch (error) {
       console.error('[RestaurantContext] Error in loadUserData:', error);
+      setSetupError(error instanceof Error ? error.message : 'Unexpected setup error.');
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const retrySetup = useCallback(async () => {
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (!s?.user) return;
+    setIsLoading(true);
+    await loadUserData(s.user);
+  }, [loadUserData]);
+
 
   // Initialize auth state
   useEffect(() => {
@@ -161,6 +185,7 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
         setCurrentRestaurant(null);
         setUserRestaurants([]);
         setPermissions(null);
+        setSetupError(null);
         setIsLoading(false);
         return;
       }
@@ -343,6 +368,8 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       permissions,
       isLoading,
       isSwitching,
+      setupError,
+      retrySetup,
       switchRestaurant,
       createRestaurant,
       updateRestaurant,
