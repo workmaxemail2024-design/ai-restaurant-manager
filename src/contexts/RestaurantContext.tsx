@@ -185,6 +185,7 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
         setCurrentRestaurant(null);
         setUserRestaurants([]);
         setPermissions(null);
+        setSetupError(null);
         setIsLoading(false);
         return;
       }
@@ -367,6 +368,8 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       permissions,
       isLoading,
       isSwitching,
+      setupError,
+      retrySetup,
       switchRestaurant,
       createRestaurant,
       updateRestaurant,
