@@ -426,12 +426,163 @@ function DeleteRoleButton({ roleId, onSuccess }: { roleId: string; onSuccess: ()
   );
 }
 
+function InviteUserDialog({ roles }: { roles: Role[] }) {
+  const { data: locations } = useLocations();
+  const { hasFullAccess } = usePermissions();
+  const createInvite = useCreateInvite();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [roleId, setRoleId] = useState('');
+  const [locationId, setLocationId] = useState('');
+
+  const selectedRole = roles.find(r => r.id === roleId);
+  const roleIsFullAccess = (selectedRole?.permissions as Permissions | undefined)?.full_access === true;
+  // Only an Owner may invite into a full-access role
+  const availableRoles = hasFullAccess()
+    ? roles
+    : roles.filter(r => (r.permissions as Permissions).full_access !== true);
+  const locationRequired = !!selectedRole && !roleIsFullAccess;
+  const canSubmit = !!email.trim() && !!roleId && (!locationRequired || !!locationId);
+
+  const reset = () => { setEmail(''); setRoleId(''); setLocationId(''); };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createInvite.mutateAsync({
+      email,
+      roleId,
+      locationId: roleIsFullAccess ? (locationId || null) : locationId,
+    });
+    reset();
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <DialogTrigger asChild>
+        <Button>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Invite user
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Invite user</DialogTitle>
+          <DialogDescription>
+            They join this restaurant automatically the next time they log in.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="invite-email">Email</Label>
+            <Input
+              id="invite-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="manager@restaurant.com"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Role</Label>
+            <Select value={roleId} onValueChange={setRoleId}>
+              <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+              <SelectContent>
+                {availableRoles.map((role) => (
+                  <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>
+              Location {locationRequired && <span className="text-destructive">*</span>}
+            </Label>
+            <Select value={locationId} onValueChange={setLocationId}>
+              <SelectTrigger>
+                <SelectValue placeholder={roleIsFullAccess ? 'All locations (owner)' : 'Select location'} />
+              </SelectTrigger>
+              <SelectContent>
+                {(locations ?? []).map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {roleIsFullAccess
+                ? 'Owners get access to every location automatically.'
+                : 'Managers and staff are locked to their assigned location.'}
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={!canSubmit || createInvite.isPending}>
+              {createInvite.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save invitation
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PendingInvites() {
+  const { data: invites } = useInvites();
+  const { data: locations } = useLocations();
+  const revoke = useRevokeInvite();
+  const pending = (invites ?? []).filter(i => i.status === 'pending');
+
+  if (pending.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Pending invitations</CardTitle>
+        <CardDescription>Accepted automatically on the invited user's next login</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="divide-y">
+          {pending.map((invite) => (
+            <div key={invite.id} className="flex items-center justify-between p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                  <Mail className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <div className="font-medium text-sm">{invite.email}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {invite.role}
+                    {invite.location_id
+                      ? ` · ${locations?.find(l => l.id === invite.location_id)?.name ?? 'Assigned location'}`
+                      : ' · All locations'}
+                    {` · expires ${new Date(invite.expires_at).toLocaleDateString()}`}
+                  </div>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => revoke.mutate(invite.id)}
+                disabled={revoke.isPending}
+              >
+                Revoke
+              </Button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function UserAssignments({ users, roles, isLoading }: { 
   users: Array<{ id: string; user_id: string; role_id: string | null; role?: Role }>;
   roles: Role[];
   isLoading: boolean;
 }) {
   const assignRole = useAssignRole();
+  const { data: profiles } = useMemberProfiles(users.map(u => u.user_id));
 
   if (isLoading) {
     return (
@@ -441,65 +592,75 @@ function UserAssignments({ users, roles, isLoading }: {
     );
   }
 
-  if (users.length === 0) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center h-32">
-          <Users className="h-8 w-8 text-muted-foreground mb-2" />
-          <p className="text-muted-foreground">No users in this restaurant yet</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-lg font-semibold">User Role Assignments</h3>
-        <p className="text-sm text-muted-foreground">
-          Assign roles to users in your restaurant
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-lg font-semibold">User Role Assignments</h3>
+          <p className="text-sm text-muted-foreground">
+            Assign roles to users in your restaurant
+          </p>
+        </div>
+        <InviteUserDialog roles={roles} />
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <div className="divide-y">
-            {users.map((user) => (
-              <div key={user.id} className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Users className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm">User ID: {user.user_id.slice(0, 8)}...</div>
-                    <div className="text-xs text-muted-foreground">
-                      Current role: {user.role?.name || 'No role assigned'}
+      <PendingInvites />
+
+      {users.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center h-32">
+            <Users className="h-8 w-8 text-muted-foreground mb-2" />
+            <p className="text-muted-foreground">No users in this restaurant yet</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {users.map((user) => {
+                const profile = profiles?.[user.user_id];
+                return (
+                  <div key={user.id} className="flex items-center justify-between p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">
+                          {profile?.full_name || profile?.email || `User ID: ${user.user_id.slice(0, 8)}…`}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {profile?.full_name && profile.email ? `${profile.email} · ` : ''}
+                          Current role: {user.role?.name || 'No role assigned'}
+                        </div>
+                      </div>
                     </div>
+                    <Select
+                      value={user.role_id || ''}
+                      onValueChange={(value) => assignRole.mutate({ 
+                        userRestaurantId: user.id, 
+                        roleId: value 
+                      })}
+                    >
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
+                            {role.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                </div>
-                <Select
-                  value={user.role_id || ''}
-                  onValueChange={(value) => assignRole.mutate({ 
-                    userRestaurantId: user.id, 
-                    roleId: value 
-                  })}
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.id}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
+
