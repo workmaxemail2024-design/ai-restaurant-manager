@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      _invite_test_log: {
+        Row: {
+          detail: string | null
+          result: string | null
+          step: string | null
+        }
+        Insert: {
+          detail?: string | null
+          result?: string | null
+          step?: string | null
+        }
+        Update: {
+          detail?: string | null
+          result?: string | null
+          step?: string | null
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           created_at: string
