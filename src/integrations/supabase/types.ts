@@ -1544,6 +1544,30 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       purchase_order_items: {
         Row: {
           cost_price: number
@@ -2915,6 +2939,7 @@ export type Database = {
         Returns: boolean
       }
       storage_doc_restaurant_id: { Args: { _name: string }; Returns: string }
+      sync_own_profile: { Args: never; Returns: undefined }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       unit_factor: { Args: { _u: string }; Returns: number }
       user_belongs_to_restaurant: {
