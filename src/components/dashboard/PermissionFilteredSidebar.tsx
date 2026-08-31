@@ -40,6 +40,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { usePermissions, PermissionResource } from "@/hooks/usePermissions";
+import { useMyMembershipRole } from "@/hooks/useRoles";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { usePendingReservationCount } from "@/hooks/useReservations";
 
@@ -176,6 +177,7 @@ export function PermissionFilteredSidebar() {
   const { hasPermission, hasFullAccess, isLoading } = usePermissions();
   const { signOut, user, currentRestaurant } = useRestaurant();
   const { data: pendingCount = 0 } = usePendingReservationCount();
+  const { data: myRoleName } = useMyMembershipRole();
 
   const restaurantKey = currentRestaurant?.id ?? "none";
   const scrollStorageKey = `sidebar_scroll_${restaurantKey}`;
@@ -391,7 +393,7 @@ export function PermissionFilteredSidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{user?.email || 'User'}</p>
-            <p className="text-xs text-muted-foreground truncate">Restaurant Owner</p>
+            <p className="text-xs text-muted-foreground truncate">{myRoleName ?? ''}</p>
           </div>
         </div>
       </div>
