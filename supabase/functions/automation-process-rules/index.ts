@@ -298,6 +298,7 @@ async function executeActions(
             results.push({ type: 'create_purchase_order', status: 'success', count: Object.keys(bySupplier).length });
           }
           break;
+        }
 
         case 'run_ai_forecast_now':
           // Trigger AI forecast edge function
