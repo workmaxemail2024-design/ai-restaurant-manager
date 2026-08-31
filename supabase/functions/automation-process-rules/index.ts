@@ -118,7 +118,7 @@ serve(async (req) => {
         }
 
         // Execute actions
-        const actionResults = await executeActions(supabase, rule);
+        const actionResults = await executeActions(supabase, rule, permittedLocationIds);
 
         // Log the run
         await supabase.from('automation_rule_runs').insert({
@@ -226,7 +226,11 @@ async function evaluateConditions(supabase: any, rule: any): Promise<boolean> {
   return true;
 }
 
-async function executeActions(supabase: any, rule: any): Promise<any[]> {
+async function executeActions(
+  supabase: any,
+  rule: any,
+  permittedLocationIds: string[] | null = null,
+): Promise<any[]> {
   const results = [];
 
   for (const action of rule.actions || []) {
