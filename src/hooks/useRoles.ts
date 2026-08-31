@@ -72,6 +72,35 @@ export function useUsersWithRoles() {
   });
 }
 
+export function useMyMembershipRole() {
+  const { currentRestaurant } = useRestaurant();
+
+  return useQuery({
+    queryKey: ['my-membership-role', currentRestaurant?.id],
+    queryFn: async () => {
+      if (!currentRestaurant?.id) return null;
+
+      const { data, error } = await supabase
+        .from('user_restaurants')
+        .select(`
+          role,
+          roles ( name )
+        `)
+        .eq('restaurant_id', currentRestaurant.id)
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '')
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      // role_id -> roles.name is canonical; fall back to the stored role column
+      const roleName = (data as any).roles?.name ?? (data as any).role ?? null;
+      return typeof roleName === 'string' ? roleName : null;
+    },
+    enabled: !!currentRestaurant?.id
+  });
+}
+
 export function useCreateRole() {
   const queryClient = useQueryClient();
   const { currentRestaurant } = useRestaurant();
