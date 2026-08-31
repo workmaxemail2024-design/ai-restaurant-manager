@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveCaller, userHasPermission, unauthorized } from "../_shared/posAuth.ts";
+import { resolveCaller, userHasPermission, userCanAccessLocation, unauthorized } from "../_shared/posAuth.ts";
 
 
 const corsHeaders = {
@@ -581,13 +581,25 @@ serve(async (req) => {
 
     const integration = integrationRows[0] as Integration;
 
-    // The tenant is taken from the integration record, never from the request body.
+    // The tenant AND the location are taken from the integration record, never
+    // from the request body. A user caller must satisfy both the restaurant-level
+    // POS permission and the canonical location-access helper, so a Manager
+    // cannot sync a sibling location inside their own restaurant.
     if (caller.kind === "user") {
       const allowed =
         !!integration.restaurant_id &&
         (await userHasPermission(adminClient, caller.userId, integration.restaurant_id, "pos", "view"));
       if (!allowed) {
         return unauthorized("Not authorised for this POS integration", corsHeaders, 403);
+      }
+      const locationAllowed = await userCanAccessLocation(
+        adminClient,
+        caller.userId,
+        integration.restaurant_id as string,
+        integration.location_id ?? null,
+      );
+      if (!locationAllowed) {
+        return unauthorized("Not authorised for this location", corsHeaders, 403);
       }
     }
 

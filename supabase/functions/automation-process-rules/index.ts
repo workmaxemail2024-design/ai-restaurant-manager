@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  resolveCaller,
+  isInternal,
+  userBelongsToRestaurant,
+  userHasAllLocationAccess,
+} from "../_shared/posAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,24 +18,12 @@ serve(async (req) => {
   }
 
   try {
-    // Authentication check
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "No authorization header" }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    // AUTHORIZATION: trusted backend (service-role / cron) keeps its deliberate
+    // bypass; a signed-in user is scoped to their restaurant AND to the
+    // locations the canonical helpers permit (user_location_access / Owner).
+    const caller = await resolveCaller(req);
+    if (caller.kind === 'none') {
+      return new Response(JSON.stringify({ error: caller.reason }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -42,20 +36,45 @@ serve(async (req) => {
 
     const { frequency, restaurant_id } = await req.json().catch(() => ({ frequency: 'all' }));
 
-    // Verify user belongs to restaurant if provided
-    if (restaurant_id) {
-      const { data: membership } = await supabaseClient
-        .from('user_restaurants')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('restaurant_id', restaurant_id)
-        .single();
-      
-      if (!membership) {
-        return new Response(JSON.stringify({ error: "Access denied to this restaurant" }), {
+    // null = unrestricted (trusted backend, or Owner / full access).
+    let permittedLocationIds: string[] | null = null;
+    let restaurantFilter: string | null = restaurant_id ?? null;
+
+    if (caller.kind === 'user') {
+      // A user caller may only ever process their own restaurant's rules.
+      let effectiveRestaurantId = restaurant_id as string | null;
+      if (!effectiveRestaurantId) {
+        const { data: membership } = await supabase
+          .from('user_restaurants')
+          .select('restaurant_id')
+          .eq('user_id', caller.userId)
+          .eq('is_default', true)
+          .maybeSingle();
+        effectiveRestaurantId = membership?.restaurant_id ?? null;
+      }
+
+      if (!effectiveRestaurantId ||
+          !(await userBelongsToRestaurant(supabase, caller.userId, effectiveRestaurantId))) {
+        return new Response(JSON.stringify({ error: 'Access denied to this restaurant' }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+      restaurantFilter = effectiveRestaurantId;
+
+      if (!(await userHasAllLocationAccess(supabase, caller.userId, effectiveRestaurantId))) {
+        const { data: assignments } = await supabase
+          .from('user_location_access')
+          .select('location_id')
+          .eq('user_id', caller.userId)
+          .eq('restaurant_id', effectiveRestaurantId);
+        permittedLocationIds = (assignments ?? []).map((a: { location_id: string }) => a.location_id);
+        if (permittedLocationIds.length === 0) {
+          return new Response(JSON.stringify({ error: 'Not authorised for any location' }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
     }
 
@@ -72,8 +91,8 @@ serve(async (req) => {
     }
 
     // Filter by restaurant if user-triggered
-    if (restaurant_id) {
-      query = query.eq('restaurant_id', restaurant_id);
+    if (restaurantFilter) {
+      query = query.eq('restaurant_id', restaurantFilter);
     }
 
     const { data: rules, error: rulesError } = await query;
@@ -99,7 +118,7 @@ serve(async (req) => {
         }
 
         // Execute actions
-        const actionResults = await executeActions(supabase, rule);
+        const actionResults = await executeActions(supabase, rule, permittedLocationIds);
 
         // Log the run
         await supabase.from('automation_rule_runs').insert({
@@ -207,7 +226,11 @@ async function evaluateConditions(supabase: any, rule: any): Promise<boolean> {
   return true;
 }
 
-async function executeActions(supabase: any, rule: any): Promise<any[]> {
+async function executeActions(
+  supabase: any,
+  rule: any,
+  permittedLocationIds: string[] | null = null,
+): Promise<any[]> {
   const results = [];
 
   for (const action of rule.actions || []) {
@@ -223,14 +246,17 @@ async function executeActions(supabase: any, rule: any): Promise<any[]> {
           results.push({ type: 'send_notification', status: 'success' });
           break;
 
-        case 'create_purchase_order':
-          // Get low stock items
-          const { data: lowStock } = await supabase
+        case 'create_purchase_order': {
+          // Get low stock items — never outside the caller's permitted locations.
+          let lowStockQuery = supabase
             .from('stock_levels')
             .select('ingredient_id, quantity, ingredients(supplier_id), location_id')
             .eq('restaurant_id', rule.restaurant_id)
-            .lt('quantity', 10)
-            .limit(10);
+            .lt('quantity', 10);
+          if (permittedLocationIds) {
+            lowStockQuery = lowStockQuery.in('location_id', permittedLocationIds);
+          }
+          const { data: lowStock } = await lowStockQuery.limit(10);
 
           if (lowStock && lowStock.length > 0) {
             // Group by supplier
@@ -272,6 +298,7 @@ async function executeActions(supabase: any, rule: any): Promise<any[]> {
             results.push({ type: 'create_purchase_order', status: 'success', count: Object.keys(bySupplier).length });
           }
           break;
+        }
 
         case 'run_ai_forecast_now':
           // Trigger AI forecast edge function
