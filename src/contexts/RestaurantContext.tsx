@@ -21,6 +21,8 @@ interface RestaurantContextType {
   permissions: Permissions | null;
   isLoading: boolean;
   isSwitching: boolean;
+  setupError: string | null;
+  retrySetup: () => Promise<void>;
   switchRestaurant: (restaurantId: string) => Promise<void>;
   createRestaurant: (name: string) => Promise<Restaurant | null>;
   updateRestaurant: (restaurantId: string, name: string) => Promise<boolean>;
