@@ -246,14 +246,17 @@ async function executeActions(
           results.push({ type: 'send_notification', status: 'success' });
           break;
 
-        case 'create_purchase_order':
-          // Get low stock items
-          const { data: lowStock } = await supabase
+        case 'create_purchase_order': {
+          // Get low stock items — never outside the caller's permitted locations.
+          let lowStockQuery = supabase
             .from('stock_levels')
             .select('ingredient_id, quantity, ingredients(supplier_id), location_id')
             .eq('restaurant_id', rule.restaurant_id)
-            .lt('quantity', 10)
-            .limit(10);
+            .lt('quantity', 10);
+          if (permittedLocationIds) {
+            lowStockQuery = lowStockQuery.in('location_id', permittedLocationIds);
+          }
+          const { data: lowStock } = await lowStockQuery.limit(10);
 
           if (lowStock && lowStock.length > 0) {
             // Group by supplier
