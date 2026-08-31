@@ -42,7 +42,9 @@ import {
   useAssignRole,
   Role 
 } from '@/hooks/useRoles';
-import { Permissions, ResourcePermissions, PermissionResource } from '@/hooks/usePermissions';
+import { useInvites, useCreateInvite, useRevokeInvite, useMemberProfiles } from '@/hooks/useInvites';
+import { useLocations } from '@/hooks/useLocations';
+import { Permissions, ResourcePermissions, PermissionResource, usePermissions } from '@/hooks/usePermissions';
 import { RequirePermission } from '@/components/RequirePermission';
 import { 
   Plus, 
@@ -54,6 +56,8 @@ import {
   Pencil, 
   Crown,
   Loader2,
+  Mail,
+  UserPlus,
   Settings
 } from 'lucide-react';
 
