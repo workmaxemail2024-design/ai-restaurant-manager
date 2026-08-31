@@ -1965,6 +1965,73 @@ export type Database = {
           },
         ]
       }
+      restaurant_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          location_id: string | null
+          restaurant_id: string
+          role: string
+          role_id: string
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          location_id?: string | null
+          restaurant_id: string
+          role?: string
+          role_id: string
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          location_id?: string | null
+          restaurant_id?: string
+          role?: string
+          role_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurant_invites_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "restaurant_invites_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "restaurant_invites_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurants: {
         Row: {
           created_at: string
@@ -2864,6 +2931,7 @@ export type Database = {
         Returns: boolean
       }
       ensure_user_restaurant: { Args: never; Returns: Json }
+      expire_stale_invites: { Args: { _email: string }; Returns: number }
       get_ingredient_base_cost: {
         Args: { p_ingredient_id: string }
         Returns: number
