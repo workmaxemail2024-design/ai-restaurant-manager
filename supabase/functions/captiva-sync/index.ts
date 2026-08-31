@@ -595,7 +595,7 @@ serve(async (req) => {
       const locationAllowed = await userCanAccessLocation(
         adminClient,
         caller.userId,
-        integration.restaurant_id,
+        integration.restaurant_id as string,
         integration.location_id ?? null,
       );
       if (!locationAllowed) {
