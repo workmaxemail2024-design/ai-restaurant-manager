@@ -2549,6 +2549,48 @@ export type Database = {
           },
         ]
       }
+      user_location_access: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          location_id: string
+          restaurant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location_id: string
+          restaurant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location_id?: string
+          restaurant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_location_access_location_fk"
+            columns: ["location_id", "restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id", "restaurant_id"]
+          },
+          {
+            foreignKeyName: "user_location_access_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_restaurants: {
         Row: {
           created_at: string
@@ -2822,6 +2864,19 @@ export type Database = {
           usage_source: string
         }[]
       }
+      get_theoretical_usage_impl: {
+        Args: { p_end?: string; p_location_id?: string; p_start?: string }
+        Returns: {
+          base_unit: string
+          cost: number
+          dishes_sold: number
+          ingredient_id: string
+          ingredient_name: string
+          quantity_used: number
+          usage_source: string
+        }[]
+      }
+      get_user_location_ids: { Args: never; Returns: string[] }
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
@@ -2864,6 +2919,14 @@ export type Database = {
       unit_factor: { Args: { _u: string }; Returns: number }
       user_belongs_to_restaurant: {
         Args: { _restaurant_id: string }
+        Returns: boolean
+      }
+      user_can_access_location: {
+        Args: { _location_id: string }
+        Returns: boolean
+      }
+      user_can_access_location_or_global: {
+        Args: { _location_id: string }
         Returns: boolean
       }
       user_can_view_pos_credentials: { Args: never; Returns: boolean }
