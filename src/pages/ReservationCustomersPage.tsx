@@ -81,7 +81,7 @@ export default function ReservationCustomersPage() {
   return (
     <PageLayout
       title="Customers"
-      subtitle="Track guests, visits, and spend history"
+      subtitle="View guest history — visits, spend and notes."
       action={
         <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-1" /> New Customer</Button>
       }

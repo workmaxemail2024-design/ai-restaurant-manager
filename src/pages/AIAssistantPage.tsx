@@ -125,7 +125,7 @@ export default function AIAssistantPage() {
     <RequirePermission resource="ai_features" action="view">
       <PageLayout
         title="AI Assistant"
-        description="Ask questions about your restaurant using real operational data"
+        description="Ask questions about your restaurant using your real data."
         action={
           <Button variant="outline" onClick={clearChat} className="gap-2">
             <RefreshCw className="h-4 w-4" />

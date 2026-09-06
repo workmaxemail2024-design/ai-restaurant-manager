@@ -39,7 +39,7 @@ export default function ReservationSettingsPage() {
   return (
     <PageLayout
       title="Reservation Settings"
-      subtitle="Configure sittings, durations, and capacity rules"
+      subtitle="Set the sittings, durations and capacity rules used for bookings."
       action={
         <div className="flex items-center gap-2">
           <LocationSelector />

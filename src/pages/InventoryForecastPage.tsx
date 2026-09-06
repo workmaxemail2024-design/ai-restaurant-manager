@@ -104,7 +104,7 @@ export default function InventoryForecastPage() {
   return (
     <PageLayout
       title="Inventory Forecasting & Waste"
-      subtitle="Forecasts derived from physical stock and theoretical usage — shown only where the data supports them"
+      subtitle="Forecast ingredient usage and waste from your stock and sales data."
     >
       <div className="space-y-6">
         {/* Data confidence & prerequisites */}

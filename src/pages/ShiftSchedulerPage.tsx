@@ -242,7 +242,7 @@ export default function ShiftSchedulerPage() {
   return (
     <PageLayout
       title="Timesheets"
-      description="Planned labour — drag, tap or edit shifts to build the weekly rota"
+      description="Plan the weekly rota — drag, tap or edit shifts to build the schedule."
       action={
         <Button size="sm" className="h-8" onClick={openNewShift}>
           <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Shift

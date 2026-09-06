@@ -59,7 +59,7 @@ export default function StaffKPIsPage() {
   return (
     <PageLayout
       title="Staff KPIs"
-      description="Track and analyze staff performance metrics"
+      description="Track and review staff performance metrics."
       action={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>

@@ -194,7 +194,7 @@ export default function StaffPage() {
   return (
     <PageLayout
       title="Staff List"
-      description="Employee master data — defines roles, rates, and contract terms"
+      description="Manage your team — their roles, pay rates and contract terms."
       action={
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
