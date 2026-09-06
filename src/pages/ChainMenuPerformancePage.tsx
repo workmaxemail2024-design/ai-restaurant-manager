@@ -317,7 +317,7 @@ export default function ChainMenuPerformancePage() {
   }, [buckets, underperformers]);
 
   return (
-    <PageLayout title="Chain Menu Performance" description="Compare dish performance across all locations">
+    <PageLayout title="Chain Menu Performance" description="Compare how each dish sells across all of your locations.">
       <div className="space-y-6">
         <Card>
           <CardContent className="pt-4 pb-4 flex flex-wrap items-center gap-3">

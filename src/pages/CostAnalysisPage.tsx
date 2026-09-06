@@ -348,7 +348,7 @@ export default function CostAnalysisPage() {
   );
 
   return (
-    <PageLayout title="Cost Analysis" description="Decide where to fix costs — driven by the canonical dish recipes">
+    <PageLayout title="Cost Analysis" description="See which dishes make or lose money, based on their recipes and sales.">
       <div className="space-y-6">
         {dishesError && (
           <Alert variant="destructive">
