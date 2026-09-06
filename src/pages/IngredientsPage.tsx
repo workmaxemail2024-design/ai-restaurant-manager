@@ -200,7 +200,7 @@ export default function IngredientsPage() {
   const costError = formData.use_pack_pricing && formData.cost_per_pack !== null && formData.cost_per_pack < 0;
 
   return (
-    <PageLayout title="Inventory Items" subtitle="Ingredients, direct-sale products and operational consumables">
+    <PageLayout title="Inventory Items" subtitle="Manage the ingredients, products and supplies used by your restaurant.">
       <div className="flex justify-end mb-4">
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>

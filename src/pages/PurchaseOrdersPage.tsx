@@ -141,7 +141,7 @@ export default function PurchaseOrdersPage() {
   };
 
   return (
-    <PageLayout title="Purchase Orders" subtitle="Manage purchase orders and restock inventory">
+    <PageLayout title="Purchase Orders" subtitle="Plan and track what you intend to order from suppliers.">
       <div className="flex justify-end mb-4">
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>

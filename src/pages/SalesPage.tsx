@@ -90,7 +90,7 @@ export default function SalesPage() {
   };
 
   return (
-    <PageLayout title="Sales" subtitle="Raw sales transaction ledger">
+    <PageLayout title="Sales" subtitle="View the individual sales transactions imported from your POS.">
       {/* Data Warnings */}
       <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes", "missing_sales"]} className="mb-4" />
 
