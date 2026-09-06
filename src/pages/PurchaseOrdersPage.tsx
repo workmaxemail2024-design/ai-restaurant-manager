@@ -94,7 +94,7 @@ export default function PurchaseOrdersPage() {
       key: "items",
       header: "Items",
       render: (item: PurchaseOrder) => (
-        <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(item); setIsItemsOpen(true); }}>
+        <Button variant="ghost" size="sm" className="h-11" onClick={() => { openOrder(item); setIsItemsOpen(true); }}>
           View <ChevronRight className="h-4 w-4" />
         </Button>
       )
@@ -103,59 +103,117 @@ export default function PurchaseOrdersPage() {
       key: "actions",
       header: "",
       render: (item: PurchaseOrder) => {
-        // Already received - show nothing
-        if (item.received_at) return null;
-        
-        // Pending - show Complete button
-        if (item.status === "pending") {
-          return (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => updateStatus.mutate({ id: item.id, status: "completed" })}
-            >
-              <Check className="h-4 w-4 mr-1" /> Complete
-            </Button>
-          );
-        }
-        
-        // Completed but not received - show Receive Delivery button
-        if (item.status === "completed") {
-          return (
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={() => { setSelectedOrder(item); setIsReceiveOpen(true); }}
-            >
-              <Package className="h-4 w-4 mr-1" /> Receive
-            </Button>
-          );
-        }
-        
-        return null;
+        const editable = canEditPurchaseOrder(item);
+
+        return (
+          <div className="flex flex-wrap gap-2 justify-end">
+            {editable && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-11 px-4"
+                onClick={() => {
+                  openOrder(item);
+                  if (canEditPurchaseOrderHeader(item)) {
+                    handleStartEdit(item);
+                  } else {
+                    setIsItemsOpen(true);
+                  }
+                }}
+              >
+                <Pencil className="h-4 w-4 mr-1" /> Edit
+              </Button>
+            )}
+
+            {!item.received_at && item.status === "pending" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11 px-4"
+                onClick={() => updateStatus.mutate({ id: item.id, status: "completed" })}
+              >
+                <Check className="h-4 w-4 mr-1" /> Complete
+              </Button>
+            )}
+
+            {!item.received_at && item.status === "completed" && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-11 px-4"
+                onClick={() => { openOrder(item); setIsReceiveOpen(true); }}
+              >
+                <Package className="h-4 w-4 mr-1" /> Receive
+              </Button>
+            )}
+          </div>
+        );
       }
     }
   ];
 
+  const handleStartEdit = (order: PurchaseOrder) => {
+    setEditingOrder(order);
+    setFormData({
+      supplier_id: order.supplier_id,
+      location_id: order.location_id,
+      order_date: order.order_date?.slice(0, 10),
+    });
+    setIsOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newOrder = await createOrder.mutateAsync(formData);
-    setSelectedOrder(newOrder as PurchaseOrder);
+    if (editingOrder) {
+      await updateOrder.mutateAsync({
+        order: editingOrder,
+        changes: {
+          supplier_id: formData.supplier_id,
+          location_id: formData.location_id,
+          order_date: formData.order_date || editingOrder.order_date,
+        },
+      });
+      handleClose();
+      setIsItemsOpen(true);
+      return;
+    }
+    const newOrder = await createOrder.mutateAsync({
+      supplier_id: formData.supplier_id,
+      location_id: formData.location_id,
+      ...(formData.order_date ? { order_date: formData.order_date } : {}),
+    });
+    openOrder(newOrder as PurchaseOrder);
     handleClose();
     setIsItemsOpen(true);
   };
 
   const handleClose = () => {
     setIsOpen(false);
+    setEditingOrder(null);
     setFormData({ supplier_id: "", location_id: "" });
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedOrder) {
-      await addItem.mutateAsync({ purchase_order_id: selectedOrder.id, ...itemForm });
+      await addItem.mutateAsync({
+        purchase_order_id: selectedOrder.id,
+        ...itemForm,
+        order_status: selectedOrder.status,
+      });
       setItemForm({ ingredient_id: "", quantity: 0, cost_price: 0 });
     }
+  };
+
+  const startLineEdit = (line: PurchaseOrderItem) => {
+    setEditingLineId(line.id);
+    setLineDraft({ quantity: Number(line.quantity), cost_price: Number(line.cost_price) });
+  };
+
+  const saveLineEdit = async (line: PurchaseOrderItem) => {
+    if (!selectedOrder) return;
+    await updateLine.mutateAsync({ order: selectedOrder, item: line, changes: lineDraft });
+    setEditingLineId(null);
   };
 
   return (
