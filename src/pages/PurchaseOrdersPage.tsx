@@ -475,7 +475,8 @@ export default function PurchaseOrdersPage() {
             })),
           });
           setIsReceiveOpen(false);
-          setSelectedOrder(null);
+          setSelectedOrderId(null);
+          setDraftOrder(null);
         }}
       />
     </PageLayout>
