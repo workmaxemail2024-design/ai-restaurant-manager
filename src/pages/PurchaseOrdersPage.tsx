@@ -33,15 +33,33 @@ export default function PurchaseOrdersPage() {
   const addItem = useAddPurchaseOrderItem();
   const addItems = useAddPurchaseOrderItems();
   const receiveDelivery = useReceiveDelivery();
-  
+  const updateOrder = useUpdatePurchaseOrder();
+  const updateLine = useUpdatePurchaseOrderItem();
+  const deleteLine = useDeletePurchaseOrderItem();
+
   const [isOpen, setIsOpen] = useState(false);
   const [isItemsOpen, setIsItemsOpen] = useState(false);
   const [isReceiveOpen, setIsReceiveOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
-  const [formData, setFormData] = useState<PurchaseOrderInsert>({ supplier_id: "", location_id: "" });
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [draftOrder, setDraftOrder] = useState<PurchaseOrder | null>(null);
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
+  const [formData, setFormData] = useState<PurchaseOrderInsert & { order_date?: string }>({ supplier_id: "", location_id: "" });
   const [itemForm, setItemForm] = useState({ ingredient_id: "", quantity: 0, cost_price: 0 });
-  
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [lineDraft, setLineDraft] = useState({ quantity: 0, cost_price: 0 });
+
+  // Always read the freshest copy of the open order from the list.
+  const selectedOrder =
+    (selectedOrderId ? orders.find((o) => o.id === selectedOrderId) : null) ?? draftOrder ?? null;
+
+  const openOrder = (order: PurchaseOrder) => {
+    setSelectedOrderId(order.id);
+    setDraftOrder(order);
+  };
+
   const { data: orderItems = [] } = usePurchaseOrderItems(selectedOrder?.id || null);
+  const canEditSelected = selectedOrder ? canEditPurchaseOrder(selectedOrder) : false;
+
 
   const statusColors: Record<string, string> = {
     pending: "bg-warning/20 text-warning",
