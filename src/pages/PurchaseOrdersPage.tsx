@@ -6,9 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ChevronRight, Check, Package } from "lucide-react";
+import { Plus, ChevronRight, Check, Package, Pencil, Trash2, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, useReceiveDelivery, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
+import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, useReceiveDelivery, useUpdatePurchaseOrder, useUpdatePurchaseOrderItem, useDeletePurchaseOrderItem, canEditPurchaseOrder, canEditPurchaseOrderHeader, PurchaseOrder, PurchaseOrderItem, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { useLocations } from "@/hooks/useLocations";
@@ -33,15 +33,33 @@ export default function PurchaseOrdersPage() {
   const addItem = useAddPurchaseOrderItem();
   const addItems = useAddPurchaseOrderItems();
   const receiveDelivery = useReceiveDelivery();
-  
+  const updateOrder = useUpdatePurchaseOrder();
+  const updateLine = useUpdatePurchaseOrderItem();
+  const deleteLine = useDeletePurchaseOrderItem();
+
   const [isOpen, setIsOpen] = useState(false);
   const [isItemsOpen, setIsItemsOpen] = useState(false);
   const [isReceiveOpen, setIsReceiveOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
-  const [formData, setFormData] = useState<PurchaseOrderInsert>({ supplier_id: "", location_id: "" });
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [draftOrder, setDraftOrder] = useState<PurchaseOrder | null>(null);
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
+  const [formData, setFormData] = useState<PurchaseOrderInsert & { order_date?: string }>({ supplier_id: "", location_id: "" });
   const [itemForm, setItemForm] = useState({ ingredient_id: "", quantity: 0, cost_price: 0 });
-  
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [lineDraft, setLineDraft] = useState({ quantity: 0, cost_price: 0 });
+
+  // Always read the freshest copy of the open order from the list.
+  const selectedOrder =
+    (selectedOrderId ? orders.find((o) => o.id === selectedOrderId) : null) ?? draftOrder ?? null;
+
+  const openOrder = (order: PurchaseOrder) => {
+    setSelectedOrderId(order.id);
+    setDraftOrder(order);
+  };
+
   const { data: orderItems = [] } = usePurchaseOrderItems(selectedOrder?.id || null);
+  const canEditSelected = selectedOrder ? canEditPurchaseOrder(selectedOrder) : false;
+
 
   const statusColors: Record<string, string> = {
     pending: "bg-warning/20 text-warning",
@@ -76,7 +94,7 @@ export default function PurchaseOrdersPage() {
       key: "items",
       header: "Items",
       render: (item: PurchaseOrder) => (
-        <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(item); setIsItemsOpen(true); }}>
+        <Button variant="ghost" size="sm" className="h-11" onClick={() => { openOrder(item); setIsItemsOpen(true); }}>
           View <ChevronRight className="h-4 w-4" />
         </Button>
       )
@@ -85,59 +103,117 @@ export default function PurchaseOrdersPage() {
       key: "actions",
       header: "",
       render: (item: PurchaseOrder) => {
-        // Already received - show nothing
-        if (item.received_at) return null;
-        
-        // Pending - show Complete button
-        if (item.status === "pending") {
-          return (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => updateStatus.mutate({ id: item.id, status: "completed" })}
-            >
-              <Check className="h-4 w-4 mr-1" /> Complete
-            </Button>
-          );
-        }
-        
-        // Completed but not received - show Receive Delivery button
-        if (item.status === "completed") {
-          return (
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={() => { setSelectedOrder(item); setIsReceiveOpen(true); }}
-            >
-              <Package className="h-4 w-4 mr-1" /> Receive
-            </Button>
-          );
-        }
-        
-        return null;
+        const editable = canEditPurchaseOrder(item);
+
+        return (
+          <div className="flex flex-wrap gap-2 justify-end">
+            {editable && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-11 px-4"
+                onClick={() => {
+                  openOrder(item);
+                  if (canEditPurchaseOrderHeader(item)) {
+                    handleStartEdit(item);
+                  } else {
+                    setIsItemsOpen(true);
+                  }
+                }}
+              >
+                <Pencil className="h-4 w-4 mr-1" /> Edit
+              </Button>
+            )}
+
+            {!item.received_at && item.status === "pending" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-11 px-4"
+                onClick={() => updateStatus.mutate({ id: item.id, status: "completed" })}
+              >
+                <Check className="h-4 w-4 mr-1" /> Complete
+              </Button>
+            )}
+
+            {!item.received_at && item.status === "completed" && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-11 px-4"
+                onClick={() => { openOrder(item); setIsReceiveOpen(true); }}
+              >
+                <Package className="h-4 w-4 mr-1" /> Receive
+              </Button>
+            )}
+          </div>
+        );
       }
     }
   ];
 
+  const handleStartEdit = (order: PurchaseOrder) => {
+    setEditingOrder(order);
+    setFormData({
+      supplier_id: order.supplier_id,
+      location_id: order.location_id,
+      order_date: order.order_date?.slice(0, 10),
+    });
+    setIsOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newOrder = await createOrder.mutateAsync(formData);
-    setSelectedOrder(newOrder as PurchaseOrder);
+    if (editingOrder) {
+      await updateOrder.mutateAsync({
+        order: editingOrder,
+        changes: {
+          supplier_id: formData.supplier_id,
+          location_id: formData.location_id,
+          order_date: formData.order_date || editingOrder.order_date,
+        },
+      });
+      handleClose();
+      setIsItemsOpen(true);
+      return;
+    }
+    const newOrder = await createOrder.mutateAsync({
+      supplier_id: formData.supplier_id,
+      location_id: formData.location_id,
+      ...(formData.order_date ? { order_date: formData.order_date } : {}),
+    });
+    openOrder(newOrder as PurchaseOrder);
     handleClose();
     setIsItemsOpen(true);
   };
 
   const handleClose = () => {
     setIsOpen(false);
+    setEditingOrder(null);
     setFormData({ supplier_id: "", location_id: "" });
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedOrder) {
-      await addItem.mutateAsync({ purchase_order_id: selectedOrder.id, ...itemForm });
+      await addItem.mutateAsync({
+        purchase_order_id: selectedOrder.id,
+        ...itemForm,
+        order_status: selectedOrder.status,
+      });
       setItemForm({ ingredient_id: "", quantity: 0, cost_price: 0 });
     }
+  };
+
+  const startLineEdit = (line: PurchaseOrderItem) => {
+    setEditingLineId(line.id);
+    setLineDraft({ quantity: Number(line.quantity), cost_price: Number(line.cost_price) });
+  };
+
+  const saveLineEdit = async (line: PurchaseOrderItem) => {
+    if (!selectedOrder) return;
+    await updateLine.mutateAsync({ order: selectedOrder, item: line, changes: lineDraft });
+    setEditingLineId(null);
   };
 
   return (
@@ -151,7 +227,7 @@ export default function PurchaseOrdersPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create Purchase Order</DialogTitle>
+              <DialogTitle>{editingOrder ? "Edit Purchase Order" : "Create Purchase Order"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -164,7 +240,7 @@ export default function PurchaseOrdersPage() {
               <div>
                 <Label>Location</Label>
                 <Select value={formData.location_id} onValueChange={(v) => setFormData({ ...formData, location_id: v })} required>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11">
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -174,10 +250,23 @@ export default function PurchaseOrdersPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Order date</Label>
+                <Input
+                  className="h-11"
+                  type="date"
+                  value={formData.order_date || ""}
+                  onChange={(e) => setFormData({ ...formData, order_date: e.target.value })}
+                />
+              </div>
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-                <Button type="submit" disabled={createOrder.isPending || !formData.supplier_id || !formData.location_id}>
-                  Create & Add Items
+                <Button type="button" variant="outline" className="h-11" onClick={handleClose}>Cancel</Button>
+                <Button
+                  type="submit"
+                  className="h-11"
+                  disabled={createOrder.isPending || updateOrder.isPending || !formData.supplier_id || !formData.location_id}
+                >
+                  {editingOrder ? "Save changes" : "Create & Add Items"}
                 </Button>
               </div>
             </form>
@@ -201,6 +290,23 @@ export default function PurchaseOrdersPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {selectedOrder && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-muted-foreground">
+                  {canEditPurchaseOrderHeader(selectedOrder)
+                    ? "Draft order — everything can still be changed."
+                    : canEditSelected
+                      ? "Order already sent — line changes are recorded in the audit log."
+                      : "This order is read-only."}
+                </div>
+                {canEditPurchaseOrderHeader(selectedOrder) && (
+                  <Button variant="secondary" className="h-11" onClick={() => handleStartEdit(selectedOrder)}>
+                    <Pencil className="h-4 w-4 mr-1" /> Edit order details
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Invoice Section */}
             {selectedOrder && (
               <POInvoiceSection
@@ -221,7 +327,7 @@ export default function PurchaseOrdersPage() {
               />
             )}
 
-            {selectedOrder?.status === "pending" && (
+            {canEditSelected && (
               <form onSubmit={handleAddItem} className="flex flex-wrap gap-2 items-end">
                 <div className="flex-1 min-w-[220px]">
                   <Label>Inventory item</Label>
@@ -270,12 +376,77 @@ export default function PurchaseOrdersPage() {
                 <p className="p-4 text-muted-foreground text-center">No items added yet</p>
               ) : (
                 orderItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3">
-                    <span>{item.ingredients?.name}</span>
-                    <div className="flex items-center gap-4">
-                      <span className="text-muted-foreground">{Number(item.quantity).toFixed(2)} {item.ingredients?.unit}</span>
-                      <span className="font-medium">{formatCurrency(Number(item.quantity) * Number(item.cost_price))}</span>
-                    </div>
+                  <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                    <span className="min-w-[140px] flex-1">{item.ingredients?.name}</span>
+
+                    {editingLineId === item.id ? (
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="w-24">
+                          <Label className="text-xs">Qty</Label>
+                          <Input
+                            className="h-11"
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min="0"
+                            value={lineDraft.quantity}
+                            onChange={(e) => setLineDraft({ ...lineDraft, quantity: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="w-24">
+                          <Label className="text-xs">Price</Label>
+                          <Input
+                            className="h-11"
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min="0"
+                            value={lineDraft.cost_price}
+                            onChange={(e) => setLineDraft({ ...lineDraft, cost_price: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-11"
+                          disabled={updateLine.isPending}
+                          onClick={() => saveLineEdit(item)}
+                        >
+                          <Save className="h-4 w-4 mr-1" /> Save
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-11" onClick={() => setEditingLineId(null)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-4">
+                        <span className="text-muted-foreground">{Number(item.quantity).toFixed(2)} {item.ingredients?.unit}</span>
+                        <span className="text-muted-foreground">{formatCurrency(Number(item.cost_price))}</span>
+                        <span className="font-medium">{formatCurrency(Number(item.quantity) * Number(item.cost_price))}</span>
+                        {canEditSelected && selectedOrder && (
+                          <div className="flex gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-11 w-11"
+                              aria-label="Edit line"
+                              onClick={() => startLineEdit(item)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-11 w-11 text-destructive hover:text-destructive"
+                              aria-label="Remove line"
+                              disabled={deleteLine.isPending}
+                              onClick={() => deleteLine.mutate({ order: selectedOrder, item })}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -304,7 +475,8 @@ export default function PurchaseOrdersPage() {
             })),
           });
           setIsReceiveOpen(false);
-          setSelectedOrder(null);
+          setSelectedOrderId(null);
+          setDraftOrder(null);
         }}
       />
     </PageLayout>
