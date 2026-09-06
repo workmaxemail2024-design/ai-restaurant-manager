@@ -376,12 +376,77 @@ export default function PurchaseOrdersPage() {
                 <p className="p-4 text-muted-foreground text-center">No items added yet</p>
               ) : (
                 orderItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3">
-                    <span>{item.ingredients?.name}</span>
-                    <div className="flex items-center gap-4">
-                      <span className="text-muted-foreground">{Number(item.quantity).toFixed(2)} {item.ingredients?.unit}</span>
-                      <span className="font-medium">{formatCurrency(Number(item.quantity) * Number(item.cost_price))}</span>
-                    </div>
+                  <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                    <span className="min-w-[140px] flex-1">{item.ingredients?.name}</span>
+
+                    {editingLineId === item.id ? (
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="w-24">
+                          <Label className="text-xs">Qty</Label>
+                          <Input
+                            className="h-11"
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min="0"
+                            value={lineDraft.quantity}
+                            onChange={(e) => setLineDraft({ ...lineDraft, quantity: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="w-24">
+                          <Label className="text-xs">Price</Label>
+                          <Input
+                            className="h-11"
+                            type="number"
+                            inputMode="decimal"
+                            step="0.01"
+                            min="0"
+                            value={lineDraft.cost_price}
+                            onChange={(e) => setLineDraft({ ...lineDraft, cost_price: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          className="h-11"
+                          disabled={updateLine.isPending}
+                          onClick={() => saveLineEdit(item)}
+                        >
+                          <Save className="h-4 w-4 mr-1" /> Save
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-11" onClick={() => setEditingLineId(null)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-4">
+                        <span className="text-muted-foreground">{Number(item.quantity).toFixed(2)} {item.ingredients?.unit}</span>
+                        <span className="text-muted-foreground">{formatCurrency(Number(item.cost_price))}</span>
+                        <span className="font-medium">{formatCurrency(Number(item.quantity) * Number(item.cost_price))}</span>
+                        {canEditSelected && selectedOrder && (
+                          <div className="flex gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-11 w-11"
+                              aria-label="Edit line"
+                              onClick={() => startLineEdit(item)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-11 w-11 text-destructive hover:text-destructive"
+                              aria-label="Remove line"
+                              disabled={deleteLine.isPending}
+                              onClick={() => deleteLine.mutate({ order: selectedOrder, item })}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
