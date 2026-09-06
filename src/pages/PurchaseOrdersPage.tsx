@@ -227,7 +227,7 @@ export default function PurchaseOrdersPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create Purchase Order</DialogTitle>
+              <DialogTitle>{editingOrder ? "Edit Purchase Order" : "Create Purchase Order"}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -240,7 +240,7 @@ export default function PurchaseOrdersPage() {
               <div>
                 <Label>Location</Label>
                 <Select value={formData.location_id} onValueChange={(v) => setFormData({ ...formData, location_id: v })} required>
-                  <SelectTrigger>
+                  <SelectTrigger className="h-11">
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -250,10 +250,23 @@ export default function PurchaseOrdersPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>Order date</Label>
+                <Input
+                  className="h-11"
+                  type="date"
+                  value={formData.order_date || ""}
+                  onChange={(e) => setFormData({ ...formData, order_date: e.target.value })}
+                />
+              </div>
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-                <Button type="submit" disabled={createOrder.isPending || !formData.supplier_id || !formData.location_id}>
-                  Create & Add Items
+                <Button type="button" variant="outline" className="h-11" onClick={handleClose}>Cancel</Button>
+                <Button
+                  type="submit"
+                  className="h-11"
+                  disabled={createOrder.isPending || updateOrder.isPending || !formData.supplier_id || !formData.location_id}
+                >
+                  {editingOrder ? "Save changes" : "Create & Add Items"}
                 </Button>
               </div>
             </form>
