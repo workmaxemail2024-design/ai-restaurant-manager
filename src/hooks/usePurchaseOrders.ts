@@ -146,10 +146,35 @@ export function useUpdatePurchaseOrderStatus() {
 
 export function useAddPurchaseOrderItem() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
-    mutationFn: async (item: { purchase_order_id: string; ingredient_id: string; quantity: number; cost_price: number }) => {
-      const { error } = await supabase.from("purchase_order_items").insert(item);
+    mutationFn: async (
+      item: {
+        purchase_order_id: string;
+        ingredient_id: string;
+        quantity: number;
+        cost_price: number;
+        /** Only used for audit logging when a line is added after the order was sent. */
+        order_status?: string;
+      },
+    ) => {
+      const { order_status, ...row } = item;
+      const { error } = await supabase.from("purchase_order_items").insert(row);
       if (error) throw error;
+
+      if (order_status && order_status !== "pending" && currentRestaurant?.id) {
+        await supabase.rpc("log_audit_event", {
+          p_restaurant_id: currentRestaurant.id,
+          p_event_type: "purchase_order_line_add",
+          p_description: "Purchase order line added after order was completed",
+          p_data: {
+            purchase_order_id: row.purchase_order_id,
+            status: order_status,
+            ingredient_id: row.ingredient_id,
+            new_values: { quantity: row.quantity, cost_price: row.cost_price },
+          } as never,
+        });
+      }
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["purchase-order-items", variables.purchase_order_id] });
