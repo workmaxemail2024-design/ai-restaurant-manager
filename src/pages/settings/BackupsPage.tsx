@@ -29,7 +29,7 @@ export default function BackupsPage() {
   return (
     <PageLayout
       title="Backup & Recovery"
-      subtitle="How this restaurant's data is protected and recovered"
+      subtitle="How your restaurant's data is backed up and restored."
     >
       <Alert className="mb-6">
         <Info className="h-4 w-4" />

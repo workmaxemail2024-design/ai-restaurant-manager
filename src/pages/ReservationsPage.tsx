@@ -95,7 +95,7 @@ export default function ReservationsPage() {
   return (
     <PageLayout
       title="Reservations"
-      subtitle="Manage bookings, covers, and table assignments"
+      subtitle="Manage bookings, covers and table assignments."
       action={
         <Button size="sm" onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4 mr-1" /> Add Booking

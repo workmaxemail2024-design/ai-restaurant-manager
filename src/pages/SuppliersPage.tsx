@@ -55,7 +55,7 @@ export default function SuppliersPage() {
   };
 
   return (
-    <PageLayout title="Suppliers" subtitle="Manage suppliers and view procurement analytics">
+    <PageLayout title="Suppliers" subtitle="Manage suppliers and review purchasing, pricing and price history.">
       <Tabs defaultValue="list" className="space-y-4">
         <TabsList>
           <TabsTrigger value="list" className="flex items-center gap-2">

@@ -76,7 +76,7 @@ export default function DocumentsPage() {
   const { data: locations = [] } = useLocations();
 
   return (
-    <PageLayout title="Documents" description="Upload and manage operational documents">
+    <PageLayout title="Documents" description="Store supplier invoices, delivery dockets and other records. Photos uploaded during daily operations are saved here.">
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6">
         <div className="flex-1 min-w-[200px] max-w-xs">

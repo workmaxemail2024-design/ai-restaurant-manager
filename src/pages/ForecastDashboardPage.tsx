@@ -75,7 +75,7 @@ export default function ForecastDashboardPage() {
   return (
     <PageLayout 
       title="Forecast Dashboard" 
-      description="AI-powered predictions for revenue, costs, and demand"
+      description="View AI predictions for revenue, costs and demand."
     >
       <div className="space-y-6">
         {/* Controls */}

@@ -428,7 +428,7 @@ export default function AutomationRulesPage() {
     <RequirePermission resource="automation" action="view">
       <PageLayout 
         title="Automation Rules" 
-        subtitle="Create automated workflows to streamline your operations"
+        subtitle="Create rules that automate routine tasks, such as reordering low-stock items."
       >
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">

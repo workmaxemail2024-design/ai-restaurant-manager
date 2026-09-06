@@ -70,7 +70,7 @@ export default function MultiLocationIntelligencePage() {
   return (
     <PageLayout 
       title="Multi-Location Intelligence" 
-      description="Chain-wide analytics and performance comparison"
+      description="Compare overall performance across your locations."
     >
       <div className="space-y-6">
         {/* Summary Cards */}

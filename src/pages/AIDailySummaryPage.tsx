@@ -110,7 +110,7 @@ export default function AIDailySummaryPage() {
   return (
     <PageLayout
       title="Daily Summary Journal"
-      subtitle="AI-generated manager briefings saved for each day of operations"
+      subtitle="Read the AI briefing saved for each trading day."
     >
       <div className="space-y-4">
         {/* Filters & Actions */}

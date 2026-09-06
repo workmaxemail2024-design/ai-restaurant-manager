@@ -46,7 +46,7 @@ export default function POSSyncLogsPage() {
   return (
     <PageLayout
       title="POS Sync Logs"
-      description="View sync history and validation errors"
+      description="Review the history of POS sync runs and any validation errors."
       action={
         <Button variant="outline" onClick={() => refetch()}>
           <RefreshCw className="h-4 w-4 mr-2" />Refresh

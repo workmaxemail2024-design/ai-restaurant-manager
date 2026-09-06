@@ -112,7 +112,7 @@ export default function AuditLogPage() {
     <RequirePermission resource="settings" action="view">
       <PageLayout 
         title="Audit Log" 
-        subtitle="Track all system activities and changes"
+        subtitle="See a record of changes made in the system."
       >
         {/* Filters */}
         <Card className="mb-6">

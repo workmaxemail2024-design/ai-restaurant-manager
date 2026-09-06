@@ -158,7 +158,7 @@ export default function AISchedulingPage() {
   return (
     <PageLayout
       title="Staff Scheduling Intelligence"
-      description="Plan labour based on historical demand patterns"
+      description="Get suggested staffing levels based on past sales demand."
     >
       <div className="space-y-6">
         {/* Summary Cards */}

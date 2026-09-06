@@ -151,7 +151,7 @@ export default function SystemQAPage() {
   return (
     <PageLayout 
       title="System QA" 
-      subtitle="Verify data flow and scope for testing purposes"
+      subtitle="Internal checks that verify data is flowing correctly for testing."
     >
       <div className="space-y-6">
         {/* Scope Section */}

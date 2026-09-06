@@ -114,7 +114,7 @@ function RoleBuilderContent() {
 
   if (rolesLoading) {
     return (
-      <PageLayout title="Role Builder" subtitle="Manage roles and permissions">
+      <PageLayout title="Role Builder" subtitle="Create roles and control what each team member can see and do.">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -125,7 +125,7 @@ function RoleBuilderContent() {
   return (
     <PageLayout 
       title="Role Builder" 
-      subtitle="Create and manage custom roles with granular permissions"
+      subtitle="Create roles and control what each team member can see and do."
     >
       <Tabs defaultValue="roles" className="space-y-6">
         <TabsList>

@@ -1135,7 +1135,7 @@ export default function ReportsPage() {
   }, []);
 
   return (
-    <PageLayout title="Reports" subtitle="Business performance metrics and daily breakdown">
+    <PageLayout title="Reports" subtitle="Review revenue, costs and profit, and reconcile each trading day.">
       <Tabs defaultValue="daily" className="space-y-6">
         <TabsList>
           <TabsTrigger value="daily" className="gap-2">

@@ -224,7 +224,7 @@ export default function AttendancePage() {
   return (
     <PageLayout
       title="Actual Labour / Attendance"
-      description="Actual hours worked — imported from Captiva POS where available, or reviewed and entered manually after the day"
+      description="Review the hours staff actually worked — imported from your POS where available, or entered manually after the day."
       action={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>

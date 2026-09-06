@@ -205,7 +205,7 @@ export default function DishesPage() {
   const sessionKey = `${selectedLocationId || "all"}`;
 
   return (
-    <PageLayout title="Menu / Dishes" subtitle="Manage your dishes and recipes">
+    <PageLayout title="Menu / Dishes" subtitle="Manage your dishes, recipes and menu schedules.">
       <Tabs defaultValue="dishes" className="space-y-4">
         <div className="flex items-center justify-between">
           <TabsList>

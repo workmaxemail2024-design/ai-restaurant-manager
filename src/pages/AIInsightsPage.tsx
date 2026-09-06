@@ -172,7 +172,7 @@ export default function AIInsightsPage() {
     <RequirePermission resource="ai_features" action="view">
       <PageLayout
         title="AI Insights Dashboard"
-        description="Actionable recommendations across your restaurant operations"
+        description="See alerts and recommendations across your restaurant's operations."
         action={
           <Button onClick={handleRefreshAll} className="gap-2">
             <Zap className="h-4 w-4" />

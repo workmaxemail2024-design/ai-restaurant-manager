@@ -175,7 +175,7 @@ export default function MenuEngineeringPage() {
   return (
     <PageLayout
       title="AI Menu Engineering"
-      description="Analyze menu performance using BCG matrix methodology"
+      description="Classify dishes by popularity and profitability to guide menu decisions."
     >
       <div className="space-y-6">
         {/* Cost coverage — profitability is only as good as recipe coverage */}

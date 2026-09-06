@@ -344,7 +344,7 @@ export default function ProductIntelligencePage() {
   return (
     <PageLayout
       title="Product Intelligence"
-      description="Historical aggregate product totals from POS reports"
+      description="Review total sales by product from your POS history, and flag items that need attention."
       action={<HistoricalCaptivaImportDialog defaultLocationId={locationId ?? undefined} />}
     >
       <Alert className="mb-4">

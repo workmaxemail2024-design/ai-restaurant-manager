@@ -80,7 +80,7 @@ export default function LocationsPage() {
   };
 
   return (
-    <PageLayout title="Locations" subtitle="Manage your restaurant locations">
+    <PageLayout title="Locations" subtitle="Manage your restaurant locations and their operating hours.">
       <div className="flex justify-end mb-4">
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>

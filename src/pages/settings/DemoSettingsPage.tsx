@@ -70,7 +70,7 @@ export default function DemoSettingsPage() {
 
   if (!isAdmin) {
     return (
-      <PageLayout title="Demo Settings" description="Configure demo mode and manage sample data">
+      <PageLayout title="Demo Settings" description="Turn demo mode on or off and manage sample data.">
         <Card>
           <CardContent className="py-12 text-center">
             <AlertTriangle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -85,7 +85,7 @@ export default function DemoSettingsPage() {
   return (
     <PageLayout 
       title="Demo Settings" 
-      description="Configure demo mode and manage sample data for presentations"
+      description="Turn demo mode on or off and manage sample data."
     >
       <div className="space-y-6">
         {/* Demo Mode Toggle */}
