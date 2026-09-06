@@ -290,6 +290,23 @@ export default function PurchaseOrdersPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {selectedOrder && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-muted-foreground">
+                  {canEditPurchaseOrderHeader(selectedOrder)
+                    ? "Draft order — everything can still be changed."
+                    : canEditSelected
+                      ? "Order already sent — line changes are recorded in the audit log."
+                      : "This order is read-only."}
+                </div>
+                {canEditPurchaseOrderHeader(selectedOrder) && (
+                  <Button variant="secondary" className="h-11" onClick={() => handleStartEdit(selectedOrder)}>
+                    <Pencil className="h-4 w-4 mr-1" /> Edit order details
+                  </Button>
+                )}
+              </div>
+            )}
+
             {/* Invoice Section */}
             {selectedOrder && (
               <POInvoiceSection
