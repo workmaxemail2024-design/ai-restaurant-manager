@@ -274,3 +274,151 @@ export function useReceiveDelivery() {
     },
   });
 }
+
+/* ------------------------------------------------------------------ */
+/* Editing: draft (pending) orders fully, completed orders line-level  */
+/* ------------------------------------------------------------------ */
+
+function usePOAudit() {
+  const { currentRestaurant } = useRestaurant();
+  return async (eventType: string, description: string, data: Record<string, unknown>) => {
+    if (!currentRestaurant?.id) return;
+    await supabase.rpc("log_audit_event", {
+      p_restaurant_id: currentRestaurant.id,
+      p_event_type: eventType,
+      p_description: description,
+      p_data: data as never,
+    });
+  };
+}
+
+function usePORefresh() {
+  const queryClient = useQueryClient();
+  return (orderId?: string) => {
+    queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["purchase-order-items", orderId] });
+    queryClient.invalidateQueries({ queryKey: ["purchase-order-items"] });
+    queryClient.invalidateQueries({ queryKey: ["supplier-analytics"] });
+  };
+}
+
+export type PurchaseOrderHeaderUpdate = {
+  supplier_id: string;
+  location_id: string;
+  order_date: string;
+};
+
+/** Update the header of a draft (pending) purchase order. */
+export function useUpdatePurchaseOrder() {
+  const refresh = usePORefresh();
+  const audit = usePOAudit();
+
+  return useMutation({
+    mutationFn: async ({ order, changes }: { order: PurchaseOrder; changes: PurchaseOrderHeaderUpdate }) => {
+      if (!canEditPurchaseOrderHeader(order)) {
+        throw new Error("Only draft (pending) orders can have their supplier, location or date changed.");
+      }
+      const { error } = await supabase
+        .from("purchase_orders")
+        .update({
+          supplier_id: changes.supplier_id,
+          location_id: changes.location_id,
+          order_date: changes.order_date,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", order.id);
+      if (error) throw error;
+
+      await audit("purchase_order_edit", "Purchase order details updated", {
+        purchase_order_id: order.id,
+        status: order.status,
+        old_values: {
+          supplier_id: order.supplier_id,
+          location_id: order.location_id,
+          order_date: order.order_date,
+        },
+        new_values: changes,
+      });
+      return order.id;
+    },
+    onSuccess: (orderId) => {
+      refresh(orderId);
+      toast({ title: "Purchase order updated" });
+    },
+    onError: (error) => {
+      toast({ title: "Error updating purchase order", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+/** Update a single line on an editable order (pending or completed). */
+export function useUpdatePurchaseOrderItem() {
+  const refresh = usePORefresh();
+  const audit = usePOAudit();
+
+  return useMutation({
+    mutationFn: async ({
+      order,
+      item,
+      changes,
+    }: {
+      order: PurchaseOrder;
+      item: PurchaseOrderItem;
+      changes: { quantity: number; cost_price: number };
+    }) => {
+      if (!canEditPurchaseOrder(order)) throw new Error("This order can no longer be edited.");
+      const { error } = await supabase
+        .from("purchase_order_items")
+        .update({ quantity: changes.quantity, cost_price: changes.cost_price })
+        .eq("id", item.id);
+      if (error) throw error;
+
+      await audit("purchase_order_line_edit", "Purchase order line updated", {
+        purchase_order_id: order.id,
+        purchase_order_item_id: item.id,
+        status: order.status,
+        ingredient_id: item.ingredient_id,
+        old_values: { quantity: Number(item.quantity), cost_price: Number(item.cost_price) },
+        new_values: changes,
+      });
+      return order.id;
+    },
+    onSuccess: (orderId) => {
+      refresh(orderId);
+      toast({ title: "Line updated" });
+    },
+    onError: (error) => {
+      toast({ title: "Error updating line", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+/** Remove a line from an editable order (pending or completed). */
+export function useDeletePurchaseOrderItem() {
+  const refresh = usePORefresh();
+  const audit = usePOAudit();
+
+  return useMutation({
+    mutationFn: async ({ order, item }: { order: PurchaseOrder; item: PurchaseOrderItem }) => {
+      if (!canEditPurchaseOrder(order)) throw new Error("This order can no longer be edited.");
+      const { error } = await supabase.from("purchase_order_items").delete().eq("id", item.id);
+      if (error) throw error;
+
+      await audit("purchase_order_line_remove", "Purchase order line removed", {
+        purchase_order_id: order.id,
+        purchase_order_item_id: item.id,
+        status: order.status,
+        ingredient_id: item.ingredient_id,
+        old_values: { quantity: Number(item.quantity), cost_price: Number(item.cost_price) },
+      });
+      return order.id;
+    },
+    onSuccess: (orderId) => {
+      refresh(orderId);
+      toast({ title: "Line removed" });
+    },
+    onError: (error) => {
+      toast({ title: "Error removing line", description: error.message, variant: "destructive" });
+    },
+  });
+}
