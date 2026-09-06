@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { POInvoiceSection } from "@/components/purchase-orders/POInvoiceSection";
 import { ReceiveDeliveryModal } from "@/components/purchase-orders/ReceiveDeliveryModal";
+import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect";
+
 
 export default function PurchaseOrdersPage() {
   const { selectedLocationId } = useLocation();
@@ -220,47 +222,48 @@ export default function PurchaseOrdersPage() {
             )}
 
             {selectedOrder?.status === "pending" && (
-              <form onSubmit={handleAddItem} className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <Label>Ingredient</Label>
-                  <Select value={itemForm.ingredient_id} onValueChange={(v) => {
-                    const ing = ingredients.find(i => i.id === v);
-                    setItemForm({ ...itemForm, ingredient_id: v, cost_price: ing ? Number(ing.default_cost_price) : 0 });
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select ingredient" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ingredients.map((ing) => (
-                        <SelectItem key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <form onSubmit={handleAddItem} className="flex flex-wrap gap-2 items-end">
+                <div className="flex-1 min-w-[220px]">
+                  <Label>Inventory item</Label>
+                  <InventoryItemSelect
+                    value={itemForm.ingredient_id || undefined}
+                    onValueChange={(v) => {
+                      const ing = ingredients.find(i => i.id === v);
+                      setItemForm({ ...itemForm, ingredient_id: v, cost_price: ing ? Number(ing.default_cost_price) : 0 });
+                    }}
+                    placeholder="Select inventory item"
+                    triggerClassName="h-11"
+                  />
                 </div>
-                <div className="w-24">
+                <div className="w-28">
                   <Label>Qty</Label>
                   <Input
+                    className="h-11"
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={itemForm.quantity}
                     onChange={(e) => setItemForm({ ...itemForm, quantity: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
-                <div className="w-24">
+                <div className="w-28">
                   <Label>Price</Label>
                   <Input
+                    className="h-11"
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     value={itemForm.cost_price}
                     onChange={(e) => setItemForm({ ...itemForm, cost_price: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
-                <Button type="submit" disabled={addItem.isPending || !itemForm.ingredient_id}>
+                <Button type="submit" className="h-11" disabled={addItem.isPending || !itemForm.ingredient_id}>
                   Add
                 </Button>
               </form>
+
             )}
             <div className="border border-border rounded-lg divide-y divide-border">
               {orderItems.length === 0 ? (
