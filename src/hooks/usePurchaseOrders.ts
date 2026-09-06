@@ -1,6 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useRestaurant } from "@/contexts/RestaurantContext";
+
+/** Statuses whose orders may still be edited. `received` / `cancelled` are read-only. */
+export const PO_EDITABLE_STATUSES = ["pending", "completed"] as const;
+/** Header (supplier / location / date) may only change while the order is still a draft. */
+export const PO_HEADER_EDITABLE_STATUSES = ["pending"] as const;
+
+export function canEditPurchaseOrder(order: { status: string; received_at?: string | null }) {
+  if (order.received_at) return false;
+  return (PO_EDITABLE_STATUSES as readonly string[]).includes(order.status);
+}
+
+export function canEditPurchaseOrderHeader(order: { status: string; received_at?: string | null }) {
+  if (order.received_at) return false;
+  return (PO_HEADER_EDITABLE_STATUSES as readonly string[]).includes(order.status);
+}
 
 export interface PurchaseOrder {
   id: string;
