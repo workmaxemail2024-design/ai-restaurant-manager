@@ -327,7 +327,7 @@ export default function PurchaseOrdersPage() {
               />
             )}
 
-            {selectedOrder?.status === "pending" && (
+            {canEditSelected && (
               <form onSubmit={handleAddItem} className="flex flex-wrap gap-2 items-end">
                 <div className="flex-1 min-w-[220px]">
                   <Label>Inventory item</Label>
