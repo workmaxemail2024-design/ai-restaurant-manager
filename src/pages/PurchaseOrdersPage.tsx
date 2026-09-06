@@ -6,9 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ChevronRight, Check, Package } from "lucide-react";
+import { Plus, ChevronRight, Check, Package, Pencil, Trash2, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, useReceiveDelivery, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
+import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, useReceiveDelivery, useUpdatePurchaseOrder, useUpdatePurchaseOrderItem, useDeletePurchaseOrderItem, canEditPurchaseOrder, canEditPurchaseOrderHeader, PurchaseOrder, PurchaseOrderItem, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { useLocations } from "@/hooks/useLocations";
