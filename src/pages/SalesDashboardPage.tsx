@@ -113,7 +113,7 @@ export default function SalesDashboardPage() {
 
   if (salesLoading) {
     return (
-      <PageLayout title="Sales Dashboard" description="Real-time sales analytics">
+      <PageLayout title="Sales Dashboard" description="Live view of today0027s sales performance.">
         <div className="grid gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
         </div>
@@ -122,7 +122,7 @@ export default function SalesDashboardPage() {
   }
 
   return (
-    <PageLayout title="Sales Dashboard" description="Real-time sales analytics">
+    <PageLayout title="Sales Dashboard" description="Live view of today0027s sales performance.">
       <div className="space-y-6">
         {/* Period indicator */}
         <div className="text-sm text-muted-foreground">
