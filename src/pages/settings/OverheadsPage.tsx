@@ -190,7 +190,7 @@ function OverheadsContent() {
   return (
     <PageLayout
       title="Overheads"
-      description="Recurring fixed costs used for profit and break-even calculations"
+      description="Record recurring fixed costs like rent and utilities, used in profit calculations."
     >
       <div className="space-y-6">
         <DataWarningBanner locationId={selectedLocationId} filterTypes={["unallocated_overheads"]} />

@@ -111,7 +111,7 @@ export default function NotificationsPage() {
     <RequirePermission resource="dashboard" action="view">
       <PageLayout 
         title="Notifications" 
-        subtitle="Stay updated with system alerts and messages"
+        subtitle="System alerts and messages about your restaurant."
       >
         <div className="flex justify-between items-center mb-6">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as 'all' | 'unread')}>

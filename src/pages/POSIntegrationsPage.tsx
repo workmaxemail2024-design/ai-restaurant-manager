@@ -475,7 +475,7 @@ export default function POSIntegrationsPage() {
   return (
     <PageLayout 
       title="POS Integrations" 
-      description="Connect and manage your Point of Sale systems"
+      description="Connect your POS system so sales flow in automatically."
       action={
         <div className="flex items-center gap-2">
           {showCaptivaImport && (
