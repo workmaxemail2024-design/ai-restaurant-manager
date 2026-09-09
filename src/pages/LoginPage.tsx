@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { ChefHat, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { getRememberMe, setRememberMe } from '@/integrations/supabase/rememberMeStorage';
 
 const authSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -18,6 +20,7 @@ const authSchema = z.object({
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMeState] = useState(() => getRememberMe());
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const navigate = useNavigate();
