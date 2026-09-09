@@ -168,6 +168,19 @@ export default function LoginPage() {
                   Forgot Password?
                 </Link>
               </div>
+              <label
+                htmlFor="remember-me"
+                className="flex items-center gap-3 min-h-11 cursor-pointer select-none"
+              >
+                <Checkbox
+                  id="remember-me"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMeState(checked === true)}
+                  disabled={isLoading}
+                  className="h-5 w-5"
+                />
+                <span className="text-sm text-foreground">Keep me signed in on this device</span>
+              </label>
               <Button onClick={handleSignIn} disabled={isLoading} className="w-full">
                 {isLoading ? (
                   <>
