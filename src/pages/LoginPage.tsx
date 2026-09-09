@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { z } from 'zod';
 import { ChefHat, Loader2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { getRememberMe, setRememberMe } from '@/integrations/supabase/rememberMeStorage';
 
 const authSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -18,6 +20,7 @@ const authSchema = z.object({
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMeState] = useState(() => getRememberMe());
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const navigate = useNavigate();
@@ -44,7 +47,11 @@ export default function LoginPage() {
   const handleSignIn = async () => {
     if (!validate()) return;
     setIsLoading(true);
-    
+
+    // Apply the "Remember me" choice before sign-in so the session token is
+    // written to the correct store (persistent vs session-only).
+    setRememberMe(rememberMe);
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) {
@@ -161,6 +168,19 @@ export default function LoginPage() {
                   Forgot Password?
                 </Link>
               </div>
+              <label
+                htmlFor="remember-me"
+                className="flex items-center gap-3 min-h-11 cursor-pointer select-none"
+              >
+                <Checkbox
+                  id="remember-me"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMeState(checked === true)}
+                  disabled={isLoading}
+                  className="h-5 w-5"
+                />
+                <span className="text-sm text-foreground">Keep me signed in on this device</span>
+              </label>
               <Button onClick={handleSignIn} disabled={isLoading} className="w-full">
                 {isLoading ? (
                   <>
