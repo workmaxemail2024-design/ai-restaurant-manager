@@ -47,7 +47,11 @@ export default function LoginPage() {
   const handleSignIn = async () => {
     if (!validate()) return;
     setIsLoading(true);
-    
+
+    // Apply the "Remember me" choice before sign-in so the session token is
+    // written to the correct store (persistent vs session-only).
+    setRememberMe(rememberMe);
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) {
