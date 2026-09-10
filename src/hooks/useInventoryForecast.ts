@@ -60,7 +60,7 @@ export function useInventoryForecast(locationId?: string | null) {
       const [ingredientsRes, stockRes, usageRes, posDaysRes, recipeRes] = await Promise.all([
         supabase
           .from("ingredients")
-          .select("id, name, unit, reorder_point, par_level, shelf_life_days, item_type, linked_dish_id")
+          .select("id, name, unit, reorder_point, par_level, shelf_life_days, item_type, linked_dish_id, item_group, category")
           .order("name"),
         supabase.from("stock_levels").select("ingredient_id, location_id, quantity"),
         supabase.rpc("get_theoretical_usage", {
