@@ -16,6 +16,7 @@ import { MenuSelector } from "@/components/menus/MenuSelector";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, Dish, DishInsert } from "@/hooks/useDishes";
+import { useDishCostStatuses, DISH_COST_FILTERS, type DishCostFilter } from "@/hooks/useDishCostStatus";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients, calculateBaseCost, getBaseUnit } from "@/hooks/useIngredients";
 import { usePOSMappings, useUpdatePOSMapping, useDeletePOSMapping, useBulkDeletePOSMappings } from "@/hooks/usePOS";
@@ -68,6 +69,7 @@ export default function DishesPage() {
   // Dishes tab filters
   const [dishSearch, setDishSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [costFilter, setCostFilter] = useState<DishCostFilter>("all");
   const [allExpanded, setAllExpanded] = useState(true);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   
@@ -95,19 +97,18 @@ export default function DishesPage() {
     return new Set(menuDishes.map(md => md.dish_id));
   }, [selectedMenuId, menuDishes]);
 
-  // Group dishes by category
-  const { groupedDishes, availableCategories, filteredCount } = useMemo(() => {
-    // Filter dishes first
+  // Dishes matching every filter EXCEPT the costing-status filter.
+  const baseFiltered = useMemo(() => {
     let filtered = dishes;
-    
+
     // Filter by selected menu
     if (menuDishIds) {
       filtered = filtered.filter(d => menuDishIds.has(d.id));
     }
-    
+
     if (dishSearch) {
       const search = dishSearch.toLowerCase();
-      filtered = filtered.filter(d => 
+      filtered = filtered.filter(d =>
         d.name.toLowerCase().includes(search) ||
         (d.category?.toLowerCase() || "").includes(search)
       );
@@ -115,6 +116,17 @@ export default function DishesPage() {
     if (categoryFilter !== "all") {
       filtered = filtered.filter(d => d.category === categoryFilter);
     }
+    return filtered;
+  }, [dishes, dishSearch, categoryFilter, menuDishIds]);
+
+  // Canonical costing status (recipe relationships + calculate_dish_cost output)
+  const { statuses: costStatuses, counts: costCounts } = useDishCostStatuses(baseFiltered);
+
+  // Group dishes by category
+  const { groupedDishes, availableCategories, filteredCount } = useMemo(() => {
+    const filtered = costFilter === "all"
+      ? baseFiltered
+      : baseFiltered.filter(d => costStatuses.get(d.id) === costFilter);
 
     // Get unique categories from all dishes (not filtered)
     const allCategories = [...new Set(dishes.map(d => d.category || "Uncategorized"))];
@@ -142,7 +154,7 @@ export default function DishesPage() {
       availableCategories: allCategories.sort(),
       filteredCount: filtered.length
     };
-  }, [dishes, dishSearch, categoryFilter, menuDishIds]);
+  }, [dishes, baseFiltered, costFilter, costStatuses]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -338,6 +350,21 @@ export default function DishesPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={costFilter} onValueChange={(v) => setCostFilter(v as DishCostFilter)}>
+              <SelectTrigger className="w-[230px]">
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="All dishes" />
+              </SelectTrigger>
+              <SelectContent>
+                {DISH_COST_FILTERS.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {value === "all"
+                      ? `${label} (${baseFiltered.length})`
+                      : `${label} (${costCounts[value]})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant={showArchived ? "default" : "outline"}
               size="sm"
@@ -401,10 +428,10 @@ export default function DishesPage() {
                     ? "No archived dishes."
                     : "No dishes yet. Add your first dish to get started."}
                 </p>
-                {(dishSearch || categoryFilter !== "all") && (
+                {(dishSearch || categoryFilter !== "all" || costFilter !== "all") && (
                   <Button 
                     variant="outline" 
-                    onClick={() => { setDishSearch(""); setCategoryFilter("all"); }}
+                    onClick={() => { setDishSearch(""); setCategoryFilter("all"); setCostFilter("all"); }}
                   >
                     Clear Filters
                   </Button>
