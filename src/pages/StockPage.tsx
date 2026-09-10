@@ -207,73 +207,103 @@ export default function StockPage() {
         </TabsList>
 
         <TabsContent value="levels" className="space-y-4">
-          <div className="flex justify-end">
-            <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-              <DialogTrigger asChild>
-                <Button onClick={() => setIsOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" /> Update Stock
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Update Stock Level</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <Label>Inventory item</Label>
-                    <InventoryItemSelect
-                      value={formData.ingredient_id || undefined}
-                      onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}
-                      placeholder="Select inventory item"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Includes recipe ingredients, direct-sale products and operational consumables.
-                    </p>
-                  </div>
-                  <div>
-                    <Label>Location</Label>
-                    <Select value={formData.location_id} onValueChange={(v) => setFormData({ ...formData, location_id: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {locations.map((loc) => (
-                          <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v)}>
+                <SelectTrigger className="w-full sm:w-[160px] min-h-[44px]">
+                  <SelectValue placeholder="All groups" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All groups</SelectItem>
+                  {INVENTORY_ITEM_GROUPS.map((g) => (
+                    <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v)}>
+                <SelectTrigger className="w-full sm:w-[180px] min-h-[44px]">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {availableCategoryOptions.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={() => setCountOpen(true)} variant="default" className="min-h-[44px]">
+                <ClipboardCheck className="h-4 w-4 mr-2" /> Count Stock
+              </Button>
+              <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => setIsOpen(true)} variant="outline" className="min-h-[44px]">
+                    <Plus className="h-4 w-4 mr-2" /> Update Stock
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Update Stock Level</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                      <Label>Inventory item</Label>
+                      <InventoryItemSelect
+                        value={formData.ingredient_id || undefined}
+                        onValueChange={(v) => setFormData({ ...formData, ingredient_id: v })}
+                        placeholder="Select inventory item"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Includes recipe ingredients, direct-sale products and operational consumables.
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Location</Label>
+                      <Select value={formData.location_id} onValueChange={(v) => setFormData({ ...formData, location_id: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select location" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {locations.map((loc) => (
+                            <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div>
-                    <Label htmlFor="quantity">Quantity</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: parseFloat(e.target.value) || 0 })}
-                      required
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-                    <Button type="submit" disabled={updateStock.isPending}>Update</Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    <div>
+                      <Label htmlFor="quantity">Quantity</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.quantity}
+                        onChange={(e) => setFormData({ ...formData, quantity: parseFloat(e.target.value) || 0 })}
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
+                      <Button type="submit" disabled={updateStock.isPending}>Update</Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-            Physical stock on hand for every inventory item — recipe ingredients, direct-sale products and
-            operational consumables. Imported sales are never deducted from these figures — see
-            Theoretical Usage for consumption derived from recipes and direct-sale mappings. Low and
-            Critical only appear once a reorder point is set on the item.
+            <strong>How stock works here:</strong> Stock on Hand is physical quantity in your kitchen or bar.
+            Count Stock starts a real count session and updates physical quantities. Adjustments & Wastage
+            records manual movements such as waste, spoilage or breakage. Expected Usage is the theoretical
+            consumption calculated from POS sales and recipes — it does not change physical stock.
+            Received deliveries increase Stock on Hand; sales do not.
           </div>
 
           <DataTable
-            data={stockLevels}
+            data={filteredStockLevels}
             columns={columns}
             isLoading={isLoading}
             onEdit={handleEdit}
@@ -288,7 +318,13 @@ export default function StockPage() {
           <TheoreticalUsageReport />
         </TabsContent>
 
+        <TabsContent value="variance">
+          <VarianceReport />
+        </TabsContent>
+
       </Tabs>
+
+      <StockCountDialog open={countOpen} onOpenChange={setCountOpen} locationId={selectedLocationId} />
     </PageLayout>
   );
 }
