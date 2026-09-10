@@ -184,7 +184,7 @@ export default function StockPage() {
   };
 
   return (
-    <PageLayout title="Inventory / Stock" subtitle="Check current stock levels and spot items running low.">
+    <PageLayout title="Inventory / Stock" subtitle="Track physical stock on hand, count sessions, adjustments and expected usage.">
       <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes"]} className="mb-4" />
       <Tabs defaultValue="levels" className="space-y-4">
         <TabsList>
