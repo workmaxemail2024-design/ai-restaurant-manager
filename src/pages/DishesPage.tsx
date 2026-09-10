@@ -428,10 +428,10 @@ export default function DishesPage() {
                     ? "No archived dishes."
                     : "No dishes yet. Add your first dish to get started."}
                 </p>
-                {(dishSearch || categoryFilter !== "all") && (
+                {(dishSearch || categoryFilter !== "all" || costFilter !== "all") && (
                   <Button 
                     variant="outline" 
-                    onClick={() => { setDishSearch(""); setCategoryFilter("all"); }}
+                    onClick={() => { setDishSearch(""); setCategoryFilter("all"); setCostFilter("all"); }}
                   >
                     Clear Filters
                   </Button>
