@@ -540,8 +540,39 @@ export default function IngredientsPage() {
         </Dialog>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <Input
+          placeholder="Search items…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="sm:max-w-xs min-h-[44px]"
+        />
+        <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v)}>
+          <SelectTrigger className="w-full sm:w-[160px] min-h-[44px]">
+            <SelectValue placeholder="All groups" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All groups</SelectItem>
+            {INVENTORY_ITEM_GROUPS.map((g) => (
+              <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v)}>
+          <SelectTrigger className="w-full sm:w-[180px] min-h-[44px]">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {availableCategoryOptions.map((c) => (
+              <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <DataTable
-        data={ingredients}
+        data={filteredIngredients}
         columns={columns}
         isLoading={isLoading}
         onEdit={handleEdit}
