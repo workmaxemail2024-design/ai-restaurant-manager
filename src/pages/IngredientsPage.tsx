@@ -150,6 +150,8 @@ export default function IngredientsPage() {
       unit: formData.unit,
       storage_type: formData.storage_type,
       item_type: formData.item_type,
+      item_group: formData.item_group ?? null,
+      category: formData.category ?? null,
       linked_dish_id: formData.item_type === "direct_sale" ? formData.linked_dish_id ?? null : null,
       supplier_id: formData.supplier_id,
       default_cost_price: formData.use_pack_pricing ? calculatedBaseCost : formData.default_cost_price,
