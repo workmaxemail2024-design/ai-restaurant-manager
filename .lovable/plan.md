@@ -1,82 +1,52 @@
-## Historical Product Report / Product Intelligence
+# Inventory improvements 1–6
 
-Add a separate flow for Captiva yearly / aggregate product reports that gives business intelligence without touching daily sales, dashboard, or reports.
+Reuses the existing inventory items, stock levels and stock-adjustment engine. No new costing or stock maths.
 
-### 1. Database (migration)
+## Schema change required (needs your approval before it runs)
 
-New table `historical_pos_product_summaries`:
-- `id`, `restaurant_id`, `location_id`, `pos_provider` (default `captiva`)
-- `external_item_id`, `item_name`, `department`
-- `period_start`, `period_end`, `period_label`
-- `quantity_sold`, `gross_sales`, `net_sales`, `vat_amount`, `discount_amount`
-- `source_file_name`, `imported_at`, `created_at`, `updated_at`
-- Unique key: `(restaurant_id, location_id, pos_provider, external_item_id, period_start, period_end)` → re-import updates, no duplicates.
-- GRANTs + RLS scoped by `restaurant_id` (owner/manager write, viewers read).
-- Add column `external_pos_items.source` (nullable text) so new rows created from the historical import can be marked `captiva_historical`.
+**1. Two new optional fields on existing inventory items** (`ingredients` table)
+- `item_group` — Food / Beverage / Operational (free of any effect on costing)
+- `category` — Meat, Fish & Seafood, Dairy, Fruit, Vegetables, Dry Goods, Bakery, Frozen, Beer, Wine, Spirits, Soft Drinks, Packaging, Cleaning, Other
 
-Nothing writes into `sales`, `pos_daily_summaries`, or any daily table.
+Both blank on existing items; used only for grouping and filtering.
 
-### 2. Import UI
+**2. A record of genuine physical counts** — so "Last counted" is accurate and never confused with wastage
+- New table `stock_counts`: restaurant, location, count date, scope (all / group / category), status, who submitted, when submitted, notes
+- New table `stock_count_lines`: the count, the inventory item, expected quantity at count time, counted quantity, difference
+- New optional column `count_id` on the existing `stock_adjustments` table, linking a correction back to the count that produced it
 
-New component `HistoricalCaptivaImportDialog.tsx` (separate from `CaptivaXLSImportDialog`):
-- Upload XLS/XLSX, pick sheet, map columns (ID, Name, Department, Qty, Gross, Net, VAT, Discount).
-- User enters `period_label` (e.g. "2026 Full Year"), `period_start`, `period_end`, location.
-- Preview totals and row count.
-- On confirm:
-  - upsert rows into `historical_pos_product_summaries`
-  - upsert into `external_pos_items` for any new `external_item_id` (keep POS id, name, department, `needs_review=true`, `source='captiva_historical'`) — never touches existing mapped items' type/cost.
-- Prominent banner: "Historical aggregate data — does not affect daily dashboard or reports."
+Both new tables get the same access rules as existing stock data: scoped to the restaurant, restricted to locations the user is allowed to see, and blocked on closed days.
 
-### 3. Product Intelligence page
+**3. One extra adjustment reason**
+- The existing adjustment type list gains `count`, so a count correction is distinguishable from wastage / staff meal / breakage / manual correction.
 
-New route `/analytics/product-intelligence` (added to sidebar under Analytics, existing daily Menu Performance stays untouched):
-- Period selector (choose imported period) + location selector.
-- KPI cards: Total gross, total qty, item count, new products, needs review, missing cost.
-- Revenue-by-type breakdown: Food / Alcoholic / Non-alcoholic / Modifiers / Other.
-- Tables: Top by revenue, Top by quantity, Low sellers, New POS products, Products needing review, "Worth costing first" (high revenue AND missing cost).
-- Every card labelled "Historical aggregate data — not daily transaction data".
+Nothing is dropped or renamed. No existing data changes.
 
-### 4. Review workflow (inline on Product Intelligence page)
+## What gets built after the migration
 
-For rows in "Needs review", quick actions using existing `external_pos_items.manual_type` + `manual_drink_type`:
-- Classify: Food dish / Drink / Alcoholic / Non-alcoholic / Modifier / Ingredient-stock / Ignore.
-- "Create/link master dish" — matches by POS id first, then normalised name against existing `dishes`; only creates if no match.
-- "Create stock item / ingredient" — opens ingredient create with prefilled name; only runs on explicit click.
-- "Mark reviewed" clears `needs_review`.
+**Groups and categories**
+- Group + Category selectors added to the existing inventory item form and quick-add dialog
+- Group/Category filters and collapsible grouping on Inventory Items and on Stock on Hand
 
-No auto-creation of dishes or ingredients on import — only on user action.
+**Stock page terminology**
+- Tabs renamed: Stock on Hand / Adjustments & Wastage / Expected Usage / Variance
+- Primary "Count Stock" button
+- Short plain-English note: deliveries add stock, wastage removes stock, POS sales only drive expected usage, counts reconcile reality
 
-### 5. Cost Analysis integration (read-only signal)
+**Count Stock workflow (iPad-first)**
+1. Choose scope: everything, or one group/category, plus location
+2. Enter counted quantity per item on a large-tap list, with current on-hand shown
+3. Review screen listing only the differences
+4. Submit once — creates the count record, and one `count`-type stock adjustment per changed item through the existing correction path, which updates stock levels exactly as today
+- Items left blank are skipped; unchanged items create no adjustment but are still recorded as counted
 
-On the existing Cost Analysis page, add a small "Priority costing (from historical)" panel:
-- Lists dishes/POS items with missing cost, ranked by historical revenue/qty.
-- Purely advisory — does NOT feed margin calculations, averages, or coverage %.
+**Last counted / Count due**
+- "Last counted" date per item, taken only from submitted counts
+- Amber "Count due" badge when older than 7 days or never counted
 
-### 6. Menu Performance mode toggle
+**Variance view (read-only)**
+- Per item: last counted quantity → expected now (last count + deliveries received − expected usage from sales/recipes − adjustments recorded since the count) → current on hand → difference and value
+- Reuses the existing theoretical-usage function, purchase-order receipts and adjustment log; count corrections are excluded from the adjustment side so nothing is double-counted
 
-Small toggle on existing `ChainMenuPerformancePage`: "Daily sales" (default, current behaviour untouched) / "Historical aggregate". Historical mode reads only from `historical_pos_product_summaries` and shows a persistent banner. No mixing.
-
-### 7. Files touched
-
-New:
-- migration
-- `src/hooks/useHistoricalPOS.ts`
-- `src/components/pos/HistoricalCaptivaImportDialog.tsx`
-- `src/pages/ProductIntelligencePage.tsx`
-
-Edited (small, additive):
-- `src/App.tsx` — add route
-- `src/components/dashboard/PermissionFilteredSidebar.tsx` — add nav link
-- `src/pages/POSIntegrationsPage.tsx` — add "Import historical product report" button next to daily import
-- `src/pages/CostAnalysisPage.tsx` — add priority costing panel
-- `src/pages/ChainMenuPerformancePage.tsx` — add mode toggle
-
-### 8. What will NOT change
-
-Daily Captiva XLS import, `sales`, `pos_daily_summaries`, dashboard, Reports page, daily labour/AOV/profit, existing POS mappings, Dishes page core, Ingredients page core, existing missing-cost logic.
-
-### Technical notes
-
-- Column mapping in the historical importer mirrors the daily importer for consistency (ID / Name / Department / Qty / Gross / Net / VAT / Discount).
-- `external_pos_items` upsert uses `onConflict: 'restaurant_id,pos_provider,external_id'` (existing unique index) — will not overwrite `manual_type`, `manual_drink_type`, or existing links.
-- Historical hook keys: `['historical-pos', restaurantId, locationId, periodStart, periodEnd]` per project convention.
+## Rules preserved
+POS sales never touch physical stock; received purchase orders still increase it; wastage/staff meals/spoilage/breakage still reduce it via existing adjustments; closed-day locks, location permissions, RLS and all costing stay unchanged.
