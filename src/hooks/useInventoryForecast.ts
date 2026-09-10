@@ -138,6 +138,8 @@ export function useInventoryForecast(locationId?: string | null) {
           id: ing.id,
           name: ing.name,
           unit: ing.unit,
+          itemGroup: ing.item_group ?? null,
+          category: ing.category ?? null,
           currentStock,
           reorderPoint,
           parLevel,
