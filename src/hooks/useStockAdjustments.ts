@@ -17,7 +17,7 @@ export interface StockAdjustment {
   created_at: string;
   ingredients?: { name: string; unit: string };
   locations?: { name: string };
-  stock_count_lines?: { difference: number }[];
+  stock_counts?: { stock_count_lines?: { difference: number }[] } | null;
 }
 
 export interface StockAdjustmentInsert {
