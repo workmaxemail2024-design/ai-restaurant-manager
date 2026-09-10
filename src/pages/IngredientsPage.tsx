@@ -72,6 +72,37 @@ export default function IngredientsPage() {
     shelf_life_days: null
   });
 
+  const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [search, setSearch] = useState<string>("");
+
+  const filteredIngredients = useMemo(() => {
+    return ingredients.filter((item) => {
+      if (groupFilter !== "all" && item.item_group !== groupFilter) return false;
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (search.trim()) {
+        const term = search.toLowerCase();
+        return (
+          item.name.toLowerCase().includes(term) ||
+          itemTypeLabel(item.item_type).toLowerCase().includes(term) ||
+          categoryLabel(item.category).toLowerCase().includes(term)
+        );
+      }
+      return true;
+    });
+  }, [ingredients, groupFilter, categoryFilter, search]);
+
+  const availableCategoryOptions = useMemo(
+    () => INVENTORY_CATEGORIES.filter((c) => groupFilter === "all" || !c.group || c.group === groupFilter),
+    [groupFilter]
+  );
+
+  useEffect(() => {
+    if (categoryFilter !== "all" && !availableCategoryOptions.some((c) => c.value === categoryFilter)) {
+      setCategoryFilter("all");
+    }
+  }, [availableCategoryOptions, categoryFilter]);
+
   // Calculate base cost from form data for preview
   const calculatedBaseCost = useMemo(() => {
     if (!formData.use_pack_pricing || !formData.pack_size || !formData.cost_per_pack) {
