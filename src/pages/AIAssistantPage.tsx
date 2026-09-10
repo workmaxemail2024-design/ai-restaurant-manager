@@ -32,6 +32,12 @@ const quickPrompts = [
 
 export default function AIAssistantPage() {
   const { currentRestaurant } = useRestaurant();
+  const { selectedLocationId } = useLocation();
+  const { startDate, endDate, presetLabel } = useDateRange();
+  const { data: locations } = useLocations();
+  const scopedLocationName = selectedLocationId
+    ? locations?.find((l) => l.id === selectedLocationId)?.name ?? "Selected location"
+    : "All locations you can access";
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -79,6 +85,9 @@ export default function AIAssistantPage() {
       const response = await supabase.functions.invoke("ai-assistant", {
         body: {
           restaurant_id: currentRestaurant.id,
+          location_id: selectedLocationId ?? null,
+          start_date: startDate,
+          end_date: endDate,
           message: messageText,
           history: messages.slice(-10).map(m => ({
             role: m.role,
