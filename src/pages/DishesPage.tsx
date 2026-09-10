@@ -95,19 +95,18 @@ export default function DishesPage() {
     return new Set(menuDishes.map(md => md.dish_id));
   }, [selectedMenuId, menuDishes]);
 
-  // Group dishes by category
-  const { groupedDishes, availableCategories, filteredCount } = useMemo(() => {
-    // Filter dishes first
+  // Dishes matching every filter EXCEPT the costing-status filter.
+  const baseFiltered = useMemo(() => {
     let filtered = dishes;
-    
+
     // Filter by selected menu
     if (menuDishIds) {
       filtered = filtered.filter(d => menuDishIds.has(d.id));
     }
-    
+
     if (dishSearch) {
       const search = dishSearch.toLowerCase();
-      filtered = filtered.filter(d => 
+      filtered = filtered.filter(d =>
         d.name.toLowerCase().includes(search) ||
         (d.category?.toLowerCase() || "").includes(search)
       );
@@ -115,6 +114,17 @@ export default function DishesPage() {
     if (categoryFilter !== "all") {
       filtered = filtered.filter(d => d.category === categoryFilter);
     }
+    return filtered;
+  }, [dishes, dishSearch, categoryFilter, menuDishIds]);
+
+  // Canonical costing status (recipe relationships + calculate_dish_cost output)
+  const { statuses: costStatuses, counts: costCounts } = useDishCostStatuses(baseFiltered);
+
+  // Group dishes by category
+  const { groupedDishes, availableCategories, filteredCount } = useMemo(() => {
+    const filtered = costFilter === "all"
+      ? baseFiltered
+      : baseFiltered.filter(d => costStatuses.get(d.id) === costFilter);
 
     // Get unique categories from all dishes (not filtered)
     const allCategories = [...new Set(dishes.map(d => d.category || "Uncategorized"))];
@@ -142,7 +152,7 @@ export default function DishesPage() {
       availableCategories: allCategories.sort(),
       filteredCount: filtered.length
     };
-  }, [dishes, dishSearch, categoryFilter, menuDishIds]);
+  }, [dishes, baseFiltered, costFilter, costStatuses]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
