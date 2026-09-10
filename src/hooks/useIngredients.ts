@@ -85,6 +85,8 @@ export interface Ingredient {
   storage_type: StorageType;
   default_cost_price: number;
   item_type: InventoryItemType;
+  item_group: string | null;
+  category: string | null;
   linked_dish_id: string | null;
   purchase_unit: PurchaseUnit | null;
   pack_size: number | null;
@@ -105,6 +107,8 @@ export type IngredientInsert = {
   storage_type: StorageType;
   default_cost_price: number;
   item_type?: InventoryItemType;
+  item_group?: string | null;
+  category?: string | null;
   linked_dish_id?: string | null;
   purchase_unit?: PurchaseUnit | null;
   pack_size?: number | null;
