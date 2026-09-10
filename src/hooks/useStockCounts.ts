@@ -69,25 +69,6 @@ export function useStockCounts(locationId?: string) {
   });
 }
 
-export function useLatestStockCountLines(locationId?: string) {
-  return useQuery({
-    queryKey: ["stock-count-latest-lines", locationId],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_latest_stock_count_lines", {
-        p_location_id: locationId ?? null,
-      });
-      if (error) throw error;
-      return (data ?? []) as {
-        ingredient_id: string;
-        location_id: string;
-        counted_quantity: number;
-        count_date: string;
-        submitted_at: string;
-      }[];
-    },
-    enabled: false, // only enabled when explicitly used by variance view
-  });
-}
 
 export function useCreateStockCount() {
   const queryClient = useQueryClient();
