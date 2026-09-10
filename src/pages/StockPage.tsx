@@ -67,6 +67,12 @@ export default function StockPage() {
     [groupFilter]
   );
 
+  useEffect(() => {
+    if (categoryFilter !== "all" && !availableCategoryOptions.some((c) => c.value === categoryFilter)) {
+      setCategoryFilter("all");
+    }
+  }, [availableCategoryOptions, categoryFilter]);
+
   const filteredStockLevels = useMemo(() => {
     return stockLevels.filter((item) => {
       const ingredient = ingredients.find((i) => i.id === item.ingredient_id);
