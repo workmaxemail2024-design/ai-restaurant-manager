@@ -22,7 +22,11 @@ import {
   calculateBaseCost,
   getBaseUnit,
   INVENTORY_ITEM_TYPES,
+  INVENTORY_ITEM_GROUPS,
+  INVENTORY_CATEGORIES,
   itemTypeLabel,
+  groupLabel,
+  categoryLabel,
   type InventoryItemType
 } from "@/hooks/useIngredients";
 import { useDishes } from "@/hooks/useDishes";
