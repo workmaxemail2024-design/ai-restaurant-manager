@@ -162,7 +162,7 @@ export function useIngredients() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ingredients")
-        .select("*, suppliers(name)")
+        .select("*, item_group, category, suppliers(name)")
         .order("name");
       if (error) throw error;
       return data as Ingredient[];
