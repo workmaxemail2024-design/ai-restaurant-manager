@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { DataTable } from "@/components/common/DataTable";
 import { Button } from "@/components/ui/button";
@@ -7,18 +7,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Package, ClipboardList, Calculator } from "lucide-react";
+import { Plus, Package, ClipboardList, Calculator, Scale, AlertCircle, ClipboardCheck } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { useStockLevels, useUpdateStock, StockLevel } from "@/hooks/useStock";
-import { useIngredients, itemTypeLabel } from "@/hooks/useIngredients";
+import {
+  useIngredients,
+  itemTypeLabel,
+  INVENTORY_ITEM_GROUPS,
+  INVENTORY_CATEGORIES,
+  groupLabel,
+  categoryLabel,
+} from "@/hooks/useIngredients";
+import { useStockCounts } from "@/hooks/useStockCounts";
 import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
 import { TheoreticalUsageReport } from "@/components/inventory/TheoreticalUsageReport";
+import { StockCountDialog } from "@/components/inventory/StockCountDialog";
+import { VarianceReport } from "@/components/inventory/VarianceReport";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 import { getStockStatus } from "@/lib/inventoryStatus";
+import { formatDistanceToNow } from "date-fns";
 
 export default function StockPage() {
   const { selectedLocationId } = useLocation();
