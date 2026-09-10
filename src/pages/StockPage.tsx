@@ -190,15 +190,19 @@ export default function StockPage() {
         <TabsList>
           <TabsTrigger value="levels" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
-            Stock Levels
+            Stock on Hand
           </TabsTrigger>
           <TabsTrigger value="adjustments" className="flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
-            Adjustments
+            Adjustments & Wastage
           </TabsTrigger>
           <TabsTrigger value="usage" className="flex items-center gap-2">
             <Calculator className="h-4 w-4" />
-            Theoretical Usage
+            Expected Usage
+          </TabsTrigger>
+          <TabsTrigger value="variance" className="flex items-center gap-2">
+            <Scale className="h-4 w-4" />
+            Variance
           </TabsTrigger>
         </TabsList>
 
