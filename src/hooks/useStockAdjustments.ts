@@ -36,7 +36,7 @@ export function useStockAdjustments(locationId?: string) {
     queryFn: async () => {
       let query = supabase
         .from("stock_adjustments")
-        .select("*, ingredients(name, unit), locations(name), stock_count_lines(difference)")
+        .select("*, ingredients(name, unit), locations(name), stock_counts!count_id(stock_count_lines(difference))")
         .order("created_at", { ascending: false })
         .limit(200);
 
