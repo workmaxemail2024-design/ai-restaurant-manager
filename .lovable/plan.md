@@ -105,6 +105,25 @@ CREATE TRIGGER trg_guard_stock_counts_closed_day
   BEFORE INSERT OR UPDATE OR DELETE ON public.stock_counts
   FOR EACH ROW EXECUTE FUNCTION public.guard_stock_counts_closed_day();
 
+-- 3d. submitted_by always comes from the signed-in user; submitted_by and submitted_at are immutable
+CREATE OR REPLACE FUNCTION public.lock_stock_count_audit_fields()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.submitted_by := auth.uid();
+    NEW.submitted_at := now();
+  ELSIF TG_OP = 'UPDATE' THEN
+    NEW.submitted_by := OLD.submitted_by;
+    NEW.submitted_at := OLD.submitted_at;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_lock_stock_count_audit_fields
+  BEFORE INSERT OR UPDATE ON public.stock_counts
+  FOR EACH ROW EXECUTE FUNCTION public.lock_stock_count_audit_fields();
+
 -- 4. Stock count lines
 CREATE TABLE public.stock_count_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
