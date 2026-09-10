@@ -97,6 +97,18 @@ export default function IngredientsPage() {
         <Badge variant="outline">{itemTypeLabel(item.item_type)}</Badge>
       )
     },
+    {
+      key: "item_group",
+      header: "Group",
+      render: (item: Ingredient) => (
+        <Badge variant="secondary" className="capitalize">{groupLabel(item.item_group)}</Badge>
+      )
+    },
+    {
+      key: "category",
+      header: "Category",
+      render: (item: Ingredient) => categoryLabel(item.category)
+    },
     { key: "unit", header: "Unit" },
     { 
       key: "storage_type", 
