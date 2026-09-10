@@ -772,10 +772,12 @@ export type Database = {
       }
       ingredients: {
         Row: {
+          category: string | null
           cost_per_pack: number | null
           created_at: string
           default_cost_price: number
           id: string
+          item_group: string | null
           item_type: string
           linked_dish_id: string | null
           name: string
@@ -792,10 +794,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           cost_per_pack?: number | null
           created_at?: string
           default_cost_price?: number
           id?: string
+          item_group?: string | null
           item_type?: string
           linked_dish_id?: string | null
           name: string
@@ -812,10 +816,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           cost_per_pack?: number | null
           created_at?: string
           default_cost_price?: number
           id?: string
+          item_group?: string | null
           item_type?: string
           linked_dish_id?: string | null
           name?: string
@@ -2449,6 +2455,7 @@ export type Database = {
         Row: {
           adjusted_by: string | null
           adjustment_type: string
+          count_id: string | null
           created_at: string
           id: string
           ingredient_id: string
@@ -2460,6 +2467,7 @@ export type Database = {
         Insert: {
           adjusted_by?: string | null
           adjustment_type: string
+          count_id?: string | null
           created_at?: string
           id?: string
           ingredient_id: string
@@ -2471,6 +2479,7 @@ export type Database = {
         Update: {
           adjusted_by?: string | null
           adjustment_type?: string
+          count_id?: string | null
           created_at?: string
           id?: string
           ingredient_id?: string
@@ -2480,6 +2489,13 @@ export type Database = {
           restaurant_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "stock_adjustments_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "stock_counts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stock_adjustments_ingredient_id_fkey"
             columns: ["ingredient_id"]
@@ -2496,6 +2512,131 @@ export type Database = {
           },
           {
             foreignKeyName: "stock_adjustments_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_count_lines: {
+        Row: {
+          count_id: string
+          counted_quantity: number
+          created_at: string
+          difference: number
+          expected_quantity: number
+          id: string
+          ingredient_id: string
+          location_id: string
+          restaurant_id: string
+        }
+        Insert: {
+          count_id: string
+          counted_quantity: number
+          created_at?: string
+          difference?: number
+          expected_quantity?: number
+          id?: string
+          ingredient_id: string
+          location_id: string
+          restaurant_id: string
+        }
+        Update: {
+          count_id?: string
+          counted_quantity?: number
+          created_at?: string
+          difference?: number
+          expected_quantity?: number
+          id?: string
+          ingredient_id?: string
+          location_id?: string
+          restaurant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_count_lines_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "stock_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_lines_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_lines_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_lines_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_counts: {
+        Row: {
+          count_date: string
+          created_at: string
+          id: string
+          location_id: string
+          notes: string | null
+          restaurant_id: string
+          scope_type: string
+          scope_value: string | null
+          status: string
+          submitted_at: string
+          submitted_by: string
+          updated_at: string
+        }
+        Insert: {
+          count_date?: string
+          created_at?: string
+          id?: string
+          location_id: string
+          notes?: string | null
+          restaurant_id: string
+          scope_type?: string
+          scope_value?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string
+          updated_at?: string
+        }
+        Update: {
+          count_date?: string
+          created_at?: string
+          id?: string
+          location_id?: string
+          notes?: string | null
+          restaurant_id?: string
+          scope_type?: string
+          scope_value?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_counts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_counts_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
