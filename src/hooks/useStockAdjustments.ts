@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
-export type AdjustmentType = "waste" | "spoilage" | "theft" | "damage" | "correction" | "other";
+export type AdjustmentType = "waste" | "spoilage" | "theft" | "damage" | "correction" | "other" | "count";
 
 export interface StockAdjustment {
   id: string;
@@ -13,9 +13,11 @@ export interface StockAdjustment {
   quantity: number;
   reason: string | null;
   adjusted_by: string | null;
+  count_id: string | null;
   created_at: string;
   ingredients?: { name: string; unit: string };
   locations?: { name: string };
+  stock_counts?: { stock_count_lines?: { difference: number }[] } | null;
 }
 
 export interface StockAdjustmentInsert {
@@ -25,6 +27,7 @@ export interface StockAdjustmentInsert {
   quantity: number;
   reason?: string;
   adjusted_by?: string;
+  count_id?: string;
 }
 
 export function useStockAdjustments(locationId?: string) {
@@ -33,9 +36,9 @@ export function useStockAdjustments(locationId?: string) {
     queryFn: async () => {
       let query = supabase
         .from("stock_adjustments")
-        .select("*, ingredients(name, unit), locations(name)")
+        .select("*, ingredients(name, unit), locations(name), stock_counts!count_id(stock_count_lines(difference))")
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(200);
 
       if (locationId) {
         query = query.eq("location_id", locationId);
@@ -61,6 +64,10 @@ export function useCreateStockAdjustment() {
         .single();
 
       if (error) throw error;
+
+      // Count adjustments are applied by the stock-count workflow itself; do not
+      // double-update stock levels here.
+      if (adjustment.adjustment_type === "count") return data;
 
       // Also update the stock level (reduce by the adjustment quantity)
       const { data: existingStock } = await supabase

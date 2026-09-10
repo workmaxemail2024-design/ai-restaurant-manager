@@ -8,7 +8,7 @@ export interface StockLevel {
   location_id: string;
   quantity: number;
   updated_at: string;
-  ingredients?: { name: string; unit: string; reorder_point: number | null; par_level: number | null; item_type?: string | null };
+  ingredients?: { name: string; unit: string; reorder_point: number | null; par_level: number | null; item_type?: string | null; item_group: string | null; category: string | null };
   locations?: { name: string };
 }
 
@@ -18,7 +18,7 @@ export function useStockLevels(locationId?: string) {
     queryFn: async () => {
       let query = supabase
         .from("stock_levels")
-        .select("*, ingredients(name, unit, reorder_point, par_level, item_type), locations(name)")
+        .select("*, ingredients(name, unit, reorder_point, par_level, item_type, item_group, category), locations(name)")
         .order("updated_at", { ascending: false });
       
       if (locationId) {

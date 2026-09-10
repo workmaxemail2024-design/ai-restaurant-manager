@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,8 @@ import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import {
   useCreateIngredient,
   INVENTORY_ITEM_TYPES,
+  INVENTORY_ITEM_GROUPS,
+  INVENTORY_CATEGORIES,
   type InventoryItemType,
   type StorageType,
   type UnitType,
@@ -58,9 +60,16 @@ export function QuickAddInventoryItemDialog({
   const [unit, setUnit] = useState<UnitType>("each");
   const [storageType, setStorageType] = useState<StorageType>("dry");
   const [supplierId, setSupplierId] = useState<string>("_none");
+  const [itemGroup, setItemGroup] = useState<string>("food");
+  const [category, setCategory] = useState<string>("other");
   const [reorderPoint, setReorderPoint] = useState<string>("");
   const [parLevel, setParLevel] = useState<string>("");
   const [shelfLife, setShelfLife] = useState<string>("");
+
+  const availableCategories = useMemo(
+    () => INVENTORY_CATEGORIES.filter((c) => !c.group || c.group === itemGroup),
+    [itemGroup]
+  );
 
   useEffect(() => {
     if (open) {
@@ -69,11 +78,19 @@ export function QuickAddInventoryItemDialog({
       setUnit("each");
       setStorageType("dry");
       setSupplierId("_none");
+      setItemGroup("food");
+      setCategory("other");
       setReorderPoint("");
       setParLevel("");
       setShelfLife("");
     }
   }, [open, initialName, fixedItemType]);
+
+  useEffect(() => {
+    if (!availableCategories.some((c) => c.value === category)) {
+      setCategory(availableCategories[0]?.value || "other");
+    }
+  }, [availableCategories, category]);
 
   const typeHelp = INVENTORY_ITEM_TYPES.find((t) => t.value === itemType)?.description;
 
@@ -85,6 +102,8 @@ export function QuickAddInventoryItemDialog({
       unit,
       storage_type: storageType,
       item_type: itemType,
+      item_group: itemGroup,
+      category,
       default_cost_price: 0,
       supplier_id: supplierId === "_none" ? null : supplierId,
       reorder_point: reorderPoint ? parseFloat(reorderPoint) : null,
@@ -136,6 +155,39 @@ export function QuickAddInventoryItemDialog({
               </SelectContent>
             </Select>
             {typeHelp && <p className="text-xs text-muted-foreground mt-1">{typeHelp}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Group</Label>
+              <Select value={itemGroup} onValueChange={(v) => setItemGroup(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVENTORY_ITEM_GROUPS.map((g) => (
+                    <SelectItem key={g.value} value={g.value}>
+                      {g.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Select value={category} onValueChange={(v) => setCategory(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCategories.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

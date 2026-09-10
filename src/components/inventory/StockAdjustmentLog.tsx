@@ -7,20 +7,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, AlertTriangle, Package } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Package, ClipboardCheck } from "lucide-react";
 import { useStockAdjustments, useCreateStockAdjustment, AdjustmentType } from "@/hooks/useStockAdjustments";
 import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { format } from "date-fns";
 
-const ADJUSTMENT_TYPES: { value: AdjustmentType; label: string; color: string }[] = [
+const ADJUSTMENT_TYPES: { value: AdjustmentType; label: string; color: string; isCount?: boolean }[] = [
   { value: "waste", label: "Waste", color: "bg-amber-500" },
   { value: "spoilage", label: "Spoilage", color: "bg-orange-500" },
   { value: "theft", label: "Theft", color: "bg-red-500" },
   { value: "damage", label: "Damage", color: "bg-rose-500" },
   { value: "correction", label: "Correction", color: "bg-blue-500" },
   { value: "other", label: "Other", color: "bg-muted-foreground" },
+  { value: "count", label: "Stock Count", color: "bg-emerald-500", isCount: true },
 ];
 
 export function StockAdjustmentLog() {
@@ -67,6 +68,31 @@ export function StockAdjustmentLog() {
     return ADJUSTMENT_TYPES.find((t) => t.value === type) || ADJUSTMENT_TYPES[5];
   };
 
+  const renderQuantity = (adj: any) => {
+    const typeConfig = getTypeConfig(adj.adjustment_type);
+    const qty = Number(adj.quantity).toFixed(2);
+    const unit = adj.ingredients?.unit ?? "";
+    if (typeConfig.isCount) {
+      // Count adjustments record the absolute correction; the signed difference is shown via +/-.
+      // The sign is reconstructed from the linked stock_count_lines row when available.
+      const lines = adj.stock_counts?.stock_count_lines;
+      const lineDiff = lines?.[0]?.difference;
+      const signed = lineDiff !== undefined ? Number(lineDiff).toFixed(2) : qty;
+      const positive = Number(signed) >= 0;
+      return (
+        <span className="font-mono">
+          {positive ? "+" : ""}
+          {signed} {unit}
+        </span>
+      );
+    }
+    return (
+      <span className="font-mono text-destructive">
+        -{qty} {unit}
+      </span>
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -76,7 +102,7 @@ export function StockAdjustmentLog() {
         </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button size="sm">
+            <Button size="sm" className="min-h-[44px]">
               <Plus className="h-4 w-4 mr-2" /> Log Adjustment
             </Button>
           </DialogTrigger>
@@ -99,7 +125,7 @@ export function StockAdjustmentLog() {
                   value={formData.location_id}
                   onValueChange={(v) => setFormData({ ...formData, location_id: v })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-[44px]">
                     <SelectValue placeholder="Select location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -120,11 +146,11 @@ export function StockAdjustmentLog() {
                     setFormData({ ...formData, adjustment_type: v as AdjustmentType })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-[44px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {ADJUSTMENT_TYPES.map((type) => (
+                    {ADJUSTMENT_TYPES.filter((t) => !t.isCount).map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.label}
                       </SelectItem>
@@ -145,6 +171,7 @@ export function StockAdjustmentLog() {
                     setFormData({ ...formData, quantity: parseFloat(e.target.value) || 0 })
                   }
                   required
+                  className="min-h-[44px]"
                 />
               </div>
 
@@ -166,6 +193,7 @@ export function StockAdjustmentLog() {
                   value={formData.adjusted_by}
                   onChange={(e) => setFormData({ ...formData, adjusted_by: e.target.value })}
                   placeholder="Your name"
+                  className="min-h-[44px]"
                 />
               </div>
 
@@ -183,7 +211,7 @@ export function StockAdjustmentLog() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-8 text-muted-foreground">Loading adjustments...</div>
+        <div className="text-center py-8 text-muted-foreground">Loading adjustments…</div>
       ) : adjustments.length === 0 ? (
         <div className="text-center py-8 text-muted-foreground border rounded-md bg-muted/30">
           <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -198,7 +226,7 @@ export function StockAdjustmentLog() {
                 <TableHead>Ingredient</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead className="text-right">Qty Lost</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead>By</TableHead>
               </TableRow>
@@ -214,13 +242,12 @@ export function StockAdjustmentLog() {
                     <TableCell className="font-medium">{adj.ingredients?.name}</TableCell>
                     <TableCell>{adj.locations?.name}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={typeConfig.color + " text-white"}>
+                      <Badge variant="secondary" className={typeConfig.color + " text-white gap-1"}>
+                        {typeConfig.isCount && <ClipboardCheck className="h-3 w-3" />}
                         {typeConfig.label}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono">
-                      -{Number(adj.quantity).toFixed(2)} {adj.ingredients?.unit}
-                    </TableCell>
+                    <TableCell className="text-right">{renderQuantity(adj)}</TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {adj.reason || "-"}
                     </TableCell>

@@ -16,6 +16,8 @@ export interface ForecastRow {
   id: string;
   name: string;
   unit: string;
+  itemGroup: string | null;
+  category: string | null;
   /** Physical stock on hand (stock_levels only — never reduced by imported sales). */
   currentStock: number;
   reorderPoint: number | null;
@@ -58,7 +60,7 @@ export function useInventoryForecast(locationId?: string | null) {
       const [ingredientsRes, stockRes, usageRes, posDaysRes, recipeRes] = await Promise.all([
         supabase
           .from("ingredients")
-          .select("id, name, unit, reorder_point, par_level, shelf_life_days, item_type, linked_dish_id")
+          .select("id, name, unit, reorder_point, par_level, shelf_life_days, item_type, linked_dish_id, item_group, category")
           .order("name"),
         supabase.from("stock_levels").select("ingredient_id, location_id, quantity"),
         supabase.rpc("get_theoretical_usage", {
@@ -136,6 +138,8 @@ export function useInventoryForecast(locationId?: string | null) {
           id: ing.id,
           name: ing.name,
           unit: ing.unit,
+          itemGroup: ing.item_group ?? null,
+          category: ing.category ?? null,
           currentStock,
           reorderPoint,
           parLevel,

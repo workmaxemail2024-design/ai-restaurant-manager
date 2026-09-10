@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { DataTable } from "@/components/common/DataTable";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,11 @@ import {
   calculateBaseCost,
   getBaseUnit,
   INVENTORY_ITEM_TYPES,
+  INVENTORY_ITEM_GROUPS,
+  INVENTORY_CATEGORIES,
   itemTypeLabel,
+  groupLabel,
+  categoryLabel,
   type InventoryItemType
 } from "@/hooks/useIngredients";
 import { useDishes } from "@/hooks/useDishes";
@@ -53,7 +57,9 @@ export default function IngredientsPage() {
     name: "", 
     unit: "each", 
     storage_type: "dry", 
-    item_type: "recipe_ingredient", 
+    item_type: "recipe_ingredient",
+    item_group: "food",
+    category: "other",
     linked_dish_id: null, 
     default_cost_price: 0,
     use_pack_pricing: false,
@@ -65,6 +71,37 @@ export default function IngredientsPage() {
     par_level: null,
     shelf_life_days: null
   });
+
+  const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [search, setSearch] = useState<string>("");
+
+  const filteredIngredients = useMemo(() => {
+    return ingredients.filter((item) => {
+      if (groupFilter !== "all" && item.item_group !== groupFilter) return false;
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (search.trim()) {
+        const term = search.toLowerCase();
+        return (
+          item.name.toLowerCase().includes(term) ||
+          itemTypeLabel(item.item_type).toLowerCase().includes(term) ||
+          categoryLabel(item.category).toLowerCase().includes(term)
+        );
+      }
+      return true;
+    });
+  }, [ingredients, groupFilter, categoryFilter, search]);
+
+  const availableCategoryOptions = useMemo(
+    () => INVENTORY_CATEGORIES.filter((c) => groupFilter === "all" || !c.group || c.group === groupFilter),
+    [groupFilter]
+  );
+
+  useEffect(() => {
+    if (categoryFilter !== "all" && !availableCategoryOptions.some((c) => c.value === categoryFilter)) {
+      setCategoryFilter("all");
+    }
+  }, [availableCategoryOptions, categoryFilter]);
 
   // Calculate base cost from form data for preview
   const calculatedBaseCost = useMemo(() => {
@@ -90,6 +127,18 @@ export default function IngredientsPage() {
       render: (item: Ingredient) => (
         <Badge variant="outline">{itemTypeLabel(item.item_type)}</Badge>
       )
+    },
+    {
+      key: "item_group",
+      header: "Group",
+      render: (item: Ingredient) => (
+        <Badge variant="secondary" className="capitalize">{groupLabel(item.item_group)}</Badge>
+      )
+    },
+    {
+      key: "category",
+      header: "Category",
+      render: (item: Ingredient) => categoryLabel(item.category)
     },
     { key: "unit", header: "Unit" },
     { 
@@ -132,6 +181,8 @@ export default function IngredientsPage() {
       unit: formData.unit,
       storage_type: formData.storage_type,
       item_type: formData.item_type,
+      item_group: formData.item_group ?? null,
+      category: formData.category ?? null,
       linked_dish_id: formData.item_type === "direct_sale" ? formData.linked_dish_id ?? null : null,
       supplier_id: formData.supplier_id,
       default_cost_price: formData.use_pack_pricing ? calculatedBaseCost : formData.default_cost_price,
@@ -160,6 +211,8 @@ export default function IngredientsPage() {
       unit: item.unit, 
       storage_type: item.storage_type,
       item_type: (item.item_type as InventoryItemType) || "recipe_ingredient",
+      item_group: item.item_group ?? "food",
+      category: item.category ?? "other",
       linked_dish_id: item.linked_dish_id ?? null,
       supplier_id: item.supplier_id,
       default_cost_price: Number(item.default_cost_price),
@@ -182,7 +235,9 @@ export default function IngredientsPage() {
       name: "", 
       unit: "each", 
       storage_type: "dry", 
-      item_type: "recipe_ingredient", 
+      item_type: "recipe_ingredient",
+      item_group: "food",
+      category: "other",
       linked_dish_id: null, 
       default_cost_price: 0,
       use_pack_pricing: false,
@@ -240,6 +295,35 @@ export default function IngredientsPage() {
                 <p className="text-xs text-muted-foreground mt-1">
                   {INVENTORY_ITEM_TYPES.find((t) => t.value === (formData.item_type || "recipe_ingredient"))?.description}
                 </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Group</Label>
+                  <Select value={formData.item_group || "food"} onValueChange={(v) => setFormData({ ...formData, item_group: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INVENTORY_ITEM_GROUPS.map((g) => (
+                        <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Category</Label>
+                  <Select value={formData.category || "other"} onValueChange={(v) => setFormData({ ...formData, category: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INVENTORY_CATEGORIES.filter((c) => !c.group || c.group === formData.item_group).map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {formData.item_type === "direct_sale" && (
@@ -456,8 +540,39 @@ export default function IngredientsPage() {
         </Dialog>
       </div>
 
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <Input
+          placeholder="Search items…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="sm:max-w-xs min-h-[44px]"
+        />
+        <Select value={groupFilter} onValueChange={(v) => setGroupFilter(v)}>
+          <SelectTrigger className="w-full sm:w-[160px] min-h-[44px]">
+            <SelectValue placeholder="All groups" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All groups</SelectItem>
+            {INVENTORY_ITEM_GROUPS.map((g) => (
+              <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v)}>
+          <SelectTrigger className="w-full sm:w-[180px] min-h-[44px]">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {availableCategoryOptions.map((c) => (
+              <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <DataTable
-        data={ingredients}
+        data={filteredIngredients}
         columns={columns}
         isLoading={isLoading}
         onEdit={handleEdit}
