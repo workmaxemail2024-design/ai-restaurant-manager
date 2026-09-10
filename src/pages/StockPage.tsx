@@ -83,6 +83,14 @@ export default function StockPage() {
       render: (item: StockLevel) => item.ingredients?.name || "-"
     },
     {
+      key: "group",
+      header: "Group",
+      render: (item: StockLevel) => (
+        <Badge variant="outline">{groupLabel(item.ingredients?.item_group)}</Badge>
+      ),
+    },
+    { key: "category", header: "Category", render: (item: StockLevel) => categoryLabel(item.ingredients?.category) },
+    {
       key: "item_type",
       header: "Type",
       render: (item: StockLevel) => (
@@ -116,6 +124,25 @@ export default function StockPage() {
           </div>
         );
       }
+    },
+    {
+      key: "last_counted",
+      header: "Last Counted",
+      render: (item: StockLevel) => {
+        const counted = latestCountByIngredient.get(item.ingredient_id);
+        if (!counted) return <span className="text-muted-foreground text-sm">Never</span>;
+        const due = counted.daysAgo > 7;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{formatDistanceToNow(new Date(counted.date), { addSuffix: true })}</span>
+            {due && (
+              <Badge variant="destructive" className="text-xs">
+                Count due
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "reorder_point",
