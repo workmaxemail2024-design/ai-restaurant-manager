@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
+import { useLocations } from "@/hooks/useLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { Send, Bot, User, Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -145,6 +146,12 @@ export default function AIAssistantPage() {
         }
       >
         <div className="flex flex-col h-[calc(100vh-220px)] max-h-[700px]">
+          {/* Active scope */}
+          <div className="mb-3 text-xs text-muted-foreground">
+            Answers cover <span className="text-foreground font-medium">{presetLabel}</span> ({startDate} – {endDate}) ·{" "}
+            <span className="text-foreground font-medium">{scopedLocationName}</span>
+          </div>
+
           {/* Suggested Prompts */}
           <div className="flex gap-2 mb-4 flex-wrap">
             {quickPrompts.map((qp) => (
