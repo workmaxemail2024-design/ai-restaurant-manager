@@ -239,7 +239,13 @@ export default function StockPage() {
               </Select>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setCountOpen(true)} variant="default" className="min-h-[44px]">
+              <Button
+                onClick={() => setCountOpen(true)}
+                variant="default"
+                className="min-h-[44px]"
+                disabled={!selectedLocationId}
+                title={selectedLocationId ? "Start a physical stock count" : "Select a location to count stock"}
+              >
                 <ClipboardCheck className="h-4 w-4 mr-2" /> Count Stock
               </Button>
               <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
