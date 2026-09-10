@@ -75,7 +75,8 @@ export function StockAdjustmentLog() {
     if (typeConfig.isCount) {
       // Count adjustments record the absolute correction; the signed difference is shown via +/-.
       // The sign is reconstructed from the linked stock_count_lines row when available.
-      const lineDiff = adj.stock_count_lines?.[0]?.difference;
+      const lines = adj.stock_counts?.stock_count_lines;
+      const lineDiff = lines?.[0]?.difference;
       const signed = lineDiff !== undefined ? Number(lineDiff).toFixed(2) : qty;
       const positive = Number(signed) >= 0;
       return (
