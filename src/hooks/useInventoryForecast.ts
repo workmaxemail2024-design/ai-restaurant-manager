@@ -16,6 +16,8 @@ export interface ForecastRow {
   id: string;
   name: string;
   unit: string;
+  itemGroup: string | null;
+  category: string | null;
   /** Physical stock on hand (stock_levels only — never reduced by imported sales). */
   currentStock: number;
   reorderPoint: number | null;
