@@ -16,6 +16,7 @@ import { MenuSelector } from "@/components/menus/MenuSelector";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDishes, useCreateDish, useUpdateDish, useDeleteDish, useDishIngredients, useAddDishIngredient, useRemoveDishIngredient, Dish, DishInsert } from "@/hooks/useDishes";
+import { useDishCostStatuses, DISH_COST_FILTERS, type DishCostFilter } from "@/hooks/useDishCostStatus";
 import { useLocations } from "@/hooks/useLocations";
 import { useIngredients, calculateBaseCost, getBaseUnit } from "@/hooks/useIngredients";
 import { usePOSMappings, useUpdatePOSMapping, useDeletePOSMapping, useBulkDeletePOSMappings } from "@/hooks/usePOS";
@@ -68,6 +69,7 @@ export default function DishesPage() {
   // Dishes tab filters
   const [dishSearch, setDishSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [costFilter, setCostFilter] = useState<DishCostFilter>("all");
   const [allExpanded, setAllExpanded] = useState(true);
   const [selectedMenuId, setSelectedMenuId] = useState<string | null>(null);
   
