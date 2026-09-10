@@ -14,6 +14,17 @@ There are currently no adjustment rows in the database.
 2. Count lines get the same closed-day protection as the parent count — insert, edit and delete are all blocked when the trading day is closed.
 3. Count lines no longer trust client-supplied restaurant/location: both are derived from the parent count row before the line is saved, and any mismatch is overwritten with the parent's values.
 4. A stock adjustment may only carry a count reference when its reason is `count`, and "Last counted" is read from submitted count lines only — never from ordinary wastage or corrections.
+5. Who submitted a count is set by the database from the signed-in user, not from client input.
+6. The difference on each count line is calculated by the database as counted − expected; a client-supplied value is ignored.
+
+## Confirmation: counts above and below expected
+
+The existing spot-count path (`useRecordDayStockAdjustment`) already handles both directions correctly and is what the count workflow will reuse:
+
+- It logs an adjustment whose quantity is `current − counted`: positive when the count is below expected (stock lost), negative when the count is above expected (stock found).
+- It then **sets** the stock level to the counted amount rather than subtracting again, so there is no double adjustment in either direction.
+
+One small code fix is needed alongside it: the adjustments list currently flags any adjustment with a quantity of zero or less as invalid, which would wrongly flag a legitimate count-above-expected. Count rows will be shown as "Physical count +/−" instead. No change to the stock update maths itself.
 
 ## Revised SQL
 
