@@ -330,7 +330,7 @@ export default function StockPage() {
 
       </Tabs>
 
-      <StockCountDialog open={countOpen} onOpenChange={setCountOpen} locationId={selectedLocationId} />
+      <StockCountDialog open={countOpen} onOpenChange={setCountOpen} />
     </PageLayout>
   );
 }
