@@ -51,7 +51,7 @@ CREATE TABLE public.stock_counts (
   scope_type text NOT NULL DEFAULT 'all' CHECK (scope_type IN ('all','group','category')),
   scope_value text,
   status text NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted')),
-  submitted_by uuid,
+  submitted_by uuid NOT NULL DEFAULT auth.uid(),
   submitted_at timestamptz NOT NULL DEFAULT now(),
   notes text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -125,7 +125,8 @@ CREATE POLICY "Location scope restrict" ON public.stock_count_lines
   USING (public.user_can_access_location(location_id))
   WITH CHECK (public.user_can_access_location(location_id));
 
--- 4a. Derive restaurant/location from the parent count, never from the client
+-- 4a. Derive restaurant/location from the parent count and the difference from the
+--     counted/expected quantities — never from the client
 CREATE OR REPLACE FUNCTION public.sync_stock_count_line_parent()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE p RECORD;
@@ -137,6 +138,7 @@ BEGIN
   END IF;
   NEW.restaurant_id := p.restaurant_id;
   NEW.location_id := p.location_id;
+  NEW.difference := COALESCE(NEW.counted_quantity, 0) - COALESCE(NEW.expected_quantity, 0);
   RETURN NEW;
 END;
 $$;
