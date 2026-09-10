@@ -14,6 +14,38 @@ export type PurchaseUnit = "each" | "g" | "kg" | "ml" | "L" | "case";
  */
 export type InventoryItemType = "recipe_ingredient" | "direct_sale" | "operational";
 
+export const INVENTORY_ITEM_GROUPS: { value: string; label: string }[] = [
+  { value: "food", label: "Food" },
+  { value: "beverage", label: "Beverage" },
+  { value: "operational", label: "Operational" },
+];
+
+export const INVENTORY_CATEGORIES: { value: string; label: string; group?: string }[] = [
+  { value: "meat", label: "Meat", group: "food" },
+  { value: "fish_seafood", label: "Fish & Seafood", group: "food" },
+  { value: "dairy", label: "Dairy", group: "food" },
+  { value: "fruit", label: "Fruit", group: "food" },
+  { value: "vegetables", label: "Vegetables", group: "food" },
+  { value: "dry_goods", label: "Dry Goods", group: "food" },
+  { value: "bakery", label: "Bakery", group: "food" },
+  { value: "frozen", label: "Frozen", group: "food" },
+  { value: "beer", label: "Beer", group: "beverage" },
+  { value: "wine", label: "Wine", group: "beverage" },
+  { value: "spirits", label: "Spirits", group: "beverage" },
+  { value: "soft_drinks", label: "Soft Drinks", group: "beverage" },
+  { value: "packaging", label: "Packaging", group: "operational" },
+  { value: "cleaning", label: "Cleaning", group: "operational" },
+  { value: "other", label: "Other" },
+];
+
+export function categoryLabel(value?: string | null): string {
+  return INVENTORY_CATEGORIES.find((c) => c.value === value)?.label || "Uncategorised";
+}
+
+export function groupLabel(value?: string | null): string {
+  return INVENTORY_ITEM_GROUPS.find((g) => g.value === value)?.label || "Uncategorised";
+}
+
 export const INVENTORY_ITEM_TYPES: {
   value: InventoryItemType;
   label: string;
