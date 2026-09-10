@@ -46,8 +46,8 @@ export function VarianceReport() {
     return (forecast?.rows || []).map((f) => ({
       id: f.id,
       name: f.name,
-      group: null, // forecast rows do not expose group/category yet
-      category: null,
+      group: f.itemGroup,
+      category: f.category,
       unit: f.unit,
       physicalStock: f.currentStock,
       expectedUsage: f.usageInWindow,
