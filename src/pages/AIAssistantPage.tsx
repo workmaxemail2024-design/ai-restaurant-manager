@@ -7,6 +7,9 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useRestaurant } from "@/contexts/RestaurantContext";
+import { useLocation } from "@/contexts/LocationContext";
+import { useDateRange } from "@/contexts/DateRangeContext";
+import { useLocations } from "@/hooks/useLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { Send, Bot, User, Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,6 +33,12 @@ const quickPrompts = [
 
 export default function AIAssistantPage() {
   const { currentRestaurant } = useRestaurant();
+  const { selectedLocationId } = useLocation();
+  const { startDate, endDate, presetLabel } = useDateRange();
+  const { data: locations } = useLocations();
+  const scopedLocationName = selectedLocationId
+    ? locations?.find((l) => l.id === selectedLocationId)?.name ?? "Selected location"
+    : "All locations you can access";
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -77,6 +86,9 @@ export default function AIAssistantPage() {
       const response = await supabase.functions.invoke("ai-assistant", {
         body: {
           restaurant_id: currentRestaurant.id,
+          location_id: selectedLocationId ?? null,
+          start_date: startDate,
+          end_date: endDate,
           message: messageText,
           history: messages.slice(-10).map(m => ({
             role: m.role,
@@ -134,6 +146,12 @@ export default function AIAssistantPage() {
         }
       >
         <div className="flex flex-col h-[calc(100vh-220px)] max-h-[700px]">
+          {/* Active scope */}
+          <div className="mb-3 text-xs text-muted-foreground">
+            Answers cover <span className="text-foreground font-medium">{presetLabel}</span> ({startDate} – {endDate}) ·{" "}
+            <span className="text-foreground font-medium">{scopedLocationName}</span>
+          </div>
+
           {/* Suggested Prompts */}
           <div className="flex gap-2 mb-4 flex-wrap">
             {quickPrompts.map((qp) => (
