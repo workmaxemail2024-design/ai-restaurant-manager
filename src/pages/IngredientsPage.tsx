@@ -180,6 +180,8 @@ export default function IngredientsPage() {
       unit: item.unit, 
       storage_type: item.storage_type,
       item_type: (item.item_type as InventoryItemType) || "recipe_ingredient",
+      item_group: item.item_group ?? "food",
+      category: item.category ?? "other",
       linked_dish_id: item.linked_dish_id ?? null,
       supplier_id: item.supplier_id,
       default_cost_price: Number(item.default_cost_price),
