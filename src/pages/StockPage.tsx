@@ -36,10 +36,45 @@ export default function StockPage() {
   const { data: stockLevels = [], isLoading } = useStockLevels(selectedLocationId);
   const { data: ingredients = [] } = useIngredients();
   const { data: locations = [] } = useLocations();
+  const { data: stockCounts = [] } = useStockCounts(selectedLocationId);
   const updateStock = useUpdateStock();
-  
+
   const [isOpen, setIsOpen] = useState(false);
+  const [countOpen, setCountOpen] = useState(false);
+  const [groupFilter, setGroupFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [formData, setFormData] = useState({ ingredient_id: "", location_id: "", quantity: 0 });
+
+  const latestCountByIngredient = useMemo(() => {
+    const map = new Map<string, { date: string; daysAgo: number }>();
+    const now = new Date();
+    for (const count of stockCounts) {
+      if (count.status !== "submitted") continue;
+      const countDate = new Date(count.count_date);
+      const daysAgo = Math.floor((now.getTime() - countDate.getTime()) / (1000 * 60 * 60 * 24));
+      for (const line of count.stock_count_lines || []) {
+        const existing = map.get(line.ingredient_id);
+        if (!existing || countDate > new Date(existing.date)) {
+          map.set(line.ingredient_id, { date: count.count_date, daysAgo });
+        }
+      }
+    }
+    return map;
+  }, [stockCounts]);
+
+  const availableCategoryOptions = useMemo(
+    () => INVENTORY_CATEGORIES.filter((c) => groupFilter === "all" || !c.group || c.group === groupFilter),
+    [groupFilter]
+  );
+
+  const filteredStockLevels = useMemo(() => {
+    return stockLevels.filter((item) => {
+      const ingredient = ingredients.find((i) => i.id === item.ingredient_id);
+      if (groupFilter !== "all" && ingredient?.item_group !== groupFilter) return false;
+      if (categoryFilter !== "all" && ingredient?.category !== categoryFilter) return false;
+      return true;
+    });
+  }, [stockLevels, ingredients, groupFilter, categoryFilter]);
 
   const columns = [
     { 
