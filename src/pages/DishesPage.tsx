@@ -350,6 +350,21 @@ export default function DishesPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={costFilter} onValueChange={(v) => setCostFilter(v as DishCostFilter)}>
+              <SelectTrigger className="w-[230px]">
+                <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="All dishes" />
+              </SelectTrigger>
+              <SelectContent>
+                {DISH_COST_FILTERS.map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>
+                    {value === "all"
+                      ? `${label} (${baseFiltered.length})`
+                      : `${label} (${costCounts[value]})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               variant={showArchived ? "default" : "outline"}
               size="sm"
