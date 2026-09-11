@@ -39,12 +39,16 @@ type ParsedRow = {
   net_sales: number;
   vat_amount: number;
   discount_amount: number;
+  sale_date: string | null;
   raw: Record<string, any>;
 };
 
 interface Props {
   trigger?: React.ReactNode;
   defaultLocationId?: string;
+  /** Optional external control (used by Reports "Import POS Data"). */
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
 }
 
 function toNumber(v: any): number {
@@ -53,6 +57,50 @@ function toNumber(v: any): number {
   const s = String(v).replace(/[€$,\s]/g, "").replace(/[()]/g, "-");
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
+}
+
+/** Excel serial / Date / dd-mm-yyyy or yyyy-mm-dd text → yyyy-MM-dd, else null. Never guesses. */
+function toISODate(v: any): string | null {
+  if (v == null || v === "") return null;
+  if (v instanceof Date && !isNaN(v.getTime())) return format(v, "yyyy-MM-dd");
+  if (typeof v === "number" && v > 20000 && v < 80000) {
+    const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+    return isNaN(d.getTime()) ? null : format(d, "yyyy-MM-dd");
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b/);
+  if (m) {
+    const dd = m[1].padStart(2, "0");
+    const mm = m[2].padStart(2, "0");
+    if (Number(mm) > 12) return null;
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  return null;
+}
+
+/** Scan the sheet header block for one date or a date range. Returns [] when nothing reliable. */
+function detectSheetDates(grid: any[][], headerIdx: number): string[] {
+  const found: string[] = [];
+  const limit = headerIdx === -1 ? Math.min(grid.length, 15) : headerIdx;
+  for (let i = 0; i < limit; i++) {
+    for (const cell of grid[i] || []) {
+      if (cell == null) continue;
+      const s = String(cell);
+      const matches = s.match(/\d{1,2}[/.-]\d{1,2}[/.-]\d{4}|\d{4}-\d{2}-\d{2}/g);
+      if (matches) {
+        for (const mm of matches) {
+          const iso = toISODate(mm);
+          if (iso && !found.includes(iso)) found.push(iso);
+        }
+      } else if (cell instanceof Date) {
+        const iso = toISODate(cell);
+        if (iso && !found.includes(iso)) found.push(iso);
+      }
+    }
+  }
+  return found.sort();
 }
 
 /** Aggregate/rollup sheets are never a store and must never be imported as a location. */
@@ -73,8 +121,11 @@ function findHeaderRow(rows: any[][]): number {
   return -1;
 }
 
-export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
-  const [open, setOpen] = useState(false);
+
+export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openProp, onOpenChange }: Props) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (o: boolean) => { onOpenChange ? onOpenChange(o) : setOpenState(o); };
   const { data: locations = [] } = useLocations();
   const { currentRestaurant } = useRestaurant();
   const { toast } = useToast();
@@ -87,6 +138,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const [sheetName, setSheetName] = useState<string>("");
   const [locationId, setLocationId] = useState<string>(defaultLocationId || "");
   const [reportDate, setReportDate] = useState<Date>(new Date());
+  const [dateConfirmed, setDateConfirmed] = useState(false);
   const [mode, setMode] = useState<"stage" | "apply">("stage");
   const [includeInactive, setIncludeInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,15 +163,17 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     setMode("stage"); setIncludeInactive(false);
     setOrderCountInput(""); setVisitorCountInput(""); setAovInput("");
     setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
+    setDateConfirmed(false);
   };
 
 
   const handleFile = useCallback(async (f: File) => {
     setError(null);
     setFile(f);
+    setDateConfirmed(false);
     try {
       const buf = await f.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
       setWorkbook(wb);
       // auto-pick a store sheet: first sheet that isn't All Stores or No Activity
       const preferred = wb.SheetNames.find(
@@ -132,17 +186,21 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   }, []);
 
   const parseSheet = useCallback(
-    (wb: XLSX.WorkBook, name: string): { rows: ParsedRow[]; missing: string[] } | null => {
+    (wb: XLSX.WorkBook, name: string):
+      { rows: ParsedRow[]; missing: string[]; headerDates: string[] } | null => {
       const ws = wb.Sheets[name];
       if (!ws) return null;
       const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
       const headerIdx = findHeaderRow(grid);
-      if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS };
+      const headerDates = detectSheetDates(grid, headerIdx);
+      if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS, headerDates };
       const header = (grid[headerIdx] || []).map((c: any) => String(c ?? "").trim());
       const missing = REQUIRED_COLUMNS.filter((c) => !header.includes(c));
-      if (missing.length) return { rows: [], missing };
+      if (missing.length) return { rows: [], missing, headerDates };
 
       const idx = (n: string) => header.indexOf(n);
+      const dateColIdx = header.findIndex((h) =>
+        /^(date|business date|trading date|sale date)$/i.test(h));
       const cols = {
         name: idx("Name"), id: idx("ID"), dept: idx("Department"),
         qty: idx("Qty"), gross: idx("Gross"), net: idx("Net"),
@@ -169,10 +227,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
           net_sales: toNumber(r[cols.net]),
           vat_amount: toNumber(r[cols.vat]),
           discount_amount: toNumber(r[cols.disc]),
+          sale_date: dateColIdx >= 0 ? toISODate(r[dateColIdx]) : null,
           raw: header.reduce((acc, h, k) => { acc[h] = r[k]; return acc; }, {} as any),
         });
       }
-      return { rows, missing: [] };
+      return { rows, missing: [], headerDates };
     },
     [],
   );
@@ -197,33 +256,66 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       sheet: string;
       rows: ParsedRow[];
       missing: string[];
+      headerDates: string[];
+      rowDates: string[];
       totals: ReturnType<typeof sumRows>;
     }>;
     return workbook.SheetNames
       .filter((n) => !isAggregateSheet(n))
       .filter((n) => (includeInactive ? true : !/no\s*activity/i.test(n)))
       .map((n) => {
-        const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS };
-        return { sheet: n, rows: p.rows, missing: p.missing, totals: sumRows(p.rows) };
+        const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS, headerDates: [] };
+        const rowDates = Array.from(
+          new Set(p.rows.map((r) => r.sale_date).filter(Boolean) as string[])
+        ).sort();
+        return {
+          sheet: n, rows: p.rows, missing: p.missing,
+          headerDates: p.headerDates, rowDates, totals: sumRows(p.rows),
+        };
       });
   }, [workbook, includeInactive, parseSheet]);
 
-  // Auto-map only exact, unambiguous location-name matches. Never guess.
+  /**
+   * Trading-date resolution. Never fabricates a date.
+   *  - row_dates : every row carries its own real date → import each date separately
+   *  - detected  : one date found in the report header → pre-filled, Owner may correct
+   *  - period    : only an aggregated range is known → daily import is refused,
+   *                the upload is routed to historical Product Intelligence storage
+   *  - owner     : nothing reliable in the file → Owner must confirm a trading date
+   */
+  const dateInfo = useMemo(() => {
+    const rowDates = Array.from(new Set(detectedStores.flatMap((s) => s.rowDates))).sort();
+    if (rowDates.length > 1) {
+      return { kind: "row_dates" as const, dates: rowDates, start: rowDates[0], end: rowDates[rowDates.length - 1] };
+    }
+    if (rowDates.length === 1) {
+      return { kind: "detected" as const, dates: rowDates, start: rowDates[0], end: rowDates[0] };
+    }
+    const headerDates = Array.from(new Set(detectedStores.flatMap((s) => s.headerDates))).sort();
+    if (headerDates.length === 1) {
+      return { kind: "detected" as const, dates: headerDates, start: headerDates[0], end: headerDates[0] };
+    }
+    if (headerDates.length > 1) {
+      const start = headerDates[0];
+      const end = headerDates[headerDates.length - 1];
+      if (start === end) return { kind: "detected" as const, dates: [start], start, end };
+      return { kind: "period" as const, dates: headerDates, start, end };
+    }
+    return { kind: "owner" as const, dates: [] as string[], start: null, end: null };
+  }, [detectedStores]);
+
+  // Pre-fill the picker from a detected single date (Owner can still correct it).
   useEffect(() => {
-    if (!detectedStores.length) return;
-    setStoreMappings((prev) => {
-      const next = { ...prev };
-      for (const s of detectedStores) {
-        if (next[s.sheet]) continue;
-        const norm = s.sheet.trim().toLowerCase();
-        const matches = locations.filter((l) => l.name.trim().toLowerCase() === norm);
-        next[s.sheet] = matches.length === 1
-          ? { action: "existing", locationId: matches[0].id }
-          : { action: "unset" };
-      }
-      return next;
-    });
-  }, [detectedStores, locations]);
+    if (dateInfo.kind === "detected" && dateInfo.start) {
+      setReportDate(new Date(`${dateInfo.start}T00:00:00`));
+      setDateConfirmed(true);
+    }
+  }, [dateInfo.kind, dateInfo.start]);
+
+  const classification: "daily" | "multi_day" | "historical" =
+    dateInfo.kind === "row_dates" ? "multi_day"
+    : dateInfo.kind === "period" ? "historical"
+    : "daily";
 
   const importableStores = detectedStores.filter((s) => {
     const m = storeMappings[s.sheet];
@@ -241,7 +333,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
 
   const totals = useMemo(() => sumRows(parsed?.rows || []), [parsed]);
 
-  const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length);
+  const dateReady = classification === "daily" ? dateConfirmed : true;
+  const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length && dateReady);
+
 
   /**
    * Imports ONE store sheet into ONE location using the existing idempotent path.
@@ -252,13 +346,14 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     locationId: string,
     rows: ParsedRow[],
     allowManualSummary: boolean,
+    dateStr: string,
   ) => {
     if (!currentRestaurant) return { products: 0, applied: 0 };
     const parsed = { rows, missing: [] as string[] };
     const totals = sumRows(rows);
     {
-      const dateStr = format(reportDate, "yyyy-MM-dd");
       const provider = "captiva_xls";
+
 
 
       // C5 PRE-CHECK: a closed operating day rejects the whole import BEFORE any
@@ -511,34 +606,127 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     }
   };
 
+  /**
+   * Aggregated period reports have no individual trading dates, so they must NEVER be
+   * posted to a single invented day. They go to the existing historical Product
+   * Intelligence storage instead, keeping daily reporting untouched.
+   */
+  const importHistoricalStore = async (
+    locationId: string,
+    rows: ParsedRow[],
+    periodStart: string,
+    periodEnd: string,
+  ) => {
+    if (!currentRestaurant) return 0;
+    const provider = "captiva";
+    const histRows = rows.map((r) => ({
+      restaurant_id: currentRestaurant.id,
+      location_id: locationId,
+      pos_provider: provider,
+      external_item_id: r.external_item_id,
+      item_name: r.item_name,
+      department: r.department || null,
+      period_start: periodStart,
+      period_end: periodEnd,
+      period_label: `${periodStart} → ${periodEnd}`,
+      quantity_sold: r.quantity,
+      gross_sales: r.gross_sales,
+      net_sales: r.net_sales,
+      vat_amount: r.vat_amount,
+      discount_amount: r.discount_amount,
+      source_file_name: file?.name || null,
+      imported_at: new Date().toISOString(),
+    }));
+    const { error: hErr } = await supabase
+      .from("historical_pos_product_summaries")
+      .upsert(histRows, {
+        onConflict: "restaurant_id,location_id,pos_provider,external_item_id,period_start,period_end",
+      });
+    if (hErr) throw hErr;
+
+    // Keep the POS product catalogue in step without touching manual settings.
+    const { data: existing } = await supabase
+      .from("external_pos_items")
+      .select("external_item_id")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("location_id", locationId)
+      .in("external_item_id", rows.map((r) => r.external_item_id));
+    const known = new Set((existing || []).map((e: any) => e.external_item_id));
+    const newRows = rows.filter((r) => !known.has(r.external_item_id)).map((r) => ({
+      restaurant_id: currentRestaurant.id,
+      location_id: locationId,
+      pos_provider: provider,
+      external_item_id: r.external_item_id,
+      external_item_name: r.item_name,
+      department: r.department || null,
+      needs_review: true,
+      source: "captiva_historical",
+    }));
+    if (newRows.length) {
+      const { error: eErr } = await supabase.from("external_pos_items").insert(newRows);
+      if (eErr) throw eErr;
+    }
+    return histRows.length;
+  };
+
   const handleImport = async () => {
     if (!canImport || !currentRestaurant) return;
     setBusy(true);
     try {
-      const dateStr = format(reportDate, "yyyy-MM-dd");
       const single = importableStores.length === 1;
       let products = 0;
       let applied = 0;
       let lastLocationId = "";
-      for (const store of importableStores) {
-        const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
-        const res = await importStore(store.sheet, locId, store.rows, single);
-        products += res?.products || 0;
-        applied += res?.applied || 0;
-        lastLocationId = locId;
+      let firstDate = "";
+      let lastDate = "";
+
+      if (classification === "historical") {
+        for (const store of importableStores) {
+          const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
+          products += await importHistoricalStore(locId, store.rows, dateInfo.start!, dateInfo.end!);
+          lastLocationId = locId;
+        }
+        firstDate = dateInfo.start!;
+        lastDate = dateInfo.end!;
+      } else {
+        for (const store of importableStores) {
+          const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
+          // Multi-day files import each row under its own real date.
+          const groups = new Map<string, ParsedRow[]>();
+          if (classification === "multi_day") {
+            for (const r of store.rows) {
+              if (!r.sale_date) continue;
+              groups.set(r.sale_date, [...(groups.get(r.sale_date) || []), r]);
+            }
+          } else {
+            groups.set(format(reportDate, "yyyy-MM-dd"), store.rows);
+          }
+          for (const [d, rows] of Array.from(groups.entries()).sort()) {
+            const res = await importStore(store.sheet, locId, rows, single && groups.size === 1, d);
+            products += res?.products || 0;
+            applied += res?.applied || 0;
+            if (!firstDate || d < firstDate) firstDate = d;
+            if (!lastDate || d > lastDate) lastDate = d;
+          }
+          lastLocationId = locId;
+        }
       }
 
       toast({
-        title: mode === "apply" ? "Import applied" : "Import staged",
+        title: classification === "historical"
+          ? "Historical report imported"
+          : mode === "apply" ? "Import applied" : "Import staged",
         description:
           `${importableStores.length} store(s) · ${products} products` +
-          (mode === "apply" ? ` · ${applied} product sale rows posted to dashboard` : "") + ".",
+          (classification === "historical"
+            ? " · stored as historical product data only."
+            : (mode === "apply" ? ` · ${applied} product sale rows posted to dashboard.` : ".")),
       });
 
       // Persist import context so Menu Performance / Dashboard immediately
       // reflect the imported report date + location instead of jumping to today.
       try {
-        setCustomRange(dateStr, dateStr);
+        if (classification !== "historical" && firstDate) setCustomRange(firstDate, lastDate || firstDate);
         if (single && lastLocationId) setSelectedLocationId(lastLocationId);
       } catch { /* non-blocking */ }
 
@@ -552,6 +740,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       setBusy(false);
     }
   };
+
 
 
   return (
@@ -594,6 +783,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
 
           {workbook && (
             <>
+              {/* What kind of upload this is, and what it will update */}
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="text-sm font-medium">
+                  {classification === "daily" && "Daily POS data"}
+                  {classification === "multi_day" && "Multi-day dated POS data"}
+                  {classification === "historical" && "Historical aggregated product data"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {classification === "daily" && "One trading day of product sales for the matched location(s)."}
+                  {classification === "multi_day" && `Rows carry their own dates (${dateInfo.start} → ${dateInfo.end}); each date is imported separately.`}
+                  {classification === "historical" && `Only an aggregated period (${dateInfo.start} → ${dateInfo.end}) is known, so this cannot be posted to a single trading day. It will be stored as historical product data.`}
+                </p>
+                <div className="text-xs">
+                  <span className="text-muted-foreground">This import will update: </span>
+                  {classification === "historical"
+                    ? "Product Intelligence (historical periods only)."
+                    : (mode === "apply"
+                        ? "Dashboard, Reports / daily calendar, Product Intelligence, Menu Performance & Cost Analysis, and theoretical inventory usage for mapped recipes."
+                        : "Staged POS rows and the product catalogue only — nothing reaches the Dashboard or Reports until you choose “Apply to dashboard”.")}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Stores detected in file</Label>
@@ -602,19 +813,43 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                   </div>
                 </div>
                 <div>
-                  <Label>Report date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !reportDate && "text-muted-foreground")}>
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {reportDate ? format(reportDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={reportDate} onSelect={(d) => d && setReportDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
-                    </PopoverContent>
-                  </Popover>
+                  <Label>Trading date</Label>
+                  {classification === "daily" ? (
+                    <>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !reportDate && "text-muted-foreground")}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {reportDate ? format(reportDate, "PPP") : "Pick a date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar mode="single" selected={reportDate} onSelect={(d) => { if (d) { setReportDate(d); setDateConfirmed(true); } }} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        </PopoverContent>
+                      </Popover>
+                      <p className={cn("text-xs mt-1", dateConfirmed ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400")}>
+                        {dateInfo.kind === "detected"
+                          ? "Detected from report — correct it if it is wrong."
+                          : dateConfirmed
+                            ? "Entered by Owner"
+                            : "Date not found in report — please confirm."}
+                      </p>
+                      {!dateConfirmed && (
+                        <Button size="sm" variant="secondary" className="mt-2 h-9" onClick={() => setDateConfirmed(true)}>
+                          Confirm {format(reportDate, "PPP")}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="mt-2 text-sm">
+                      {dateInfo.start} → {dateInfo.end}
+                      <p className="text-xs text-muted-foreground">
+                        {classification === "multi_day" ? "Taken from the rows themselves" : "Aggregated period from the report"}
+                      </p>
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <Label>Preview rows from</Label>
                   <Select value={sheetName} onValueChange={setSheetName}>
@@ -656,6 +891,8 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Store sheet</TableHead>
+                      <TableHead>Trading date</TableHead>
+
                       <TableHead className="text-right">Rows</TableHead>
                       <TableHead className="text-right">Qty</TableHead>
                       <TableHead className="text-right">Gross</TableHead>
@@ -677,7 +914,15 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                               <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
                             )}
                           </TableCell>
+                          <TableCell className="text-xs">
+                            {classification === "daily"
+                              ? (dateConfirmed ? format(reportDate, "yyyy-MM-dd") : "Awaiting confirmation")
+                              : s.rowDates.length > 1
+                                ? `${s.rowDates[0]} → ${s.rowDates[s.rowDates.length - 1]}`
+                                : `${dateInfo.start} → ${dateInfo.end}`}
+                          </TableCell>
                           <TableCell className="text-right">{s.totals.count}</TableCell>
+
                           <TableCell className="text-right">{s.totals.qty}</TableCell>
                           <TableCell className="text-right">{formatCurrency(s.totals.gross)}</TableCell>
                           <TableCell>
@@ -842,7 +1087,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
           <Button variant="outline" onClick={() => { setOpen(false); reset(); }}>Cancel</Button>
           <Button onClick={handleImport} disabled={!canImport || busy}>
             <Upload className="h-4 w-4 mr-2" />
-            {busy ? "Importing…" : mode === "apply" ? "Import & Apply" : "Stage Import"}
+            {busy ? "Importing…" : classification === "historical" ? "Confirm — store as historical" : mode === "apply" ? "Confirm Import & Apply" : "Confirm — Stage Import"}
           </Button>
         </DialogFooter>
       </DialogContent>

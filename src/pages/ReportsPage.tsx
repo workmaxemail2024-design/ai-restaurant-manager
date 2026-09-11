@@ -28,7 +28,10 @@ import {
   X,
   CalendarDays,
   Receipt,
+  Upload,
 } from "lucide-react";
+import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
+
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
 import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
 import { useRestaurant } from "@/contexts/RestaurantContext";
@@ -494,7 +497,18 @@ function DayCard({
                       {liveMissing.missing.includes("SALES") && (
                         <div className="space-y-2">
                           <p className="text-xs text-muted-foreground">No sales data for this day.</p>
+                          <CaptivaXLSImportDialog
+                            trigger={
+                              <Button variant="secondary" size="sm" className="h-8 text-xs gap-1">
+                                <Upload className="h-3 w-3" /> Import POS Data
+                              </Button>
+                            }
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            The trading date comes from the file (or your confirmation) — not from the day you opened here.
+                          </p>
                           <div className="flex flex-wrap gap-2 items-end">
+
                             <Button
                               variant="outline"
                               size="sm"
