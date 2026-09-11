@@ -891,6 +891,8 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                   <TableHeader>
                     <TableRow>
                       <TableHead>Store sheet</TableHead>
+                      <TableHead>Trading date</TableHead>
+
                       <TableHead className="text-right">Rows</TableHead>
                       <TableHead className="text-right">Qty</TableHead>
                       <TableHead className="text-right">Gross</TableHead>
