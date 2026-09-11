@@ -39,12 +39,16 @@ type ParsedRow = {
   net_sales: number;
   vat_amount: number;
   discount_amount: number;
+  sale_date: string | null;
   raw: Record<string, any>;
 };
 
 interface Props {
   trigger?: React.ReactNode;
   defaultLocationId?: string;
+  /** Optional external control (used by Reports "Import POS Data"). */
+  open?: boolean;
+  onOpenChange?: (o: boolean) => void;
 }
 
 function toNumber(v: any): number {
@@ -53,6 +57,50 @@ function toNumber(v: any): number {
   const s = String(v).replace(/[€$,\s]/g, "").replace(/[()]/g, "-");
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
+}
+
+/** Excel serial / Date / dd-mm-yyyy or yyyy-mm-dd text → yyyy-MM-dd, else null. Never guesses. */
+function toISODate(v: any): string | null {
+  if (v == null || v === "") return null;
+  if (v instanceof Date && !isNaN(v.getTime())) return format(v, "yyyy-MM-dd");
+  if (typeof v === "number" && v > 20000 && v < 80000) {
+    const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+    return isNaN(d.getTime()) ? null : format(d, "yyyy-MM-dd");
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/\b(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\b/);
+  if (m) {
+    const dd = m[1].padStart(2, "0");
+    const mm = m[2].padStart(2, "0");
+    if (Number(mm) > 12) return null;
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  return null;
+}
+
+/** Scan the sheet header block for one date or a date range. Returns [] when nothing reliable. */
+function detectSheetDates(grid: any[][], headerIdx: number): string[] {
+  const found: string[] = [];
+  const limit = headerIdx === -1 ? Math.min(grid.length, 15) : headerIdx;
+  for (let i = 0; i < limit; i++) {
+    for (const cell of grid[i] || []) {
+      if (cell == null) continue;
+      const s = String(cell);
+      const matches = s.match(/\d{1,2}[/.-]\d{1,2}[/.-]\d{4}|\d{4}-\d{2}-\d{2}/g);
+      if (matches) {
+        for (const mm of matches) {
+          const iso = toISODate(mm);
+          if (iso && !found.includes(iso)) found.push(iso);
+        }
+      } else if (cell instanceof Date) {
+        const iso = toISODate(cell);
+        if (iso && !found.includes(iso)) found.push(iso);
+      }
+    }
+  }
+  return found.sort();
 }
 
 /** Aggregate/rollup sheets are never a store and must never be imported as a location. */
@@ -72,6 +120,7 @@ function findHeaderRow(rows: any[][]): number {
   }
   return -1;
 }
+
 
 export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const [open, setOpen] = useState(false);
