@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useLocations } from "@/hooks/useLocations";
+import { useLocations, useCreateLocation } from "@/hooks/useLocations";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +55,16 @@ function toNumber(v: any): number {
   return isNaN(n) ? 0 : n;
 }
 
+/** Aggregate/rollup sheets are never a store and must never be imported as a location. */
+function isAggregateSheet(name: string): boolean {
+  return /all\s*stores|summary|totals?$|grand/i.test(name.trim());
+}
+
+type StoreMapping =
+  | { action: "unset" }
+  | { action: "existing"; locationId: string }
+  | { action: "skip" };
+
 function findHeaderRow(rows: any[][]): number {
   for (let i = 0; i < Math.min(rows.length, 30); i++) {
     const row = (rows[i] || []).map((c) => String(c ?? "").trim());
@@ -81,6 +91,10 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [storeMappings, setStoreMappings] = useState<Record<string, StoreMapping>>({});
+  const [newLocationFor, setNewLocationFor] = useState<string | null>(null);
+  const [newLocationName, setNewLocationName] = useState("");
+  const createLocation = useCreateLocation();
 
   // Optional daily summary fields (from Captiva journal, not product XLS rows)
   const [orderCountInput, setOrderCountInput] = useState<string>("");
@@ -96,6 +110,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     setFile(null); setWorkbook(null); setSheetName(""); setError(null);
     setMode("stage"); setIncludeInactive(false);
     setOrderCountInput(""); setVisitorCountInput(""); setAovInput("");
+    setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
   };
 
 
