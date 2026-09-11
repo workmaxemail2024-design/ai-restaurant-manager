@@ -521,7 +521,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       let applied = 0;
       let lastLocationId = "";
       for (const store of importableStores) {
-        const locId = storeMappings[store.sheet]!.locationId!;
+        const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
         const res = await importStore(store.sheet, locId, store.rows, single);
         products += res?.products || 0;
         applied += res?.applied || 0;
@@ -596,13 +596,10 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Restaurant location</Label>
-                  <Select value={locationId} onValueChange={setLocationId}>
-                    <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                    <SelectContent>
-                      {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label>Stores detected in file</Label>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {detectedStores.length} store sheet(s) found. Aggregate sheets are ignored.
+                  </div>
                 </div>
                 <div>
                   <Label>Report date</Label>
@@ -619,7 +616,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                   </Popover>
                 </div>
                 <div>
-                  <Label>Sheet to import</Label>
+                  <Label>Preview rows from</Label>
                   <Select value={sheetName} onValueChange={setSheetName}>
                     <SelectTrigger><SelectValue placeholder="Select sheet" /></SelectTrigger>
                     <SelectContent>
@@ -646,6 +643,110 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                     </div>
                   </RadioGroup>
                 </div>
+              </div>
+
+              <div className="rounded-lg border">
+                <div className="p-3 border-b">
+                  <div className="text-sm font-medium">Stores in this file</div>
+                  <p className="text-xs text-muted-foreground">
+                    Each store must be matched to a restaurant location, or skipped. Nothing is created or guessed automatically.
+                  </p>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Store sheet</TableHead>
+                      <TableHead className="text-right">Rows</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Gross</TableHead>
+                      <TableHead className="min-w-[220px]">Import to</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detectedStores.map((s) => {
+                      const m = storeMappings[s.sheet] || { action: "unset" as const };
+                      const value =
+                        m.action === "existing" ? m.locationId
+                        : m.action === "skip" ? "__skip"
+                        : "";
+                      return (
+                        <TableRow key={s.sheet}>
+                          <TableCell className="font-medium">
+                            {s.sheet}
+                            {s.missing.length > 0 && (
+                              <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">{s.totals.count}</TableCell>
+                          <TableCell className="text-right">{s.totals.qty}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(s.totals.gross)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={value}
+                                onValueChange={(v) => {
+                                  if (v === "__skip") {
+                                    setStoreMappings((prev) => ({ ...prev, [s.sheet]: { action: "skip" } }));
+                                  } else if (v === "__new") {
+                                    setNewLocationFor(s.sheet);
+                                    setNewLocationName(s.sheet);
+                                  } else {
+                                    setStoreMappings((prev) => ({ ...prev, [s.sheet]: { action: "existing", locationId: v } }));
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-11"><SelectValue placeholder="Choose…" /></SelectTrigger>
+                                <SelectContent>
+                                  {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                                  <SelectItem value="__new">+ Add as new location</SelectItem>
+                                  <SelectItem value="__skip">Skip this store</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {newLocationFor === s.sheet && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <Input
+                                  className="h-11"
+                                  value={newLocationName}
+                                  onChange={(e) => setNewLocationName(e.target.value)}
+                                  placeholder="New location name"
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-11"
+                                  disabled={!newLocationName.trim() || createLocation.isPending || !currentRestaurant}
+                                  onClick={async () => {
+                                    if (!currentRestaurant) return;
+                                    const created = await createLocation.mutateAsync({
+                                      name: newLocationName.trim(),
+                                      restaurant_id: currentRestaurant.id,
+                                    } as any);
+                                    setStoreMappings((prev) => ({
+                                      ...prev,
+                                      [s.sheet]: { action: "existing", locationId: created.id },
+                                    }));
+                                    setNewLocationFor(null);
+                                    setNewLocationName("");
+                                  }}
+                                >
+                                  Create
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-11" onClick={() => setNewLocationFor(null)}>
+                                  Cancel
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {unresolvedStores.length > 0 && (
+                  <div className="p-3 border-t text-xs text-amber-600 dark:text-amber-400">
+                    {unresolvedStores.length} store(s) still need a decision before importing.
+                  </div>
+                )}
               </div>
 
               {parsed?.missing.length ? (
@@ -702,6 +803,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                     )}
                   </div>
 
+                  {importableStores.length === 1 && (
                   <div className="rounded-lg border p-3 space-y-2">
                     <div className="text-sm font-medium">Daily summary (optional)</div>
                     <p className="text-xs text-muted-foreground">
@@ -722,7 +824,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                       </div>
                     </div>
                   </div>
-
+                  )}
 
                   <Alert>
                     <CheckCircle2 className="h-4 w-4" />
