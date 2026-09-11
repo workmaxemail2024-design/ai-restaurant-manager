@@ -647,11 +647,17 @@ serve(async (req) => {
       const externalSaleId = identity.id;
       if (identity.canonical) {
         const previous = seenContentIds.get(externalSaleId);
-        if (previous !== undefined && previous !== identity.canonical) {
-          result.failed_rows++;
-          const msg = "Row rejected — two different rows produced the same derived identity.";
-          if (result.errors.length < 10) result.errors.push(msg);
-          rejectedRows.push({ reason: msg, sale_date: mappedSaleDate, total: mappedTotalPrice, raw: saleRecord });
+        if (previous !== undefined) {
+          if (previous !== identity.canonical) {
+            result.failed_rows++;
+            const msg = "Row rejected — two different rows produced the same derived identity.";
+            if (result.errors.length < 10) result.errors.push(msg);
+            rejectedRows.push({ reason: msg, sale_date: mappedSaleDate, total: mappedTotalPrice, raw: saleRecord });
+          } else {
+            // Byte-identical repeat inside the same response: cannot be told apart,
+            // so it is counted once rather than silently overwriting itself.
+            result.skipped_duplicates++;
+          }
           continue;
         }
         seenContentIds.set(externalSaleId, identity.canonical);
