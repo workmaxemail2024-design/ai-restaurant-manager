@@ -782,9 +782,13 @@ export default function POSIntegrationsPage() {
                         )}
 
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Last Sync</span>
+                          <span className="text-muted-foreground">Last successful sync</span>
                           <span>{integration.last_sync_time ? format(new Date(integration.last_sync_time), "MMM d, HH:mm") : "Never"}</span>
                         </div>
+
+                        {integration.pos_provider === "captiva" && (
+                          <CaptivaSyncStatus locationId={integration.location_id} />
+                        )}
                         
                         {integration.pos_provider === "captiva" && stats && (
                           <div className="grid grid-cols-3 gap-2 text-center text-xs">
