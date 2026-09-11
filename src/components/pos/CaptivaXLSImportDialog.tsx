@@ -346,13 +346,14 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     locationId: string,
     rows: ParsedRow[],
     allowManualSummary: boolean,
+    dateStr: string,
   ) => {
     if (!currentRestaurant) return { products: 0, applied: 0 };
     const parsed = { rows, missing: [] as string[] };
     const totals = sumRows(rows);
     {
-      const dateStr = format(reportDate, "yyyy-MM-dd");
       const provider = "captiva_xls";
+
 
 
       // C5 PRE-CHECK: a closed operating day rejects the whole import BEFORE any
