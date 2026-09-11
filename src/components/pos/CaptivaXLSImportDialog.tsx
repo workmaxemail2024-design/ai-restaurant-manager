@@ -783,6 +783,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
 
           {workbook && (
             <>
+              {/* What kind of upload this is, and what it will update */}
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="text-sm font-medium">
+                  {classification === "daily" && "Daily POS data"}
+                  {classification === "multi_day" && "Multi-day dated POS data"}
+                  {classification === "historical" && "Historical aggregated product data"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {classification === "daily" && "One trading day of product sales for the matched location(s)."}
+                  {classification === "multi_day" && `Rows carry their own dates (${dateInfo.start} → ${dateInfo.end}); each date is imported separately.`}
+                  {classification === "historical" && `Only an aggregated period (${dateInfo.start} → ${dateInfo.end}) is known, so this cannot be posted to a single trading day. It will be stored as historical product data.`}
+                </p>
+                <div className="text-xs">
+                  <span className="text-muted-foreground">This import will update: </span>
+                  {classification === "historical"
+                    ? "Product Intelligence (historical periods only)."
+                    : (mode === "apply"
+                        ? "Dashboard, Reports / daily calendar, Product Intelligence, Menu Performance & Cost Analysis, and theoretical inventory usage for mapped recipes."
+                        : "Staged POS rows and the product catalogue only — nothing reaches the Dashboard or Reports until you choose “Apply to dashboard”.")}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Stores detected in file</Label>
@@ -791,19 +813,43 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                   </div>
                 </div>
                 <div>
-                  <Label>Report date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !reportDate && "text-muted-foreground")}>
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {reportDate ? format(reportDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={reportDate} onSelect={(d) => d && setReportDate(d)} initialFocus className={cn("p-3 pointer-events-auto")} />
-                    </PopoverContent>
-                  </Popover>
+                  <Label>Trading date</Label>
+                  {classification === "daily" ? (
+                    <>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !reportDate && "text-muted-foreground")}>
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {reportDate ? format(reportDate, "PPP") : "Pick a date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar mode="single" selected={reportDate} onSelect={(d) => { if (d) { setReportDate(d); setDateConfirmed(true); } }} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        </PopoverContent>
+                      </Popover>
+                      <p className={cn("text-xs mt-1", dateConfirmed ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400")}>
+                        {dateInfo.kind === "detected"
+                          ? "Detected from report — correct it if it is wrong."
+                          : dateConfirmed
+                            ? "Entered by Owner"
+                            : "Date not found in report — please confirm."}
+                      </p>
+                      {!dateConfirmed && (
+                        <Button size="sm" variant="secondary" className="mt-2 h-9" onClick={() => setDateConfirmed(true)}>
+                          Confirm {format(reportDate, "PPP")}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="mt-2 text-sm">
+                      {dateInfo.start} → {dateInfo.end}
+                      <p className="text-xs text-muted-foreground">
+                        {classification === "multi_day" ? "Taken from the rows themselves" : "Aggregated period from the report"}
+                      </p>
+                    </div>
+                  )}
                 </div>
+
                 <div>
                   <Label>Preview rows from</Label>
                   <Select value={sheetName} onValueChange={setSheetName}>
