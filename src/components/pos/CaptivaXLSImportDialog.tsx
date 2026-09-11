@@ -914,7 +914,15 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                               <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
                             )}
                           </TableCell>
+                          <TableCell className="text-xs">
+                            {classification === "daily"
+                              ? (dateConfirmed ? format(reportDate, "yyyy-MM-dd") : "Awaiting confirmation")
+                              : s.rowDates.length > 1
+                                ? `${s.rowDates[0]} → ${s.rowDates[s.rowDates.length - 1]}`
+                                : `${dateInfo.start} → ${dateInfo.end}`}
+                          </TableCell>
                           <TableCell className="text-right">{s.totals.count}</TableCell>
+
                           <TableCell className="text-right">{s.totals.qty}</TableCell>
                           <TableCell className="text-right">{formatCurrency(s.totals.gross)}</TableCell>
                           <TableCell>
