@@ -16,6 +16,7 @@ import {
   Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3,
   Pencil, Info, FileSpreadsheet
 } from "lucide-react";
+import { CaptivaSyncStatus } from "@/components/pos/CaptivaSyncStatus";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
@@ -782,9 +783,13 @@ export default function POSIntegrationsPage() {
                         )}
 
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Last Sync</span>
+                          <span className="text-muted-foreground">Last successful sync</span>
                           <span>{integration.last_sync_time ? format(new Date(integration.last_sync_time), "MMM d, HH:mm") : "Never"}</span>
                         </div>
+
+                        {integration.pos_provider === "captiva" && (
+                          <CaptivaSyncStatus locationId={integration.location_id} />
+                        )}
                         
                         {integration.pos_provider === "captiva" && stats && (
                           <div className="grid grid-cols-3 gap-2 text-center text-xs">

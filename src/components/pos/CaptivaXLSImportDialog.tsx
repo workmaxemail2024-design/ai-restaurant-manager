@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useLocations } from "@/hooks/useLocations";
+import { useLocations, useCreateLocation } from "@/hooks/useLocations";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -55,6 +55,16 @@ function toNumber(v: any): number {
   return isNaN(n) ? 0 : n;
 }
 
+/** Aggregate/rollup sheets are never a store and must never be imported as a location. */
+function isAggregateSheet(name: string): boolean {
+  return /all\s*stores|summary|totals?$|grand/i.test(name.trim());
+}
+
+type StoreMapping =
+  | { action: "unset" }
+  | { action: "existing"; locationId: string }
+  | { action: "skip" };
+
 function findHeaderRow(rows: any[][]): number {
   for (let i = 0; i < Math.min(rows.length, 30); i++) {
     const row = (rows[i] || []).map((c) => String(c ?? "").trim());
@@ -81,6 +91,10 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [storeMappings, setStoreMappings] = useState<Record<string, StoreMapping>>({});
+  const [newLocationFor, setNewLocationFor] = useState<string | null>(null);
+  const [newLocationName, setNewLocationName] = useState("");
+  const createLocation = useCreateLocation();
 
   // Optional daily summary fields (from Captiva journal, not product XLS rows)
   const [orderCountInput, setOrderCountInput] = useState<string>("");
@@ -96,6 +110,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     setFile(null); setWorkbook(null); setSheetName(""); setError(null);
     setMode("stage"); setIncludeInactive(false);
     setOrderCountInput(""); setVisitorCountInput(""); setAovInput("");
+    setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
   };
 
 
@@ -116,54 +131,54 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     }
   }, []);
 
-  const parsed = useMemo<{ rows: ParsedRow[]; missing: string[] } | null>(() => {
-    if (!workbook || !sheetName) return null;
-    const ws = workbook.Sheets[sheetName];
-    if (!ws) return null;
-    const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-    const headerIdx = findHeaderRow(grid);
-    if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS };
-    const header = (grid[headerIdx] || []).map((c: any) => String(c ?? "").trim());
-    const missing = REQUIRED_COLUMNS.filter((c) => !header.includes(c));
-    if (missing.length) return { rows: [], missing };
+  const parseSheet = useCallback(
+    (wb: XLSX.WorkBook, name: string): { rows: ParsedRow[]; missing: string[] } | null => {
+      const ws = wb.Sheets[name];
+      if (!ws) return null;
+      const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      const headerIdx = findHeaderRow(grid);
+      if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS };
+      const header = (grid[headerIdx] || []).map((c: any) => String(c ?? "").trim());
+      const missing = REQUIRED_COLUMNS.filter((c) => !header.includes(c));
+      if (missing.length) return { rows: [], missing };
 
-    const idx = (name: string) => header.indexOf(name);
-    const cols = {
-      name: idx("Name"), id: idx("ID"), dept: idx("Department"),
-      qty: idx("Qty"), gross: idx("Gross"), net: idx("Net"),
-      vat: idx("VAT"), disc: idx("Discounts"), sales: idx("Sales"),
-    };
+      const idx = (n: string) => header.indexOf(n);
+      const cols = {
+        name: idx("Name"), id: idx("ID"), dept: idx("Department"),
+        qty: idx("Qty"), gross: idx("Gross"), net: idx("Net"),
+        vat: idx("VAT"), disc: idx("Discounts"), sales: idx("Sales"),
+      };
 
-    const rows: ParsedRow[] = [];
-    for (let i = headerIdx + 1; i < grid.length; i++) {
-      const r = grid[i];
-      if (!r) continue;
-      const name = String(r[cols.name] ?? "").trim();
-      const id = String(r[cols.id] ?? "").trim();
-      if (!name && !id) continue;
-      // skip total/summary rows
-      if (/^total/i.test(name) || /^grand/i.test(name)) continue;
-      const qty = toNumber(r[cols.qty]);
-      const gross = toNumber(r[cols.gross]);
-      if (!id && !qty && !gross) continue;
-      rows.push({
-        external_item_id: id || `NAME:${name}`,
-        item_name: name,
-        department: String(r[cols.dept] ?? "").trim(),
-        quantity: qty,
-        gross_sales: gross,
-        net_sales: toNumber(r[cols.net]),
-        vat_amount: toNumber(r[cols.vat]),
-        discount_amount: toNumber(r[cols.disc]),
-        raw: header.reduce((acc, h, k) => { acc[h] = r[k]; return acc; }, {} as any),
-      });
-    }
-    return { rows, missing: [] };
-  }, [workbook, sheetName]);
+      const rows: ParsedRow[] = [];
+      for (let i = headerIdx + 1; i < grid.length; i++) {
+        const r = grid[i];
+        if (!r) continue;
+        const nm = String(r[cols.name] ?? "").trim();
+        const id = String(r[cols.id] ?? "").trim();
+        if (!nm && !id) continue;
+        if (/^total/i.test(nm) || /^grand/i.test(nm)) continue;
+        const qty = toNumber(r[cols.qty]);
+        const gross = toNumber(r[cols.gross]);
+        if (!id && !qty && !gross) continue;
+        rows.push({
+          external_item_id: id || `NAME:${nm}`,
+          item_name: nm,
+          department: String(r[cols.dept] ?? "").trim(),
+          quantity: qty,
+          gross_sales: gross,
+          net_sales: toNumber(r[cols.net]),
+          vat_amount: toNumber(r[cols.vat]),
+          discount_amount: toNumber(r[cols.disc]),
+          raw: header.reduce((acc, h, k) => { acc[h] = r[k]; return acc; }, {} as any),
+        });
+      }
+      return { rows, missing: [] };
+    },
+    [],
+  );
 
-  const totals = useMemo(() => {
-    if (!parsed?.rows.length) return { qty: 0, gross: 0, net: 0, vat: 0, disc: 0, count: 0 };
-    return parsed.rows.reduce((a, r) => ({
+  const sumRows = (rows: ParsedRow[]) =>
+    rows.reduce((a, r) => ({
       qty: a.qty + r.quantity,
       gross: a.gross + r.gross_sales,
       net: a.net + r.net_sales,
@@ -171,16 +186,80 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       disc: a.disc + r.discount_amount,
       count: a.count + 1,
     }), { qty: 0, gross: 0, net: 0, vat: 0, disc: 0, count: 0 });
-  }, [parsed]);
 
-  const canImport = !!(currentRestaurant && locationId && parsed?.rows.length && !parsed.missing.length);
+  /**
+   * Every store sheet found in the workbook, with its own parsed rows and totals.
+   * Aggregate sheets ("All Stores"/summary) are never treated as a store, and
+   * "No Activity" sheets are excluded unless explicitly allowed.
+   */
+  const detectedStores = useMemo(() => {
+    if (!workbook) return [] as Array<{
+      sheet: string;
+      rows: ParsedRow[];
+      missing: string[];
+      totals: ReturnType<typeof sumRows>;
+    }>;
+    return workbook.SheetNames
+      .filter((n) => !isAggregateSheet(n))
+      .filter((n) => (includeInactive ? true : !/no\s*activity/i.test(n)))
+      .map((n) => {
+        const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS };
+        return { sheet: n, rows: p.rows, missing: p.missing, totals: sumRows(p.rows) };
+      });
+  }, [workbook, includeInactive, parseSheet]);
 
-  const handleImport = async () => {
-    if (!canImport || !parsed || !currentRestaurant) return;
-    setBusy(true);
-    try {
+  // Auto-map only exact, unambiguous location-name matches. Never guess.
+  useEffect(() => {
+    if (!detectedStores.length) return;
+    setStoreMappings((prev) => {
+      const next = { ...prev };
+      for (const s of detectedStores) {
+        if (next[s.sheet]) continue;
+        const norm = s.sheet.trim().toLowerCase();
+        const matches = locations.filter((l) => l.name.trim().toLowerCase() === norm);
+        next[s.sheet] = matches.length === 1
+          ? { action: "existing", locationId: matches[0].id }
+          : { action: "unset" };
+      }
+      return next;
+    });
+  }, [detectedStores, locations]);
+
+  const importableStores = detectedStores.filter((s) => {
+    const m = storeMappings[s.sheet];
+    return m && m.action === "existing" && m.locationId && s.rows.length > 0 && !s.missing.length;
+  });
+  const unresolvedStores = detectedStores.filter((s) => {
+    const m = storeMappings[s.sheet];
+    return !m || m.action === "unset";
+  });
+
+  const parsed = useMemo(() => {
+    if (!workbook || !sheetName) return null;
+    return parseSheet(workbook, sheetName);
+  }, [workbook, sheetName, parseSheet]);
+
+  const totals = useMemo(() => sumRows(parsed?.rows || []), [parsed]);
+
+  const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length);
+
+  /**
+   * Imports ONE store sheet into ONE location using the existing idempotent path.
+   * Called once per confirmed store mapping.
+   */
+  const importStore = async (
+    sheetName: string,
+    locationId: string,
+    rows: ParsedRow[],
+    allowManualSummary: boolean,
+  ) => {
+    if (!currentRestaurant) return { products: 0, applied: 0 };
+    const parsed = { rows, missing: [] as string[] };
+    const totals = sumRows(rows);
+    {
       const dateStr = format(reportDate, "yyyy-MM-dd");
       const provider = "captiva_xls";
+
 
       // C5 PRE-CHECK: a closed operating day rejects the whole import BEFORE any
       // delete/upsert runs, so a rejected import leaves the data untouched.
@@ -395,10 +474,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       }
 
 
-      // 5) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs)
-      const parsedOrders = orderCountInput.trim() ? parseInt(orderCountInput, 10) : null;
-      const parsedVisitors = visitorCountInput.trim() ? parseInt(visitorCountInput, 10) : null;
-      let parsedAOV: number | null = aovInput.trim() ? Number(aovInput.replace(",", ".")) : null;
+      // 5) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs,
+      //    only meaningful when a single store is being imported)
+      const parsedOrders = allowManualSummary && orderCountInput.trim() ? parseInt(orderCountInput, 10) : null;
+      const parsedVisitors = allowManualSummary && visitorCountInput.trim() ? parseInt(visitorCountInput, 10) : null;
+      let parsedAOV: number | null = allowManualSummary && aovInput.trim() ? Number(aovInput.replace(",", ".")) : null;
       if (parsedAOV == null && parsedOrders && parsedOrders > 0) {
         parsedAOV = Number((totals.gross / parsedOrders).toFixed(2));
       }
@@ -427,22 +507,39 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       });
       if (sumErr) throw sumErr;
 
+      return { products: importRows.length, applied: appliedCount };
+    }
+  };
+
+  const handleImport = async () => {
+    if (!canImport || !currentRestaurant) return;
+    setBusy(true);
+    try {
+      const dateStr = format(reportDate, "yyyy-MM-dd");
+      const single = importableStores.length === 1;
+      let products = 0;
+      let applied = 0;
+      let lastLocationId = "";
+      for (const store of importableStores) {
+        const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
+        const res = await importStore(store.sheet, locId, store.rows, single);
+        products += res?.products || 0;
+        applied += res?.applied || 0;
+        lastLocationId = locId;
+      }
+
       toast({
         title: mode === "apply" ? "Import applied" : "Import staged",
         description:
-          `${importRows.length} products · ${catalogueRows.length} POS items catalogued` +
-          (mode === "apply" ? ` · ${appliedCount} product sale rows posted to dashboard` : "") +
-          `. Gross ${formatCurrency(totals.gross)}, Net ${formatCurrency(totals.net)}, VAT ${formatCurrency(totals.vat)}, Qty ${totals.qty}` +
-          (parsedOrders != null ? `, Orders ${parsedOrders}` : "") + `.`,
+          `${importableStores.length} store(s) · ${products} products` +
+          (mode === "apply" ? ` · ${applied} product sale rows posted to dashboard` : "") + ".",
       });
-
-
 
       // Persist import context so Menu Performance / Dashboard immediately
       // reflect the imported report date + location instead of jumping to today.
       try {
         setCustomRange(dateStr, dateStr);
-        if (locationId) setSelectedLocationId(locationId);
+        if (single && lastLocationId) setSelectedLocationId(lastLocationId);
       } catch { /* non-blocking */ }
 
       queryClient.invalidateQueries();
@@ -499,13 +596,10 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Restaurant location</Label>
-                  <Select value={locationId} onValueChange={setLocationId}>
-                    <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                    <SelectContent>
-                      {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <Label>Stores detected in file</Label>
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    {detectedStores.length} store sheet(s) found. Aggregate sheets are ignored.
+                  </div>
                 </div>
                 <div>
                   <Label>Report date</Label>
@@ -522,7 +616,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                   </Popover>
                 </div>
                 <div>
-                  <Label>Sheet to import</Label>
+                  <Label>Preview rows from</Label>
                   <Select value={sheetName} onValueChange={setSheetName}>
                     <SelectTrigger><SelectValue placeholder="Select sheet" /></SelectTrigger>
                     <SelectContent>
@@ -549,6 +643,110 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                     </div>
                   </RadioGroup>
                 </div>
+              </div>
+
+              <div className="rounded-lg border">
+                <div className="p-3 border-b">
+                  <div className="text-sm font-medium">Stores in this file</div>
+                  <p className="text-xs text-muted-foreground">
+                    Each store must be matched to a restaurant location, or skipped. Nothing is created or guessed automatically.
+                  </p>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Store sheet</TableHead>
+                      <TableHead className="text-right">Rows</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Gross</TableHead>
+                      <TableHead className="min-w-[220px]">Import to</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detectedStores.map((s) => {
+                      const m = storeMappings[s.sheet] || { action: "unset" as const };
+                      const value =
+                        m.action === "existing" ? m.locationId
+                        : m.action === "skip" ? "__skip"
+                        : "";
+                      return (
+                        <TableRow key={s.sheet}>
+                          <TableCell className="font-medium">
+                            {s.sheet}
+                            {s.missing.length > 0 && (
+                              <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">{s.totals.count}</TableCell>
+                          <TableCell className="text-right">{s.totals.qty}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(s.totals.gross)}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={value}
+                                onValueChange={(v) => {
+                                  if (v === "__skip") {
+                                    setStoreMappings((prev) => ({ ...prev, [s.sheet]: { action: "skip" } }));
+                                  } else if (v === "__new") {
+                                    setNewLocationFor(s.sheet);
+                                    setNewLocationName(s.sheet);
+                                  } else {
+                                    setStoreMappings((prev) => ({ ...prev, [s.sheet]: { action: "existing", locationId: v } }));
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-11"><SelectValue placeholder="Choose…" /></SelectTrigger>
+                                <SelectContent>
+                                  {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                                  <SelectItem value="__new">+ Add as new location</SelectItem>
+                                  <SelectItem value="__skip">Skip this store</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {newLocationFor === s.sheet && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <Input
+                                  className="h-11"
+                                  value={newLocationName}
+                                  onChange={(e) => setNewLocationName(e.target.value)}
+                                  placeholder="New location name"
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-11"
+                                  disabled={!newLocationName.trim() || createLocation.isPending || !currentRestaurant}
+                                  onClick={async () => {
+                                    if (!currentRestaurant) return;
+                                    const created = await createLocation.mutateAsync({
+                                      name: newLocationName.trim(),
+                                      restaurant_id: currentRestaurant.id,
+                                    } as any);
+                                    setStoreMappings((prev) => ({
+                                      ...prev,
+                                      [s.sheet]: { action: "existing", locationId: created.id },
+                                    }));
+                                    setNewLocationFor(null);
+                                    setNewLocationName("");
+                                  }}
+                                >
+                                  Create
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-11" onClick={() => setNewLocationFor(null)}>
+                                  Cancel
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {unresolvedStores.length > 0 && (
+                  <div className="p-3 border-t text-xs text-amber-600 dark:text-amber-400">
+                    {unresolvedStores.length} store(s) still need a decision before importing.
+                  </div>
+                )}
               </div>
 
               {parsed?.missing.length ? (
@@ -605,6 +803,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                     )}
                   </div>
 
+                  {importableStores.length === 1 && (
                   <div className="rounded-lg border p-3 space-y-2">
                     <div className="text-sm font-medium">Daily summary (optional)</div>
                     <p className="text-xs text-muted-foreground">
@@ -625,7 +824,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
                       </div>
                     </div>
                   </div>
-
+                  )}
 
                   <Alert>
                     <CheckCircle2 className="h-4 w-4" />
