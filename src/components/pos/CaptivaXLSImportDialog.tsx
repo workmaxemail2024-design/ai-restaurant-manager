@@ -228,12 +228,23 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
 
   const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length);
 
-  const handleImport = async () => {
-    if (!canImport || !parsed || !currentRestaurant) return;
-    setBusy(true);
-    try {
+  /**
+   * Imports ONE store sheet into ONE location using the existing idempotent path.
+   * Called once per confirmed store mapping.
+   */
+  const importStore = async (
+    sheetName: string,
+    locationId: string,
+    rows: ParsedRow[],
+    allowManualSummary: boolean,
+  ) => {
+    if (!currentRestaurant) return { products: 0, applied: 0 };
+    const parsed = { rows, missing: [] as string[] };
+    const totals = sumRows(rows);
+    {
       const dateStr = format(reportDate, "yyyy-MM-dd");
       const provider = "captiva_xls";
+
 
       // C5 PRE-CHECK: a closed operating day rejects the whole import BEFORE any
       // delete/upsert runs, so a rejected import leaves the data untouched.
