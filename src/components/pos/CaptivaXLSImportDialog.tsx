@@ -122,8 +122,10 @@ function findHeaderRow(rows: any[][]): number {
 }
 
 
-export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
-  const [open, setOpen] = useState(false);
+export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openProp, onOpenChange }: Props) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (o: boolean) => { onOpenChange ? onOpenChange(o) : setOpenState(o); };
   const { data: locations = [] } = useLocations();
   const { currentRestaurant } = useRestaurant();
   const { toast } = useToast();
@@ -136,6 +138,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   const [sheetName, setSheetName] = useState<string>("");
   const [locationId, setLocationId] = useState<string>(defaultLocationId || "");
   const [reportDate, setReportDate] = useState<Date>(new Date());
+  const [dateConfirmed, setDateConfirmed] = useState(false);
   const [mode, setMode] = useState<"stage" | "apply">("stage");
   const [includeInactive, setIncludeInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,15 +163,17 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     setMode("stage"); setIncludeInactive(false);
     setOrderCountInput(""); setVisitorCountInput(""); setAovInput("");
     setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
+    setDateConfirmed(false);
   };
 
 
   const handleFile = useCallback(async (f: File) => {
     setError(null);
     setFile(f);
+    setDateConfirmed(false);
     try {
       const buf = await f.arrayBuffer();
-      const wb = XLSX.read(buf, { type: "array" });
+      const wb = XLSX.read(buf, { type: "array", cellDates: true });
       setWorkbook(wb);
       // auto-pick a store sheet: first sheet that isn't All Stores or No Activity
       const preferred = wb.SheetNames.find(
@@ -181,17 +186,21 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
   }, []);
 
   const parseSheet = useCallback(
-    (wb: XLSX.WorkBook, name: string): { rows: ParsedRow[]; missing: string[] } | null => {
+    (wb: XLSX.WorkBook, name: string):
+      { rows: ParsedRow[]; missing: string[]; headerDates: string[] } | null => {
       const ws = wb.Sheets[name];
       if (!ws) return null;
       const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
       const headerIdx = findHeaderRow(grid);
-      if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS };
+      const headerDates = detectSheetDates(grid, headerIdx);
+      if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS, headerDates };
       const header = (grid[headerIdx] || []).map((c: any) => String(c ?? "").trim());
       const missing = REQUIRED_COLUMNS.filter((c) => !header.includes(c));
-      if (missing.length) return { rows: [], missing };
+      if (missing.length) return { rows: [], missing, headerDates };
 
       const idx = (n: string) => header.indexOf(n);
+      const dateColIdx = header.findIndex((h) =>
+        /^(date|business date|trading date|sale date)$/i.test(h));
       const cols = {
         name: idx("Name"), id: idx("ID"), dept: idx("Department"),
         qty: idx("Qty"), gross: idx("Gross"), net: idx("Net"),
@@ -218,10 +227,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
           net_sales: toNumber(r[cols.net]),
           vat_amount: toNumber(r[cols.vat]),
           discount_amount: toNumber(r[cols.disc]),
+          sale_date: dateColIdx >= 0 ? toISODate(r[dateColIdx]) : null,
           raw: header.reduce((acc, h, k) => { acc[h] = r[k]; return acc; }, {} as any),
         });
       }
-      return { rows, missing: [] };
+      return { rows, missing: [], headerDates };
     },
     [],
   );
@@ -246,33 +256,66 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       sheet: string;
       rows: ParsedRow[];
       missing: string[];
+      headerDates: string[];
+      rowDates: string[];
       totals: ReturnType<typeof sumRows>;
     }>;
     return workbook.SheetNames
       .filter((n) => !isAggregateSheet(n))
       .filter((n) => (includeInactive ? true : !/no\s*activity/i.test(n)))
       .map((n) => {
-        const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS };
-        return { sheet: n, rows: p.rows, missing: p.missing, totals: sumRows(p.rows) };
+        const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS, headerDates: [] };
+        const rowDates = Array.from(
+          new Set(p.rows.map((r) => r.sale_date).filter(Boolean) as string[])
+        ).sort();
+        return {
+          sheet: n, rows: p.rows, missing: p.missing,
+          headerDates: p.headerDates, rowDates, totals: sumRows(p.rows),
+        };
       });
   }, [workbook, includeInactive, parseSheet]);
 
-  // Auto-map only exact, unambiguous location-name matches. Never guess.
+  /**
+   * Trading-date resolution. Never fabricates a date.
+   *  - row_dates : every row carries its own real date → import each date separately
+   *  - detected  : one date found in the report header → pre-filled, Owner may correct
+   *  - period    : only an aggregated range is known → daily import is refused,
+   *                the upload is routed to historical Product Intelligence storage
+   *  - owner     : nothing reliable in the file → Owner must confirm a trading date
+   */
+  const dateInfo = useMemo(() => {
+    const rowDates = Array.from(new Set(detectedStores.flatMap((s) => s.rowDates))).sort();
+    if (rowDates.length > 1) {
+      return { kind: "row_dates" as const, dates: rowDates, start: rowDates[0], end: rowDates[rowDates.length - 1] };
+    }
+    if (rowDates.length === 1) {
+      return { kind: "detected" as const, dates: rowDates, start: rowDates[0], end: rowDates[0] };
+    }
+    const headerDates = Array.from(new Set(detectedStores.flatMap((s) => s.headerDates))).sort();
+    if (headerDates.length === 1) {
+      return { kind: "detected" as const, dates: headerDates, start: headerDates[0], end: headerDates[0] };
+    }
+    if (headerDates.length > 1) {
+      const start = headerDates[0];
+      const end = headerDates[headerDates.length - 1];
+      if (start === end) return { kind: "detected" as const, dates: [start], start, end };
+      return { kind: "period" as const, dates: headerDates, start, end };
+    }
+    return { kind: "owner" as const, dates: [] as string[], start: null, end: null };
+  }, [detectedStores]);
+
+  // Pre-fill the picker from a detected single date (Owner can still correct it).
   useEffect(() => {
-    if (!detectedStores.length) return;
-    setStoreMappings((prev) => {
-      const next = { ...prev };
-      for (const s of detectedStores) {
-        if (next[s.sheet]) continue;
-        const norm = s.sheet.trim().toLowerCase();
-        const matches = locations.filter((l) => l.name.trim().toLowerCase() === norm);
-        next[s.sheet] = matches.length === 1
-          ? { action: "existing", locationId: matches[0].id }
-          : { action: "unset" };
-      }
-      return next;
-    });
-  }, [detectedStores, locations]);
+    if (dateInfo.kind === "detected" && dateInfo.start) {
+      setReportDate(new Date(`${dateInfo.start}T00:00:00`));
+      setDateConfirmed(true);
+    }
+  }, [dateInfo.kind, dateInfo.start]);
+
+  const classification: "daily" | "multi_day" | "historical" =
+    dateInfo.kind === "row_dates" ? "multi_day"
+    : dateInfo.kind === "period" ? "historical"
+    : "daily";
 
   const importableStores = detectedStores.filter((s) => {
     const m = storeMappings[s.sheet];
@@ -290,7 +333,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
 
   const totals = useMemo(() => sumRows(parsed?.rows || []), [parsed]);
 
-  const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length);
+  const dateReady = classification === "daily" ? dateConfirmed : true;
+  const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length && dateReady);
+
 
   /**
    * Imports ONE store sheet into ONE location using the existing idempotent path.
