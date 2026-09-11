@@ -116,54 +116,54 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
     }
   }, []);
 
-  const parsed = useMemo<{ rows: ParsedRow[]; missing: string[] } | null>(() => {
-    if (!workbook || !sheetName) return null;
-    const ws = workbook.Sheets[sheetName];
-    if (!ws) return null;
-    const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-    const headerIdx = findHeaderRow(grid);
-    if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS };
-    const header = (grid[headerIdx] || []).map((c: any) => String(c ?? "").trim());
-    const missing = REQUIRED_COLUMNS.filter((c) => !header.includes(c));
-    if (missing.length) return { rows: [], missing };
+  const parseSheet = useCallback(
+    (wb: XLSX.WorkBook, name: string): { rows: ParsedRow[]; missing: string[] } | null => {
+      const ws = wb.Sheets[name];
+      if (!ws) return null;
+      const grid: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      const headerIdx = findHeaderRow(grid);
+      if (headerIdx === -1) return { rows: [], missing: REQUIRED_COLUMNS };
+      const header = (grid[headerIdx] || []).map((c: any) => String(c ?? "").trim());
+      const missing = REQUIRED_COLUMNS.filter((c) => !header.includes(c));
+      if (missing.length) return { rows: [], missing };
 
-    const idx = (name: string) => header.indexOf(name);
-    const cols = {
-      name: idx("Name"), id: idx("ID"), dept: idx("Department"),
-      qty: idx("Qty"), gross: idx("Gross"), net: idx("Net"),
-      vat: idx("VAT"), disc: idx("Discounts"), sales: idx("Sales"),
-    };
+      const idx = (n: string) => header.indexOf(n);
+      const cols = {
+        name: idx("Name"), id: idx("ID"), dept: idx("Department"),
+        qty: idx("Qty"), gross: idx("Gross"), net: idx("Net"),
+        vat: idx("VAT"), disc: idx("Discounts"), sales: idx("Sales"),
+      };
 
-    const rows: ParsedRow[] = [];
-    for (let i = headerIdx + 1; i < grid.length; i++) {
-      const r = grid[i];
-      if (!r) continue;
-      const name = String(r[cols.name] ?? "").trim();
-      const id = String(r[cols.id] ?? "").trim();
-      if (!name && !id) continue;
-      // skip total/summary rows
-      if (/^total/i.test(name) || /^grand/i.test(name)) continue;
-      const qty = toNumber(r[cols.qty]);
-      const gross = toNumber(r[cols.gross]);
-      if (!id && !qty && !gross) continue;
-      rows.push({
-        external_item_id: id || `NAME:${name}`,
-        item_name: name,
-        department: String(r[cols.dept] ?? "").trim(),
-        quantity: qty,
-        gross_sales: gross,
-        net_sales: toNumber(r[cols.net]),
-        vat_amount: toNumber(r[cols.vat]),
-        discount_amount: toNumber(r[cols.disc]),
-        raw: header.reduce((acc, h, k) => { acc[h] = r[k]; return acc; }, {} as any),
-      });
-    }
-    return { rows, missing: [] };
-  }, [workbook, sheetName]);
+      const rows: ParsedRow[] = [];
+      for (let i = headerIdx + 1; i < grid.length; i++) {
+        const r = grid[i];
+        if (!r) continue;
+        const nm = String(r[cols.name] ?? "").trim();
+        const id = String(r[cols.id] ?? "").trim();
+        if (!nm && !id) continue;
+        if (/^total/i.test(nm) || /^grand/i.test(nm)) continue;
+        const qty = toNumber(r[cols.qty]);
+        const gross = toNumber(r[cols.gross]);
+        if (!id && !qty && !gross) continue;
+        rows.push({
+          external_item_id: id || `NAME:${nm}`,
+          item_name: nm,
+          department: String(r[cols.dept] ?? "").trim(),
+          quantity: qty,
+          gross_sales: gross,
+          net_sales: toNumber(r[cols.net]),
+          vat_amount: toNumber(r[cols.vat]),
+          discount_amount: toNumber(r[cols.disc]),
+          raw: header.reduce((acc, h, k) => { acc[h] = r[k]; return acc; }, {} as any),
+        });
+      }
+      return { rows, missing: [] };
+    },
+    [],
+  );
 
-  const totals = useMemo(() => {
-    if (!parsed?.rows.length) return { qty: 0, gross: 0, net: 0, vat: 0, disc: 0, count: 0 };
-    return parsed.rows.reduce((a, r) => ({
+  const sumRows = (rows: ParsedRow[]) =>
+    rows.reduce((a, r) => ({
       qty: a.qty + r.quantity,
       gross: a.gross + r.gross_sales,
       net: a.net + r.net_sales,
@@ -171,9 +171,62 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       disc: a.disc + r.discount_amount,
       count: a.count + 1,
     }), { qty: 0, gross: 0, net: 0, vat: 0, disc: 0, count: 0 });
-  }, [parsed]);
 
-  const canImport = !!(currentRestaurant && locationId && parsed?.rows.length && !parsed.missing.length);
+  /**
+   * Every store sheet found in the workbook, with its own parsed rows and totals.
+   * Aggregate sheets ("All Stores"/summary) are never treated as a store, and
+   * "No Activity" sheets are excluded unless explicitly allowed.
+   */
+  const detectedStores = useMemo(() => {
+    if (!workbook) return [] as Array<{
+      sheet: string;
+      rows: ParsedRow[];
+      missing: string[];
+      totals: ReturnType<typeof sumRows>;
+    }>;
+    return workbook.SheetNames
+      .filter((n) => !isAggregateSheet(n))
+      .filter((n) => (includeInactive ? true : !/no\s*activity/i.test(n)))
+      .map((n) => {
+        const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS };
+        return { sheet: n, rows: p.rows, missing: p.missing, totals: sumRows(p.rows) };
+      });
+  }, [workbook, includeInactive, parseSheet]);
+
+  // Auto-map only exact, unambiguous location-name matches. Never guess.
+  useEffect(() => {
+    if (!detectedStores.length) return;
+    setStoreMappings((prev) => {
+      const next = { ...prev };
+      for (const s of detectedStores) {
+        if (next[s.sheet]) continue;
+        const norm = s.sheet.trim().toLowerCase();
+        const matches = locations.filter((l) => l.name.trim().toLowerCase() === norm);
+        next[s.sheet] = matches.length === 1
+          ? { action: "existing", locationId: matches[0].id }
+          : { action: "unset" };
+      }
+      return next;
+    });
+  }, [detectedStores, locations]);
+
+  const importableStores = detectedStores.filter((s) => {
+    const m = storeMappings[s.sheet];
+    return m && m.action === "existing" && m.locationId && s.rows.length > 0 && !s.missing.length;
+  });
+  const unresolvedStores = detectedStores.filter((s) => {
+    const m = storeMappings[s.sheet];
+    return !m || m.action === "unset";
+  });
+
+  const parsed = useMemo(() => {
+    if (!workbook || !sheetName) return null;
+    return parseSheet(workbook, sheetName);
+  }, [workbook, sheetName, parseSheet]);
+
+  const totals = useMemo(() => sumRows(parsed?.rows || []), [parsed]);
+
+  const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length);
 
   const handleImport = async () => {
     if (!canImport || !parsed || !currentRestaurant) return;
