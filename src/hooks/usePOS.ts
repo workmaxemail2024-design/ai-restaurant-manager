@@ -991,3 +991,49 @@ export function useApplyPOSImport() {
     },
   });
 }
+
+/**
+ * Latest Captiva sync outcome for one integration location.
+ * Owner-facing: reports what actually happened (including "0 rows") rather
+ * than assuming a completed call means data arrived.
+ */
+export function useLatestCaptivaSync(locationId?: string) {
+  return useQuery({
+    queryKey: ["pos-latest-sync", locationId ?? "none"],
+    enabled: !!locationId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pos_sync_logs")
+        .select("*")
+        .eq("location_id", locationId!)
+        .eq("pos_provider", "captiva")
+        .in("event_type", ["sync_completed", "sync_failed", "row_validation_rejected"])
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      const logs = (data || []) as POSSyncLog[];
+      const latest = logs.find((l) => l.event_type !== "row_validation_rejected") ?? logs[0] ?? null;
+      if (!latest) return null;
+      const details = (latest.details || {}) as Record<string, any>;
+      const rowsImported = Number(details.sales_imported ?? 0);
+      const fetched = Number(details.fetched ?? 0);
+      const rejected = logs.find(
+        (l) => l.event_type === "row_validation_rejected" && l.created_at >= latest.created_at,
+      );
+      const failed = latest.status === "fail" || latest.event_type === "sync_failed";
+      return {
+        attemptedAt: latest.created_at,
+        status: (failed ? "failed" : rowsImported > 0 ? "success" : "no_data") as
+          | "failed"
+          | "success"
+          | "no_data",
+        partial: latest.status === "partial",
+        rowsImported,
+        fetched,
+        message: latest.message || null,
+        errorText: (details.errors?.[0] as string | undefined) || (failed ? latest.message : null) || null,
+        rejectedMessage: rejected?.message || null,
+      };
+    },
+  });
+}
