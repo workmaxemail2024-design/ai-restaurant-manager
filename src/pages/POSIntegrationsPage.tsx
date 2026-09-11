@@ -16,6 +16,7 @@ import {
   Settings2, List, MapPin, Brain, Clock, Trash2, Eye, EyeOff, Download, BarChart3,
   Pencil, Info, FileSpreadsheet
 } from "lucide-react";
+import { CaptivaSyncStatus } from "@/components/pos/CaptivaSyncStatus";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
