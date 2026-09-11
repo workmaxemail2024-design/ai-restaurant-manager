@@ -459,10 +459,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       }
 
 
-      // 5) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs)
-      const parsedOrders = orderCountInput.trim() ? parseInt(orderCountInput, 10) : null;
-      const parsedVisitors = visitorCountInput.trim() ? parseInt(visitorCountInput, 10) : null;
-      let parsedAOV: number | null = aovInput.trim() ? Number(aovInput.replace(",", ".")) : null;
+      // 5) Upsert daily summary row (orders/visitors/AOV are OPTIONAL manual inputs,
+      //    only meaningful when a single store is being imported)
+      const parsedOrders = allowManualSummary && orderCountInput.trim() ? parseInt(orderCountInput, 10) : null;
+      const parsedVisitors = allowManualSummary && visitorCountInput.trim() ? parseInt(visitorCountInput, 10) : null;
+      let parsedAOV: number | null = allowManualSummary && aovInput.trim() ? Number(aovInput.replace(",", ".")) : null;
       if (parsedAOV == null && parsedOrders && parsedOrders > 0) {
         parsedAOV = Number((totals.gross / parsedOrders).toFixed(2));
       }
@@ -491,22 +492,39 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId }: Props) {
       });
       if (sumErr) throw sumErr;
 
+      return { products: importRows.length, applied: appliedCount };
+    }
+  };
+
+  const handleImport = async () => {
+    if (!canImport || !currentRestaurant) return;
+    setBusy(true);
+    try {
+      const dateStr = format(reportDate, "yyyy-MM-dd");
+      const single = importableStores.length === 1;
+      let products = 0;
+      let applied = 0;
+      let lastLocationId = "";
+      for (const store of importableStores) {
+        const locId = storeMappings[store.sheet]!.locationId!;
+        const res = await importStore(store.sheet, locId, store.rows, single);
+        products += res?.products || 0;
+        applied += res?.applied || 0;
+        lastLocationId = locId;
+      }
+
       toast({
         title: mode === "apply" ? "Import applied" : "Import staged",
         description:
-          `${importRows.length} products · ${catalogueRows.length} POS items catalogued` +
-          (mode === "apply" ? ` · ${appliedCount} product sale rows posted to dashboard` : "") +
-          `. Gross ${formatCurrency(totals.gross)}, Net ${formatCurrency(totals.net)}, VAT ${formatCurrency(totals.vat)}, Qty ${totals.qty}` +
-          (parsedOrders != null ? `, Orders ${parsedOrders}` : "") + `.`,
+          `${importableStores.length} store(s) · ${products} products` +
+          (mode === "apply" ? ` · ${applied} product sale rows posted to dashboard` : "") + ".",
       });
-
-
 
       // Persist import context so Menu Performance / Dashboard immediately
       // reflect the imported report date + location instead of jumping to today.
       try {
         setCustomRange(dateStr, dateStr);
-        if (locationId) setSelectedLocationId(locationId);
+        if (single && lastLocationId) setSelectedLocationId(lastLocationId);
       } catch { /* non-blocking */ }
 
       queryClient.invalidateQueries();
