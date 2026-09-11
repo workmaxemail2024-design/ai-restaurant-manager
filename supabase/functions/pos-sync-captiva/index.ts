@@ -566,19 +566,98 @@ serve(async (req) => {
       });
     }
 
+    // Identity rules for staged rows (B3 idempotency depends entirely on this):
+    //  1. Use a stable identifier supplied by Captiva when one exists.
+    //  2. Otherwise derive a DETERMINISTIC id from restaurant/location/provider/date
+    //     plus the row's own stable content, so a retry produces the same id.
+    //  3. Never invent a random id. If identity is ambiguous (no date, no content, or
+    //     two distinct rows hash to the same identity) the row is rejected and logged.
+    const rejectedRows: Array<Record<string, unknown>> = [];
+    const seenContentIds = new Map<string, string>(); // contentId -> canonical json of first row
+    const identityFor = (
+      saleRecord: Record<string, unknown>,
+      mappedSaleDate: string | null,
+      items: Array<Record<string, unknown>>,
+    ): { id: string | null; reason?: string; canonical?: string } => {
+      const stable =
+        saleRecord.receipt_id ?? saleRecord.ReceiptNumber ?? saleRecord.TransactionID ??
+        saleRecord.id ?? saleRecord.ID ?? saleRecord.sale_id ?? null;
+      if (stable !== null && stable !== undefined && String(stable).trim() !== "") {
+        return { id: String(stable).trim() };
+      }
+      if (!mappedSaleDate) {
+        return { id: null, reason: "No Captiva receipt/transaction id and no usable sale date — identity is ambiguous." };
+      }
+      // Stable content signature: sorted item lines + totals + operator/table when present.
+      const itemSignature = items
+        .map((i) => `${i.product_id ?? i.name ?? ""}|${i.quantity ?? 0}|${i.gross_sales ?? 0}|${i.unit_price ?? 0}`)
+        .sort()
+        .join(";");
+      const totalPart = String(
+        saleRecord.total ?? saleRecord.GrossTotal ?? saleRecord.NetTotal ?? saleRecord.Amount ?? "",
+      );
+      const contextPart = [
+        saleRecord.operator ?? saleRecord.Operator ?? saleRecord.OperatorCode ?? "",
+        saleRecord.table ?? saleRecord.Table ?? saleRecord.TableNumber ?? "",
+        saleRecord.time ?? saleRecord.Time ?? saleRecord.DateTime ?? "",
+      ].map((v) => String(v ?? "")).join("|");
+      if (!itemSignature && !totalPart && !contextPart.replace(/\|/g, "")) {
+        return { id: null, reason: "Row carries no stable content to derive an identity from." };
+      }
+      const canonical = [
+        integration.restaurant_id ?? "",
+        location_id,
+        "captiva",
+        mappedSaleDate,
+        totalPart,
+        contextPart,
+        itemSignature,
+      ].join("~");
+      // FNV-1a (32-bit) x2 with a salt for a compact, stable, collision-resistant-enough digest.
+      const fnv = (input: string, seed: number) => {
+        let h = seed >>> 0;
+        for (let i = 0; i < input.length; i++) {
+          h ^= input.charCodeAt(i);
+          h = Math.imul(h, 0x01000193) >>> 0;
+        }
+        return h.toString(16).padStart(8, "0");
+      };
+      const digest = `${fnv(canonical, 0x811c9dc5)}${fnv(canonical, 0x9e3779b9)}`;
+      return { id: `derived:${mappedSaleDate}:${digest}`, canonical };
+    };
+
     // Process and insert sales with idempotency via upsert
     for (const sale of salesData) {
       const saleRecord = sale as Record<string, unknown>;
-      const externalSaleId = String(
-        saleRecord.receipt_id ?? saleRecord.ReceiptNumber ?? saleRecord.TransactionID ??
-        saleRecord.id ?? saleRecord.ID ?? saleRecord.sale_id ?? `${Date.now()}-${Math.random()}`
-      );
       const rawDate = saleRecord.sale_date ?? saleRecord.TransactionDate ?? saleRecord.DateTime ?? saleRecord.Date ?? null;
       const mappedSaleDate = rawDate ? String(rawDate).split("T")[0] : null;
       const rawTotal = saleRecord.total ?? saleRecord.GrossTotal ?? saleRecord.NetTotal ?? saleRecord.Amount ?? 0;
       const mappedTotalPrice = typeof rawTotal === "number" ? rawTotal : parseFloat(String(rawTotal || 0));
       // Enrich the stored payload with normalized item lines so downstream apply/mapping can use them.
       const enrichedRecord = { ...saleRecord, _normalized_items: normalizeItems(saleRecord) };
+
+      const identity = identityFor(saleRecord, mappedSaleDate, enrichedRecord._normalized_items);
+      if (!identity.id) {
+        result.failed_rows++;
+        const msg = `Row rejected — ${identity.reason}`;
+        if (result.errors.length < 10) result.errors.push(msg);
+        rejectedRows.push({ reason: identity.reason, sale_date: mappedSaleDate, total: mappedTotalPrice, raw: saleRecord });
+        continue;
+      }
+      const externalSaleId = identity.id;
+      if (identity.canonical) {
+        const previous = seenContentIds.get(externalSaleId);
+        if (previous !== undefined && previous !== identity.canonical) {
+          result.failed_rows++;
+          const msg = "Row rejected — two different rows produced the same derived identity.";
+          if (result.errors.length < 10) result.errors.push(msg);
+          rejectedRows.push({ reason: msg, sale_date: mappedSaleDate, total: mappedTotalPrice, raw: saleRecord });
+          continue;
+        }
+        seenContentIds.set(externalSaleId, identity.canonical);
+      }
+
+
 
       // Upsert the sale record (insert or update on conflict)
       // This ensures idempotency - reimporting the same date range updates existing records
