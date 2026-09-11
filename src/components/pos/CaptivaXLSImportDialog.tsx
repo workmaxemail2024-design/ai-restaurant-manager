@@ -1087,7 +1087,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
           <Button variant="outline" onClick={() => { setOpen(false); reset(); }}>Cancel</Button>
           <Button onClick={handleImport} disabled={!canImport || busy}>
             <Upload className="h-4 w-4 mr-2" />
-            {busy ? "Importing…" : mode === "apply" ? "Import & Apply" : "Stage Import"}
+            {busy ? "Importing…" : classification === "historical" ? "Confirm — store as historical" : mode === "apply" ? "Confirm Import & Apply" : "Confirm — Stage Import"}
           </Button>
         </DialogFooter>
       </DialogContent>
