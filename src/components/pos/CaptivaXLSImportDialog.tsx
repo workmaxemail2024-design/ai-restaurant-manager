@@ -606,34 +606,127 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     }
   };
 
+  /**
+   * Aggregated period reports have no individual trading dates, so they must NEVER be
+   * posted to a single invented day. They go to the existing historical Product
+   * Intelligence storage instead, keeping daily reporting untouched.
+   */
+  const importHistoricalStore = async (
+    locationId: string,
+    rows: ParsedRow[],
+    periodStart: string,
+    periodEnd: string,
+  ) => {
+    if (!currentRestaurant) return 0;
+    const provider = "captiva";
+    const histRows = rows.map((r) => ({
+      restaurant_id: currentRestaurant.id,
+      location_id: locationId,
+      pos_provider: provider,
+      external_item_id: r.external_item_id,
+      item_name: r.item_name,
+      department: r.department || null,
+      period_start: periodStart,
+      period_end: periodEnd,
+      period_label: `${periodStart} → ${periodEnd}`,
+      quantity_sold: r.quantity,
+      gross_sales: r.gross_sales,
+      net_sales: r.net_sales,
+      vat_amount: r.vat_amount,
+      discount_amount: r.discount_amount,
+      source_file_name: file?.name || null,
+      imported_at: new Date().toISOString(),
+    }));
+    const { error: hErr } = await supabase
+      .from("historical_pos_product_summaries")
+      .upsert(histRows, {
+        onConflict: "restaurant_id,location_id,pos_provider,external_item_id,period_start,period_end",
+      });
+    if (hErr) throw hErr;
+
+    // Keep the POS product catalogue in step without touching manual settings.
+    const { data: existing } = await supabase
+      .from("external_pos_items")
+      .select("external_item_id")
+      .eq("restaurant_id", currentRestaurant.id)
+      .eq("location_id", locationId)
+      .in("external_item_id", rows.map((r) => r.external_item_id));
+    const known = new Set((existing || []).map((e: any) => e.external_item_id));
+    const newRows = rows.filter((r) => !known.has(r.external_item_id)).map((r) => ({
+      restaurant_id: currentRestaurant.id,
+      location_id: locationId,
+      pos_provider: provider,
+      external_item_id: r.external_item_id,
+      external_item_name: r.item_name,
+      department: r.department || null,
+      needs_review: true,
+      source: "captiva_historical",
+    }));
+    if (newRows.length) {
+      const { error: eErr } = await supabase.from("external_pos_items").insert(newRows);
+      if (eErr) throw eErr;
+    }
+    return histRows.length;
+  };
+
   const handleImport = async () => {
     if (!canImport || !currentRestaurant) return;
     setBusy(true);
     try {
-      const dateStr = format(reportDate, "yyyy-MM-dd");
       const single = importableStores.length === 1;
       let products = 0;
       let applied = 0;
       let lastLocationId = "";
-      for (const store of importableStores) {
-        const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
-        const res = await importStore(store.sheet, locId, store.rows, single);
-        products += res?.products || 0;
-        applied += res?.applied || 0;
-        lastLocationId = locId;
+      let firstDate = "";
+      let lastDate = "";
+
+      if (classification === "historical") {
+        for (const store of importableStores) {
+          const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
+          products += await importHistoricalStore(locId, store.rows, dateInfo.start!, dateInfo.end!);
+          lastLocationId = locId;
+        }
+        firstDate = dateInfo.start!;
+        lastDate = dateInfo.end!;
+      } else {
+        for (const store of importableStores) {
+          const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
+          // Multi-day files import each row under its own real date.
+          const groups = new Map<string, ParsedRow[]>();
+          if (classification === "multi_day") {
+            for (const r of store.rows) {
+              if (!r.sale_date) continue;
+              groups.set(r.sale_date, [...(groups.get(r.sale_date) || []), r]);
+            }
+          } else {
+            groups.set(format(reportDate, "yyyy-MM-dd"), store.rows);
+          }
+          for (const [d, rows] of Array.from(groups.entries()).sort()) {
+            const res = await importStore(store.sheet, locId, rows, single && groups.size === 1, d);
+            products += res?.products || 0;
+            applied += res?.applied || 0;
+            if (!firstDate || d < firstDate) firstDate = d;
+            if (!lastDate || d > lastDate) lastDate = d;
+          }
+          lastLocationId = locId;
+        }
       }
 
       toast({
-        title: mode === "apply" ? "Import applied" : "Import staged",
+        title: classification === "historical"
+          ? "Historical report imported"
+          : mode === "apply" ? "Import applied" : "Import staged",
         description:
           `${importableStores.length} store(s) · ${products} products` +
-          (mode === "apply" ? ` · ${applied} product sale rows posted to dashboard` : "") + ".",
+          (classification === "historical"
+            ? " · stored as historical product data only."
+            : (mode === "apply" ? ` · ${applied} product sale rows posted to dashboard.` : ".")),
       });
 
       // Persist import context so Menu Performance / Dashboard immediately
       // reflect the imported report date + location instead of jumping to today.
       try {
-        setCustomRange(dateStr, dateStr);
+        if (classification !== "historical" && firstDate) setCustomRange(firstDate, lastDate || firstDate);
         if (single && lastLocationId) setSelectedLocationId(lastLocationId);
       } catch { /* non-blocking */ }
 
@@ -647,6 +740,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
       setBusy(false);
     }
   };
+
 
 
   return (
