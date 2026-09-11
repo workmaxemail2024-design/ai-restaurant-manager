@@ -705,6 +705,21 @@ serve(async (req) => {
       }
     }
 
+    // Surface rejected rows explicitly — they are never silently dropped or given an invented id.
+    if (rejectedRows.length) {
+      await adminClient.from("pos_sync_logs").insert({
+        location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "row_validation_rejected",
+        status: "fail",
+        message: `${rejectedRows.length} row(s) rejected: no stable Captiva identifier and no unambiguous derived identity.`,
+        details: { integration_id, date_from, date_to, rejected: rejectedRows.slice(0, 25) },
+      });
+    }
+
+
+
     // Determine overall status: fail if every row errored, partial if some, success otherwise
     // Special case: zero fetched + zero failed = success (nothing to import for that range)
     const overallStatus =
