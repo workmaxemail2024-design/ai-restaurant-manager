@@ -4,6 +4,7 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
+import { canonicalizePosSummaries, sumNullable } from "@/lib/posDailyCanonical";
 
 interface HourlyRevenue {
   time: string;
@@ -103,33 +104,21 @@ export function useDashboardOverview(locationId?: string | null) {
 
       // Prefer authoritative order/visitor/AOV counts from pos_daily_summaries.
       // Product-row counts (sales.length) are NOT receipts, so we don't fall back to them.
+      // Canonicalize per location+date first so multiple POS providers for the
+      // same day are never added together as separate counts.
       let summaryQuery = supabase
         .from("pos_daily_summaries")
-        .select("order_count, visitor_count, average_order_value, gross_sales")
+        .select("report_date, location_id, pos_provider, order_count, visitor_count, average_order_value, gross_sales, has_product_detail, has_summary_report")
         .eq("restaurant_id", restaurantId)
         .gte("report_date", startDate)
         .lte("report_date", endDate);
       if (locationId) summaryQuery = summaryQuery.eq("location_id", locationId);
       const { data: summaries } = await summaryQuery;
 
-      let ordersToday: number | null = null;
-      let visitorsToday: number | null = null;
-      let aovToday: number | null = null;
-      if (summaries && summaries.length) {
-        const orderSum = summaries.reduce<number | null>((acc, r: any) => {
-          if (r.order_count == null) return acc;
-          return (acc ?? 0) + Number(r.order_count);
-        }, null);
-        const visitorSum = summaries.reduce<number | null>((acc, r: any) => {
-          if (r.visitor_count == null) return acc;
-          return (acc ?? 0) + Number(r.visitor_count);
-        }, null);
-        ordersToday = orderSum;
-        visitorsToday = visitorSum;
-        if (orderSum != null && orderSum > 0) {
-          aovToday = revenueToday / orderSum;
-        }
-      }
+      const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
+      const ordersToday = sumNullable(canonicalDays.map((d) => d.orderCount));
+      const visitorsToday = sumNullable(canonicalDays.map((d) => d.visitorCount));
+      const aovToday = ordersToday != null && ordersToday > 0 ? revenueToday / ordersToday : null;
 
 
       // Build hourly revenue series for the end date (most recent day in range)

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { canonicalizePosSummaries, sumNullable } from "../_shared/posDailyCanonical.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -147,21 +148,26 @@ serve(async (req) => {
       (locations ?? []).find((l: any) => l.id === id)?.name ?? "Unknown";
 
     // --- Canonical revenue source: pos_daily_summaries ---
+    // Multiple POS providers for the same location+date are NEVER added together:
+    // the shared canonicalizer picks one canonical day per location+date.
     const { data: posSummaries } = await applyLoc(
       supabaseClient
         .from("pos_daily_summaries")
-        .select("report_date, location_id, gross_sales, net_sales, vat_amount, discounts, order_count, visitor_count")
+        .select("report_date, location_id, pos_provider, gross_sales, net_sales, vat_amount, discounts, order_count, visitor_count, average_order_value, has_product_detail, has_summary_report, product_gross_sales, summary_gross_sales")
         .eq("restaurant_id", restaurant_id)
         .gte("report_date", start_date)
         .lte("report_date", end_date)
     );
 
     const posRows = posSummaries ?? [];
-    const posNet = posRows.reduce((s: number, r: any) => s + Number(r.net_sales || 0), 0);
-    const posGross = posRows.reduce((s: number, r: any) => s + Number(r.gross_sales || 0), 0);
-    const posOrders = posRows.reduce((s: number, r: any) => s + Number(r.order_count || 0), 0);
-    const posVisitors = posRows.reduce((s: number, r: any) => s + Number(r.visitor_count || 0), 0);
-    const posDates = new Set(posRows.map((r: any) => r.report_date));
+    const canonicalDays = canonicalizePosSummaries(posRows as any[]);
+    // NULL-safe totals: a day that didn't supply a figure contributes "unknown",
+    // never €0.
+    const posNet = sumNullable(canonicalDays.map((d) => d.netSales)) ?? 0;
+    const posGross = sumNullable(canonicalDays.map((d) => d.grossSales)) ?? 0;
+    const posOrders = sumNullable(canonicalDays.map((d) => d.orderCount)) ?? 0;
+    const posVisitors = sumNullable(canonicalDays.map((d) => d.visitorCount)) ?? 0;
+    const posDates = new Set(canonicalDays.map((d) => d.reportDate));
 
     // --- Item-level sales for the period (for dish mix + COGS) ---
     const { data: salesRows } = await applyLoc(

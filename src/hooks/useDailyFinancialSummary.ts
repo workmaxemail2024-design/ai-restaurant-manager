@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { calculateOverheadForRange, type Overhead } from "./useOverheads";
 import { normalisePayType, allocateSalaryCost } from "@/lib/labour";
+import { canonicalizePosSummaries, sumNullable } from "@/lib/posDailyCanonical";
 
 /** Default assumption used ONLY when recipe coverage is too low to be trusted. */
 export const ESTIMATED_FOOD_COST_PCT = 30;
@@ -80,19 +81,17 @@ export function useDailyFinancialSummary(
 
       let sumQ = supabase
         .from("pos_daily_summaries")
-        .select("order_count, visitor_count")
+        .select("report_date, location_id, pos_provider, gross_sales, order_count, visitor_count, has_product_detail, has_summary_report")
         .eq("restaurant_id", restaurantId)
         .gte("report_date", startDate)
         .lte("report_date", endDate);
       if (locationId) sumQ = sumQ.eq("location_id", locationId);
       const { data: summaries } = await sumQ;
 
-      let orders: number | null = null;
-      let posCovers: number | null = null;
-      for (const s of summaries ?? []) {
-        if (s.order_count != null) orders = (orders ?? 0) + Number(s.order_count);
-        if (s.visitor_count != null) posCovers = (posCovers ?? 0) + Number(s.visitor_count);
-      }
+      // Canonical per location+date: providers for the same day are never summed.
+      const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
+      const orders = sumNullable(canonicalDays.map((d) => d.orderCount));
+      const posCovers = sumNullable(canonicalDays.map((d) => d.visitorCount));
 
       // ---------- Daily ledger (covers fallback + confirmation flags) ----------
       let ledgerQ = supabase

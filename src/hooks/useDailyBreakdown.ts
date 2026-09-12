@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { inferItemType, inferDrinkType, type PosItemType, type DrinkType } from "@/lib/posItemClassification";
+import { canonicalizePosSummaries, sumNullable, type CanonicalPosDay } from "@/lib/posDailyCanonical";
 
 interface DishMetric {
   name: string;
@@ -18,13 +19,18 @@ interface LocationMetric {
 }
 
 export interface DailySummary {
-  grossSales: number;
-  netSales: number;
-  vat: number;
-  discounts: number;
+  /** null = the figure was not supplied by any POS report (never treat as €0). */
+  grossSales: number | null;
+  netSales: number | null;
+  vat: number | null;
+  discounts: number | null;
   orderCount: number | null;
   visitorCount: number | null;
   aov: number | null;
+  hasProductDetail: boolean;
+  hasSummaryReport: boolean;
+  productGross: number | null;
+  summaryGross: number | null;
 }
 
 export interface RevenueByType {
@@ -144,30 +150,38 @@ export function useDailyBreakdown(
       if (!restaurantId) return new Map<string, DailySummary>();
       let q = supabase
         .from("pos_daily_summaries")
-        .select("report_date, gross_sales, net_sales, vat_amount, discounts, order_count, visitor_count, average_order_value")
+        .select("report_date, location_id, pos_provider, gross_sales, net_sales, vat_amount, discounts, order_count, visitor_count, average_order_value, has_product_detail, has_summary_report, product_gross_sales, summary_gross_sales")
         .eq("restaurant_id", restaurantId)
         .gte("report_date", targetStart)
         .lte("report_date", targetEnd);
       if (locationId) q = q.eq("location_id", locationId);
       const { data } = await q;
-      const map = new Map<string, DailySummary>();
-      for (const r of (data as any[]) || []) {
-        const existing = map.get(r.report_date);
-        const s: DailySummary = existing ?? {
-          grossSales: 0, netSales: 0, vat: 0, discounts: 0,
-          orderCount: null, visitorCount: null, aov: null,
-        };
-        s.grossSales += Number(r.gross_sales) || 0;
-        s.netSales += Number(r.net_sales) || 0;
-        s.vat += Number(r.vat_amount) || 0;
-        s.discounts += Number(r.discounts) || 0;
-        if (r.order_count != null) s.orderCount = (s.orderCount ?? 0) + Number(r.order_count);
-        if (r.visitor_count != null) s.visitorCount = (s.visitorCount ?? 0) + Number(r.visitor_count);
-        // AOV is derived below from summed order_count & gross to stay accurate
-        map.set(r.report_date, s);
+      // One canonical day per location+date first (never add providers together),
+      // then sum across locations for "All locations" views. Unknown stays null.
+      const canonical = canonicalizePosSummaries((data as any[]) || []);
+      const byDate = new Map<string, CanonicalPosDay[]>();
+      for (const c of canonical) {
+        const list = byDate.get(c.reportDate);
+        if (list) list.push(c);
+        else byDate.set(c.reportDate, [c]);
       }
-      for (const s of map.values()) {
-        if (s.orderCount && s.orderCount > 0) s.aov = s.grossSales / s.orderCount;
+      const map = new Map<string, DailySummary>();
+      for (const [date, days] of byDate) {
+        const grossSales = sumNullable(days.map((d) => d.grossSales));
+        const orderCount = sumNullable(days.map((d) => d.orderCount));
+        map.set(date, {
+          grossSales,
+          netSales: sumNullable(days.map((d) => d.netSales)),
+          vat: sumNullable(days.map((d) => d.vat)),
+          discounts: sumNullable(days.map((d) => d.discounts)),
+          orderCount,
+          visitorCount: sumNullable(days.map((d) => d.visitorCount)),
+          aov: orderCount != null && orderCount > 0 && grossSales != null ? grossSales / orderCount : null,
+          hasProductDetail: days.some((d) => d.hasProductDetail),
+          hasSummaryReport: days.some((d) => d.hasSummaryReport),
+          productGross: sumNullable(days.map((d) => d.productGross)),
+          summaryGross: sumNullable(days.map((d) => d.summaryGross)),
+        });
       }
       return map;
     },
