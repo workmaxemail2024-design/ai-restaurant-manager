@@ -31,6 +31,7 @@ import {
   Upload,
 } from "lucide-react";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
+import { reconcileGross } from "@/lib/posDailyCanonical";
 
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
 import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
