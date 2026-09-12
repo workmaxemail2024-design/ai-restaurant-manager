@@ -14,7 +14,7 @@
 - [ ] Nightly cron — intentionally NOT enabled until Captiva confirms request envelope / UserID
 
 ## POS dual-report merge (Products Sold + Daily Sales Summary)
-- [ ] Migration (revised, pending approval): product/summary split columns, NULL-safe unknowns, restaurant/location pairing check, narrowed backfill, upsert_pos_daily_summary RPC
+- [x] Migration (approved + applied):: product/summary split columns, NULL-safe unknowns, restaurant/location pairing check, narrowed backfill, upsert_pos_daily_summary RPC
 - [ ] Blank receipts/visitors must never overwrite existing values
 - [ ] Daily Sales Summary report type in the Captiva importer (no product columns required)
 - [ ] Gross reconciliation panel (both figures, EUR diff, % diff, Matched / Small variance / Needs review)
