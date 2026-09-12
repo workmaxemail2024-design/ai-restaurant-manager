@@ -627,10 +627,10 @@ function DayCard({
                         )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
-                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{formatCurrency(day.summary?.grossSales ?? day.revenue)}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Net Revenue</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.netSales) : "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.vat) : "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary ? formatCurrency(day.summary.discounts) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{day.summary?.grossSales != null ? formatCurrency(day.summary.grossSales) : formatCurrency(day.revenue)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Net Revenue</span><span className="font-medium">{day.summary?.netSales != null ? formatCurrency(day.summary.netSales) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span className="font-medium">{day.summary?.vat != null ? formatCurrency(day.summary.vat) : "—"}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary?.discounts != null ? formatCurrency(day.summary.discounts) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span className="font-medium">{day.orders ?? "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">AOV</span><span className="font-medium">{day.aov != null ? formatCurrency(day.aov) : "—"}</span></div>
                         <div className="flex justify-between">
@@ -639,6 +639,29 @@ function DayCard({
                         </div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Qty Sold</span><span className="font-medium">{day.qtySold}</span></div>
                       </div>
+                      {/* Product vs daily-summary reconciliation — shown only when both exist */}
+                      {(() => {
+                        if (!day.summary) return null;
+                        const rec = reconcileGross({
+                          locationId: null, reportDate: "", grossSales: null, netSales: null,
+                          vat: null, discounts: null, orderCount: null, visitorCount: null, aov: null,
+                          hasProductDetail: day.summary.hasProductDetail, hasSummaryReport: day.summary.hasSummaryReport,
+                          productGross: day.summary.productGross, summaryGross: day.summary.summaryGross, providers: [],
+                        });
+                        if (!rec) return null;
+                        const label = rec.status === "matched" ? "Matched" : rec.status === "small_variance" ? "Small variance" : "Needs review";
+                        return (
+                          <div className="pt-2 mt-1 border-t border-border/60 text-[11px] space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground font-medium uppercase tracking-wide text-[10px]">POS reconciliation</span>
+                              <Badge variant={rec.status === "matched" ? "secondary" : rec.status === "small_variance" ? "outline" : "destructive"} className="text-[10px]">{label}</Badge>
+                            </div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Product lines gross</span><span className="font-medium">{formatCurrency(rec.productGross)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Daily summary gross</span><span className="font-medium">{formatCurrency(rec.summaryGross)}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Difference</span><span className="font-medium">{formatCurrency(rec.diff)} ({rec.pct.toFixed(1)}%)</span></div>
+                          </div>
+                        );
+                      })()}
                       {/* Revenue split — reconciles back to total item revenue */}
                       {(() => {
                         const rt = day.revenueByType;
@@ -655,7 +678,7 @@ function DayCard({
                               <div className="flex justify-between"><span className="text-muted-foreground">Non-alcoholic</span><span className="font-medium">{formatCurrency(rt.nonAlcoholic)}</span></div>
                               <div className="flex justify-between"><span className="text-muted-foreground">Modifiers / Sides</span><span className="font-medium">{formatCurrency(rt.modifier)}</span></div>
                               <div className="flex justify-between"><span className="text-muted-foreground">Other / Unclassified</span><span className="font-medium">{formatCurrency(rt.other + unclassified)}</span></div>
-                              {day.summary && (
+                              {day.summary?.discounts != null && (
                                 <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">−{formatCurrency(day.summary.discounts)}</span></div>
                               )}
                               <div className="flex justify-between col-span-2 md:col-span-2 border-t border-border/60 pt-1 mt-1">

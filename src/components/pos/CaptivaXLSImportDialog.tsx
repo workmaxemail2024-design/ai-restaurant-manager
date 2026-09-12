@@ -19,7 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { useLocation } from "@/contexts/LocationContext";
 
@@ -119,6 +120,79 @@ function findHeaderRow(rows: any[][]): number {
     if (row.includes("Name") && row.includes("ID") && row.includes("Gross")) return i;
   }
   return -1;
+}
+
+/** Blank → null (blank is NOT zero); numbers & formatted strings → number. */
+function toNullableNumber(v: any): number | null {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = String(v).replace(/[€$,\s]/g, "").replace(/[()]/g, "-");
+  if (s === "" || s === "-") return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+export type DailySummaryParsed = {
+  date: string | null;
+  gross: number | null;
+  net: number | null;
+  vat: number | null;
+  discounts: number | null;
+  receipts: number | null;
+  visitors: number | null;
+};
+
+const SUMMARY_LABELS: Array<{ key: keyof Omit<DailySummaryParsed, "date">; re: RegExp }> = [
+  { key: "gross", re: /^(gross(\s*(sales|revenue|turnover))?|total\s*gross)$/ },
+  { key: "net", re: /^(net\s*(sales|revenue|turnover)|total\s*net)$/ },
+  { key: "vat", re: /^((total\s*)?vat|tax)(\s*(amount|payable))?$/ },
+  { key: "discounts", re: /^(total\s*)?discounts?$/ },
+  { key: "receipts", re: /^(no\.?\s*of\s*)?(receipts?|orders|transactions|bills|sales\s*count)$/ },
+  { key: "visitors", re: /^(no\.?\s*of\s*)?(visitors?|covers|guests|customers|diners)$/ },
+];
+
+/**
+ * Detects a Daily Sales Summary sheet: a label/value layout with no product
+ * table. Returns null unless a gross figure and at least one other figure are
+ * found — a sheet we cannot read is never treated as a summary.
+ */
+function parseDailySummarySheet(grid: any[][]): DailySummaryParsed | null {
+  if (findHeaderRow(grid) !== -1) return null; // has a product table → products sheet
+  const out: DailySummaryParsed = { date: null, gross: null, net: null, vat: null, discounts: null, receipts: null, visitors: null };
+  let matched = 0;
+  for (let i = 0; i < grid.length; i++) {
+    const row = grid[i] || [];
+    for (let j = 0; j < row.length; j++) {
+      const cell = row[j];
+      if (typeof cell !== "string") continue;
+      const label = cell.trim().toLowerCase().replace(/:$/, "");
+      if (!label) continue;
+      // Trading/business date label
+      if (/^(business|trading|sales?)?\s*date$/.test(label)) {
+        for (let k = j + 1; k < row.length; k++) {
+          const d = toISODate(row[k]);
+          if (d) { out.date = d; break; }
+        }
+        continue;
+      }
+      const spec = SUMMARY_LABELS.find((s) => s.re.test(label));
+      if (!spec || out[spec.key] != null) continue;
+      // Value = first usable cell to the right, else the cell directly below.
+      let val: number | null = null;
+      for (let k = j + 1; k < row.length; k++) {
+        val = toNullableNumber(row[k]);
+        if (val != null) break;
+      }
+      if (val == null && grid[i + 1]) val = toNullableNumber(grid[i + 1][j]);
+      if (val != null) { (out as any)[spec.key] = val; matched++; }
+    }
+  }
+  if (out.gross == null || matched < 2) return null;
+  if (!out.date) {
+    const dates = detectSheetDates(grid, -1);
+    if (dates.length === 1) out.date = dates[0];
+  }
+  return out;
 }
 
 
@@ -254,25 +328,38 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   const detectedStores = useMemo(() => {
     if (!workbook) return [] as Array<{
       sheet: string;
+      kind: "products" | "summary";
       rows: ParsedRow[];
       missing: string[];
+      summary: DailySummaryParsed | null;
       headerDates: string[];
       rowDates: string[];
       totals: ReturnType<typeof sumRows>;
     }>;
     return workbook.SheetNames
-      .filter((n) => !isAggregateSheet(n))
       .filter((n) => (includeInactive ? true : !/no\s*activity/i.test(n)))
       .map((n) => {
         const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS, headerDates: [] };
+        // A sheet without a product table may be a Daily Sales Summary sheet.
+        const ws = workbook.Sheets[n];
+        const grid: any[][] = ws ? XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) : [];
+        const summary = p.missing.length ? parseDailySummarySheet(grid) : null;
         const rowDates = Array.from(
           new Set(p.rows.map((r) => r.sale_date).filter(Boolean) as string[])
         ).sort();
+        const headerDates = summary?.date && !p.headerDates.includes(summary.date)
+          ? [...p.headerDates, summary.date].sort()
+          : p.headerDates;
         return {
-          sheet: n, rows: p.rows, missing: p.missing,
-          headerDates: p.headerDates, rowDates, totals: sumRows(p.rows),
+          sheet: n,
+          kind: (summary ? "summary" : "products") as "products" | "summary",
+          rows: p.rows, missing: p.missing, summary,
+          headerDates, rowDates, totals: sumRows(p.rows),
         };
-      });
+      })
+      // Aggregate rollup sheets are never a store — but a recognisable Daily
+      // Sales Summary sheet IS importable even when its name says "Summary".
+      .filter((s) => !isAggregateSheet(s.sheet) || s.kind === "summary");
   }, [workbook, includeInactive, parseSheet]);
 
   /**
@@ -319,7 +406,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
 
   const importableStores = detectedStores.filter((s) => {
     const m = storeMappings[s.sheet];
-    return m && m.action === "existing" && m.locationId && s.rows.length > 0 && !s.missing.length;
+    if (!m || m.action !== "existing" || !m.locationId) return false;
+    if (s.kind === "summary") return !!s.summary;
+    return s.rows.length > 0 && !s.missing.length;
   });
   const unresolvedStores = detectedStores.filter((s) => {
     const m = storeMappings[s.sheet];
@@ -335,6 +424,48 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
 
   const dateReady = classification === "daily" ? dateConfirmed : true;
   const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length && dateReady);
+
+  /** The (location, trading date) pairs this import would write to. */
+  const previewTargets = useMemo(() => {
+    if (!currentRestaurant || !dateReady) return [] as Array<{ locationId: string; date: string }>;
+    const targets: Array<{ locationId: string; date: string }> = [];
+    for (const s of importableStores) {
+      const locId = (storeMappings[s.sheet] as { locationId: string }).locationId;
+      if (classification === "daily") {
+        targets.push({ locationId: locId, date: format(reportDate, "yyyy-MM-dd") });
+      } else if (classification === "multi_day") {
+        const dates = s.kind === "summary"
+          ? (s.summary?.date ? [s.summary.date] : [])
+          : s.rowDates;
+        for (const d of dates) targets.push({ locationId: locId, date: d });
+      }
+    }
+    return targets;
+  }, [currentRestaurant, dateReady, importableStores, classification, reportDate, storeMappings]);
+
+  /** Existing canonical POS day rows for those targets — powers the
+   *  "existing data found" notice and the reconciliation estimate. */
+  const targetKey = previewTargets.map((t) => `${t.locationId}:${t.date}`).sort().join("|");
+  const { data: existingPosDays = [] } = useQuery({
+    queryKey: ["pos-import-existing", currentRestaurant?.id, targetKey],
+    enabled: !!currentRestaurant && previewTargets.length > 0,
+    queryFn: async () => {
+      const locIds = Array.from(new Set(previewTargets.map((t) => t.locationId)));
+      const dates = Array.from(new Set(previewTargets.map((t) => t.date)));
+      const { data } = await supabase
+        .from("pos_daily_summaries")
+        .select("location_id, report_date, pos_provider, has_product_detail, has_summary_report, product_gross_sales, summary_gross_sales")
+        .eq("restaurant_id", currentRestaurant!.id)
+        .in("location_id", locIds)
+        .in("report_date", dates);
+      return (data as any[]) ?? [];
+    },
+  });
+  const existingFor = useCallback(
+    (locationId: string, date: string) =>
+      existingPosDays.filter((r: any) => r.location_id === locationId && r.report_date === date),
+    [existingPosDays],
+  );
 
 
   /**
@@ -578,32 +709,57 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         parsedAOV = Number((totals.gross / parsedOrders).toFixed(2));
       }
 
-      await supabase
-        .from("pos_daily_summaries")
-        .delete()
-        .eq("restaurant_id", currentRestaurant.id)
-        .eq("location_id", locationId)
-        .eq("pos_provider", provider)
-        .eq("report_date", dateStr);
-
-      const { error: sumErr } = await supabase.from("pos_daily_summaries").insert({
-        restaurant_id: currentRestaurant.id,
-        location_id: locationId,
-        pos_provider: provider,
-        report_date: dateStr,
-        gross_sales: Number(totals.gross.toFixed(2)),
-        net_sales: Number(totals.net.toFixed(2)),
-        vat_amount: Number(totals.vat.toFixed(2)),
-        discounts: Number(totals.disc.toFixed(2)),
-        order_count: Number.isFinite(parsedOrders as any) ? parsedOrders : null,
-        visitor_count: Number.isFinite(parsedVisitors as any) ? parsedVisitors : null,
-        average_order_value: Number.isFinite(parsedAOV as any) ? parsedAOV : null,
-        source_file_name: file?.name || null,
+      // MERGE, never replace: the canonical upsert keeps any figures a Daily
+      // Sales Summary report already supplied (receipts/visitors stay when the
+      // manual inputs are blank — blank is not zero).
+      const { error: sumErr } = await supabase.rpc("upsert_pos_daily_summary", {
+        p_restaurant_id: currentRestaurant.id,
+        p_location_id: locationId,
+        p_pos_provider: provider,
+        p_report_date: dateStr,
+        p_report_kind: "products",
+        p_gross: Number(totals.gross.toFixed(2)),
+        p_net: Number(totals.net.toFixed(2)),
+        p_vat: Number(totals.vat.toFixed(2)),
+        p_discounts: Number(totals.disc.toFixed(2)),
+        p_order_count: Number.isFinite(parsedOrders as any) ? parsedOrders : null,
+        p_visitor_count: Number.isFinite(parsedVisitors as any) ? parsedVisitors : null,
+        p_average_order_value: Number.isFinite(parsedAOV as any) ? parsedAOV : null,
+        p_source_file: file?.name || null,
       });
       if (sumErr) throw sumErr;
 
       return { products: importRows.length, applied: appliedCount };
     }
+  };
+
+  /**
+   * Imports a Daily Sales Summary sheet (no product lines): MERGES control
+   * totals and receipts/visitors into the canonical day row via the RPC.
+   * Blank figures are sent as NULL so existing values are never wiped.
+   * Closed-day and permission checks run inside the RPC.
+   */
+  const importDailySummaryStore = async (
+    locationId: string,
+    sum: DailySummaryParsed,
+    dateStr: string,
+  ) => {
+    if (!currentRestaurant) return;
+    const { error } = await supabase.rpc("upsert_pos_daily_summary", {
+      p_restaurant_id: currentRestaurant.id,
+      p_location_id: locationId,
+      p_pos_provider: "captiva_xls",
+      p_report_date: dateStr,
+      p_report_kind: "summary",
+      p_gross: sum.gross,
+      p_net: sum.net,
+      p_vat: sum.vat,
+      p_discounts: sum.discounts,
+      p_order_count: sum.receipts != null ? Math.round(sum.receipts) : null,
+      p_visitor_count: sum.visitors != null ? Math.round(sum.visitors) : null,
+      p_source_file: file?.name || null,
+    });
+    if (error) throw error;
   };
 
   /**
@@ -682,6 +838,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
 
       if (classification === "historical") {
         for (const store of importableStores) {
+          if (store.kind === "summary") continue; // daily summaries never go to historical product storage
           const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
           products += await importHistoricalStore(locId, store.rows, dateInfo.start!, dateInfo.end!);
           lastLocationId = locId;
@@ -691,6 +848,17 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
       } else {
         for (const store of importableStores) {
           const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
+          // Daily Sales Summary sheets MERGE into the canonical day row via the RPC.
+          if (store.kind === "summary" && store.summary) {
+            const d = classification === "multi_day" && store.summary.date
+              ? store.summary.date
+              : format(reportDate, "yyyy-MM-dd");
+            await importDailySummaryStore(locId, store.summary, d);
+            if (!firstDate || d < firstDate) firstDate = d;
+            if (!lastDate || d > lastDate) lastDate = d;
+            lastLocationId = locId;
+            continue;
+          }
           // Multi-day files import each row under its own real date.
           const groups = new Map<string, ParsedRow[]>();
           if (classification === "multi_day") {
@@ -909,9 +1077,21 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                       return (
                         <TableRow key={s.sheet}>
                           <TableCell className="font-medium">
-                            {s.sheet}
-                            {s.missing.length > 0 && (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {s.sheet}
+                              <Badge variant="outline" className="text-[10px]">
+                                {s.kind === "summary" ? "Daily summary" : "Products sold"}
+                              </Badge>
+                            </div>
+                            {s.missing.length > 0 && s.kind !== "summary" && (
                               <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
+                            )}
+                            {s.kind === "summary" && s.summary && (
+                              <div className="text-xs text-muted-foreground">
+                                Gross {formatCurrency(s.summary.gross ?? 0)}
+                                {s.summary.receipts != null && ` · ${s.summary.receipts} receipts`}
+                                {s.summary.visitors != null && ` · ${s.summary.visitors} visitors`}
+                              </div>
                             )}
                           </TableCell>
                           <TableCell className="text-xs">
@@ -948,6 +1128,46 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                                 </SelectContent>
                               </Select>
                             </div>
+                            {/* Existing canonical data + reconciliation estimate */}
+                            {m.action === "existing" && dateReady && classification !== "historical" && (() => {
+                              const dates = classification === "multi_day"
+                                ? (s.kind === "summary" ? (s.summary?.date ? [s.summary.date] : []) : s.rowDates)
+                                : [format(reportDate, "yyyy-MM-dd")];
+                              const notes: React.ReactNode[] = [];
+                              for (const d of dates) {
+                                const rows = existingFor(m.locationId, d);
+                                if (!rows.length) continue;
+                                const hasP = rows.some((r: any) => r.has_product_detail);
+                                const hasS = rows.some((r: any) => r.has_summary_report);
+                                if (!hasP && !hasS) continue;
+                                // Reconciliation: incoming kind fills one side, existing data the other.
+                                const prodGross = s.kind === "products"
+                                  ? (classification === "multi_day"
+                                      ? s.rows.filter((r) => r.sale_date === d).reduce((a, r) => a + r.gross_sales, 0)
+                                      : s.totals.gross)
+                                  : rows.reduce((a: number | null, r: any) => r.product_gross_sales != null ? (a ?? 0) + Number(r.product_gross_sales) : a, null);
+                                const sumGross = s.kind === "summary"
+                                  ? s.summary?.gross ?? null
+                                  : rows.reduce((a: number | null, r: any) => r.summary_gross_sales != null ? (a ?? 0) + Number(r.summary_gross_sales) : a, null);
+                                notes.push(
+                                  <div key={d} className="mt-1 text-[11px] text-muted-foreground">
+                                    Existing data found for {d}: {hasP ? "products report" : ""}{hasP && hasS ? " + " : ""}{hasS ? "daily summary" : ""} — this import will merge, not duplicate.
+                                    {prodGross != null && sumGross != null && (() => {
+                                      const diff = Math.abs(prodGross - sumGross);
+                                      const pct = sumGross !== 0 ? (diff / Math.abs(sumGross)) * 100 : (diff === 0 ? 0 : 100);
+                                      const status = diff <= 0.02 ? "matched" : pct < 2 ? "small" : "review";
+                                      return (
+                                        <span className={cn("ml-1 font-medium", status === "review" ? "text-destructive" : status === "small" ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
+                                          {status === "matched" ? "Matched" : status === "small" ? "Small variance" : "Needs review"}
+                                          {status !== "matched" && ` (Δ ${formatCurrency(diff)}${Number.isFinite(pct) ? `, ${pct.toFixed(1)}%` : ""})`}
+                                        </span>
+                                      );
+                                    })()}
+                                  </div>
+                                );
+                              }
+                              return notes.length ? <>{notes}</> : null;
+                            })()}
                             {newLocationFor === s.sheet && (
                               <div className="mt-2 flex items-center gap-2">
                                 <Input

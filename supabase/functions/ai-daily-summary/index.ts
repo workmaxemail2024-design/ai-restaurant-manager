@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { userCanAccessLocation, userHasAllLocationAccess } from "../_shared/posAuth.ts";
+import { canonicalizePosSummaries, sumNullable } from "../_shared/posDailyCanonical.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -125,20 +126,18 @@ serve(async (req) => {
     const itemsSold = sales.reduce((s, r) => s + Number(r.quantity || 0), 0);
 
     // Orders = canonical POS receipt count (pos_daily_summaries), never item quantity.
+    // Providers for the same location+date are never added together.
     let orderQuery = adminClient
       .from("pos_daily_summaries")
-      .select("order_count, visitor_count")
+      .select("report_date, location_id, pos_provider, gross_sales, order_count, visitor_count, has_product_detail, has_summary_report")
       .eq("restaurant_id", restaurant_id)
       .eq("report_date", targetDate);
     if (locFilter) orderQuery = orderQuery.eq("location_id", locFilter);
     const { data: posSummaries } = await orderQuery;
 
-    let totalOrders: number | null = null;
-    let posCovers: number | null = null;
-    for (const s of posSummaries || []) {
-      if (s.order_count != null) totalOrders = (totalOrders ?? 0) + Number(s.order_count);
-      if (s.visitor_count != null) posCovers = (posCovers ?? 0) + Number(s.visitor_count);
-    }
+    const canonicalDays = canonicalizePosSummaries((posSummaries as any[]) || []);
+    const totalOrders = sumNullable(canonicalDays.map((d) => d.orderCount));
+    const posCovers = sumNullable(canonicalDays.map((d) => d.visitorCount));
     const avgOrderValue = totalOrders && totalOrders > 0 ? totalRevenue / totalOrders : null;
 
     if (totalRevenue === 0) {

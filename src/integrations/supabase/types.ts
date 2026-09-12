@@ -1134,52 +1134,88 @@ export type Database = {
         Row: {
           average_order_value: number | null
           created_at: string
-          discounts: number
-          gross_sales: number
+          discounts: number | null
+          gross_sales: number | null
+          has_product_detail: boolean
+          has_summary_report: boolean
           id: string
           location_id: string | null
-          net_sales: number
+          net_sales: number | null
           order_count: number | null
           pos_provider: string
+          product_discounts: number | null
+          product_gross_sales: number | null
+          product_net_sales: number | null
+          product_source_file: string | null
+          product_vat_amount: number | null
           report_date: string
           restaurant_id: string
           source_file_name: string | null
+          summary_discounts: number | null
+          summary_gross_sales: number | null
+          summary_net_sales: number | null
+          summary_source_file: string | null
+          summary_vat_amount: number | null
           updated_at: string
-          vat_amount: number
+          vat_amount: number | null
           visitor_count: number | null
         }
         Insert: {
           average_order_value?: number | null
           created_at?: string
-          discounts?: number
-          gross_sales?: number
+          discounts?: number | null
+          gross_sales?: number | null
+          has_product_detail?: boolean
+          has_summary_report?: boolean
           id?: string
           location_id?: string | null
-          net_sales?: number
+          net_sales?: number | null
           order_count?: number | null
           pos_provider: string
+          product_discounts?: number | null
+          product_gross_sales?: number | null
+          product_net_sales?: number | null
+          product_source_file?: string | null
+          product_vat_amount?: number | null
           report_date: string
           restaurant_id: string
           source_file_name?: string | null
+          summary_discounts?: number | null
+          summary_gross_sales?: number | null
+          summary_net_sales?: number | null
+          summary_source_file?: string | null
+          summary_vat_amount?: number | null
           updated_at?: string
-          vat_amount?: number
+          vat_amount?: number | null
           visitor_count?: number | null
         }
         Update: {
           average_order_value?: number | null
           created_at?: string
-          discounts?: number
-          gross_sales?: number
+          discounts?: number | null
+          gross_sales?: number | null
+          has_product_detail?: boolean
+          has_summary_report?: boolean
           id?: string
           location_id?: string | null
-          net_sales?: number
+          net_sales?: number | null
           order_count?: number | null
           pos_provider?: string
+          product_discounts?: number | null
+          product_gross_sales?: number | null
+          product_net_sales?: number | null
+          product_source_file?: string | null
+          product_vat_amount?: number | null
           report_date?: string
           restaurant_id?: string
           source_file_name?: string | null
+          summary_discounts?: number | null
+          summary_gross_sales?: number | null
+          summary_net_sales?: number | null
+          summary_source_file?: string | null
+          summary_vat_amount?: number | null
           updated_at?: string
-          vat_amount?: number
+          vat_amount?: number | null
           visitor_count?: number | null
         }
         Relationships: [
@@ -3151,6 +3187,58 @@ export type Database = {
       sync_own_profile: { Args: never; Returns: undefined }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       unit_factor: { Args: { _u: string }; Returns: number }
+      upsert_pos_daily_summary: {
+        Args: {
+          p_average_order_value?: number
+          p_discounts?: number
+          p_gross?: number
+          p_location_id: string
+          p_net?: number
+          p_order_count?: number
+          p_pos_provider: string
+          p_report_date: string
+          p_report_kind: string
+          p_restaurant_id: string
+          p_source_file?: string
+          p_vat?: number
+          p_visitor_count?: number
+        }
+        Returns: {
+          average_order_value: number | null
+          created_at: string
+          discounts: number | null
+          gross_sales: number | null
+          has_product_detail: boolean
+          has_summary_report: boolean
+          id: string
+          location_id: string | null
+          net_sales: number | null
+          order_count: number | null
+          pos_provider: string
+          product_discounts: number | null
+          product_gross_sales: number | null
+          product_net_sales: number | null
+          product_source_file: string | null
+          product_vat_amount: number | null
+          report_date: string
+          restaurant_id: string
+          source_file_name: string | null
+          summary_discounts: number | null
+          summary_gross_sales: number | null
+          summary_net_sales: number | null
+          summary_source_file: string | null
+          summary_vat_amount: number | null
+          updated_at: string
+          vat_amount: number | null
+          visitor_count: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "pos_daily_summaries"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       user_belongs_to_restaurant: {
         Args: { _restaurant_id: string }
         Returns: boolean
