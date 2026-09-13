@@ -870,7 +870,7 @@ function DayCard({
                   </div>
 
                   {/* Existing dish/location analytics */}
-                  {day.hasData && (
+                  {day.hasProductDetail && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -919,7 +919,7 @@ function DayCard({
                     </div>
                   )}
 
-                  {day.hasData && day.locationPerformance.length > 1 && (
+                  {day.hasProductDetail && day.locationPerformance.length > 1 && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         Location Performance
@@ -949,6 +949,18 @@ function DayCard({
 
                   {!day.hasData && !isClosed && manualRevenue == null && (
                     <p className="text-sm text-muted-foreground">No sales recorded for this day.</p>
+                  )}
+                  {day.hasData && !day.hasProductDetail && (
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <span>Sales summary available · Product detail missing.</span>
+                      <CaptivaXLSImportDialog
+                        trigger={
+                          <Button size="sm" variant="outline" className="h-8 gap-1 text-xs">
+                            <Upload className="h-3 w-3" /> Import POS Data
+                          </Button>
+                        }
+                      />
+                    </div>
                   )}
                 </CardContent>
               </CollapsibleContent>
