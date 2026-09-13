@@ -144,30 +144,8 @@ export function SalesDayRow({ day, locationId }: SalesDayRowProps) {
             ) : (
               <p className="text-sm text-muted-foreground">No sales recorded for this day.</p>
             )
-          ) : isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading sales…</p>
           ) : (
-            <div className="divide-y divide-border rounded-md border border-border bg-background">
-              <div className="grid grid-cols-[1fr_1fr_80px_110px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/40">
-                <span>Item</span>
-                <span>Location</span>
-                <span className="text-right">Qty</span>
-                <span className="text-right">Revenue</span>
-              </div>
-              {sales.map((sale) => (
-                <div
-                  key={sale.id}
-                  className="grid grid-cols-[1fr_1fr_80px_110px] gap-2 px-3 py-2.5 items-center text-sm"
-                >
-                  <span className="truncate">{sale.dishes?.name || "—"}</span>
-                  <span className="truncate text-muted-foreground">{sale.locations?.name || "—"}</span>
-                  <span className="text-right tabular-nums">{sale.quantity}</span>
-                  <span className="text-right font-medium tabular-nums">
-                    {formatCurrency(Number(sale.total_price))}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <SalesDayDetail date={day.date} locationId={locationId} />
           )}
         </div>
       )}
