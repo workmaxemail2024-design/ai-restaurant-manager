@@ -13,7 +13,10 @@ export interface Location {
   updated_at: string;
 }
 
-export type LocationInsert = Omit<Location, "id" | "created_at" | "updated_at" | "operating_hours">;
+export type LocationInsert = Omit<Location, "id" | "created_at" | "updated_at" | "operating_hours"> & {
+  /** Optional explicit tenant. Required when creating from a non-Locations page context. */
+  restaurant_id?: string;
+};
 
 export function useLocations() {
   return useQuery({
@@ -37,13 +40,20 @@ export function useCreateLocation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (location: LocationInsert) => {
-      const { data, error } = await supabase
-        .from("locations")
-        .insert(location)
-        .select()
-        .single();
+      // No RETURNING: the restrictive "Location scope read" policy re-reads the row
+      // inside the same command, where the just-inserted row is not yet visible to
+      // the security-definer scope helper. We generate the id client-side instead
+      // and read the row back with a separate SELECT (which RLS allows).
+      const id = crypto.randomUUID();
+      const { error } = await supabase.from("locations").insert({ ...location, id });
       if (error) throw error;
-      return data;
+      const { data, error: readError } = await supabase
+        .from("locations")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (readError) throw readError;
+      return data ?? { id, ...location };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["locations"] });
