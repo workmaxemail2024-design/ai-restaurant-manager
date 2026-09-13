@@ -8,7 +8,12 @@ export type CoverageLevel = "complete" | "partial" | "missing";
 
 export interface DayCoverage {
   date: string;
+  /** Any POS sales evidence: product detail OR a daily sales summary. */
   hasSales: boolean;
+  /** Daily sales summary (gross, order count) present. */
+  hasSalesSummary: boolean;
+  /** Product/transaction-level detail present. */
+  hasProductDetail: boolean;
   hasLabour: boolean; // attendance OR manual ledger
   hasAttendance: boolean;
   hasManualLabour: boolean;
@@ -31,7 +36,7 @@ export interface CoverageSummary {
 }
 
 export interface DataWarning {
-  type: "missing_labour" | "missing_recipes" | "unallocated_overheads" | "missing_sales" | "no_attendance";
+  type: "missing_labour" | "missing_recipes" | "unallocated_overheads" | "missing_sales" | "missing_product_detail" | "no_attendance";
   message: string;
   severity: "info" | "warning" | "error";
   page?: string;
