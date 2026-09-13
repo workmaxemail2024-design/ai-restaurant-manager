@@ -241,6 +241,16 @@ export function useDataCoverage(locationId?: string | null) {
         });
       }
 
+      if (productMissingWithSummary > 0) {
+        warnings.push({
+          type: "missing_product_detail",
+          message: `Product-level sales missing for ${productMissingWithSummary} day${productMissingWithSummary > 1 ? "s" : ""} — totals are available, dish-level analysis is not.`,
+          severity: "info",
+          page: "Sales",
+          route: "/sales",
+        });
+      }
+
       if (recipes.total > 0 && recipes.withRecipes < recipes.total * 0.5) {
         warnings.push({
           type: "missing_recipes",
