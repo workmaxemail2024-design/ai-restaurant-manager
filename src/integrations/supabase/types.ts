@@ -2904,6 +2904,21 @@ export type Database = {
           },
         ]
       }
+      zz_tmp_rls_probe: {
+        Row: {
+          result: string | null
+          step: string | null
+        }
+        Insert: {
+          result?: string | null
+          step?: string | null
+        }
+        Update: {
+          result?: string | null
+          step?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       pos_integrations_safe: {
