@@ -20,11 +20,39 @@ interface SalesDayRowProps {
  * Totals come from the canonical daily resolver (via useDailyBreakdown);
  * product rows are fetched lazily only when the day is expanded.
  */
+/** Detailed product rows for one date — mounted only when the day is expanded. */
+function SalesDayDetail({ date, locationId }: { date: string; locationId: string | null }) {
+  const { data: sales = [], isLoading } = useSales(date, date, locationId);
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Loading sales…</p>;
+
+  return (
+    <div className="divide-y divide-border rounded-md border border-border bg-background overflow-x-auto">
+      <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(8rem,1fr)_80px_110px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/40">
+        <span>Item</span>
+        <span>Location</span>
+        <span className="text-right">Qty</span>
+        <span className="text-right">Revenue</span>
+      </div>
+      {sales.map((sale) => (
+        <div
+          key={sale.id}
+          className="grid grid-cols-[minmax(10rem,1fr)_minmax(8rem,1fr)_80px_110px] gap-2 px-3 py-2.5 items-center text-sm"
+        >
+          <span className="truncate">{sale.dishes?.name || "—"}</span>
+          <span className="truncate text-muted-foreground">{sale.locations?.name || "—"}</span>
+          <span className="text-right tabular-nums">{sale.quantity}</span>
+          <span className="text-right font-medium tabular-nums">
+            {formatCurrency(Number(sale.total_price))}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function SalesDayRow({ day, locationId }: SalesDayRowProps) {
   const [open, setOpen] = useState(false);
-
-  // Lazy: the detailed query only runs once the user opens this date.
-  const { data: sales = [], isLoading } = useSales(day.date, day.date, locationId);
 
   const reconciliation = day.summary
     ? reconcileGross({
