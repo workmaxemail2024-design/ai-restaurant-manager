@@ -314,6 +314,8 @@ export function useDailyBreakdown(
       return {
         date: dateStr,
         revenue,
+        productRevenue,
+        hasProductDetail,
         qtySold,
         orders: orderCount,
         aov,
