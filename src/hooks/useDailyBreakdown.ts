@@ -234,10 +234,15 @@ export function useDailyBreakdown(
     return days.map((day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       const daySales = byDate.get(dateStr) || [];
-      const hasData = daySales.length > 0;
+      const hasProductDetail = daySales.length > 0;
       const summary = summaries.get(dateStr) || null;
 
-      const revenue = daySales.reduce((s, r) => s + Number(r.total_price), 0);
+      const productRevenue = daySales.reduce((s, r) => s + Number(r.total_price), 0);
+      // Canonical revenue: the resolver already prefers product-derived gross where it
+      // exists, so a summary gross never double-counts a product day.
+      const revenue = summary?.grossSales ?? productRevenue;
+      // A day with only a daily sales summary still HAS sales data.
+      const hasData = hasProductDetail || (summary != null && summary.grossSales != null);
       const qtySold = daySales.reduce((s, r) => s + Number(r.quantity), 0);
 
       // Aggregate by dish + classify
