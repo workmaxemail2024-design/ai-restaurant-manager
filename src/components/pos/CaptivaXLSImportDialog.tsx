@@ -195,6 +195,89 @@ function parseDailySummarySheet(grid: any[][]): DailySummaryParsed | null {
   return out;
 }
 
+/** Columns of a Captiva tabular Daily Sales Summary (one row per store/date). */
+const SUM_COL = {
+  date: /^(date|business\s*date|trading\s*date|sales?\s*date)$/i,
+  store: /^store(\s*name)?$/i,
+  gross: /^(sales|sales\s*value|gross|gross\s*sales|total\s*sales|turnover)$/i,
+  net: /^(net|net\s*sales|net\s*value)$/i,
+  vat: /^(vat|vat\s*amount|tax)$/i,
+  count: /^(sales\s*count|receipts?|transactions?|orders|no\.?\s*of\s*sales)$/i,
+  visitors: /^(visitors?|covers|guests|customers|diners)$/i,
+  discount: /^(discount\s*value|discounts?|discount\s*amount)$/i,
+};
+
+export type SummaryTableRow = { store: string | null; summary: DailySummaryParsed };
+
+function findSummaryTableHeader(grid: any[][]): number {
+  for (let i = 0; i < Math.min(grid.length, 40); i++) {
+    const row = (grid[i] || []).map((c) => String(c ?? "").trim());
+    if (row.some((c) => SUM_COL.date.test(c)) && row.some((c) => SUM_COL.gross.test(c))) return i;
+  }
+  return -1;
+}
+
+/**
+ * Captiva "Daily Sales Summary" workbooks are a TABLE (one row per store/date),
+ * not a label/value block. Returns one parsed daily summary per dated row, so a
+ * 1–12 Sep report yields 12 separate trading days instead of an aggregate period.
+ */
+export function parseSummaryTableSheet(grid: any[][]): SummaryTableRow[] {
+  if (findHeaderRow(grid) !== -1) return []; // a product table always wins
+  const h = findSummaryTableHeader(grid);
+  if (h === -1) return [];
+  const header = (grid[h] || []).map((c: any) => String(c ?? "").trim());
+  const col = (re: RegExp) => header.findIndex((c) => re.test(c));
+  const ci = {
+    date: col(SUM_COL.date), store: col(SUM_COL.store), gross: col(SUM_COL.gross),
+    net: col(SUM_COL.net), vat: col(SUM_COL.vat), count: col(SUM_COL.count),
+    visitors: col(SUM_COL.visitors), discount: col(SUM_COL.discount),
+  };
+  if (ci.date === -1 || ci.gross === -1) return [];
+  const out: SummaryTableRow[] = [];
+  for (let i = h + 1; i < grid.length; i++) {
+    const r = grid[i];
+    if (!r) continue;
+    if (/^(total|grand)/i.test(String(r[0] ?? "").trim())) continue;
+    const date = toISODate(r[ci.date]);
+    if (!date) continue;
+    const gross = toNullableNumber(r[ci.gross]);
+    if (gross == null) continue;
+    out.push({
+      store: ci.store >= 0 ? (String(r[ci.store] ?? "").trim() || null) : null,
+      summary: {
+        date,
+        gross,
+        net: ci.net >= 0 ? toNullableNumber(r[ci.net]) : null,
+        vat: ci.vat >= 0 ? toNullableNumber(r[ci.vat]) : null,
+        discounts: ci.discount >= 0 ? toNullableNumber(r[ci.discount]) : null,
+        receipts: ci.count >= 0 ? toNullableNumber(r[ci.count]) : null,
+        visitors: ci.visitors >= 0 ? toNullableNumber(r[ci.visitors]) : null,
+      },
+    });
+  }
+  return out;
+}
+
+type DetectedStore = {
+  /** Unique mapping key (a sheet may contain several stores). */
+  key: string;
+  sheet: string;
+  label: string;
+  kind: "products" | "summary";
+  rows: ParsedRow[];
+  missing: string[];
+  summaries: DailySummaryParsed[];
+  headerDates: string[];
+  rowDates: string[];
+  totals: { qty: number; gross: number; net: number; vat: number; disc: number; count: number };
+};
+
+/** Per trading date, what this import would do to existing canonical data. */
+type DateAction = "add" | "enrich" | "up_to_date" | "review" | "closed";
+
+
+
 
 export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openProp, onOpenChange }: Props) {
   const [openState, setOpenState] = useState(false);
@@ -227,24 +310,47 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   const [visitorCountInput, setVisitorCountInput] = useState<string>("");
   const [aovInput, setAovInput] = useState<string>("");
 
+  // Import setup step — an Owner HINT used only to confirm the file, never to
+  // override what the workbook actually contains.
+  const [intendedType, setIntendedType] = useState<"summary" | "products" | null>(null);
+  const [intendedScope, setIntendedScope] = useState<"single" | "range">("single");
+  const [intendedDate, setIntendedDate] = useState<Date>(new Date());
+  const [intendedStart, setIntendedStart] = useState<Date>(new Date());
+  const [intendedEnd, setIntendedEnd] = useState<Date>(new Date());
+  const [typeMismatchAck, setTypeMismatchAck] = useState(false);
+  const [dateMismatchAck, setDateMismatchAck] = useState(false);
+  // Per-date Keep existing / Replace decisions for "Needs review" dates.
+  const [reviewDecisions, setReviewDecisions] = useState<Record<string, "keep" | "replace">>({});
+
   const sheetNames = workbook?.SheetNames || [];
   const availableSheets = includeInactive
     ? sheetNames
     : sheetNames.filter((n) => !/no\s*activity/i.test(n));
 
-  const reset = () => {
+  const clearFile = () => {
     setFile(null); setWorkbook(null); setSheetName(""); setError(null);
+    setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
+    setDateConfirmed(false); setTypeMismatchAck(false); setDateMismatchAck(false);
+    setReviewDecisions({});
+  };
+
+  const reset = () => {
+    clearFile();
     setMode("stage"); setIncludeInactive(false);
     setOrderCountInput(""); setVisitorCountInput(""); setAovInput("");
-    setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
-    setDateConfirmed(false);
+    setIntendedType(null); setIntendedScope("single");
   };
+
 
 
   const handleFile = useCallback(async (f: File) => {
     setError(null);
     setFile(f);
     setDateConfirmed(false);
+    setTypeMismatchAck(false);
+    setDateMismatchAck(false);
+    setStoreMappings({});
+    setReviewDecisions({});
     try {
       const buf = await f.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array", cellDates: true });
@@ -321,45 +427,67 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     }), { qty: 0, gross: 0, net: 0, vat: 0, disc: 0, count: 0 });
 
   /**
-   * Every store sheet found in the workbook, with its own parsed rows and totals.
-   * Aggregate sheets ("All Stores"/summary) are never treated as a store, and
-   * "No Activity" sheets are excluded unless explicitly allowed.
+   * Every store found in the workbook, with its own parsed rows and totals.
+   * A sheet can be: a Products Sold table, a tabular Daily Sales Summary (one
+   * row per store/date — may contain SEVERAL stores), or a label/value summary.
+   * Aggregate rollup sheets are never treated as a store.
    */
-  const detectedStores = useMemo(() => {
-    if (!workbook) return [] as Array<{
-      sheet: string;
-      kind: "products" | "summary";
-      rows: ParsedRow[];
-      missing: string[];
-      summary: DailySummaryParsed | null;
-      headerDates: string[];
-      rowDates: string[];
-      totals: ReturnType<typeof sumRows>;
-    }>;
-    return workbook.SheetNames
-      .filter((n) => (includeInactive ? true : !/no\s*activity/i.test(n)))
-      .map((n) => {
-        const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS, headerDates: [] };
-        // A sheet without a product table may be a Daily Sales Summary sheet.
-        const ws = workbook.Sheets[n];
-        const grid: any[][] = ws ? XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) : [];
-        const summary = p.missing.length ? parseDailySummarySheet(grid) : null;
-        const rowDates = Array.from(
-          new Set(p.rows.map((r) => r.sale_date).filter(Boolean) as string[])
-        ).sort();
-        const headerDates = summary?.date && !p.headerDates.includes(summary.date)
-          ? [...p.headerDates, summary.date].sort()
-          : p.headerDates;
-        return {
-          sheet: n,
-          kind: (summary ? "summary" : "products") as "products" | "summary",
-          rows: p.rows, missing: p.missing, summary,
-          headerDates, rowDates, totals: sumRows(p.rows),
-        };
-      })
-      // Aggregate rollup sheets are never a store — but a recognisable Daily
-      // Sales Summary sheet IS importable even when its name says "Summary".
-      .filter((s) => !isAggregateSheet(s.sheet) || s.kind === "summary");
+  const detectedStores = useMemo<DetectedStore[]>(() => {
+    if (!workbook) return [];
+    const out: DetectedStore[] = [];
+    const empty = sumRows([]);
+    for (const n of workbook.SheetNames) {
+      if (!includeInactive && /no\s*activity/i.test(n)) continue;
+      const p = parseSheet(workbook, n) || { rows: [], missing: REQUIRED_COLUMNS, headerDates: [] };
+      const ws = workbook.Sheets[n];
+      const grid: any[][] = ws ? XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }) : [];
+
+      if (p.missing.length) {
+        // (a) Tabular Daily Sales Summary — one row per store/date.
+        const tableRows = parseSummaryTableSheet(grid);
+        if (tableRows.length) {
+          const groups = new Map<string, DailySummaryParsed[]>();
+          for (const tr of tableRows) {
+            const k = tr.store || n;
+            groups.set(k, [...(groups.get(k) || []), tr.summary]);
+          }
+          for (const [storeLabel, sums] of groups) {
+            const dates = Array.from(new Set(sums.map((s) => s.date).filter(Boolean) as string[])).sort();
+            out.push({
+              key: `${n}::${storeLabel}`,
+              sheet: n,
+              label: storeLabel === n ? n : `${storeLabel}`,
+              kind: "summary",
+              rows: [], missing: [], summaries: sums,
+              headerDates: dates, rowDates: dates, totals: empty,
+            });
+          }
+          continue;
+        }
+        // (b) Label/value Daily Sales Summary sheet.
+        const single = parseDailySummarySheet(grid);
+        if (single) {
+          const dates = single.date ? [single.date] : [];
+          out.push({
+            key: n, sheet: n, label: n, kind: "summary",
+            rows: [], missing: [], summaries: [single],
+            headerDates: dates.length ? dates : p.headerDates, rowDates: dates, totals: empty,
+          });
+          continue;
+        }
+      }
+
+      if (isAggregateSheet(n)) continue;
+      const rowDates = Array.from(
+        new Set(p.rows.map((r) => r.sale_date).filter(Boolean) as string[])
+      ).sort();
+      out.push({
+        key: n, sheet: n, label: n, kind: "products",
+        rows: p.rows, missing: p.missing, summaries: [],
+        headerDates: p.headerDates, rowDates, totals: sumRows(p.rows),
+      });
+    }
+    return out;
   }, [workbook, includeInactive, parseSheet]);
 
   /**
@@ -404,14 +532,39 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     : dateInfo.kind === "period" ? "historical"
     : "daily";
 
+  /** What the file actually is, compared with the Owner's setup selections. */
+  const detectedType: "products" | "summary" | null = useMemo(() => {
+    if (!detectedStores.length) return null;
+    return detectedStores.some((s) => s.kind === "summary") &&
+      !detectedStores.some((s) => s.kind === "products" && !s.missing.length)
+      ? "summary"
+      : "products";
+  }, [detectedStores]);
+
+  const detectedStart = dateInfo.start ?? (classification === "daily" ? format(reportDate, "yyyy-MM-dd") : null);
+  const detectedEnd = dateInfo.end ?? detectedStart;
+
+  const typeMismatch = !!(workbook && intendedType && detectedType && intendedType !== detectedType);
+  const intendedStartStr = intendedScope === "single"
+    ? format(intendedDate, "yyyy-MM-dd")
+    : format(intendedStart, "yyyy-MM-dd");
+  const intendedEndStr = intendedScope === "single"
+    ? format(intendedDate, "yyyy-MM-dd")
+    : format(intendedEnd, "yyyy-MM-dd");
+  const dateMismatch = !!(
+    workbook && detectedStart && detectedEnd &&
+    (detectedStart !== intendedStartStr || detectedEnd !== intendedEndStr)
+  );
+  const blockingMismatch = (typeMismatch && !typeMismatchAck) || (dateMismatch && !dateMismatchAck);
+
   const importableStores = detectedStores.filter((s) => {
-    const m = storeMappings[s.sheet];
+    const m = storeMappings[s.key];
     if (!m || m.action !== "existing" || !m.locationId) return false;
-    if (s.kind === "summary") return !!s.summary;
+    if (s.kind === "summary") return s.summaries.length > 0;
     return s.rows.length > 0 && !s.missing.length;
   });
   const unresolvedStores = detectedStores.filter((s) => {
-    const m = storeMappings[s.sheet];
+    const m = storeMappings[s.key];
     return !m || m.action === "unset";
   });
 
@@ -423,48 +576,152 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   const totals = useMemo(() => sumRows(parsed?.rows || []), [parsed]);
 
   const dateReady = classification === "daily" ? dateConfirmed : true;
-  const canImport = !!(currentRestaurant && importableStores.length && !unresolvedStores.length && dateReady);
+
+  /** Dates this store writes to (never fabricated for summaries). */
+  const storeDates = useCallback((s: DetectedStore): string[] => {
+    if (s.kind === "summary") {
+      const ds = Array.from(new Set(s.summaries.map((x) => x.date).filter(Boolean) as string[])).sort();
+      return ds.length ? ds : (dateConfirmed ? [format(reportDate, "yyyy-MM-dd")] : []);
+    }
+    if (classification === "multi_day") return s.rowDates;
+    return dateConfirmed ? [format(reportDate, "yyyy-MM-dd")] : [];
+  }, [classification, dateConfirmed, reportDate]);
 
   /** The (location, trading date) pairs this import would write to. */
   const previewTargets = useMemo(() => {
-    if (!currentRestaurant || !dateReady) return [] as Array<{ locationId: string; date: string }>;
+    if (!currentRestaurant || !dateReady || classification === "historical") {
+      return [] as Array<{ locationId: string; date: string }>;
+    }
     const targets: Array<{ locationId: string; date: string }> = [];
     for (const s of importableStores) {
-      const locId = (storeMappings[s.sheet] as { locationId: string }).locationId;
-      if (classification === "daily") {
-        targets.push({ locationId: locId, date: format(reportDate, "yyyy-MM-dd") });
-      } else if (classification === "multi_day") {
-        const dates = s.kind === "summary"
-          ? (s.summary?.date ? [s.summary.date] : [])
-          : s.rowDates;
-        for (const d of dates) targets.push({ locationId: locId, date: d });
-      }
+      const locId = (storeMappings[s.key] as { locationId: string }).locationId;
+      for (const d of storeDates(s)) targets.push({ locationId: locId, date: d });
     }
     return targets;
-  }, [currentRestaurant, dateReady, importableStores, classification, reportDate, storeMappings]);
+  }, [currentRestaurant, dateReady, importableStores, classification, storeMappings, storeDates]);
 
-  /** Existing canonical POS day rows for those targets — powers the
-   *  "existing data found" notice and the reconciliation estimate. */
+  /** Existing canonical POS day rows + closed days for those targets. */
   const targetKey = previewTargets.map((t) => `${t.locationId}:${t.date}`).sort().join("|");
-  const { data: existingPosDays = [] } = useQuery({
+  const { data: existingData } = useQuery({
     queryKey: ["pos-import-existing", currentRestaurant?.id, targetKey],
     enabled: !!currentRestaurant && previewTargets.length > 0,
     queryFn: async () => {
       const locIds = Array.from(new Set(previewTargets.map((t) => t.locationId)));
       const dates = Array.from(new Set(previewTargets.map((t) => t.date)));
-      const { data } = await supabase
-        .from("pos_daily_summaries")
-        .select("location_id, report_date, pos_provider, has_product_detail, has_summary_report, product_gross_sales, summary_gross_sales")
-        .eq("restaurant_id", currentRestaurant!.id)
-        .in("location_id", locIds)
-        .in("report_date", dates);
-      return (data as any[]) ?? [];
+      const [{ data: days }, { data: ledger }] = await Promise.all([
+        supabase
+          .from("pos_daily_summaries")
+          .select("location_id, report_date, pos_provider, has_product_detail, has_summary_report, product_gross_sales, summary_gross_sales, order_count, visitor_count")
+          .eq("restaurant_id", currentRestaurant!.id)
+          .in("location_id", locIds)
+          .in("report_date", dates),
+        supabase
+          .from("daily_ledger_entries")
+          .select("location_id, entry_date, is_closed")
+          .eq("restaurant_id", currentRestaurant!.id)
+          .in("location_id", locIds)
+          .in("entry_date", dates)
+          .eq("is_closed", true),
+      ]);
+      return { days: (days as any[]) ?? [], closed: (ledger as any[]) ?? [] };
     },
   });
+  const existingPosDays = existingData?.days ?? [];
+  const closedDays = existingData?.closed ?? [];
   const existingFor = useCallback(
     (locationId: string, date: string) =>
       existingPosDays.filter((r: any) => r.location_id === locationId && r.report_date === date),
     [existingPosDays],
+  );
+  const isClosedDay = useCallback(
+    (locationId: string, date: string) =>
+      closedDays.some((r: any) => r.location_id === locationId && r.entry_date === date),
+    [closedDays],
+  );
+
+  const nearlyEqual = (a: number | null, b: number | null) =>
+    a != null && b != null && Math.abs(a - b) <= 0.02;
+
+  /**
+   * Date-by-date plan. Each trading date is judged independently against the
+   * existing canonical data — one problem date never affects the others.
+   */
+  const datePlan = useMemo(() => {
+    if (!dateReady || classification === "historical") return [] as Array<{
+      id: string; storeKey: string; label: string; kind: "products" | "summary";
+      locationId: string; date: string;
+      gross: number | null; count: number | null;
+      existingLabel: string; existingGross: number | null;
+      action: DateAction;
+    }>;
+    const plan: Array<any> = [];
+    for (const s of importableStores) {
+      const locId = (storeMappings[s.key] as { locationId: string }).locationId;
+      for (const d of storeDates(s)) {
+        const rows = existingFor(locId, d);
+        const hasP = rows.some((r: any) => r.has_product_detail);
+        const hasS = rows.some((r: any) => r.has_summary_report);
+        const existProd = rows.reduce((a: number | null, r: any) => r.product_gross_sales != null ? (a ?? 0) + Number(r.product_gross_sales) : a, null);
+        const existSum = rows.reduce((a: number | null, r: any) => r.summary_gross_sales != null ? (a ?? 0) + Number(r.summary_gross_sales) : a, null);
+
+        let gross: number | null = null;
+        let count: number | null = null;
+        if (s.kind === "summary") {
+          const mine = s.summaries.filter((x) => (x.date ?? d) === d);
+          gross = mine.reduce((a: number | null, x) => x.gross != null ? (a ?? 0) + x.gross : a, null);
+          count = mine.reduce((a: number | null, x) => x.receipts != null ? (a ?? 0) + x.receipts : a, null);
+        } else {
+          const mine = classification === "multi_day" ? s.rows.filter((r) => r.sale_date === d) : s.rows;
+          gross = mine.reduce((a, r) => a + r.gross_sales, 0);
+        }
+
+        const sameSideExisting = s.kind === "summary" ? existSum : existProd;
+        const sameSideExists = s.kind === "summary" ? hasS : hasP;
+        const otherSideGross = s.kind === "summary" ? existProd : existSum;
+
+        let action: DateAction;
+        if (isClosedDay(locId, d)) action = "closed";
+        else if (!hasP && !hasS) action = "add";
+        else if (sameSideExists && nearlyEqual(sameSideExisting, gross)) action = "up_to_date";
+        else if (sameSideExists) action = "review";
+        else action = "enrich";
+
+        const existingLabel = isClosedDay(locId, d)
+          ? "Day closed"
+          : !hasP && !hasS
+            ? "Missing"
+            : [hasP ? `Products ${existProd != null ? formatCurrency(existProd) : "—"}` : null,
+               hasS ? `Summary ${existSum != null ? formatCurrency(existSum) : "—"}` : null]
+              .filter(Boolean).join(" · ");
+
+        plan.push({
+          id: `${s.key}|${locId}|${d}`,
+          storeKey: s.key, label: s.label, kind: s.kind,
+          locationId: locId, date: d, gross, count,
+          existingLabel, existingGross: sameSideExists ? sameSideExisting : otherSideGross,
+          action,
+        });
+      }
+    }
+    return plan.sort((a, b) => a.label.localeCompare(b.label) || a.date.localeCompare(b.date));
+  }, [dateReady, classification, importableStores, storeMappings, storeDates, existingFor, isClosedDay]);
+
+  const pendingReviews = datePlan.filter((p) => p.action === "review" && !reviewDecisions[p.id]);
+  const writableDates = datePlan.filter(
+    (p) => p.action === "add" || p.action === "enrich" ||
+      (p.action === "review" && reviewDecisions[p.id] === "replace"),
+  );
+  /** Fast lookup used by the importer to skip dates that must not be written. */
+  const shouldWriteDate = useCallback(
+    (storeKey: string, locationId: string, date: string) =>
+      writableDates.some((p) => p.id === `${storeKey}|${locationId}|${date}`),
+    [writableDates],
+  );
+
+  const canImport = !!(
+    currentRestaurant && importableStores.length && !unresolvedStores.length && dateReady &&
+    !blockingMismatch && !pendingReviews.length &&
+    (classification === "historical" || writableDates.length > 0)
   );
 
 
@@ -836,10 +1093,13 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
       let firstDate = "";
       let lastDate = "";
 
+      let summaryDays = 0;
+      let skipped = 0;
+
       if (classification === "historical") {
         for (const store of importableStores) {
           if (store.kind === "summary") continue; // daily summaries never go to historical product storage
-          const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
+          const locId = (storeMappings[store.key] as { locationId: string }).locationId;
           products += await importHistoricalStore(locId, store.rows, dateInfo.start!, dateInfo.end!);
           lastLocationId = locId;
         }
@@ -847,15 +1107,22 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         lastDate = dateInfo.end!;
       } else {
         for (const store of importableStores) {
-          const locId = (storeMappings[store.sheet] as { locationId: string }).locationId;
-          // Daily Sales Summary sheets MERGE into the canonical day row via the RPC.
-          if (store.kind === "summary" && store.summary) {
-            const d = classification === "multi_day" && store.summary.date
-              ? store.summary.date
-              : format(reportDate, "yyyy-MM-dd");
-            await importDailySummaryStore(locId, store.summary, d);
-            if (!firstDate || d < firstDate) firstDate = d;
-            if (!lastDate || d > lastDate) lastDate = d;
+          const locId = (storeMappings[store.key] as { locationId: string }).locationId;
+          // Daily Sales Summary sheets MERGE into the canonical day row via the
+          // RPC — one write per trading date, each judged independently.
+          if (store.kind === "summary") {
+            const byDate = new Map<string, DailySummaryParsed>();
+            for (const sum of store.summaries) {
+              const d = sum.date ?? format(reportDate, "yyyy-MM-dd");
+              byDate.set(d, sum);
+            }
+            for (const [d, sum] of Array.from(byDate.entries()).sort()) {
+              if (!shouldWriteDate(store.key, locId, d)) { skipped++; continue; }
+              await importDailySummaryStore(locId, sum, d);
+              summaryDays++;
+              if (!firstDate || d < firstDate) firstDate = d;
+              if (!lastDate || d > lastDate) lastDate = d;
+            }
             lastLocationId = locId;
             continue;
           }
@@ -870,6 +1137,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
             groups.set(format(reportDate, "yyyy-MM-dd"), store.rows);
           }
           for (const [d, rows] of Array.from(groups.entries()).sort()) {
+            if (!shouldWriteDate(store.key, locId, d)) { skipped++; continue; }
             const res = await importStore(store.sheet, locId, rows, single && groups.size === 1, d);
             products += res?.products || 0;
             applied += res?.applied || 0;
@@ -885,10 +1153,13 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
           ? "Historical report imported"
           : mode === "apply" ? "Import applied" : "Import staged",
         description:
-          `${importableStores.length} store(s) · ${products} products` +
+          `${importableStores.length} store(s)` +
+          (summaryDays ? ` · ${summaryDays} daily summar${summaryDays === 1 ? "y" : "ies"}` : "") +
+          (products ? ` · ${products} products` : "") +
+          (skipped ? ` · ${skipped} date(s) left unchanged` : "") +
           (classification === "historical"
             ? " · stored as historical product data only."
-            : (mode === "apply" ? ` · ${applied} product sale rows posted to dashboard.` : ".")),
+            : (mode === "apply" && products ? ` · ${applied} product sale rows posted to dashboard.` : ".")),
       });
 
       // Persist import context so Menu Performance / Dashboard immediately
@@ -925,21 +1196,80 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         <DialogHeader>
           <DialogTitle>Import Captiva XLS</DialogTitle>
           <DialogDescription>
-            Upload a Captiva Product Report workbook. Choose a store sheet and report date, preview totals, then stage or apply to the dashboard.
+            Import a Captiva Sales Summary or Products Sold report — one day or a date range. Tell us what you are uploading, choose the file, review each trading date, then confirm.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div>
-            <Label>Workbook file</Label>
-            <div className="flex items-center gap-2 mt-1">
+          {/* STEP 1 — what the Owner intends to upload (a confirmation aid only) */}
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="text-sm font-medium">1. What are you importing?</div>
+            <div>
+              <Label className="text-xs">Report type</Label>
+              <div className="flex gap-2 mt-1">
+                {([["summary", "Sales Summary"], ["products", "Products Sold"]] as const).map(([v, lbl]) => (
+                  <Button
+                    key={v}
+                    type="button"
+                    variant={intendedType === v ? "default" : "outline"}
+                    className="h-11 flex-1"
+                    onClick={() => { setIntendedType(v); setTypeMismatchAck(false); }}
+                  >
+                    {lbl}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Date scope</Label>
+              <div className="flex gap-2 mt-1">
+                {([["single", "Single day"], ["range", "Date range"]] as const).map(([v, lbl]) => (
+                  <Button
+                    key={v}
+                    type="button"
+                    variant={intendedScope === v ? "default" : "outline"}
+                    className="h-11 flex-1"
+                    onClick={() => { setIntendedScope(v); setDateMismatchAck(false); }}
+                  >
+                    {lbl}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {(intendedScope === "single"
+                ? [["Trading date", intendedDate, setIntendedDate] as const]
+                : [["Start date", intendedStart, setIntendedStart] as const,
+                   ["End date", intendedEnd, setIntendedEnd] as const]
+              ).map(([lbl, val, set]) => (
+                <div key={lbl}>
+                  <Label className="text-xs">{lbl}</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full h-11 justify-start text-left font-normal mt-1">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(val, "PPP")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={val} onSelect={(d) => { if (d) { set(d); setDateMismatchAck(false); } }} initialFocus className={cn("p-3 pointer-events-auto")} />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              ))}
+            </div>
+            <div>
+              <Label className="text-xs">Captiva XLS file</Label>
               <Input
+                className="mt-1 h-11"
                 type="file"
                 accept=".xls,.xlsx,.xlsm"
+                disabled={!intendedType}
                 onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               />
+              {!intendedType && <p className="text-xs text-muted-foreground mt-1">Choose a report type first.</p>}
+              {file && <p className="text-xs text-muted-foreground mt-1">{file.name}</p>}
             </div>
-            {file && <p className="text-xs text-muted-foreground mt-1">{file.name}</p>}
           </div>
 
           {error && (
@@ -951,27 +1281,87 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
 
           {workbook && (
             <>
-              {/* What kind of upload this is, and what it will update */}
+              {/* Selected vs detected — never silently continue on a disagreement */}
               <div className="rounded-lg border p-3 space-y-2">
                 <div className="text-sm font-medium">
-                  {classification === "daily" && "Daily POS data"}
-                  {classification === "multi_day" && "Multi-day dated POS data"}
+                  {classification === "daily" && (detectedType === "summary" ? "Daily Sales Summary" : "Daily POS data")}
+                  {classification === "multi_day" && (detectedType === "summary" ? "Multi-day Daily Sales Summary" : "Multi-day dated POS data")}
                   {classification === "historical" && "Historical aggregated product data"}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {classification === "daily" && "One trading day of product sales for the matched location(s)."}
-                  {classification === "multi_day" && `Rows carry their own dates (${dateInfo.start} → ${dateInfo.end}); each date is imported separately.`}
-                  {classification === "historical" && `Only an aggregated period (${dateInfo.start} → ${dateInfo.end}) is known, so this cannot be posted to a single trading day. It will be stored as historical product data.`}
-                </p>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Selected by you</div>
+                    <div>{intendedType === "summary" ? "Sales Summary" : "Products Sold"} · {intendedStartStr}{intendedEndStr !== intendedStartStr ? ` → ${intendedEndStr}` : ""}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Detected from file</div>
+                    <div>
+                      {detectedType === "summary" ? "Daily Sales Summary" : "Products Sold"}
+                      {detectedStart ? ` · ${detectedStart}${detectedEnd !== detectedStart ? ` → ${detectedEnd}` : ""}` : ""}
+                      {dateInfo.dates.length > 1 ? ` · ${dateInfo.dates.length} trading days` : ""}
+                    </div>
+                  </div>
+                </div>
+                {typeMismatch && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs space-y-2">
+                      <div>This file appears to be a {detectedType === "summary" ? "Sales Summary" : "Products Sold"} report, not a {intendedType === "summary" ? "Sales Summary" : "Products Sold"} report.</div>
+                      <div className="flex gap-2">
+                        <Button size="sm" className="h-10" onClick={() => { setIntendedType(detectedType); setTypeMismatchAck(true); }}>Use detected report type</Button>
+                        <Button size="sm" variant="outline" className="h-10" onClick={clearFile}>Choose another file</Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {dateMismatch && !typeMismatch && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs space-y-2">
+                      <div>
+                        This file contains data for {detectedStart}{detectedEnd !== detectedStart ? ` – ${detectedEnd}` : ""}, which differs from the dates you selected.
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="h-10"
+                          onClick={() => {
+                            if (detectedStart) setIntendedStart(new Date(`${detectedStart}T00:00:00`));
+                            if (detectedEnd) setIntendedEnd(new Date(`${detectedEnd}T00:00:00`));
+                            if (detectedStart && detectedStart === detectedEnd) {
+                              setIntendedScope("single");
+                              setIntendedDate(new Date(`${detectedStart}T00:00:00`));
+                            } else {
+                              setIntendedScope("range");
+                            }
+                            setDateMismatchAck(true);
+                          }}
+                        >
+                          Use detected date range
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-10" onClick={clearFile}>Choose another file</Button>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <div className="text-xs">
                   <span className="text-muted-foreground">This import will update: </span>
                   {classification === "historical"
                     ? "Product Intelligence (historical periods only)."
-                    : (mode === "apply"
-                        ? "Dashboard, Reports / daily calendar, Product Intelligence, Menu Performance & Cost Analysis, and theoretical inventory usage for mapped recipes."
-                        : "Staged POS rows and the product catalogue only — nothing reaches the Dashboard or Reports until you choose “Apply to dashboard”.")}
+                    : detectedType === "summary"
+                      ? "Reports, Dashboard and daily analytics (sales count, average order value, discounts)."
+                      : (mode === "apply"
+                          ? "Dashboard, Reports / daily calendar, Product Intelligence, Menu Performance & Cost Analysis, and theoretical inventory usage for mapped recipes."
+                          : "Staged POS rows and the product catalogue only — nothing reaches the Dashboard or Reports until you choose “Apply to dashboard”.")}
                 </div>
+                {detectedType === "summary" && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">This import will not create: </span>
+                    individual product or transaction sales.
+                  </div>
+                )}
               </div>
+
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1069,16 +1459,18 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                   </TableHeader>
                   <TableBody>
                     {detectedStores.map((s) => {
-                      const m = storeMappings[s.sheet] || { action: "unset" as const };
+                      const m = storeMappings[s.key] || { action: "unset" as const };
                       const value =
                         m.action === "existing" ? m.locationId
                         : m.action === "skip" ? "__skip"
                         : "";
+                      const sumGrossTotal = s.summaries.reduce(
+                        (a: number | null, x) => x.gross != null ? (a ?? 0) + x.gross : a, null);
                       return (
-                        <TableRow key={s.sheet}>
+                        <TableRow key={s.key}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2 flex-wrap">
-                              {s.sheet}
+                              {s.label}
                               <Badge variant="outline" className="text-[10px]">
                                 {s.kind === "summary" ? "Daily summary" : "Products sold"}
                               </Badge>
@@ -1086,37 +1478,42 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                             {s.missing.length > 0 && s.kind !== "summary" && (
                               <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
                             )}
-                            {s.kind === "summary" && s.summary && (
+                            {s.kind === "summary" && (
                               <div className="text-xs text-muted-foreground">
-                                Gross {formatCurrency(s.summary.gross ?? 0)}
-                                {s.summary.receipts != null && ` · ${s.summary.receipts} receipts`}
-                                {s.summary.visitors != null && ` · ${s.summary.visitors} visitors`}
+                                {s.summaries.length} trading day{s.summaries.length === 1 ? "" : "s"}
+                                {sumGrossTotal != null && ` · ${formatCurrency(sumGrossTotal)}`}
                               </div>
                             )}
                           </TableCell>
                           <TableCell className="text-xs">
-                            {classification === "daily"
-                              ? (dateConfirmed ? format(reportDate, "yyyy-MM-dd") : "Awaiting confirmation")
-                              : s.rowDates.length > 1
-                                ? `${s.rowDates[0]} → ${s.rowDates[s.rowDates.length - 1]}`
-                                : `${dateInfo.start} → ${dateInfo.end}`}
+                            {s.rowDates.length > 1
+                              ? `${s.rowDates[0]} → ${s.rowDates[s.rowDates.length - 1]}`
+                              : s.rowDates.length === 1
+                                ? s.rowDates[0]
+                                : classification === "daily"
+                                  ? (dateConfirmed ? format(reportDate, "yyyy-MM-dd") : "Awaiting confirmation")
+                                  : `${dateInfo.start} → ${dateInfo.end}`}
                           </TableCell>
-                          <TableCell className="text-right">{s.totals.count}</TableCell>
+                          <TableCell className="text-right">{s.kind === "summary" ? s.summaries.length : s.totals.count}</TableCell>
 
-                          <TableCell className="text-right">{s.totals.qty}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(s.totals.gross)}</TableCell>
+                          <TableCell className="text-right">{s.kind === "summary" ? "—" : s.totals.qty}</TableCell>
+                          <TableCell className="text-right">
+                            {s.kind === "summary"
+                              ? (sumGrossTotal != null ? formatCurrency(sumGrossTotal) : "—")
+                              : formatCurrency(s.totals.gross)}
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Select
                                 value={value}
                                 onValueChange={(v) => {
                                   if (v === "__skip") {
-                                    setStoreMappings((prev) => ({ ...prev, [s.sheet]: { action: "skip" } }));
+                                    setStoreMappings((prev) => ({ ...prev, [s.key]: { action: "skip" } }));
                                   } else if (v === "__new") {
-                                    setNewLocationFor(s.sheet);
-                                    setNewLocationName(s.sheet);
+                                    setNewLocationFor(s.key);
+                                    setNewLocationName(s.label);
                                   } else {
-                                    setStoreMappings((prev) => ({ ...prev, [s.sheet]: { action: "existing", locationId: v } }));
+                                    setStoreMappings((prev) => ({ ...prev, [s.key]: { action: "existing", locationId: v } }));
                                   }
                                 }}
                               >
@@ -1128,47 +1525,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                                 </SelectContent>
                               </Select>
                             </div>
-                            {/* Existing canonical data + reconciliation estimate */}
-                            {m.action === "existing" && dateReady && classification !== "historical" && (() => {
-                              const dates = classification === "multi_day"
-                                ? (s.kind === "summary" ? (s.summary?.date ? [s.summary.date] : []) : s.rowDates)
-                                : [format(reportDate, "yyyy-MM-dd")];
-                              const notes: React.ReactNode[] = [];
-                              for (const d of dates) {
-                                const rows = existingFor(m.locationId, d);
-                                if (!rows.length) continue;
-                                const hasP = rows.some((r: any) => r.has_product_detail);
-                                const hasS = rows.some((r: any) => r.has_summary_report);
-                                if (!hasP && !hasS) continue;
-                                // Reconciliation: incoming kind fills one side, existing data the other.
-                                const prodGross = s.kind === "products"
-                                  ? (classification === "multi_day"
-                                      ? s.rows.filter((r) => r.sale_date === d).reduce((a, r) => a + r.gross_sales, 0)
-                                      : s.totals.gross)
-                                  : rows.reduce((a: number | null, r: any) => r.product_gross_sales != null ? (a ?? 0) + Number(r.product_gross_sales) : a, null);
-                                const sumGross = s.kind === "summary"
-                                  ? s.summary?.gross ?? null
-                                  : rows.reduce((a: number | null, r: any) => r.summary_gross_sales != null ? (a ?? 0) + Number(r.summary_gross_sales) : a, null);
-                                notes.push(
-                                  <div key={d} className="mt-1 text-[11px] text-muted-foreground">
-                                    Existing data found for {d}: {hasP ? "products report" : ""}{hasP && hasS ? " + " : ""}{hasS ? "daily summary" : ""} — this import will merge, not duplicate.
-                                    {prodGross != null && sumGross != null && (() => {
-                                      const diff = Math.abs(prodGross - sumGross);
-                                      const pct = sumGross !== 0 ? (diff / Math.abs(sumGross)) * 100 : (diff === 0 ? 0 : 100);
-                                      const status = diff <= 0.02 ? "matched" : pct < 2 ? "small" : "review";
-                                      return (
-                                        <span className={cn("ml-1 font-medium", status === "review" ? "text-destructive" : status === "small" ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>
-                                          {status === "matched" ? "Matched" : status === "small" ? "Small variance" : "Needs review"}
-                                          {status !== "matched" && ` (Δ ${formatCurrency(diff)}${Number.isFinite(pct) ? `, ${pct.toFixed(1)}%` : ""})`}
-                                        </span>
-                                      );
-                                    })()}
-                                  </div>
-                                );
-                              }
-                              return notes.length ? <>{notes}</> : null;
-                            })()}
-                            {newLocationFor === s.sheet && (
+                            {newLocationFor === s.key && (
                               <div className="mt-2 flex items-center gap-2">
                                 <Input
                                   className="h-11"
@@ -1200,7 +1557,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                                         ).id;
                                       setStoreMappings((prev) => ({
                                         ...prev,
-                                        [s.sheet]: { action: "existing", locationId },
+                                        [s.key]: { action: "existing", locationId },
                                       }));
                                       setNewLocationFor(null);
                                       setNewLocationName("");
@@ -1230,7 +1587,95 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                 )}
               </div>
 
-              {parsed?.missing.length ? (
+              {/* Date-by-date plan: every trading date judged independently */}
+              {classification !== "historical" && datePlan.length > 0 && (
+                <div className="rounded-lg border">
+                  <div className="p-3 border-b">
+                    <div className="text-sm font-medium">What will happen to each trading date</div>
+                    <p className="text-xs text-muted-foreground">
+                      Existing data is merged, never duplicated or silently overwritten. Nothing is written until you confirm.
+                    </p>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-background">
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead className="text-right">Sales</TableHead>
+                          <TableHead className="text-right">Sales count</TableHead>
+                          <TableHead>Existing data</TableHead>
+                          <TableHead>Action</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {datePlan.map((p) => {
+                          const decision = reviewDecisions[p.id];
+                          const badge =
+                            p.action === "add" ? { label: "Will add", cls: "text-emerald-600 dark:text-emerald-400" }
+                            : p.action === "enrich" ? { label: "Will enrich", cls: "text-emerald-600 dark:text-emerald-400" }
+                            : p.action === "up_to_date" ? { label: "Already up to date", cls: "text-muted-foreground" }
+                            : p.action === "closed" ? { label: "Closed day — protected", cls: "text-amber-600 dark:text-amber-400" }
+                            : { label: "Needs review", cls: "text-destructive" };
+                          return (
+                            <TableRow key={p.id}>
+                              <TableCell className="text-xs">
+                                <div className="font-medium">{p.date}</div>
+                                <div className="text-muted-foreground">{p.label}</div>
+                              </TableCell>
+                              <TableCell className="text-right text-xs">{p.gross != null ? formatCurrency(p.gross) : "—"}</TableCell>
+                              <TableCell className="text-right text-xs">{p.count != null ? p.count : "—"}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{p.existingLabel}</TableCell>
+                              <TableCell className="text-xs">
+                                <span className={cn("font-medium", badge.cls)}>{badge.label}</span>
+                                {p.action === "closed" && (
+                                  <div className="text-muted-foreground">Reopen the day before POS data can change.</div>
+                                )}
+                                {p.action === "review" && (
+                                  <div className="mt-1 space-y-1">
+                                    <div className="text-muted-foreground">
+                                      Existing {p.existingGross != null ? formatCurrency(p.existingGross) : "—"} vs uploaded {p.gross != null ? formatCurrency(p.gross) : "—"}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant={decision === "keep" ? "default" : "outline"}
+                                        className="h-9"
+                                        onClick={() => setReviewDecisions((prev) => ({ ...prev, [p.id]: "keep" }))}
+                                      >
+                                        Keep existing
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant={decision === "replace" ? "default" : "outline"}
+                                        className="h-9"
+                                        onClick={() => setReviewDecisions((prev) => ({ ...prev, [p.id]: "replace" }))}
+                                      >
+                                        Replace
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="p-3 border-t text-xs text-muted-foreground">
+                    {writableDates.length} date(s) will be written · {datePlan.length - writableDates.length} left unchanged.
+                    {pendingReviews.length > 0 && (
+                      <span className="ml-1 text-destructive font-medium">
+                        {pendingReviews.length} date(s) need a Keep existing / Replace decision.
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+
+
+              {detectedType === "summary" ? null : parsed?.missing.length ? (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
@@ -1323,7 +1768,13 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
           <Button variant="outline" onClick={() => { setOpen(false); reset(); }}>Cancel</Button>
           <Button onClick={handleImport} disabled={!canImport || busy}>
             <Upload className="h-4 w-4 mr-2" />
-            {busy ? "Importing…" : classification === "historical" ? "Confirm — store as historical" : mode === "apply" ? "Confirm Import & Apply" : "Confirm — Stage Import"}
+            {busy
+              ? "Importing…"
+              : classification === "historical"
+                ? "Confirm — store as historical"
+                : detectedType === "summary"
+                  ? `Apply ${writableDates.length} date(s)`
+                  : mode === "apply" ? "Confirm Import & Apply" : "Confirm — Stage Import"}
           </Button>
         </DialogFooter>
       </DialogContent>
