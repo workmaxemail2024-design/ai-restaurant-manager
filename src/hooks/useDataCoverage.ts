@@ -8,7 +8,12 @@ export type CoverageLevel = "complete" | "partial" | "missing";
 
 export interface DayCoverage {
   date: string;
+  /** Any POS sales evidence: product detail OR a daily sales summary. */
   hasSales: boolean;
+  /** Daily sales summary (gross, order count) present. */
+  hasSalesSummary: boolean;
+  /** Product/transaction-level detail present. */
+  hasProductDetail: boolean;
   hasLabour: boolean; // attendance OR manual ledger
   hasAttendance: boolean;
   hasManualLabour: boolean;
@@ -31,7 +36,7 @@ export interface CoverageSummary {
 }
 
 export interface DataWarning {
-  type: "missing_labour" | "missing_recipes" | "unallocated_overheads" | "missing_sales" | "no_attendance";
+  type: "missing_labour" | "missing_recipes" | "unallocated_overheads" | "missing_sales" | "missing_product_detail" | "no_attendance";
   message: string;
   severity: "info" | "warning" | "error";
   page?: string;
@@ -70,6 +75,22 @@ export function useDataCoverage(locationId?: string | null) {
         const { data } = await q;
         const set = new Set<string>();
         (data || []).forEach(r => set.add(r.sale_date));
+        return set;
+      })();
+
+      // Daily POS sales summaries — a day with a summary HAS sales data even
+      // when no product/transaction detail was imported.
+      const summaryPromise = (async () => {
+        let q = supabase
+          .from("pos_daily_summaries")
+          .select("report_date, gross_sales")
+          .eq("restaurant_id", restaurantId!)
+          .gte("report_date", startDate)
+          .lte("report_date", endDate);
+        if (locationId) q = q.eq("location_id", locationId);
+        const { data } = await q;
+        const set = new Set<string>();
+        (data || []).forEach(r => { if (r.gross_sales != null) set.add(r.report_date); });
         return set;
       })();
 
@@ -160,15 +181,19 @@ export function useDataCoverage(locationId?: string | null) {
         return { total: dishCount || 0, withRecipes: recipedCount || 0 };
       })();
 
-      const [salesDays, attendanceDays, ledgerMap, inventoryDays, reservationDays, hasOverheads, recipes] =
-        await Promise.all([salesPromise, attendancePromise, ledgerPromise, inventoryPromise, reservationsPromise, overheadsPromise, recipesPromise]);
+      const [productDays, summaryDays, attendanceDays, ledgerMap, inventoryDays, reservationDays, hasOverheads, recipes] =
+        await Promise.all([salesPromise, summaryPromise, attendancePromise, ledgerPromise, inventoryPromise, reservationsPromise, overheadsPromise, recipesPromise]);
 
       // Build daily coverage
       const dailyCoverage = new Map<string, DayCoverage>();
       let salesCovered = 0, labourCovered = 0, inventoryCovered = 0, resCovered = 0, finCovered = 0;
+      let productMissingWithSummary = 0;
 
       for (const dateStr of dateStrings) {
-        const hasSales = salesDays.has(dateStr);
+        const hasProductDetail = productDays.has(dateStr);
+        const hasSalesSummary = summaryDays.has(dateStr);
+        const hasSales = hasProductDetail || hasSalesSummary;
+        if (hasSalesSummary && !hasProductDetail) productMissingWithSummary++;
         const hasAttendance = attendanceDays.has(dateStr);
         const ledger = ledgerMap.get(dateStr);
         const hasManualLabour = (ledger?.labour_hours ?? 0) > 0;
@@ -182,7 +207,7 @@ export function useDataCoverage(locationId?: string | null) {
         const anyPresent = hasSales || hasLabour || hasInventory || hasReservations || hasFinancial;
         const level: CoverageLevel = criticalPresent ? "complete" : anyPresent ? "partial" : "missing";
 
-        dailyCoverage.set(dateStr, { date: dateStr, hasSales: hasSales || isClosed, hasLabour, hasAttendance, hasManualLabour, hasInventory, hasReservations, hasFinancial, level });
+        dailyCoverage.set(dateStr, { date: dateStr, hasSales: hasSales || isClosed, hasSalesSummary, hasProductDetail, hasLabour, hasAttendance, hasManualLabour, hasInventory, hasReservations, hasFinancial, level });
 
         if (hasSales || isClosed) salesCovered++;
         if (hasLabour) labourCovered++;
@@ -211,6 +236,16 @@ export function useDataCoverage(locationId?: string | null) {
           type: "missing_sales",
           message: `Sales data missing for ${salesMissing} day${salesMissing > 1 ? "s" : ""}.`,
           severity: salesMissing === totalDays ? "error" : "warning",
+          page: "Sales",
+          route: "/sales",
+        });
+      }
+
+      if (productMissingWithSummary > 0) {
+        warnings.push({
+          type: "missing_product_detail",
+          message: `Product-level sales missing for ${productMissingWithSummary} day${productMissingWithSummary > 1 ? "s" : ""} — totals are available, dish-level analysis is not.`,
+          severity: "info",
           page: "Sales",
           route: "/sales",
         });

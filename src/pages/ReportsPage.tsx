@@ -31,6 +31,7 @@ import {
   Upload,
 } from "lucide-react";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
+import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { reconcileGross } from "@/lib/posDailyCanonical";
 
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
@@ -663,12 +664,18 @@ function DayCard({
                           </div>
                         );
                       })()}
+                      {/* Summary-only day notice */}
+                      {!day.hasProductDetail && day.hasSummary && (
+                        <div className="pt-2 mt-1 border-t border-border/60 text-[11px] text-muted-foreground">
+                          Sales summary imported. Product-level sales have not yet been imported for this day.
+                        </div>
+                      )}
                       {/* Revenue split — reconciles back to total item revenue */}
-                      {(() => {
+                      {day.hasProductDetail && (() => {
                         const rt = day.revenueByType;
                         const catTotal = rt.food + rt.alcoholic + rt.nonAlcoholic + rt.modifier + rt.other;
                         // Unclassified = any revenue we could not bucket at all (should be 0 after backfill).
-                        const unclassified = Math.max(0, day.revenue - catTotal);
+                        const unclassified = Math.max(0, day.productRevenue - catTotal);
                         const totalReconciled = catTotal + unclassified;
                         return (
                           <div className="pt-2 mt-1 border-t border-border/60">
@@ -864,7 +871,7 @@ function DayCard({
                   </div>
 
                   {/* Existing dish/location analytics */}
-                  {day.hasData && (
+                  {day.hasProductDetail && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -913,7 +920,7 @@ function DayCard({
                     </div>
                   )}
 
-                  {day.hasData && day.locationPerformance.length > 1 && (
+                  {day.hasProductDetail && day.locationPerformance.length > 1 && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         Location Performance
@@ -943,6 +950,18 @@ function DayCard({
 
                   {!day.hasData && !isClosed && manualRevenue == null && (
                     <p className="text-sm text-muted-foreground">No sales recorded for this day.</p>
+                  )}
+                  {day.hasData && !day.hasProductDetail && (
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                      <span>Sales summary available · Product detail missing.</span>
+                      <CaptivaXLSImportDialog
+                        trigger={
+                          <Button size="sm" variant="outline" className="h-8 gap-1 text-xs">
+                            <Upload className="h-3 w-3" /> Import POS Data
+                          </Button>
+                        }
+                      />
+                    </div>
                   )}
                 </CardContent>
               </CollapsibleContent>
@@ -1195,6 +1214,10 @@ export default function ReportsPage() {
         </TabsList>
 
         <TabsContent value="daily" className="space-y-4">
+          {/* Date range control */}
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangeSelector />
+          </div>
           {/* Date Context Header */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <div className="flex items-center gap-1.5 text-muted-foreground">

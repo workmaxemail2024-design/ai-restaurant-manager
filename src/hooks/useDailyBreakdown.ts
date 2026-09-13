@@ -43,7 +43,12 @@ export interface RevenueByType {
 
 export interface DailyMetrics {
   date: string; // YYYY-MM-DD
-  revenue: number;             // from sales rows (source of truth for revenue)
+  /** Canonical revenue: POS daily summary gross where known, else product-line revenue. */
+  revenue: number;
+  /** Revenue derived from product/transaction rows only (0 when no product detail). */
+  productRevenue: number;
+  /** True when product/transaction level detail exists for the day. */
+  hasProductDetail: boolean;
   qtySold: number;             // total item units sold (product quantity)
   orders: number | null;       // authoritative receipt count from pos_daily_summaries
   aov: number | null;
@@ -229,10 +234,15 @@ export function useDailyBreakdown(
     return days.map((day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       const daySales = byDate.get(dateStr) || [];
-      const hasData = daySales.length > 0;
+      const hasProductDetail = daySales.length > 0;
       const summary = summaries.get(dateStr) || null;
 
-      const revenue = daySales.reduce((s, r) => s + Number(r.total_price), 0);
+      const productRevenue = daySales.reduce((s, r) => s + Number(r.total_price), 0);
+      // Canonical revenue: the resolver already prefers product-derived gross where it
+      // exists, so a summary gross never double-counts a product day.
+      const revenue = summary?.grossSales ?? productRevenue;
+      // A day with only a daily sales summary still HAS sales data.
+      const hasData = hasProductDetail || (summary != null && summary.grossSales != null);
       const qtySold = daySales.reduce((s, r) => s + Number(r.quantity), 0);
 
       // Aggregate by dish + classify
@@ -304,6 +314,8 @@ export function useDailyBreakdown(
       return {
         date: dateStr,
         revenue,
+        productRevenue,
+        hasProductDetail,
         qtySold,
         orders: orderCount,
         aov,
