@@ -181,15 +181,19 @@ export function useDataCoverage(locationId?: string | null) {
         return { total: dishCount || 0, withRecipes: recipedCount || 0 };
       })();
 
-      const [salesDays, attendanceDays, ledgerMap, inventoryDays, reservationDays, hasOverheads, recipes] =
-        await Promise.all([salesPromise, attendancePromise, ledgerPromise, inventoryPromise, reservationsPromise, overheadsPromise, recipesPromise]);
+      const [productDays, summaryDays, attendanceDays, ledgerMap, inventoryDays, reservationDays, hasOverheads, recipes] =
+        await Promise.all([salesPromise, summaryPromise, attendancePromise, ledgerPromise, inventoryPromise, reservationsPromise, overheadsPromise, recipesPromise]);
 
       // Build daily coverage
       const dailyCoverage = new Map<string, DayCoverage>();
       let salesCovered = 0, labourCovered = 0, inventoryCovered = 0, resCovered = 0, finCovered = 0;
+      let productMissingWithSummary = 0;
 
       for (const dateStr of dateStrings) {
-        const hasSales = salesDays.has(dateStr);
+        const hasProductDetail = productDays.has(dateStr);
+        const hasSalesSummary = summaryDays.has(dateStr);
+        const hasSales = hasProductDetail || hasSalesSummary;
+        if (hasSalesSummary && !hasProductDetail) productMissingWithSummary++;
         const hasAttendance = attendanceDays.has(dateStr);
         const ledger = ledgerMap.get(dateStr);
         const hasManualLabour = (ledger?.labour_hours ?? 0) > 0;
