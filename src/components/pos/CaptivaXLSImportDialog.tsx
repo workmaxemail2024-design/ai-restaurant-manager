@@ -1181,17 +1181,33 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                                   className="h-11"
                                   disabled={!newLocationName.trim() || createLocation.isPending || !currentRestaurant}
                                   onClick={async () => {
-                                    if (!currentRestaurant) return;
-                                    const created = await createLocation.mutateAsync({
-                                      name: newLocationName.trim(),
-                                      restaurant_id: currentRestaurant.id,
-                                    } as any);
-                                    setStoreMappings((prev) => ({
-                                      ...prev,
-                                      [s.sheet]: { action: "existing", locationId: created.id },
-                                    }));
-                                    setNewLocationFor(null);
-                                    setNewLocationName("");
+                                    if (!currentRestaurant || createLocation.isPending) return;
+                                    const name = newLocationName.trim();
+                                    // Duplicate guard: reuse an identically named location instead
+                                    // of creating a second one on a double tap / slow retry.
+                                    const existing = locations.find(
+                                      (l) => l.name.trim().toLowerCase() === name.toLowerCase(),
+                                    );
+                                    try {
+                                      const locationId =
+                                        existing?.id ??
+                                        (
+                                          await createLocation.mutateAsync({
+                                            name,
+                                            address: null,
+                                            restaurant_id: currentRestaurant.id,
+                                          })
+                                        ).id;
+                                      setStoreMappings((prev) => ({
+                                        ...prev,
+                                        [s.sheet]: { action: "existing", locationId },
+                                      }));
+                                      setNewLocationFor(null);
+                                      setNewLocationName("");
+                                    } catch {
+                                      // useCreateLocation already surfaces the error toast;
+                                      // keep the field open so the user can retry.
+                                    }
                                   }}
                                 >
                                   Create
