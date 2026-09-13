@@ -93,7 +93,7 @@ export default function SalesPage() {
   return (
     <PageLayout title="Sales" subtitle="View the individual sales transactions imported from your POS.">
       {/* Data Warnings */}
-      <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes", "missing_sales"]} className="mb-4" />
+      <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes", "missing_sales", "missing_product_detail"]} className="mb-4" />
 
       {/* Date range control */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
