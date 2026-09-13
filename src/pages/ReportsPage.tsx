@@ -31,6 +31,7 @@ import {
   Upload,
 } from "lucide-react";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
+import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { reconcileGross } from "@/lib/posDailyCanonical";
 
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
@@ -1213,6 +1214,10 @@ export default function ReportsPage() {
         </TabsList>
 
         <TabsContent value="daily" className="space-y-4">
+          {/* Date range control */}
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangeSelector />
+          </div>
           {/* Date Context Header */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
             <div className="flex items-center gap-1.5 text-muted-foreground">

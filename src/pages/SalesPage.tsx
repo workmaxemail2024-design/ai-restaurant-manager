@@ -18,6 +18,7 @@ import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
+import { DateRangeSelector } from "@/components/DateRangeSelector";
 
 export default function SalesPage() {
   const { selectedLocationId } = useLocation();
@@ -93,6 +94,11 @@ export default function SalesPage() {
     <PageLayout title="Sales" subtitle="View the individual sales transactions imported from your POS.">
       {/* Data Warnings */}
       <DataWarningBanner locationId={selectedLocationId} filterTypes={["missing_recipes", "missing_sales"]} className="mb-4" />
+
+      {/* Date range control */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <DateRangeSelector />
+      </div>
 
       {/* Period indicator */}
       <div className="text-sm text-muted-foreground mb-4">
