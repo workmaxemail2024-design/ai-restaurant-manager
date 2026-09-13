@@ -78,6 +78,22 @@ export function useDataCoverage(locationId?: string | null) {
         return set;
       })();
 
+      // Daily POS sales summaries — a day with a summary HAS sales data even
+      // when no product/transaction detail was imported.
+      const summaryPromise = (async () => {
+        let q = supabase
+          .from("pos_daily_summaries")
+          .select("report_date, gross_sales")
+          .eq("restaurant_id", restaurantId!)
+          .gte("report_date", startDate)
+          .lte("report_date", endDate);
+        if (locationId) q = q.eq("location_id", locationId);
+        const { data } = await q;
+        const set = new Set<string>();
+        (data || []).forEach(r => { if (r.gross_sales != null) set.add(r.report_date); });
+        return set;
+      })();
+
       const attendancePromise = (async () => {
         let q = supabase
           .from("staff_attendance")
