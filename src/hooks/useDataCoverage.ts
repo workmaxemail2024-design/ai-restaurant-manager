@@ -207,7 +207,7 @@ export function useDataCoverage(locationId?: string | null) {
         const anyPresent = hasSales || hasLabour || hasInventory || hasReservations || hasFinancial;
         const level: CoverageLevel = criticalPresent ? "complete" : anyPresent ? "partial" : "missing";
 
-        dailyCoverage.set(dateStr, { date: dateStr, hasSales: hasSales || isClosed, hasLabour, hasAttendance, hasManualLabour, hasInventory, hasReservations, hasFinancial, level });
+        dailyCoverage.set(dateStr, { date: dateStr, hasSales: hasSales || isClosed, hasSalesSummary, hasProductDetail, hasLabour, hasAttendance, hasManualLabour, hasInventory, hasReservations, hasFinancial, level });
 
         if (hasSales || isClosed) salesCovered++;
         if (hasLabour) labourCovered++;
