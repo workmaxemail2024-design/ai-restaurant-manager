@@ -43,7 +43,12 @@ export interface RevenueByType {
 
 export interface DailyMetrics {
   date: string; // YYYY-MM-DD
-  revenue: number;             // from sales rows (source of truth for revenue)
+  /** Canonical revenue: POS daily summary gross where known, else product-line revenue. */
+  revenue: number;
+  /** Revenue derived from product/transaction rows only (0 when no product detail). */
+  productRevenue: number;
+  /** True when product/transaction level detail exists for the day. */
+  hasProductDetail: boolean;
   qtySold: number;             // total item units sold (product quantity)
   orders: number | null;       // authoritative receipt count from pos_daily_summaries
   aov: number | null;
