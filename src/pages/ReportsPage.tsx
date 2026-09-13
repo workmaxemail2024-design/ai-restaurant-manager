@@ -663,12 +663,18 @@ function DayCard({
                           </div>
                         );
                       })()}
+                      {/* Summary-only day notice */}
+                      {!day.hasProductDetail && day.hasSummary && (
+                        <div className="pt-2 mt-1 border-t border-border/60 text-[11px] text-muted-foreground">
+                          Sales summary imported. Product-level sales have not yet been imported for this day.
+                        </div>
+                      )}
                       {/* Revenue split — reconciles back to total item revenue */}
-                      {(() => {
+                      {day.hasProductDetail && (() => {
                         const rt = day.revenueByType;
                         const catTotal = rt.food + rt.alcoholic + rt.nonAlcoholic + rt.modifier + rt.other;
                         // Unclassified = any revenue we could not bucket at all (should be 0 after backfill).
-                        const unclassified = Math.max(0, day.revenue - catTotal);
+                        const unclassified = Math.max(0, day.productRevenue - catTotal);
                         const totalReconciled = catTotal + unclassified;
                         return (
                           <div className="pt-2 mt-1 border-t border-border/60">
