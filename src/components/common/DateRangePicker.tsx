@@ -310,7 +310,7 @@ export function DateRangePicker({
     return (
       <>
         {triggerButton}
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogContent className="max-w-[95vw] sm:max-w-fit max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Select Date Range</DialogTitle>
@@ -326,7 +326,7 @@ export function DateRangePicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         {triggerButton}
       </PopoverTrigger>
