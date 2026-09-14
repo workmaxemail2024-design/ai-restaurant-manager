@@ -251,7 +251,9 @@ export function DateRangePicker({
         <Calendar
           mode="range"
           selected={tempRange}
-          onSelect={handleRangeSelect}
+          onSelect={() => { /* selection handled explicitly in onDayClick */ }}
+          onDayClick={handleDayClick}
+          month={visibleMonth}
           onMonthChange={handleMonthChange}
           numberOfMonths={isMobile ? 1 : 2}
           disabled={(date) => date > new Date()}
@@ -272,16 +274,18 @@ export function DateRangePicker({
             }
           }}
         />
-        <p className="text-xs text-muted-foreground mt-2">
-          {tempRange?.from && tempRange?.to ? (
+        <p className={cn("text-xs mt-2", pickingEnd ? "text-primary font-medium" : "text-muted-foreground")}>
+          {pickingEnd && tempRange?.from ? (
+            <>Start date selected ({format(tempRange.from, 'MMM d, yyyy')}) — choose end date</>
+          ) : tempRange?.from && tempRange?.to ? (
             <>
               {format(tempRange.from, 'MMM d, yyyy')}
-              {tempRange.from.getTime() !== tempRange.to.getTime() && (
+              {!isSameDay(tempRange.from, tempRange.to) && (
                 <> → {format(tempRange.to, 'MMM d, yyyy')}</>
               )}
             </>
           ) : tempRange?.from ? (
-            <>Select end date</>
+            <>{format(tempRange.from, 'MMM d, yyyy')}</>
           ) : (
             <>Select start date</>
           )}
