@@ -216,7 +216,7 @@ export function DateRangePicker({
       variant="outline"
       size="sm"
       className={cn("h-9 gap-2 min-w-[140px] justify-start", className)}
-      onClick={() => setOpen(true)}
+      onClick={() => handleOpenChange(true)}
     >
       <CalendarDays className="h-4 w-4 shrink-0" />
       <span className="truncate">{getDisplayLabel()}</span>
