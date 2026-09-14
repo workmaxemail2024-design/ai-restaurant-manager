@@ -193,8 +193,8 @@ export function DateRangePicker({
 
 
   const getDisplayLabel = () => {
-    const fromDate = new Date(startDate);
-    const toDate = new Date(endDate);
+    const fromDate = parseISO(startDate);
+    const toDate = parseISO(endDate);
     
     if (startDate === endDate) {
       return format(fromDate, 'MMM d, yyyy');
