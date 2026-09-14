@@ -98,11 +98,13 @@ export function DateRangePicker({
   const [open, setOpen] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<DatePreset>(preset);
   const [tempRange, setTempRange] = useState<DateRange | undefined>({
-    from: new Date(startDate),
-    to: new Date(endDate)
+    from: parseISO(startDate),
+    to: parseISO(endDate)
   });
-  const [visibleMonth, setVisibleMonth] = useState<Date>(new Date(startDate));
-  
+  // true once the user has clicked a start date and is waiting to pick the end date
+  const [pickingEnd, setPickingEnd] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState<Date>(parseISO(endDate));
+
   // Get restaurant and location for data days hook
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
@@ -120,24 +122,51 @@ export function DateRangePicker({
   useEffect(() => {
     setSelectedPreset(preset);
     setTempRange({
-      from: new Date(startDate),
-      to: new Date(endDate)
+      from: parseISO(startDate),
+      to: parseISO(endDate)
     });
+    setPickingEnd(false);
   }, [startDate, endDate, preset]);
+
+  // Always open on the currently applied range, with a clean selection state
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setSelectedPreset(preset);
+      setTempRange({ from: parseISO(startDate), to: parseISO(endDate) });
+      setPickingEnd(false);
+      setVisibleMonth(isMobile ? parseISO(endDate) : startOfMonth(subMonths(parseISO(endDate), 1)));
+    }
+    setOpen(nextOpen);
+  };
 
   const handlePresetClick = (presetOption: PresetOption) => {
     const range = presetOption.getRange();
     setSelectedPreset(presetOption.value);
+    // A preset fully replaces any in-progress or previous custom range
     setTempRange({ from: range.from, to: range.to });
+    setPickingEnd(false);
+    setVisibleMonth(isMobile ? range.to : startOfMonth(subMonths(range.to, 1)));
   };
 
-  const handleRangeSelect = (range: DateRange | undefined) => {
-    setTempRange(range);
-    if (range?.from && range?.to) {
-      setSelectedPreset('custom');
+  // Explicit two-click flow: click 1 = start, click 2 = end (swapped if earlier).
+  // Never extends a previously applied range.
+  const handleDayClick = (day: Date) => {
+    setSelectedPreset('custom');
+    if (!pickingEnd || !tempRange?.from) {
+      setTempRange({ from: day, to: undefined });
+      setPickingEnd(true);
+      return;
     }
+    const start = tempRange.from;
+    if (isAfter(start, day) && !isSameDay(start, day)) {
+      setTempRange({ from: day, to: start });
+    } else {
+      setTempRange({ from: start, to: day });
+    }
+    setPickingEnd(false);
   };
 
+  // Month navigation only affects which month is visible, never the selection
   const handleMonthChange = (month: Date) => {
     setVisibleMonth(month);
   };
@@ -147,6 +176,7 @@ export function DateRangePicker({
       const fromDate = format(tempRange.from, 'yyyy-MM-dd');
       const toDate = format(tempRange.to || tempRange.from, 'yyyy-MM-dd');
       onApply(fromDate, toDate, selectedPreset);
+      setPickingEnd(false);
       setOpen(false);
     }
   };
@@ -154,11 +184,13 @@ export function DateRangePicker({
   const handleCancel = () => {
     setSelectedPreset(preset);
     setTempRange({
-      from: new Date(startDate),
-      to: new Date(endDate)
+      from: parseISO(startDate),
+      to: parseISO(endDate)
     });
+    setPickingEnd(false);
     setOpen(false);
   };
+
 
   const getDisplayLabel = () => {
     const fromDate = new Date(startDate);
