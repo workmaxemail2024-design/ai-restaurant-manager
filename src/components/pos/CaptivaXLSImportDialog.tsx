@@ -1921,7 +1921,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                           </div>
                         </div>
                         <div className="text-xs text-muted-foreground space-y-1">
-                          <div>Parser classification: {classification} · detected report: {detectedType === "summary" ? "Daily Sales Summary" : "Products Sold"}</div>
+                          <div>Parser classification: {classification} · detected report: Products Sold</div>
                           {detectedStores.filter((s) => s.isAggregate).map((s) => (
                             <div key={s.key}>Ignored: {s.label} (aggregate total)</div>
                           ))}
