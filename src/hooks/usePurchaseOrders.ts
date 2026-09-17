@@ -292,6 +292,7 @@ export function useReceiveDelivery() {
               ingredient_id: item.ingredient_id,
               location_id: locationId,
               quantity: item.delivered_quantity,
+              restaurant_id: currentRestaurant?.id ?? null,
             });
           if (error) throw error;
         }
