@@ -44,6 +44,10 @@ import {
 } from "@/lib/effectiveOperationalMetrics";
 
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
+import { useDailyFoodCosting, usePeriodFoodCosting } from "@/hooks/useFoodCosting";
+import { buildFoodCostView, type FoodCostResolverRow } from "@/lib/foodCosting";
+import { FoodCostBlock } from "@/components/reports/FoodCostBlock";
+import { MissingCostsDialog } from "@/components/reports/MissingCostsDialog";
 import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useQuery } from "@tanstack/react-query";
