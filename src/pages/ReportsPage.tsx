@@ -29,10 +29,19 @@ import {
   CalendarDays,
   Receipt,
   Upload,
+  Pencil,
+  RotateCcw,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { reconcileGross } from "@/lib/posDailyCanonical";
+import {
+  effectiveOrders as computeEffectiveOrders,
+  effectiveVisitors as computeEffectiveVisitors,
+  effectiveAov,
+  type EffectiveMetric,
+} from "@/lib/effectiveOperationalMetrics";
 
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
 import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
@@ -400,6 +409,101 @@ function CalendarStrip({
   );
 }
 
+// ─── Editable operational metric (Orders, Covers / Visitors) ───
+function EditableMetric({
+  label,
+  metric,
+  onSave,
+  onReset,
+  disabled,
+}: {
+  label: string;
+  metric: EffectiveMetric;
+  onSave: (value: number) => void;
+  onReset: () => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string>(metric.value != null ? String(metric.value) : "");
+
+  useEffect(() => {
+    if (open) setDraft(metric.value != null ? String(metric.value) : "");
+  }, [open, metric.value]);
+
+  const display = metric.value != null ? String(metric.value) : "—";
+
+  return (
+    <div className="flex justify-between items-center gap-1">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1">
+        <span className="font-medium">{display}</span>
+        {metric.source === "pos" && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal text-muted-foreground">POS</Badge>
+        )}
+        {metric.source === "manual" && (
+          <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal">
+            {metric.adjusted ? "Adjusted" : "Manual"}
+          </Badge>
+        )}
+        {!disabled && (
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" aria-label={`Edit ${label}`}>
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-60 space-y-2 z-[60]">
+              <p className="text-xs font-medium">{label}</p>
+              {metric.posValue != null && (
+                <p className="text-[11px] text-muted-foreground">
+                  Imported from POS: {metric.posValue}
+                  {metric.adjusted ? " (kept for audit)" : ""}
+                </p>
+              )}
+              <Input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="h-9 text-sm"
+                placeholder="—"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 text-xs flex-1"
+                  onClick={() => {
+                    const n = Number(draft);
+                    if (draft === "" || Number.isNaN(n) || n < 0) return;
+                    onSave(Math.round(n));
+                    setOpen(false);
+                  }}
+                >
+                  Save
+                </Button>
+                {metric.source === "manual" && metric.posValue != null && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs gap-1"
+                    onClick={() => {
+                      onReset();
+                      setOpen(false);
+                    }}
+                  >
+                    <RotateCcw className="h-3 w-3" /> Reset to POS
+                  </Button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </span>
+    </div>
+  );
+}
+
 // ─── Day Card ───
 function DayCard({
   day,
@@ -425,6 +529,8 @@ function DayCard({
   plannedShiftHours?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const { currentRestaurant } = useRestaurant();
+  const auditRestaurantId = currentRestaurant?.id;
   const dateObj = parseISO(day.date);
   const label = format(dateObj, "EEE dd MMM");
 
@@ -458,10 +564,14 @@ function DayCard({
 
   // Effective revenue: use manual override if no actual sales data
   const effectiveRevenue = day.hasData ? day.revenue : (manualRevenue ?? 0);
-  // Orders = receipt count (from pos_daily_summaries). Qty is separate.
-  const effectiveOrders: number | null = day.hasData
-    ? (day.orders ?? (manualOrders ?? null))
-    : (manualOrders ?? null);
+  // Orders = receipt count (from pos_daily_summaries), manual correction wins.
+  // Qty sold is a separate product-line measure and is never used as orders.
+  const ordersMetric = computeEffectiveOrders(day.orders, { manual_orders: manualOrders });
+  const visitorsMetric = computeEffectiveVisitors(day.visitors, { covers, covers_unknown: coversUnknown });
+  const effectiveOrders: number | null = ordersMetric.value;
+  const grossForDisplay: number | null =
+    day.summary?.grossSales != null ? day.summary.grossSales : day.hasData ? day.revenue : manualRevenue;
+  const aovForDisplay = effectiveAov(grossForDisplay, ordersMetric, day.summary?.aov ?? day.aov);
   const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
   const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
   const foodCostIsEstimated = day.hasData ? day.foodCostIsEstimated : true;
@@ -543,6 +653,51 @@ function DayCard({
       covers_unknown: true,
     });
     toast.success(`Covers marked as unknown for ${label}`);
+  };
+
+  // ── Manual corrections of operational metrics ──
+  // The POS value stays untouched in pos_daily_summaries; the correction is stored
+  // in the existing daily-ledger fields and logged for audit.
+  const logMetricAudit = (metricLabel: string, from: number | null, to: number | null) => {
+    if (!auditRestaurantId) return;
+    supabase
+      .rpc("log_audit_event", {
+        p_restaurant_id: auditRestaurantId,
+        p_event_type: "daily_metric_adjusted",
+        p_description: `${metricLabel} for ${day.date} changed from ${from ?? "unknown"} to ${to ?? "POS value"}`,
+        p_data: { entry_date: day.date, metric: metricLabel, pos_value: from, new_value: to } as any,
+      })
+      .then(() => undefined, () => undefined);
+  };
+
+  const persistLedger = (patch: Partial<LedgerEntry>) => {
+    onSaveLedger({ ...localLedger, ...patch });
+  };
+
+  const handleSaveOrders = (value: number) => {
+    setManualOrders(value);
+    persistLedger({ manual_orders: value });
+    logMetricAudit("Orders", ordersMetric.posValue, value);
+    toast.success(`Orders updated for ${label}`);
+  };
+  const handleResetOrders = () => {
+    setManualOrders(null);
+    persistLedger({ manual_orders: null });
+    logMetricAudit("Orders", ordersMetric.posValue, null);
+    toast.success(`Orders reset to the POS value for ${label}`);
+  };
+  const handleSaveVisitors = (value: number) => {
+    setCovers(value);
+    setCoversUnknown(false);
+    persistLedger({ covers: value, covers_unknown: false });
+    logMetricAudit("Covers / Visitors", visitorsMetric.posValue, value);
+    toast.success(`Covers / Visitors updated for ${label}`);
+  };
+  const handleResetVisitors = () => {
+    setCovers(0);
+    persistLedger({ covers: 0 });
+    logMetricAudit("Covers / Visitors", visitorsMetric.posValue, null);
+    toast.success(`Covers / Visitors reset to the POS value for ${label}`);
   };
 
   const hasAnyData = day.hasData || isClosed || (manualRevenue != null && manualRevenue > 0);
@@ -744,7 +899,7 @@ function DayCard({
                   )}
 
                   {/* Daily Performance — from Captiva import */}
-                  {day.hasData && (
+                  {(day.hasData || posSourceFlags(day).hasAnyPos || ordersMetric.value != null || visitorsMetric.value != null) && (
                     <div className="rounded-md border border-border bg-secondary/10 p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -755,16 +910,25 @@ function DayCard({
                         )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
-                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{day.summary?.grossSales != null ? formatCurrency(day.summary.grossSales) : formatCurrency(day.revenue)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{grossForDisplay != null ? formatCurrency(grossForDisplay) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Net Revenue</span><span className="font-medium">{day.summary?.netSales != null ? formatCurrency(day.summary.netSales) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span className="font-medium">{day.summary?.vat != null ? formatCurrency(day.summary.vat) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary?.discounts != null ? formatCurrency(day.summary.discounts) : "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span className="font-medium">{day.orders ?? "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">AOV</span><span className="font-medium">{day.aov != null ? formatCurrency(day.aov) : "—"}</span></div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Covers / Visitors{day.visitors != null && day.visitors > 0 ? " (Captiva)" : ""}</span>
-                          <span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span>
-                        </div>
+                        <EditableMetric
+                          label="Orders / Receipts"
+                          metric={ordersMetric}
+                          onSave={handleSaveOrders}
+                          onReset={handleResetOrders}
+                          disabled={isSaving}
+                        />
+                        <div className="flex justify-between"><span className="text-muted-foreground">Average Order Value</span><span className="font-medium">{aovForDisplay != null ? formatCurrency(aovForDisplay) : "—"}</span></div>
+                        <EditableMetric
+                          label="Covers / Visitors"
+                          metric={visitorsMetric}
+                          onSave={handleSaveVisitors}
+                          onReset={handleResetVisitors}
+                          disabled={isSaving}
+                        />
                         <div className="flex justify-between"><span className="text-muted-foreground">Qty Sold</span><span className="font-medium">{day.qtySold}</span></div>
                       </div>
                       {/* Product vs daily-summary reconciliation — shown only when both exist */}
