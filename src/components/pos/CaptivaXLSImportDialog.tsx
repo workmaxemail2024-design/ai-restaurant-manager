@@ -338,6 +338,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   const [dateMismatchAck, setDateMismatchAck] = useState(false);
   // Per-date Keep existing / Replace decisions for "Needs review" dates.
   const [reviewDecisions, setReviewDecisions] = useState<Record<string, "keep" | "replace">>({});
+  // Sheets the Owner removed from this import with ×. Reversible before Apply.
+  const [ignoredStores, setIgnoredStores] = useState<Record<string, boolean>>({});
+  // True once the Owner has picked the trading date by hand — a manual choice is
+  // never silently replaced by a date detected in the file.
+  const [dateManuallySet, setDateManuallySet] = useState(false);
 
   const sheetNames = workbook?.SheetNames || [];
   const availableSheets = includeInactive
@@ -348,8 +353,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     setFile(null); setWorkbook(null); setSheetName(""); setError(null);
     setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
     setDateConfirmed(false); setTypeMismatchAck(false); setDateMismatchAck(false);
-    setReviewDecisions({});
+    setReviewDecisions({}); setIgnoredStores({}); setDateManuallySet(false);
   };
+
 
   const reset = () => {
     clearFile();
