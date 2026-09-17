@@ -109,41 +109,140 @@ function getDotClass(status: DayStatus): string {
   }
 }
 
+// ─── POS source flags for a day (Sales Summary vs Products Sold) ───
+export function posSourceFlags(day: DailyMetrics) {
+  const s = day.summary;
+  // Product detail: real product/transaction rows, or the resolver's flag.
+  const productsUploaded = day.hasProductDetail || s?.hasProductDetail === true;
+  // Sales summary: resolver flag, or a summary-side gross being present.
+  const summaryUploaded = s?.hasSummaryReport === true || s?.summaryGross != null;
+  return { productsUploaded, summaryUploaded, hasAnyPos: productsUploaded || summaryUploaded };
+}
+
+function StatusRow({
+  label,
+  state,
+  value,
+  action,
+}: {
+  label: string;
+  state: "ok" | "missing" | "optional";
+  value: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs min-h-[22px]">
+      {state === "ok" ? (
+        <Check className="h-3 w-3 text-success shrink-0" />
+      ) : state === "optional" ? (
+        <span className="h-3 w-3 rounded-full border border-muted-foreground/40 shrink-0" />
+      ) : (
+        <X className="h-3 w-3 text-destructive shrink-0" />
+      )}
+      <span className={state === "ok" ? "text-foreground" : "text-muted-foreground"}>{label}</span>
+      <span className="text-muted-foreground/80 ml-auto">{value}</span>
+      {action}
+    </div>
+  );
+}
+
 // ─── Data Completeness Checklist ───
-function DataChecklist({ checklist }: { checklist: Record<MissingField, boolean> }) {
-  const items: { field: MissingField; label: string; optional?: boolean }[] = [
-    { field: "SALES", label: "Sales" },
-    { field: "LABOUR_HOURS", label: "Labour" },
-    { field: "COVERS", label: "Covers" },
-    { field: "EXPENSES", label: "Expenses" },
-    { field: "BOOKINGS", label: "Bookings", optional: true },
-  ];
+function DataChecklist({
+  checklist,
+  day,
+  isClosed,
+}: {
+  checklist: Record<MissingField, boolean>;
+  day: DailyMetrics;
+  isClosed?: boolean;
+}) {
+  const { productsUploaded, summaryUploaded } = posSourceFlags(day);
+
+  const reconciliation = (() => {
+    if (!day.summary || !productsUploaded || !summaryUploaded) return null;
+    return reconcileGross({
+      locationId: null, reportDate: "", grossSales: null, netSales: null,
+      vat: null, discounts: null, orderCount: null, visitorCount: null, aov: null,
+      hasProductDetail: true, hasSummaryReport: true,
+      productGross: day.summary.productGross, summaryGross: day.summary.summaryGross, providers: [],
+    });
+  })();
+
+  const importAction = (
+    <CaptivaXLSImportDialog
+      trigger={
+        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] gap-1">
+          <Upload className="h-3 w-3" /> Import
+        </Button>
+      }
+    />
+  );
+
   return (
     <div className="rounded-md border border-border bg-secondary/20 p-2.5 space-y-1">
       <h4 className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
         Data Completeness
       </h4>
-      {items.map(({ field, label, optional }) => {
-        const ok = checklist[field];
-        const showOptional = optional && !ok;
-        return (
-          <div key={field} className="flex items-center gap-2 text-xs">
-            {ok ? (
-              <Check className="h-3 w-3 text-success shrink-0" />
-            ) : showOptional ? (
-              <span className="h-3 w-3 rounded-full border border-muted-foreground/40 shrink-0" />
-            ) : (
-              <X className="h-3 w-3 text-destructive shrink-0" />
-            )}
-            <span className={ok ? "text-foreground" : "text-muted-foreground"}>
-              {label}
-              {showOptional && (
-                <span className="ml-1 text-[10px] text-muted-foreground/70">(optional)</span>
-              )}
+
+      <StatusRow
+        label="Sales Summary"
+        state={summaryUploaded ? "ok" : "optional"}
+        value={summaryUploaded ? "Uploaded" : productsUploaded ? "Not uploaded (optional)" : "Not uploaded"}
+      />
+      <StatusRow
+        label="Products Sold"
+        state={productsUploaded ? "ok" : summaryUploaded ? "optional" : isClosed ? "optional" : "missing"}
+        value={productsUploaded ? "Uploaded" : "Not uploaded"}
+        action={!productsUploaded && !isClosed ? importAction : undefined}
+      />
+
+      {reconciliation && (
+        <div className="flex items-center gap-2 text-[11px] pl-5 pb-0.5">
+          <Badge
+            variant={
+              reconciliation.status === "matched"
+                ? "secondary"
+                : reconciliation.status === "small_variance"
+                ? "outline"
+                : "destructive"
+            }
+            className="text-[10px]"
+          >
+            {reconciliation.status === "matched"
+              ? "Matched"
+              : reconciliation.status === "small_variance"
+              ? "Small variance"
+              : "Needs review"}
+          </Badge>
+          {reconciliation.status !== "matched" && (
+            <span className="text-muted-foreground">
+              {formatCurrency(reconciliation.productGross)} vs {formatCurrency(reconciliation.summaryGross)} · diff{" "}
+              {formatCurrency(reconciliation.diff)} ({reconciliation.pct.toFixed(1)}%)
             </span>
-          </div>
-        );
-      })}
+          )}
+        </div>
+      )}
+
+      <StatusRow
+        label="Labour"
+        state={checklist.LABOUR_HOURS ? "ok" : "missing"}
+        value={checklist.LABOUR_HOURS ? "Uploaded" : "Missing"}
+      />
+      <StatusRow
+        label="Covers / Visitors"
+        state={checklist.COVERS ? "ok" : "missing"}
+        value={checklist.COVERS ? "Known" : "Unknown"}
+      />
+      <StatusRow
+        label="Expenses"
+        state={checklist.EXPENSES ? "ok" : "missing"}
+        value={checklist.EXPENSES ? "Available" : "Missing"}
+      />
+      <StatusRow
+        label="Bookings"
+        state={checklist.BOOKINGS ? "ok" : "optional"}
+        value={checklist.BOOKINGS ? "Available" : "Optional"}
+      />
     </div>
   );
 }
