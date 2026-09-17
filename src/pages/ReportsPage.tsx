@@ -1698,6 +1698,15 @@ export default function ReportsPage() {
                   </div>
                 )}
               </div>
+
+              <MissingCostsDialog
+                open={missingCostsOpen}
+                onOpenChange={setMissingCostsOpen}
+                startDate={startDate}
+                endDate={endDate}
+                locationId={selectedLocationId}
+                label={startDate === endDate ? startDate : `${startDate} → ${endDate}`}
+              />
             </>
           )}
         </TabsContent>
