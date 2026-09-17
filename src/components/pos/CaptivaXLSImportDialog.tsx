@@ -1556,6 +1556,23 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                               : formatCurrency(s.totals.gross)}
                           </TableCell>
                           <TableCell>
+                            {s.isAggregate ? (
+                              <div className="text-xs text-muted-foreground">
+                                Not imported — no location needed
+                              </div>
+                            ) : ignored ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">Removed from this import</span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-9"
+                                  onClick={() => setIgnoredStores((p) => { const n = { ...p }; delete n[s.key]; return n; })}
+                                >
+                                  Undo
+                                </Button>
+                              </div>
+                            ) : (
                             <div className="flex items-center gap-2">
                               <Select
                                 value={value}
@@ -1577,7 +1594,22 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                                   <SelectItem value="__skip">Skip this store</SelectItem>
                                 </SelectContent>
                               </Select>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-11 w-11 shrink-0"
+                                title="Remove this sheet from the import"
+                                aria-label={`Remove ${s.label} from this import`}
+                                onClick={() => {
+                                  setIgnoredStores((p) => ({ ...p, [s.key]: true }));
+                                  setNewLocationFor((cur) => (cur === s.key ? null : cur));
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
                             </div>
+                            )}
+
                             {newLocationFor === s.key && (
                               <div className="mt-2 flex items-center gap-2">
                                 <Input
