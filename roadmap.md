@@ -35,3 +35,8 @@
 - [x] add_ingredient_price RPC for backdated entry (owner/manager)
 - [x] Immutable history rows (corrections = new revision, audit logged)
 - [ ] Ingredients UI: "Add historical price" with Effective from date (after DB verification)
+
+## Tenant assignment hardening (done)
+- [x] Backfilled NULL restaurant_id in ingredients, stock_levels, purchase_orders, purchase_order_items
+- [x] Client creation paths always set restaurant_id (ingredients, stock levels, POs, PO items)
+- [ ] Optional migration (needs approval): NOT NULL + default trigger on restaurant_id for these 4 tables
