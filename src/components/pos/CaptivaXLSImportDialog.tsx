@@ -751,6 +751,12 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     (p) => p.action === "add" || p.action === "enrich" ||
       (p.action === "review" && reviewDecisions[p.id] === "replace"),
   );
+  const destinationLocationCount = new Set(writableDates.map((p) => p.locationId)).size;
+  const locationName = useCallback(
+    (id: string) => locations.find((l) => l.id === id)?.name || "Unknown location",
+    [locations],
+  );
+
   /** Fast lookup used by the importer to skip dates that must not be written. */
   const shouldWriteDate = useCallback(
     (storeKey: string, locationId: string, date: string) =>
