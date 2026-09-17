@@ -545,13 +545,16 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     return { kind: "owner" as const, dates: [] as string[], start: null, end: null };
   }, [detectedStores]);
 
-  // Pre-fill the picker from a detected single date (Owner can still correct it).
+  // Pre-fill the picker from a detected single date. A date the Owner picked by
+  // hand is kept — it is only replaced through "Use detected date".
   useEffect(() => {
+    if (dateManuallySet) return;
     if (dateInfo.kind === "detected" && dateInfo.start) {
       setReportDate(new Date(`${dateInfo.start}T00:00:00`));
       setDateConfirmed(true);
     }
-  }, [dateInfo.kind, dateInfo.start]);
+  }, [dateInfo.kind, dateInfo.start, dateManuallySet]);
+
 
   const classification: "daily" | "multi_day" | "historical" =
     dateInfo.kind === "row_dates" ? "multi_day"
