@@ -520,6 +520,8 @@ function DayCard({
   hasBookings,
   actualAttendance,
   plannedShiftHours,
+  costRow,
+  locationId,
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
@@ -531,6 +533,8 @@ function DayCard({
   hasBookings: boolean;
   actualAttendance?: { hours: number; cost: number };
   plannedShiftHours?: number;
+  costRow?: FoodCostResolverRow;
+  locationId: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const { currentRestaurant } = useRestaurant();
