@@ -172,21 +172,23 @@ export function useIngredients() {
 
 export function useCreateIngredient() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async (ingredient: IngredientInsert) => {
+      // Every ingredient must be tenanted, otherwise it is invisible to RLS and
+      // can never be costed.
+      const restaurantId = ingredient.restaurant_id ?? currentRestaurant?.id;
+      if (!restaurantId) throw new Error("No restaurant selected");
+
       const { data, error } = await supabase
         .from("ingredients")
-        .insert(ingredient)
+        .insert({ ...ingredient, restaurant_id: restaurantId })
         .select()
         .single();
       if (error) throw error;
-      
-      // Create initial price record
-      await supabase.from("ingredient_prices").insert({
-        ingredient_id: data.id,
-        cost_price: ingredient.default_cost_price,
-      });
-      
+
+      // Price history is written by the database trigger with a proper
+      // effective date — never inserted from the client.
       return data;
     },
     onSuccess: () => {
@@ -210,20 +212,16 @@ export function useUpdateIngredient() {
         .select()
         .single();
       if (error) throw error;
-      
-      // If price changed, create new price record
-      if (ingredient.default_cost_price !== undefined) {
-        await supabase.from("ingredient_prices").insert({
-          ingredient_id: id,
-          cost_price: ingredient.default_cost_price,
-        });
-      }
-      
+
+      // A cost change automatically creates a dated price-history row in the
+      // database, so no client-side history insert happens here.
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ingredients"] });
       toast({ title: "Ingredient updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["food-costing-daily"] });
+      queryClient.invalidateQueries({ queryKey: ["food-costing-period"] });
     },
     onError: (error) => {
       toast({ title: "Error updating ingredient", description: error.message, variant: "destructive" });
