@@ -81,7 +81,8 @@ export function canonicalizePosSummaries(rows: PosDailySummaryRow[]): CanonicalP
   for (const g of groups.values()) {
     const first = g[0];
     const productRows = g.filter(isProductRow);
-    const summaryRows = g.filter((r) => !isProductRow(r) && isSummaryRow(r));
+    // A row can carry both reports; each side is judged on its own flag.
+    const summaryRows = g.filter(isSummaryRow);
 
     const pickRevenue = (rs: PosDailySummaryRow[]): PosDailySummaryRow | undefined =>
       rs.find((r) => num(r.gross_sales) != null) ?? rs[0];

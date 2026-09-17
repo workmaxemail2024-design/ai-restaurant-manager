@@ -90,7 +90,10 @@ export function canonicalizePosSummaries(rows: PosDailySummaryRow[]): CanonicalP
   for (const g of groups.values()) {
     const first = g[0];
     const productRows = g.filter(isProductRow);
-    const summaryRows = g.filter((r) => !isProductRow(r) && isSummaryRow(r));
+    // A single row can carry BOTH reports (has_product_detail AND
+    // has_summary_report). Each side is judged on its own flag so a merged row
+    // is recognised as both a product report and a summary report.
+    const summaryRows = g.filter(isSummaryRow);
 
     // Revenue basis: product-detail row first; otherwise a summary/API row.
     const pickRevenue = (rs: PosDailySummaryRow[]): PosDailySummaryRow | undefined =>
