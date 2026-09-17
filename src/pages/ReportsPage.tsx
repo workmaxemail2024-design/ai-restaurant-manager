@@ -156,7 +156,9 @@ function DataChecklist({
   day: DailyMetrics;
   isClosed?: boolean;
 }) {
+  const { selectedLocationId: locationId } = useLocation();
   const { productsUploaded, summaryUploaded } = posSourceFlags(day);
+  const [uploadKind, setUploadKind] = useState<"summary" | "products" | null>(null);
 
   const reconciliation = (() => {
     if (!day.summary || !productsUploaded || !summaryUploaded) return null;
@@ -168,14 +170,15 @@ function DataChecklist({
     });
   })();
 
-  const importAction = (
-    <CaptivaXLSImportDialog
-      trigger={
-        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] gap-1">
-          <Upload className="h-3 w-3" /> Import
-        </Button>
-      }
-    />
+  const uploadAction = (kind: "summary" | "products") => (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-6 px-1.5 text-[10px] gap-1 text-primary hover:text-primary"
+      onClick={() => setUploadKind(kind)}
+    >
+      <Upload className="h-3 w-3" /> Upload
+    </Button>
   );
 
   return (
@@ -184,17 +187,30 @@ function DataChecklist({
         Data Completeness
       </h4>
 
+      {uploadKind && (
+        <CaptivaXLSImportDialog
+          open
+          onOpenChange={(o) => { if (!o) setUploadKind(null); }}
+          trigger={<span className="hidden" />}
+          presetType={uploadKind}
+          presetDate={day.date}
+          defaultLocationId={locationId || undefined}
+        />
+      )}
+
       <StatusRow
         label="Sales Summary"
         state={summaryUploaded ? "ok" : "optional"}
         value={summaryUploaded ? "Uploaded" : productsUploaded ? "Not uploaded (optional)" : "Not uploaded"}
+        action={!summaryUploaded && !isClosed ? uploadAction("summary") : undefined}
       />
       <StatusRow
         label="Products Sold"
         state={productsUploaded ? "ok" : summaryUploaded ? "optional" : isClosed ? "optional" : "missing"}
         value={productsUploaded ? "Uploaded" : "Not uploaded"}
-        action={!productsUploaded && !isClosed ? importAction : undefined}
+        action={!productsUploaded && !isClosed ? uploadAction("products") : undefined}
       />
+
 
       {reconciliation && (
         <div className="flex items-center gap-2 text-[11px] pl-5 pb-0.5">
