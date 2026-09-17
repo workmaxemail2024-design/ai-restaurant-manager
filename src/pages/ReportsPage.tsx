@@ -1592,18 +1592,18 @@ export default function ReportsPage() {
                     <div className="text-[10px] text-muted-foreground">item units</div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="col-span-2">
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">
-                      {periodSummary.foodCostIsEstimated ? "Food Cost % (est.)" : "Food Cost %"}
+                      {periodSummary.costing.isEstimated ? "Food Cost (est.)" : "Food Cost"}
                     </CardTitle>
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.foodCostPct.toFixed(1)}%</div>
-                    {periodSummary.foodCostIsEstimated && (
-                      <div className="text-[10px] text-muted-foreground">default 30%</div>
-                    )}
+                    <FoodCostBlock
+                      view={periodSummary.costing}
+                      onViewMissing={() => setMissingCostsOpen(true)}
+                    />
                   </CardContent>
                 </Card>
                 <Card>
