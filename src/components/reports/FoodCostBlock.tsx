@@ -40,11 +40,24 @@ export function FoodCostBlock({ view, onViewMissing, className }: Props) {
           {view.foodCostPct != null ? `${view.foodCostPct.toFixed(1)}%` : "—"}
         </span>
       </div>
-      {view.qualityLabel && (
-        <div className={cn("text-[11px]", view.isEstimated ? "text-warning" : "text-muted-foreground")}>
-          {view.qualityLabel}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-1.5">
+        <span className="inline-flex items-center rounded-full border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          Recipe costed {view.recipeCoveragePct.toFixed(0)}%
+        </span>
+        <span className="inline-flex items-center rounded-full border border-border/50 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+          Historical pricing {view.historicalCoveragePct.toFixed(0)}%
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+            view.estimatedSharePct > 0
+              ? "border-warning/20 bg-warning/10 text-warning"
+              : "border-border/50 bg-muted/50 text-muted-foreground"
+          )}
+        >
+          Estimated {view.estimatedSharePct.toFixed(0)}%
+        </span>
+      </div>
 
       <button
         type="button"
