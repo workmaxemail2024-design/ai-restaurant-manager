@@ -192,9 +192,15 @@ export function useAddPurchaseOrderItem() {
 
 export function useAddPurchaseOrderItems() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async ({ purchaseOrderId, items }: { purchaseOrderId: string; items: { ingredient_id: string; quantity: number; cost_price: number }[] }) => {
-      const itemsWithPO = items.map(item => ({ ...item, purchase_order_id: purchaseOrderId }));
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
+      const itemsWithPO = items.map(item => ({
+        ...item,
+        purchase_order_id: purchaseOrderId,
+        restaurant_id: currentRestaurant.id,
+      }));
       const { error } = await supabase.from("purchase_order_items").insert(itemsWithPO);
       if (error) throw error;
     },
