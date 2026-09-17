@@ -1886,67 +1886,98 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                     <div><div className="text-xs text-muted-foreground">VAT</div><div className="font-semibold">{formatCurrency(totals.vat)}</div></div>
                   </div>
 
-                  <div className="border rounded-lg max-h-64 overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-background">
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Dept</TableHead>
-                          <TableHead className="text-right">Qty</TableHead>
-                          <TableHead className="text-right">Gross</TableHead>
-                          <TableHead className="text-right">Net</TableHead>
-                          <TableHead className="text-right">VAT</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {parsed.rows.slice(0, 100).map((r) => (
-                          <TableRow key={r.external_item_id}>
-                            <TableCell className="font-medium">{r.item_name}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{r.department}</TableCell>
-                            <TableCell className="text-right">{r.quantity}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(r.gross_sales)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(r.net_sales)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(r.vat_amount)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {parsed.rows.length > 100 && (
-                      <div className="text-xs text-muted-foreground text-center py-2">
-                        Showing first 100 of {parsed.rows.length} rows
+                  <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="h-11 w-full justify-between px-3">
+                        <span className="text-sm font-medium">Import details</span>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", detailsOpen && "rotate-180")} />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-3 pt-2">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <Label className="text-xs">Preview rows from</Label>
+                          <Select value={sheetName} onValueChange={setSheetName}>
+                            <SelectTrigger className="h-11 mt-1"><SelectValue placeholder="Select sheet" /></SelectTrigger>
+                            <SelectContent>
+                              {availableSheets.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Checkbox id="incInactive" checked={includeInactive} onCheckedChange={(v) => setIncludeInactive(!!v)} />
+                            <Label htmlFor="incInactive" className="text-xs font-normal cursor-pointer">
+                              Also allow "No Activity" sheet
+                            </Label>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div>Parser classification: {classification} · detected report: {detectedType === "summary" ? "Daily Sales Summary" : "Products Sold"}</div>
+                          {detectedStores.filter((s) => s.isAggregate).map((s) => (
+                            <div key={s.key}>Ignored: {s.label} (aggregate total)</div>
+                          ))}
+                          {eligibleStores.filter((s) => ignoredStores[s.key]).map((s) => (
+                            <div key={s.key}>Ignored: {s.label} (removed by you)</div>
+                          ))}
+                          <div>Idempotent: re-importing the same date + location + item IDs updates existing rows instead of duplicating.</div>
+                        </div>
                       </div>
-                    )}
-                  </div>
 
-                  {importableStores.length === 1 && (
-                  <div className="rounded-lg border p-3 space-y-2">
-                    <div className="text-sm font-medium">Daily summary (optional)</div>
-                    <p className="text-xs text-muted-foreground">
-                      Product rows are not receipts. Enter true order/visitor counts from the Captiva journal summary if available. Leave blank if unknown.
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <Label className="text-xs">Orders</Label>
-                        <Input type="number" min="0" placeholder="e.g. 26" value={orderCountInput} onChange={(e) => setOrderCountInput(e.target.value)} />
+                      <div className="border rounded-lg max-h-64 overflow-y-auto">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-background">
+                            <TableRow>
+                              <TableHead>Name</TableHead>
+                              <TableHead>Dept</TableHead>
+                              <TableHead className="text-right">Qty</TableHead>
+                              <TableHead className="text-right">Gross</TableHead>
+                              <TableHead className="text-right">Net</TableHead>
+                              <TableHead className="text-right">VAT</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {parsed.rows.slice(0, 100).map((r) => (
+                              <TableRow key={r.external_item_id}>
+                                <TableCell className="font-medium">{r.item_name}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground">{r.department}</TableCell>
+                                <TableCell className="text-right">{r.quantity}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(r.gross_sales)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(r.net_sales)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(r.vat_amount)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        {parsed.rows.length > 100 && (
+                          <div className="text-xs text-muted-foreground text-center py-2">
+                            Showing first 100 of {parsed.rows.length} rows
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <Label className="text-xs">Visitors</Label>
-                        <Input type="number" min="0" placeholder="e.g. 106" value={visitorCountInput} onChange={(e) => setVisitorCountInput(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Avg order value</Label>
-                        <Input type="number" min="0" step="0.01" placeholder="auto" value={aovInput} onChange={(e) => setAovInput(e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
-                  )}
 
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
-                      Idempotent: re-importing the same date + location + item IDs updates existing staged rows instead of duplicating.
-                    </AlertDescription>
-                  </Alert>
+                      {importableStores.length === 1 && (
+                        <div className="rounded-lg border p-3 space-y-2">
+                          <div className="text-sm font-medium">Receipt &amp; visitor counts (optional)</div>
+                          <p className="text-xs text-muted-foreground">
+                            Product rows are not receipts. Enter true order/visitor counts from the Captiva journal summary if available. Leave blank if unknown — blank never overwrites a known value.
+                          </p>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <Label className="text-xs">Orders</Label>
+                              <Input type="number" min="0" placeholder="e.g. 26" value={orderCountInput} onChange={(e) => setOrderCountInput(e.target.value)} />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Visitors</Label>
+                              <Input type="number" min="0" placeholder="e.g. 106" value={visitorCountInput} onChange={(e) => setVisitorCountInput(e.target.value)} />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Avg order value</Label>
+                              <Input type="number" min="0" step="0.01" placeholder="auto" value={aovInput} onChange={(e) => setAovInput(e.target.value)} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
                 </>
               ) : null}
             </>
