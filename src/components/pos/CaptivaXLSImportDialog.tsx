@@ -577,16 +577,24 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   );
   const blockingMismatch = (typeMismatch && !typeMismatchAck) || (dateMismatch && !dateMismatchAck);
 
+  /** Sheets the Owner has removed from this import (reversible before Apply). */
+  const isEligible = useCallback(
+    (s: DetectedStore) => !s.isAggregate && !ignoredStores[s.key],
+    [ignoredStores],
+  );
   const importableStores = detectedStores.filter((s) => {
+    if (!isEligible(s)) return false;
     const m = storeMappings[s.key];
     if (!m || m.action !== "existing" || !m.locationId) return false;
     if (s.kind === "summary") return s.summaries.length > 0;
     return s.rows.length > 0 && !s.missing.length;
   });
   const unresolvedStores = detectedStores.filter((s) => {
+    if (!isEligible(s)) return false;
     const m = storeMappings[s.key];
     return !m || m.action === "unset";
   });
+
 
   const parsed = useMemo(() => {
     if (!workbook || !sheetName) return null;
