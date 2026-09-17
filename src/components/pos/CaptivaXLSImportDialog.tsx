@@ -1886,6 +1886,32 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
               ) : null}
             </>
           )}
+          {file && classification !== "historical" && detectedStores.length > 0 && (
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="text-sm font-medium">
+                {writableDates.length} trading day{writableDates.length === 1 ? "" : "s"} will be imported
+                {destinationLocationCount > 0 &&
+                  ` to ${destinationLocationCount} location${destinationLocationCount === 1 ? "" : "s"}`}
+              </div>
+              {writableDates.map((p) => (
+                <div key={p.id} className="text-xs text-muted-foreground">
+                  <span className="text-foreground">{p.label} → {locationName(p.locationId)}</span>
+                  {" · "}{format(new Date(`${p.date}T00:00:00`), "d MMM yyyy")}
+                  {p.gross != null && ` · ${formatCurrency(p.gross)}`}
+                </div>
+              ))}
+              {detectedStores.filter((s) => s.isAggregate).map((s) => (
+                <div key={s.key} className="text-xs text-muted-foreground">
+                  {s.label} → Aggregate · Not imported
+                </div>
+              ))}
+              {detectedStores.filter((s) => !s.isAggregate && ignoredStores[s.key]).map((s) => (
+                <div key={s.key} className="text-xs text-muted-foreground">
+                  {s.label} → Removed by you · Not imported
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -1897,7 +1923,8 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
               : classification === "historical"
                 ? "Confirm — store as historical"
                 : detectedType === "summary"
-                  ? `Apply ${writableDates.length} date(s)`
+                  ? `Apply ${writableDates.length} day${writableDates.length === 1 ? "" : "s"} to ${destinationLocationCount} location${destinationLocationCount === 1 ? "" : "s"}`
+
                   : mode === "apply" ? "Confirm Import & Apply" : "Confirm — Stage Import"}
           </Button>
         </DialogFooter>
