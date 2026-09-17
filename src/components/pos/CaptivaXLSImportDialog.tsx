@@ -1295,35 +1295,29 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
             <div className="text-sm font-medium">1. What are you importing?</div>
             <div>
               <Label className="text-xs">Report type</Label>
-              <div className="flex gap-2 mt-1">
-                {([["summary", "Sales Summary"], ["products", "Products Sold"]] as const).map(([v, lbl]) => (
-                  <Button
-                    key={v}
-                    type="button"
-                    variant={intendedType === v ? "default" : "outline"}
-                    className="h-11 flex-1"
-                    onClick={() => { setIntendedType(v); setTypeMismatchAck(false); }}
-                  >
-                    {lbl}
-                  </Button>
-                ))}
-              </div>
+              <SegmentedControl
+                className="mt-1"
+                ariaLabel="Report type"
+                value={intendedType}
+                onChange={(v) => { setIntendedType(v); setTypeMismatchAck(false); }}
+                options={[
+                  { value: "summary", label: "Sales Summary" },
+                  { value: "products", label: "Products Sold" },
+                ]}
+              />
             </div>
             <div>
               <Label className="text-xs">Date scope</Label>
-              <div className="flex gap-2 mt-1">
-                {([["single", "Single day"], ["range", "Date range"]] as const).map(([v, lbl]) => (
-                  <Button
-                    key={v}
-                    type="button"
-                    variant={intendedScope === v ? "default" : "outline"}
-                    className="h-11 flex-1"
-                    onClick={() => { setIntendedScope(v); setDateMismatchAck(false); }}
-                  >
-                    {lbl}
-                  </Button>
-                ))}
-              </div>
+              <SegmentedControl
+                className="mt-1"
+                ariaLabel="Date scope"
+                value={intendedScope}
+                onChange={(v) => { setIntendedScope(v); setDateMismatchAck(false); }}
+                options={[
+                  { value: "single", label: "Single day" },
+                  { value: "range", label: "Date range" },
+                ]}
+              />
             </div>
             <div className="grid grid-cols-2 gap-2">
               {(intendedScope === "single"
