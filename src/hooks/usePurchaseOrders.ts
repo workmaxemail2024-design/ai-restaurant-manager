@@ -159,7 +159,10 @@ export function useAddPurchaseOrderItem() {
       },
     ) => {
       const { order_status, ...row } = item;
-      const { error } = await supabase.from("purchase_order_items").insert(row);
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
+      const { error } = await supabase
+        .from("purchase_order_items")
+        .insert({ ...row, restaurant_id: currentRestaurant.id });
       if (error) throw error;
 
       if (order_status && order_status !== "pending" && currentRestaurant?.id) {
