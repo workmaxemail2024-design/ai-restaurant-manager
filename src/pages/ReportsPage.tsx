@@ -562,10 +562,14 @@ function DayCard({
 
   // Effective revenue: use manual override if no actual sales data
   const effectiveRevenue = day.hasData ? day.revenue : (manualRevenue ?? 0);
-  // Orders = receipt count (from pos_daily_summaries). Qty is separate.
-  const effectiveOrders: number | null = day.hasData
-    ? (day.orders ?? (manualOrders ?? null))
-    : (manualOrders ?? null);
+  // Orders = receipt count (from pos_daily_summaries), manual correction wins.
+  // Qty sold is a separate product-line measure and is never used as orders.
+  const ordersMetric = computeEffectiveOrders(day.orders, { manual_orders: manualOrders });
+  const visitorsMetric = computeEffectiveVisitors(day.visitors, { covers, covers_unknown: coversUnknown });
+  const effectiveOrders: number | null = ordersMetric.value;
+  const grossForDisplay: number | null =
+    day.summary?.grossSales != null ? day.summary.grossSales : day.hasData ? day.revenue : manualRevenue;
+  const aovForDisplay = effectiveAov(grossForDisplay, ordersMetric, day.summary?.aov ?? day.aov);
   const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
   const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
   const foodCostIsEstimated = day.hasData ? day.foodCostIsEstimated : true;
