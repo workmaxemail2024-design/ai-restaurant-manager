@@ -116,8 +116,24 @@ export function useDashboardOverview(locationId?: string | null) {
       const { data: summaries } = await summaryQuery;
 
       const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
-      const ordersToday = sumNullable(canonicalDays.map((d) => d.orderCount));
-      const visitorsToday = sumNullable(canonicalDays.map((d) => d.visitorCount));
+      const posOrders = sumNullable(canonicalDays.map((d) => d.orderCount));
+      const posVisitors = sumNullable(canonicalDays.map((d) => d.visitorCount));
+
+      // Manual corrections made in Reports → Daily Performance become the effective
+      // values here too. The POS figures themselves are never modified.
+      let ledgerQuery = supabase
+        .from("daily_ledger_entries")
+        .select("entry_date, location_id, manual_orders, covers")
+        .eq("restaurant_id", restaurantId)
+        .gte("entry_date", startDate)
+        .lte("entry_date", endDate);
+      if (locationId) ledgerQuery = ledgerQuery.eq("location_id", locationId);
+      const { data: ledgerRows } = await ledgerQuery;
+      const manualOrdersTotal = sumNullable((ledgerRows || []).map((r: any) => (r.manual_orders != null ? Number(r.manual_orders) : null)));
+      const manualCoversTotal = sumNullable((ledgerRows || []).map((r: any) => (r.covers != null && Number(r.covers) > 0 ? Number(r.covers) : null)));
+
+      const ordersToday = manualOrdersTotal != null ? manualOrdersTotal : posOrders;
+      const visitorsToday = manualCoversTotal != null ? manualCoversTotal : posVisitors;
       const aovToday = ordersToday != null && ordersToday > 0 ? revenueToday / ordersToday : null;
 
 
