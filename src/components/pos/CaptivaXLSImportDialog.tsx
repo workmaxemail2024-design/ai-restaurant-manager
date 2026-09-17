@@ -52,6 +52,10 @@ interface Props {
   /** Optional external control (used by Reports "Import POS Data"). */
   open?: boolean;
   onOpenChange?: (o: boolean) => void;
+  /** Preconfigure the setup step from context (Reports daily card). File validation is unchanged. */
+  presetType?: "summary" | "products";
+  /** yyyy-MM-dd trading date to preselect (treated as a manual choice). */
+  presetDate?: string;
 }
 
 function toNumber(v: any): number {
@@ -298,7 +302,7 @@ type DateAction = "add" | "enrich" | "up_to_date" | "review" | "closed";
 
 
 
-export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openProp, onOpenChange }: Props) {
+export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openProp, onOpenChange, presetType, presetDate }: Props) {
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
   const setOpen = (o: boolean) => { onOpenChange ? onOpenChange(o) : setOpenState(o); };
