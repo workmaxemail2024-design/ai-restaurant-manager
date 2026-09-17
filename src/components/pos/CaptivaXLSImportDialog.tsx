@@ -1524,34 +1524,26 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                   )}
                 </div>
 
-                <div>
-                  <Label>Preview rows from</Label>
-                  <Select value={sheetName} onValueChange={setSheetName}>
-                    <SelectTrigger><SelectValue placeholder="Select sheet" /></SelectTrigger>
-                    <SelectContent>
-                      {availableSheets.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Checkbox id="incInactive" checked={includeInactive} onCheckedChange={(v) => setIncludeInactive(!!v)} />
-                    <Label htmlFor="incInactive" className="text-xs font-normal cursor-pointer">
-                      Also allow "No Activity" sheet
-                    </Label>
+                {detectedType !== "summary" && (
+                  <div>
+                    <Label>Import mode</Label>
+                    <SegmentedControl
+                      className="mt-2"
+                      ariaLabel="Import mode"
+                      value={mode}
+                      onChange={(v) => setMode(v)}
+                      options={[
+                        { value: "stage", label: "Stage only" },
+                        { value: "apply", label: "Apply to dashboard" },
+                      ]}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {mode === "apply"
+                        ? "Sales are posted to Dashboard and Reports."
+                        : "Rows are staged only — nothing reaches Dashboard or Reports yet."}
+                    </p>
                   </div>
-                </div>
-                <div>
-                  <Label>Import mode</Label>
-                  <RadioGroup value={mode} onValueChange={(v: any) => setMode(v)} className="mt-2 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="stage" id="stage" />
-                      <Label htmlFor="stage" className="font-normal cursor-pointer">Stage only</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="apply" id="apply" />
-                      <Label htmlFor="apply" className="font-normal cursor-pointer">Apply to dashboard</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
+                )}
               </div>
 
               <div className="rounded-lg border">
