@@ -285,7 +285,10 @@ type DetectedStore = {
   headerDates: string[];
   rowDates: string[];
   totals: { qty: number; gross: number; net: number; vat: number; disc: number; count: number };
+  /** Captiva roll-up line (e.g. "All Stores") — shown, never imported. */
+  isAggregate: boolean;
 };
+
 
 /** Per trading date, what this import would do to existing canonical data. */
 type DateAction = "add" | "enrich" | "up_to_date" | "review" | "closed";
