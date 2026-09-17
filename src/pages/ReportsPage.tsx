@@ -44,6 +44,10 @@ import {
 } from "@/lib/effectiveOperationalMetrics";
 
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
+import { useDailyFoodCosting, usePeriodFoodCosting } from "@/hooks/useFoodCosting";
+import { buildFoodCostView, type FoodCostResolverRow } from "@/lib/foodCosting";
+import { FoodCostBlock } from "@/components/reports/FoodCostBlock";
+import { MissingCostsDialog } from "@/components/reports/MissingCostsDialog";
 import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useQuery } from "@tanstack/react-query";
@@ -516,6 +520,8 @@ function DayCard({
   hasBookings,
   actualAttendance,
   plannedShiftHours,
+  costRow,
+  locationId,
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
@@ -527,6 +533,8 @@ function DayCard({
   hasBookings: boolean;
   actualAttendance?: { hours: number; cost: number };
   plannedShiftHours?: number;
+  costRow?: FoodCostResolverRow;
+  locationId: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const { currentRestaurant } = useRestaurant();
@@ -572,9 +580,13 @@ function DayCard({
   const grossForDisplay: number | null =
     day.summary?.grossSales != null ? day.summary.grossSales : day.hasData ? day.revenue : manualRevenue;
   const aovForDisplay = effectiveAov(grossForDisplay, ordersMetric, day.summary?.aov ?? day.aov);
-  const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
-  const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
-  const foodCostIsEstimated = day.hasData ? day.foodCostIsEstimated : true;
+  // Food cost comes from the shared date-aware resolver; the 30% assumption is
+  // applied only to revenue that genuinely cannot be costed.
+  const costing = buildFoodCostView(costRow, effectiveRevenue);
+  const effectiveFoodCost = costing.blendedCost;
+  const effectiveFoodCostPct = costing.foodCostPct ?? 0;
+  const foodCostIsEstimated = costing.isEstimated;
+  const [missingOpen, setMissingOpen] = useState(false);
 
   // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. planned shifts
   const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
@@ -584,7 +596,7 @@ function DayCard({
   const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
-  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || day.itemsMissingCost > 0;
+  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || costing.missingCostDishes > 0;
 
   // Variance between actual and planned
   const labourVariance = (plannedShiftHours != null && effectiveLabourHours > 0)
@@ -987,17 +999,20 @@ function DayCard({
                           </div>
                         );
                       })()}
-                      {(foodCostIsEstimated || day.itemsMissingCost > 0 || labourSource === "none") && (
+                      <div className="pt-2 mt-1 border-t border-border/60">
+                        <FoodCostBlock view={costing} onViewMissing={() => setMissingOpen(true)} />
+                      </div>
+                      <MissingCostsDialog
+                        open={missingOpen}
+                        onOpenChange={setMissingOpen}
+                        startDate={day.date}
+                        endDate={day.date}
+                        locationId={locationId}
+                        label={label}
+                      />
+                      {labourSource === "none" && (
                         <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground space-y-0.5">
-                          {foodCostIsEstimated && (
-                            <div>Food cost shown is <span className="text-warning font-medium">Estimated Food Cost % (30.0%)</span> — actual recipe costs not applied.</div>
-                          )}
-                          {day.itemsMissingCost > 0 && (
-                            <div>Margin incomplete — <span className="text-warning font-medium">{day.itemsMissingCost}</span> sold items missing recipe/product cost.</div>
-                          )}
-                          {labourSource === "none" && (
-                            <div>Labour missing — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
-                          )}
+                          <div>Labour missing — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
                         </div>
                       )}
                     </div>
@@ -1270,6 +1285,10 @@ export default function ReportsPage() {
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
   const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(startDate, endDate, selectedLocationId);
   const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(startDate, endDate, selectedLocationId);
+  // Single costing source — date-aware ingredient costs resolved server-side.
+  const { data: dailyCostMap } = useDailyFoodCosting(startDate, endDate, selectedLocationId);
+  const { data: periodCostRow } = usePeriodFoodCosting(startDate, endDate, selectedLocationId);
+  const [missingCostsOpen, setMissingCostsOpen] = useState(false);
 
   // Fetch actual attendance for date range
   const restaurantId = currentRestaurant?.id;
@@ -1375,6 +1394,7 @@ export default function ReportsPage() {
       aov: null as number | null, foodCostPct: 0, profit: 0,
       totalLabourCost: 0, labourPct: 0,
       foodCostIsEstimated: true, itemsMissingCost: 0, hasAnyLabour: false,
+      costing: buildFoodCostView(null, 0),
     };
     if (!dailyData || dailyData.length === 0) return empty;
 
@@ -1388,30 +1408,14 @@ export default function ReportsPage() {
     let visitorTotal: number | null = null;
     let itemsMissingCost = 0;
     let hasAnyLabour = false;
-    // Sum food cost from each day so the summary card matches the daily row exactly.
-    let totalFoodCost = 0;
-    let anyDayEstimated = false;
-
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
       const actual = attendanceMap.get(day.date);
 
       salesRevenue += day.revenue;
       qtySold += day.qtySold;
-      itemsMissingCost += day.itemsMissingCost;
       if (day.orders != null) orderTotal = (orderTotal ?? 0) + day.orders;
       if (day.visitors != null) visitorTotal = (visitorTotal ?? 0) + day.visitors;
-
-      // Apply the same per-day food cost rule the daily row uses:
-      //   if the row has sales but no recipe coverage → 30% estimate.
-      const dayRevenue = day.revenue + (ledger && !day.hasData ? (ledger.manual_revenue ?? 0) : 0);
-      if (day.hasData) {
-        totalFoodCost += day.foodCost;
-        if (day.foodCostIsEstimated) anyDayEstimated = true;
-      } else if (dayRevenue > 0) {
-        totalFoodCost += dayRevenue * 0.3;
-        anyDayEstimated = true;
-      }
 
       if (actual && actual.hours > 0) {
         totalLabourCost += actual.cost;
@@ -1434,18 +1438,23 @@ export default function ReportsPage() {
 
     const revenue = salesRevenue + manualRevenueTotal;
     if (manualOrdersTotal > 0) orderTotal = (orderTotal ?? 0) + manualOrdersTotal;
+    // Period food cost comes from the period resolver against period totals —
+    // daily percentages are never averaged.
+    const costing = buildFoodCostView(periodCostRow ?? null, revenue);
+    const totalFoodCost = costing.blendedCost;
+    itemsMissingCost = costing.missingCostDishes;
     const adjustedProfit = revenue - totalFoodCost - totalLabourCost - totalAdditionalExpenses;
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
-    const foodCostPct = revenue > 0 ? (totalFoodCost / revenue) * 100 : 0;
+    const foodCostPct = costing.foodCostPct ?? 0;
     const aov = orderTotal && orderTotal > 0 ? revenue / orderTotal : null;
-    const foodCostIsEstimated = anyDayEstimated;
+    const foodCostIsEstimated = costing.isEstimated;
 
     return {
       revenue, orders: orderTotal, qtySold, visitors: visitorTotal, aov,
       foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct,
-      foodCostIsEstimated, itemsMissingCost, hasAnyLabour,
+      foodCostIsEstimated, itemsMissingCost, hasAnyLabour, costing,
     };
-  }, [dailyData, ledgerEntries, avgHourlyRate, attendanceMap]);
+  }, [dailyData, ledgerEntries, avgHourlyRate, attendanceMap, periodCostRow]);
   const profitIsEstimated = periodSummary.foodCostIsEstimated || !periodSummary.hasAnyLabour;
 
   // Count days needing attention for summary
@@ -1592,18 +1601,18 @@ export default function ReportsPage() {
                     <div className="text-[10px] text-muted-foreground">item units</div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="col-span-2">
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">
-                      {periodSummary.foodCostIsEstimated ? "Food Cost % (est.)" : "Food Cost %"}
+                      {periodSummary.costing.isEstimated ? "Food Cost (est.)" : "Food Cost"}
                     </CardTitle>
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.foodCostPct.toFixed(1)}%</div>
-                    {periodSummary.foodCostIsEstimated && (
-                      <div className="text-[10px] text-muted-foreground">default 30%</div>
-                    )}
+                    <FoodCostBlock
+                      view={periodSummary.costing}
+                      onViewMissing={() => setMissingCostsOpen(true)}
+                    />
                   </CardContent>
                 </Card>
                 <Card>
@@ -1682,11 +1691,22 @@ export default function ReportsPage() {
                         hasBookings={bookingDaysSet.has(day.date)}
                         actualAttendance={attendanceMap.get(day.date)}
                         plannedShiftHours={shiftsMap.get(day.date)}
+                        costRow={dailyCostMap?.get(day.date)}
+                        locationId={selectedLocationId}
                       />
                     ))}
                   </div>
                 )}
               </div>
+
+              <MissingCostsDialog
+                open={missingCostsOpen}
+                onOpenChange={setMissingCostsOpen}
+                startDate={startDate}
+                endDate={endDate}
+                locationId={selectedLocationId}
+                label={startDate === endDate ? startDate : `${startDate} → ${endDate}`}
+              />
             </>
           )}
         </TabsContent>
