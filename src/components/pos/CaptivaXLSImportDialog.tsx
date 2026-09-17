@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
-import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, X } from "lucide-react";
+import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, X, ChevronDown, Circle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { SegmentedControl } from "@/components/common/SegmentedControl";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -343,6 +345,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   // True once the Owner has picked the trading date by hand — a manual choice is
   // never silently replaced by a date detected in the file.
   const [dateManuallySet, setDateManuallySet] = useState(false);
+  // Full mapping table is only shown when a store needs a decision, or on demand.
+  const [showLocationDetails, setShowLocationDetails] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const sheetNames = workbook?.SheetNames || [];
   const availableSheets = includeInactive
@@ -606,6 +611,44 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     const m = storeMappings[s.key];
     return !m || m.action === "unset";
   });
+
+  /**
+   * Confident store → location match. Only used to PRE-FILL the mapping the
+   * Owner can still change; ambiguous labels are left for manual mapping.
+   */
+  const matchLocationFor = useCallback((label: string): string | null => {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const l = norm(label);
+    if (!l) return null;
+    const tokens = label.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+    const cands = locations.filter((loc) => {
+      const n = norm(loc.name);
+      if (!n) return false;
+      if (n === l) return true;
+      if (n.length >= 4 && (l.startsWith(n) || n.startsWith(l))) return true;
+      return tokens.some((t) => n.includes(t) || t.includes(n));
+    });
+    return cands.length === 1 ? cands[0].id : null;
+  }, [locations]);
+
+  // Pre-fill confident matches so a normal import needs no mapping interaction.
+  useEffect(() => {
+    if (!detectedStores.length || !locations.length) return;
+    setStoreMappings((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      const eligible = detectedStores.filter((s) => !s.isAggregate);
+      for (const s of eligible) {
+        if (next[s.key]) continue;
+        const id =
+          matchLocationFor(s.label) ??
+          (eligible.length === 1 && locations.length === 1 ? locations[0].id : null) ??
+          (eligible.length === 1 && defaultLocationId ? defaultLocationId : null);
+        if (id) { next[s.key] = { action: "existing", locationId: id }; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [detectedStores, locations, matchLocationFor, defaultLocationId]);
 
 
   const parsed = useMemo(() => {
