@@ -2934,24 +2934,6 @@ export type Database = {
           },
         ]
       }
-      zz_cost_test: {
-        Row: {
-          at: string | null
-          k: string
-          v: Json | null
-        }
-        Insert: {
-          at?: string | null
-          k: string
-          v?: Json | null
-        }
-        Update: {
-          at?: string | null
-          k?: string
-          v?: Json | null
-        }
-        Relationships: []
-      }
     }
     Views: {
       pos_integrations_safe: {

@@ -25,13 +25,13 @@
 
 ## Historical food costing (proposal awaiting approval)
 - [ ] Blended item-level food cost (actual + 30% only on uncosted revenue)
-- [ ] Date-aware costing: get_ingredient_cost_at_date / calculate_dish_cost_at_date
-- [ ] ingredient_prices reused as dated history + seed current costs
+- [x] Date-aware costing migration applied + verified (functions, seed, revisions, immutability)
+- [x] ingredient_prices reused as dated history + frozen baseline seeded
 - [ ] Single shared resolver (get_period_food_cost / get_daily_food_cost) for Reports, Dashboard, P&L, AI
 - [ ] Reports UI: coverage %, actual vs estimated split, missing-cost item count -> Dishes filter
 
 ## Historical costing - backdated prices (approved)
-- [ ] Migration: revision column + deterministic ordering, unique (ingredient_id, effective_date, revision)
-- [ ] add_ingredient_price(ingredient, cost, pack, effective_date, source) owner-only RPC for backdated entry
-- [ ] Immutable history rows (no silent edit/delete; corrections = new revision, audit logged)
+- [x] Migration: revision column + deterministic ordering, unique (ingredient_id, effective_date, revision)
+- [x] add_ingredient_price RPC for backdated entry (owner/manager)
+- [x] Immutable history rows (corrections = new revision, audit logged)
 - [ ] Ingredients UI: "Add historical price" with Effective from date (after DB verification)
