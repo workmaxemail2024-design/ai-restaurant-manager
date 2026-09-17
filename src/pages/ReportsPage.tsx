@@ -596,7 +596,7 @@ function DayCard({
   const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
-  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || day.itemsMissingCost > 0;
+  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || costing.missingCostDishes > 0;
 
   // Variance between actual and planned
   const labourVariance = (plannedShiftHours != null && effectiveLabourHours > 0)
