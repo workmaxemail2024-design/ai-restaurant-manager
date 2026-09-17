@@ -733,25 +733,55 @@ export type Database = {
       }
       ingredient_prices: {
         Row: {
+          base_unit: string | null
+          cost_per_base_unit: number | null
+          cost_per_pack: number | null
           cost_price: number
           created_at: string
+          created_by: string | null
+          effective_date: string
           id: string
           ingredient_id: string
+          note: string | null
+          pack_size: number | null
+          pack_unit: string | null
           restaurant_id: string | null
+          revision: number
+          source: string
         }
         Insert: {
+          base_unit?: string | null
+          cost_per_base_unit?: number | null
+          cost_per_pack?: number | null
           cost_price: number
           created_at?: string
+          created_by?: string | null
+          effective_date?: string
           id?: string
           ingredient_id: string
+          note?: string | null
+          pack_size?: number | null
+          pack_unit?: string | null
           restaurant_id?: string | null
+          revision?: number
+          source?: string
         }
         Update: {
+          base_unit?: string | null
+          cost_per_base_unit?: number | null
+          cost_per_pack?: number | null
           cost_price?: number
           created_at?: string
+          created_by?: string | null
+          effective_date?: string
           id?: string
           ingredient_id?: string
+          note?: string | null
+          pack_size?: number | null
+          pack_unit?: string | null
           restaurant_id?: string | null
+          revision?: number
+          source?: string
         }
         Relationships: [
           {
@@ -3070,11 +3100,30 @@ export type Database = {
       }
     }
     Functions: {
+      add_ingredient_price: {
+        Args: {
+          p_cost_per_pack?: number
+          p_effective_date: string
+          p_ingredient_id: string
+          p_note?: string
+          p_pack_size?: number
+          p_pack_unit?: string
+          p_unit_cost?: number
+        }
+        Returns: string
+      }
       assert_day_open: {
         Args: { _date: string; _location_id: string; _restaurant_id: string }
         Returns: undefined
       }
       calculate_dish_cost: { Args: { p_dish_id: string }; Returns: number }
+      calculate_dish_cost_at_date: {
+        Args: { p_date: string; p_dish_id: string }
+        Returns: {
+          cost: number
+          status: string
+        }[]
+      }
       calculate_dish_margin: { Args: { p_dish_id: string }; Returns: number }
       calculate_staff_score: {
         Args: { p_date: string; p_staff_id: string }
@@ -3109,9 +3158,44 @@ export type Database = {
       }
       ensure_user_restaurant: { Args: never; Returns: Json }
       expire_stale_invites: { Args: { _email: string }; Returns: number }
+      get_daily_food_cost: {
+        Args: {
+          p_end: string
+          p_estimate_pct?: number
+          p_location_id: string
+          p_start: string
+        }
+        Returns: {
+          actual_food_cost: number
+          blended_food_cost: number
+          estimated_food_cost: number
+          fallback_food_cost: number
+          fallback_priced_dishes: number
+          fallback_quantity: number
+          fallback_revenue: number
+          food_cost_pct: number
+          historical_coverage_pct: number
+          historical_food_cost: number
+          historical_quantity: number
+          historical_revenue: number
+          missing_cost_dishes: number
+          recipe_coverage_pct: number
+          sale_date: string
+          total_revenue: number
+          uncosted_quantity: number
+          uncosted_revenue: number
+        }[]
+      }
       get_ingredient_base_cost: {
         Args: { p_ingredient_id: string }
         Returns: number
+      }
+      get_ingredient_cost_at_date: {
+        Args: { p_date: string; p_ingredient_id: string }
+        Returns: {
+          cost: number
+          is_historical: boolean
+        }[]
       }
       get_ingredient_cost_unit: {
         Args: { p_ingredient_id: string }
@@ -3120,6 +3204,33 @@ export type Database = {
       get_latest_ingredient_price: {
         Args: { p_ingredient_id: string }
         Returns: number
+      }
+      get_period_food_cost: {
+        Args: {
+          p_end: string
+          p_estimate_pct?: number
+          p_location_id: string
+          p_start: string
+        }
+        Returns: {
+          actual_food_cost: number
+          blended_food_cost: number
+          estimated_food_cost: number
+          fallback_food_cost: number
+          fallback_priced_dishes: number
+          fallback_quantity: number
+          fallback_revenue: number
+          food_cost_pct: number
+          historical_coverage_pct: number
+          historical_food_cost: number
+          historical_quantity: number
+          historical_revenue: number
+          missing_cost_dishes: number
+          recipe_coverage_pct: number
+          total_revenue: number
+          uncosted_quantity: number
+          uncosted_revenue: number
+        }[]
       }
       get_theoretical_usage: {
         Args: { p_end?: string; p_location_id?: string; p_start?: string }
@@ -3149,6 +3260,21 @@ export type Database = {
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
+      insert_ingredient_price_row: {
+        Args: {
+          p_cost_per_base_unit: number
+          p_cost_per_pack: number
+          p_cost_price: number
+          p_created_by?: string
+          p_effective_date: string
+          p_ingredient_id: string
+          p_note?: string
+          p_pack_size: number
+          p_pack_unit: string
+          p_source: string
+        }
+        Returns: string
+      }
       is_trusted_backend_session: { Args: never; Returns: boolean }
       log_audit_event: {
         Args: {
