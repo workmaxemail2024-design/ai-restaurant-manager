@@ -1388,30 +1388,14 @@ export default function ReportsPage() {
     let visitorTotal: number | null = null;
     let itemsMissingCost = 0;
     let hasAnyLabour = false;
-    // Sum food cost from each day so the summary card matches the daily row exactly.
-    let totalFoodCost = 0;
-    let anyDayEstimated = false;
-
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
       const actual = attendanceMap.get(day.date);
 
       salesRevenue += day.revenue;
       qtySold += day.qtySold;
-      itemsMissingCost += day.itemsMissingCost;
       if (day.orders != null) orderTotal = (orderTotal ?? 0) + day.orders;
       if (day.visitors != null) visitorTotal = (visitorTotal ?? 0) + day.visitors;
-
-      // Apply the same per-day food cost rule the daily row uses:
-      //   if the row has sales but no recipe coverage → 30% estimate.
-      const dayRevenue = day.revenue + (ledger && !day.hasData ? (ledger.manual_revenue ?? 0) : 0);
-      if (day.hasData) {
-        totalFoodCost += day.foodCost;
-        if (day.foodCostIsEstimated) anyDayEstimated = true;
-      } else if (dayRevenue > 0) {
-        totalFoodCost += dayRevenue * 0.3;
-        anyDayEstimated = true;
-      }
 
       if (actual && actual.hours > 0) {
         totalLabourCost += actual.cost;
@@ -1434,18 +1418,23 @@ export default function ReportsPage() {
 
     const revenue = salesRevenue + manualRevenueTotal;
     if (manualOrdersTotal > 0) orderTotal = (orderTotal ?? 0) + manualOrdersTotal;
+    // Period food cost comes from the period resolver against period totals —
+    // daily percentages are never averaged.
+    const costing = buildFoodCostView(periodCostRow ?? null, revenue);
+    const totalFoodCost = costing.blendedCost;
+    itemsMissingCost = costing.missingCostDishes;
     const adjustedProfit = revenue - totalFoodCost - totalLabourCost - totalAdditionalExpenses;
     const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
-    const foodCostPct = revenue > 0 ? (totalFoodCost / revenue) * 100 : 0;
+    const foodCostPct = costing.foodCostPct ?? 0;
     const aov = orderTotal && orderTotal > 0 ? revenue / orderTotal : null;
-    const foodCostIsEstimated = anyDayEstimated;
+    const foodCostIsEstimated = costing.isEstimated;
 
     return {
       revenue, orders: orderTotal, qtySold, visitors: visitorTotal, aov,
       foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct,
-      foodCostIsEstimated, itemsMissingCost, hasAnyLabour,
+      foodCostIsEstimated, itemsMissingCost, hasAnyLabour, costing,
     };
-  }, [dailyData, ledgerEntries, avgHourlyRate, attendanceMap]);
+  }, [dailyData, ledgerEntries, avgHourlyRate, attendanceMap, periodCostRow]);
   const profitIsEstimated = periodSummary.foodCostIsEstimated || !periodSummary.hasAnyLabour;
 
   // Count days needing attention for summary
