@@ -1691,6 +1691,8 @@ export default function ReportsPage() {
                         hasBookings={bookingDaysSet.has(day.date)}
                         actualAttendance={attendanceMap.get(day.date)}
                         plannedShiftHours={shiftsMap.get(day.date)}
+                        costRow={dailyCostMap?.get(day.date)}
+                        locationId={selectedLocationId}
                       />
                     ))}
                   </div>
