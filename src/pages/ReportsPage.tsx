@@ -999,17 +999,20 @@ function DayCard({
                           </div>
                         );
                       })()}
-                      {(foodCostIsEstimated || day.itemsMissingCost > 0 || labourSource === "none") && (
+                      <div className="pt-2 mt-1 border-t border-border/60">
+                        <FoodCostBlock view={costing} onViewMissing={() => setMissingOpen(true)} />
+                      </div>
+                      <MissingCostsDialog
+                        open={missingOpen}
+                        onOpenChange={setMissingOpen}
+                        startDate={day.date}
+                        endDate={day.date}
+                        locationId={locationId}
+                        label={label}
+                      />
+                      {labourSource === "none" && (
                         <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground space-y-0.5">
-                          {foodCostIsEstimated && (
-                            <div>Food cost shown is <span className="text-warning font-medium">Estimated Food Cost % (30.0%)</span> — actual recipe costs not applied.</div>
-                          )}
-                          {day.itemsMissingCost > 0 && (
-                            <div>Margin incomplete — <span className="text-warning font-medium">{day.itemsMissingCost}</span> sold items missing recipe/product cost.</div>
-                          )}
-                          {labourSource === "none" && (
-                            <div>Labour missing — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
-                          )}
+                          <div>Labour missing — profit shown as <span className="text-warning font-medium">estimated</span>.</div>
                         </div>
                       )}
                     </div>
