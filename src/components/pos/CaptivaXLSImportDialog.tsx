@@ -1560,6 +1560,27 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                 )}
               </div>
 
+              {simpleLocation ? (
+                <div className="rounded-lg border p-3 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">Location</div>
+                    {eligibleStores.filter((s) => !ignoredStores[s.key]).map((s) => (
+                      <div key={s.key} className="mt-1 flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                        <span>{s.label} → {locationName((storeMappings[s.key] as { locationId: string }).locationId)}</span>
+                      </div>
+                    ))}
+                    {eligibleStores.some((s) => ignoredStores[s.key]) && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Removed from this import: {eligibleStores.filter((s) => ignoredStores[s.key]).map((s) => s.label).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                  <Button variant="outline" size="sm" className="h-10 shrink-0" onClick={() => setShowLocationDetails(true)}>
+                    Change
+                  </Button>
+                </div>
+              ) : (
               <div className="rounded-lg border">
                 <div className="p-3 border-b">
                   <div className="text-sm font-medium">Stores in this file</div>
