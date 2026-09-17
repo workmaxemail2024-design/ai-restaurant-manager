@@ -29,10 +29,19 @@ import {
   CalendarDays,
   Receipt,
   Upload,
+  Pencil,
+  RotateCcw,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { reconcileGross } from "@/lib/posDailyCanonical";
+import {
+  effectiveOrders as computeEffectiveOrders,
+  effectiveVisitors as computeEffectiveVisitors,
+  effectiveAov,
+  type EffectiveMetric,
+} from "@/lib/effectiveOperationalMetrics";
 
 import { useDailyBreakdown, type DailyMetrics } from "@/hooks/useDailyBreakdown";
 import { useDailyLedger, type LedgerEntry, type MissingField, type DayStatus, evaluateMissing } from "@/hooks/useDailyLedger";
