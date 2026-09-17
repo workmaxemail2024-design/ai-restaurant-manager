@@ -529,6 +529,8 @@ function DayCard({
   plannedShiftHours?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const { currentRestaurant } = useRestaurant();
+  const auditRestaurantId = currentRestaurant?.id;
   const dateObj = parseISO(day.date);
   const label = format(dateObj, "EEE dd MMM");
 
