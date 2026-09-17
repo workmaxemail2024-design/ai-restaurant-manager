@@ -1251,18 +1251,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         }
       }
 
+      const dayLabel = firstDate
+        ? format(new Date(`${firstDate}T00:00:00`), "d MMM") +
+          (lastDate && lastDate !== firstDate ? ` – ${format(new Date(`${lastDate}T00:00:00`), "d MMM")}` : "")
+        : "";
       toast({
         title: classification === "historical"
           ? "Historical report imported"
-          : mode === "apply" ? "Import applied" : "Import staged",
+          : products
+            ? `${dayLabel} populated from Products Sold ✓`
+            : summaryDays
+              ? `${dayLabel} updated from Sales Summary ✓`
+              : mode === "apply" ? "Import applied" : "Import staged",
         description:
-          `${importableStores.length} store(s)` +
-          (summaryDays ? ` · ${summaryDays} daily summar${summaryDays === 1 ? "y" : "ies"}` : "") +
-          (products ? ` · ${products} products` : "") +
-          (skipped ? ` · ${skipped} date(s) left unchanged` : "") +
-          (classification === "historical"
-            ? " · stored as historical product data only."
-            : (mode === "apply" && products ? ` · ${applied} product sale rows posted to dashboard.` : ".")),
+          classification === "historical"
+            ? `${importableStores.length} store(s) · stored as historical product data only.`
+            : products
+              ? `Revenue, net sales, VAT, quantity and product detail are available. ` +
+                (summaryDays ? "" : "Sales Summary optional — upload it to add receipt/visitor metrics and reconcile totals. ") +
+                (skipped ? `${skipped} date(s) left unchanged. ` : "") +
+                (mode === "apply" ? `${applied} product sale rows posted to dashboard.` : "Staged only — choose “Apply to dashboard” to post them.")
+              : `${summaryDays} daily summar${summaryDays === 1 ? "y" : "ies"} merged — receipts, visitors and control totals updated.` +
+                (skipped ? ` ${skipped} date(s) left unchanged.` : ""),
       });
 
       // Persist import context so Menu Performance / Dashboard immediately
