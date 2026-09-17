@@ -109,6 +109,20 @@ function isAggregateSheet(name: string): boolean {
   return /all\s*stores|summary|totals?$|grand/i.test(name.trim());
 }
 
+/**
+ * Strict aggregate/roll-up detector used for STORE LABELS (sheet names and the
+ * Store column of a tabular Daily Sales Summary). A Captiva roll-up line such as
+ * "All Stores" repeats the same revenue as the individual store lines, so it must
+ * never be mapped to a location or imported.
+ */
+function isAggregateLabel(name: string): boolean {
+  const s = String(name || "").trim().toLowerCase().replace(/[.*]/g, "").trim();
+  if (!s) return false;
+  if (/\ball\s*(stores?|locations?|sites?|branches|outlets|shops)\b/.test(s)) return true;
+  return /^(grand\s*total|totals?|company\s*total|overall|all)$/.test(s);
+}
+
+
 type StoreMapping =
   | { action: "unset" }
   | { action: "existing"; locationId: string }
