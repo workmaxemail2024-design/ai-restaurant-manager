@@ -1438,7 +1438,30 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar mode="single" selected={reportDate} onSelect={(d) => { if (d) { setReportDate(d); setDateConfirmed(true); } }} initialFocus className={cn("p-3 pointer-events-auto")} />
+                          <Calendar
+                            mode="single"
+                            selected={reportDate}
+                            defaultMonth={reportDate}
+                            onSelect={(d) => { if (d) { setReportDate(d); setDateConfirmed(true); setDateManuallySet(true); } }}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                            classNames={{
+                              // Today = subtle permanent outline; selected trading date keeps the strong fill.
+                              day_today:
+                                "bg-transparent text-foreground font-semibold ring-1 ring-inset ring-primary/60 rounded-md",
+                              day_selected:
+                                "bg-primary text-primary-foreground font-semibold ring-0 hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                            }}
+                          />
+                          <div className="flex items-center gap-4 border-t px-3 py-2 text-[11px] text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <span className="h-3 w-3 rounded-[3px] ring-1 ring-inset ring-primary/60" /> Today
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="h-3 w-3 rounded-[3px] bg-primary" /> Selected trading date
+                            </span>
+                          </div>
+
                         </PopoverContent>
                       </Popover>
                       <p className={cn("text-xs mt-1", dateConfirmed ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400")}>
