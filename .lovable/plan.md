@@ -1,72 +1,57 @@
-# Captiva POS — audit findings and smallest safe plan
+# Audit: historical food cost, margin and profit recalculation
 
-## 1. What is actually running today
+No code or data was changed. Findings below come from reading the live database functions, the Reports code and your actual September rows.
 
-**Live path:** POS Integrations screen → `pos-sync-captiva` → (auto-apply) → `pos-apply-import` → `sales` + `pos_daily_summaries`.
+## How it works today
 
-**Retired and not involved** (all return 410): `captiva-sync`, `captiva-webhook-handler`, `pos-import-sales`, `pos-webhook-handler`. They only occupy space; nothing calls them.
+**Where sold products live.** Each POS product line becomes a row in `sales` (date, location, dish, quantity, total price), created by the Captiva import/apply step. Raw import rows stay in `pos_sales_import`, and day totals in `pos_daily_summaries`. Aggregated period sheets go to the historical product summaries table instead.
 
-**Still involved:** `captiva-schedule-sync` — a working end-of-day batch runner that already chains sync → apply per integration, but only for integrations whose settings contain `auto_sync_daily: true`.
+**How a sold product becomes a dish.** The POS item list (`external_pos_items`) holds a `mapped_dish_id`; the apply step uses that mapping to write `sales.dish_id`. Unmapped items fall back to a placeholder dish.
 
-## 2. Credentials and endpoint
+**Dish to recipe to cost.** `dish_ingredients` lists ingredient + quantity + unit per dish. `calculate_dish_cost` either returns the dish's direct cost (when "use direct cost" is on) or sums each recipe line: quantity converted to base units × `get_ingredient_base_cost`, which reads the ingredient's **current** pack size / pack cost, falling back to the current default cost price. If any line can't be converted, or the dish has no recipe lines, the function returns "unknown" (null).
 
-One Captiva integration exists, for one location (Pizzeria La Scala, outlet code `02137`), status active. Credentials live in `pos_integrations.settings`: `base_url`, `store_id`, `api_key`, `api_account_name`, `api_password`. No secrets are exposed to the browser; every call is made server-side.
+**Ingredient price history.** There is an `ingredient_prices` table with timestamps, but the cost engine never uses it — `get_latest_ingredient_price` is only a "latest" lookup and `calculate_dish_cost` doesn't call it at all. Effectively there is **one current cost per ingredient, with no effective dates**.
 
-Endpoint called: `https://mycaptivaserver001.azurewebsites.net/CaptivaCloudAPIRequest.ashx`, POST JSON, trying request types `GetSales`, `GetJournals`, `GetProductSales`, `GetSalesJournal` in turn.
+**Where the Reports figures come from.** Nothing about cost is stored per day. Every figure is computed live each time Reports loads:
+- Daily cards (`useDailyBreakdown`) do **not** use recipes at all — food cost is hard-coded at 30% of revenue and Est. Profit is revenue − that 30%. Food Cost % therefore always reads 30.0% and is flagged with an asterisk/"estimated".
+- The Daily Financial Summary / dashboard path does use recipes: it sums `calculate_dish_cost` × quantity for the dishes sold, but only trusts it when at least 50% of the sold dishes have a cost; below that it falls back to the same 30% estimate.
+- The period KPIs on Reports sum the daily values, so they inherit the 30% estimate.
 
-## 3. Can the live API currently return sales data? No.
+## Answers to your scenario
 
-Every attempt returns HTTP 200 with a Captiva error body and **zero rows**:
+- **Add a missing recipe in October → does September improve?** Yes in principle, no in practice today. Because costs are computed live, no re-import is needed. But the Reports daily cards ignore recipes entirely, so September's Food Cost % and Est. Profit stay at 30% no matter how many recipes you complete. Only the financial-summary/dashboard path would improve, and only once recipe coverage passes 50%.
+- **Change an ingredient price today → does September change?** Yes, wherever recipe costs are actually used, and incorrectly so. September would be re-costed at today's price, because cost lookup has no date awareness and price history is never consulted. This is a genuine correctness risk once recipes exist.
 
-- JSON body, form-encoded, multipart and query-string: `115403 — Error user id required` (even when a UserID was supplied).
-- XML body: `306610 — Error loading request` — Captiva treated the XML as a *file path* on its own server, so that format is definitely wrong.
+## Tested against your real September data
 
-So today it can retrieve **no** product sales, gross sales or order count. Visitor/covers is not part of the product report at all — in the manual import the Owner types it in.
+September has Products Sold on 1, 11 and 16 Sep (e.g. 1 Sep: 85 product lines, 235 items, €2,398.45). Checked across the whole database: **416 dishes, 0 with a recipe, 0 using a direct cost, 0 recipe lines, 2 ingredients.** So every sold product on 1 Sep is currently missing a cost.
 
-**Classification: Captiva-side request-contract restriction.** Not our authentication, not the endpoint host, not payload mapping, not location mapping, not the canonical import path. The missing piece is the exact request envelope and the meaning of `UserID` — that has to come from Captiva.
+If you completed those recipes now: `sales` rows already carry dish IDs, so the cost engine would immediately see them — no re-import. The daily financial summary would switch from 30% estimated to real recipe cost once over half the sold dishes are costed. The Reports daily cards and the period Food Cost % / Est. Profit would **not** change, because that path never calls the cost engine.
 
-## 4. Outlet / multi-location
+## Audit report
 
-We send `OutletCode`. Because no successful response has ever been received, there is **no evidence** of how Captiva labels outlets in a response or whether one response can carry several outlets. This cannot be answered from our side — it needs one real sample response.
+**Already works correctly**
+- Sales are stored per dish per day, so historical recalculation is possible without re-importing.
+- Costs are computed on read, not snapshotted — completing a recipe can improve the past.
+- Dish cost correctly returns "unknown" instead of a misleading zero when a recipe or conversion is missing.
 
-The only proven multi-outlet identifier we have is in the XLS export: one worksheet per store plus an "All Stores" sheet. That is a sheet *name*, not a stable code, so it must be mapped by a human, never guessed.
+**Works but has limitations**
+- Recipe costing only applies in the financial-summary/dashboard path, and is discarded entirely below 50% dish coverage — an all-or-nothing switch rather than "costed part + estimated remainder".
+- No per-day record of how complete the costing was at the time.
 
-## 5. Scheduler state
+**Missing functionality**
+- Reports daily cards and period KPIs never use recipe costs at all (fixed 30%).
+- No dated ingredient cost — `ingredient_prices` exists with timestamps but is unused by the cost engine.
+- No per-day "items missing cost" coverage figure driven by real recipe data.
 
-**There is no scheduled job.** `cron.job` is empty. The original migration also built the call with `current_setting('app.settings.service_role_key')`, which is unset — it would have sent `Bearer ` and been rejected anyway. Nothing has run automatically; every log entry came from a manual button press.
+**Risk of historical figures changing incorrectly**
+- High, once recipes exist: any ingredient price edit silently re-prices every past month. September margins would move because of an October price change.
+- Editing a dish's recipe (not just its price) has the same retroactive effect.
 
-## 6. Sync logs
+**Minimum changes for reliable historical recalculation**
+1. Make Reports use the real cost engine instead of the 30% constant, with a blended result: sum actual cost for costed items, mark the rest as uncosted, and show coverage ("62% of items costed") rather than a silent estimate.
+2. Add a date-aware cost lookup: a dish-cost function that takes the trading date and picks the ingredient price effective on that date from the existing price history, falling back to the current cost when no earlier price exists. This stops today's price edits from rewriting September.
+3. Ensure ingredient price changes write a dated row into the price history rather than only overwriting the current cost.
+4. Keep everything computed on read (no stored snapshots), so completing recipes later still improves the past — with the day's own prices, not today's.
 
-Last real activity 11–12 Jul 2026: repeated "returned 0 rows" plus the diagnostic errors above. One later entry (28 Aug) is a rejected inbound webhook — expected, that route is retired.
-
-## 7. Is the canonical idempotent path safe to receive API results? Yes, with one fix.
-
-Staging upserts on `(restaurant_id, location_id, pos_provider, external_sale_id)`; apply skips already-applied rows, upserts `sales` on `pos_import_id`, and pre-checks closed days (single day → refuse with 409, range → skip that day). Retries are safe.
-
-**One real bug:** when a Captiva row has no receipt identifier, `pos-sync-captiva` invents `${Date.now()}-${Math.random()}` as the external id. A retry would then create duplicates. Must be fixed before any live import is trusted.
-
----
-
-# Smallest safe plan
-
-## Phase A — end-of-day sync (no new architecture)
-
-1. **Fix the duplicate risk**: replace the random fallback external id with a deterministic one derived from location + date + row content; if no stable identity can be derived, fail that row and report it rather than staging it.
-2. **Re-create the nightly job properly**: one `pg_cron` entry per day calling `captiva-schedule-sync` with the cron secret header (the shared header `posAuth` already accepts), not an unset database setting. Run once per trading day after close, per location, for the previous operating day.
-3. **Reuse `captiva-schedule-sync` as-is** — it already resolves the integration and location server-side, calls the canonical path, and never advances the success checkpoint on partial runs.
-4. **Owner visibility**: guarantee one clear success/failure row in POS Sync Logs per location per night, carrying Captiva's own error text, and surface the last result on the POS Integrations screen.
-5. **Leave request-format guessing alone** until Captiva confirms the contract. Add one place to record a real sample response so outlet identity can be confirmed from evidence.
-
-Blocked on Captiva: the correct request envelope and what `UserID` must contain. Until then the nightly job will run and log a clear, honest failure rather than silently importing nothing.
-
-## Phase B — multi-location preview for the manual XLS import
-
-Add a preview step to the existing dialog before anything is written:
-
-- Detect every store sheet in the workbook (excluding "All Stores" and "No Activity").
-- Show row count, total quantity and total gross per detected store.
-- Auto-match a sheet to a known location only on an exact, unambiguous name match; everything else is flagged Unknown.
-- Per store the Owner chooses: Map to existing location / Add new location / Skip.
-- Import only runs after confirmation, uses the existing idempotent per-location path, and never creates a location without an explicit choice.
-
-No change to POS calculations, closed-day rules, permissions, RLS or location scoping.
+Nothing above has been implemented. Approve and I'll propose the exact migration and code changes for review before running anything.
