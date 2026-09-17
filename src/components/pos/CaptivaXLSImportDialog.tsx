@@ -1,13 +1,15 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
-import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, X } from "lucide-react";
+import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, X, ChevronDown, Circle } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { SegmentedControl } from "@/components/common/SegmentedControl";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -343,6 +345,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   // True once the Owner has picked the trading date by hand — a manual choice is
   // never silently replaced by a date detected in the file.
   const [dateManuallySet, setDateManuallySet] = useState(false);
+  // Full mapping table is only shown when a store needs a decision, or on demand.
+  const [showLocationDetails, setShowLocationDetails] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const sheetNames = workbook?.SheetNames || [];
   const availableSheets = includeInactive
@@ -606,6 +611,58 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     const m = storeMappings[s.key];
     return !m || m.action === "unset";
   });
+
+  /**
+   * Confident store → location match. Only used to PRE-FILL the mapping the
+   * Owner can still change; ambiguous labels are left for manual mapping.
+   */
+  const matchLocationFor = useCallback((label: string): string | null => {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const l = norm(label);
+    if (!l) return null;
+    const tokens = label.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4);
+    const cands = locations.filter((loc) => {
+      const n = norm(loc.name);
+      if (!n) return false;
+      if (n === l) return true;
+      if (n.length >= 4 && (l.startsWith(n) || n.startsWith(l))) return true;
+      return tokens.some((t) => n.includes(t) || t.includes(n));
+    });
+    return cands.length === 1 ? cands[0].id : null;
+  }, [locations]);
+
+  // Pre-fill confident matches so a normal import needs no mapping interaction.
+  useEffect(() => {
+    if (!detectedStores.length || !locations.length) return;
+    setStoreMappings((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      const eligible = detectedStores.filter((s) => !s.isAggregate);
+      for (const s of eligible) {
+        if (next[s.key]) continue;
+        const id =
+          matchLocationFor(s.label) ??
+          (eligible.length === 1 && locations.length === 1 ? locations[0].id : null) ??
+          (eligible.length === 1 && defaultLocationId ? defaultLocationId : null);
+        if (id) { next[s.key] = { action: "existing", locationId: id }; changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [detectedStores, locations, matchLocationFor, defaultLocationId]);
+
+  const eligibleStores = useMemo(
+    () => detectedStores.filter((s) => !s.isAggregate),
+    [detectedStores],
+  );
+  /** Every genuine store is already resolved — no mapping table needed. */
+  const simpleLocation =
+    !showLocationDetails &&
+    eligibleStores.length > 0 &&
+    eligibleStores.some((s) => !ignoredStores[s.key]) &&
+    eligibleStores.every((s) => {
+      const m = storeMappings[s.key];
+      return !!ignoredStores[s.key] || (m?.action === "existing" && !!m.locationId);
+    });
 
 
   const parsed = useMemo(() => {
@@ -1194,18 +1251,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         }
       }
 
+      const dayLabel = firstDate
+        ? format(new Date(`${firstDate}T00:00:00`), "d MMM") +
+          (lastDate && lastDate !== firstDate ? ` – ${format(new Date(`${lastDate}T00:00:00`), "d MMM")}` : "")
+        : "";
       toast({
         title: classification === "historical"
           ? "Historical report imported"
-          : mode === "apply" ? "Import applied" : "Import staged",
+          : products
+            ? `${dayLabel} populated from Products Sold ✓`
+            : summaryDays
+              ? `${dayLabel} updated from Sales Summary ✓`
+              : mode === "apply" ? "Import applied" : "Import staged",
         description:
-          `${importableStores.length} store(s)` +
-          (summaryDays ? ` · ${summaryDays} daily summar${summaryDays === 1 ? "y" : "ies"}` : "") +
-          (products ? ` · ${products} products` : "") +
-          (skipped ? ` · ${skipped} date(s) left unchanged` : "") +
-          (classification === "historical"
-            ? " · stored as historical product data only."
-            : (mode === "apply" && products ? ` · ${applied} product sale rows posted to dashboard.` : ".")),
+          classification === "historical"
+            ? `${importableStores.length} store(s) · stored as historical product data only.`
+            : products
+              ? `Revenue, net sales, VAT, quantity and product detail are available. ` +
+                (summaryDays ? "" : "Sales Summary optional — upload it to add receipt/visitor metrics and reconcile totals. ") +
+                (skipped ? `${skipped} date(s) left unchanged. ` : "") +
+                (mode === "apply" ? `${applied} product sale rows posted to dashboard.` : "Staged only — choose “Apply to dashboard” to post them.")
+              : `${summaryDays} daily summar${summaryDays === 1 ? "y" : "ies"} merged — receipts, visitors and control totals updated.` +
+                (skipped ? ` ${skipped} date(s) left unchanged.` : ""),
       });
 
       // Persist import context so Menu Performance / Dashboard immediately
@@ -1252,35 +1319,29 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
             <div className="text-sm font-medium">1. What are you importing?</div>
             <div>
               <Label className="text-xs">Report type</Label>
-              <div className="flex gap-2 mt-1">
-                {([["summary", "Sales Summary"], ["products", "Products Sold"]] as const).map(([v, lbl]) => (
-                  <Button
-                    key={v}
-                    type="button"
-                    variant={intendedType === v ? "default" : "outline"}
-                    className="h-11 flex-1"
-                    onClick={() => { setIntendedType(v); setTypeMismatchAck(false); }}
-                  >
-                    {lbl}
-                  </Button>
-                ))}
-              </div>
+              <SegmentedControl
+                className="mt-1"
+                ariaLabel="Report type"
+                value={intendedType}
+                onChange={(v) => { setIntendedType(v); setTypeMismatchAck(false); }}
+                options={[
+                  { value: "summary", label: "Sales Summary" },
+                  { value: "products", label: "Products Sold" },
+                ]}
+              />
             </div>
             <div>
               <Label className="text-xs">Date scope</Label>
-              <div className="flex gap-2 mt-1">
-                {([["single", "Single day"], ["range", "Date range"]] as const).map(([v, lbl]) => (
-                  <Button
-                    key={v}
-                    type="button"
-                    variant={intendedScope === v ? "default" : "outline"}
-                    className="h-11 flex-1"
-                    onClick={() => { setIntendedScope(v); setDateMismatchAck(false); }}
-                  >
-                    {lbl}
-                  </Button>
-                ))}
-              </div>
+              <SegmentedControl
+                className="mt-1"
+                ariaLabel="Date scope"
+                value={intendedScope}
+                onChange={(v) => { setIntendedScope(v); setDateMismatchAck(false); }}
+                options={[
+                  { value: "single", label: "Single day" },
+                  { value: "range", label: "Date range" },
+                ]}
+              />
             </div>
             <div className="grid grid-cols-2 gap-2">
               {(intendedScope === "single"
@@ -1425,13 +1486,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
               </div>
 
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Stores detected in file</Label>
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    {detectedStores.length} store sheet(s) found. Aggregate sheets are ignored.
-                  </div>
-                </div>
+              <div className="grid gap-3 md:grid-cols-2">
                 <div>
                   <Label>Trading date</Label>
                   {classification === "daily" ? (
@@ -1493,36 +1548,49 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                   )}
                 </div>
 
-                <div>
-                  <Label>Preview rows from</Label>
-                  <Select value={sheetName} onValueChange={setSheetName}>
-                    <SelectTrigger><SelectValue placeholder="Select sheet" /></SelectTrigger>
-                    <SelectContent>
-                      {availableSheets.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Checkbox id="incInactive" checked={includeInactive} onCheckedChange={(v) => setIncludeInactive(!!v)} />
-                    <Label htmlFor="incInactive" className="text-xs font-normal cursor-pointer">
-                      Also allow "No Activity" sheet
-                    </Label>
+                {detectedType !== "summary" && (
+                  <div>
+                    <Label>Import mode</Label>
+                    <SegmentedControl
+                      className="mt-2"
+                      ariaLabel="Import mode"
+                      value={mode}
+                      onChange={(v) => setMode(v)}
+                      options={[
+                        { value: "stage", label: "Stage only" },
+                        { value: "apply", label: "Apply to dashboard" },
+                      ]}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {mode === "apply"
+                        ? "Sales are posted to Dashboard and Reports."
+                        : "Rows are staged only — nothing reaches Dashboard or Reports yet."}
+                    </p>
                   </div>
-                </div>
-                <div>
-                  <Label>Import mode</Label>
-                  <RadioGroup value={mode} onValueChange={(v: any) => setMode(v)} className="mt-2 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="stage" id="stage" />
-                      <Label htmlFor="stage" className="font-normal cursor-pointer">Stage only</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RadioGroupItem value="apply" id="apply" />
-                      <Label htmlFor="apply" className="font-normal cursor-pointer">Apply to dashboard</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
+                )}
               </div>
 
+              {simpleLocation ? (
+                <div className="rounded-lg border p-3 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">Location</div>
+                    {eligibleStores.filter((s) => !ignoredStores[s.key]).map((s) => (
+                      <div key={s.key} className="mt-1 flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                        <span>{s.label} → {locationName((storeMappings[s.key] as { locationId: string }).locationId)}</span>
+                      </div>
+                    ))}
+                    {eligibleStores.some((s) => ignoredStores[s.key]) && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Removed from this import: {eligibleStores.filter((s) => ignoredStores[s.key]).map((s) => s.label).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                  <Button variant="outline" size="sm" className="h-10 shrink-0" onClick={() => setShowLocationDetails(true)}>
+                    Change
+                  </Button>
+                </div>
+              ) : (
               <div className="rounded-lg border">
                 <div className="p-3 border-b">
                   <div className="text-sm font-medium">Stores in this file</div>
@@ -1716,6 +1784,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                   </div>
                 )}
               </div>
+              )}
 
               {/* Date-by-date plan: every trading date judged independently */}
               {classification !== "historical" && datePlan.length > 0 && (
@@ -1827,67 +1896,98 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                     <div><div className="text-xs text-muted-foreground">VAT</div><div className="font-semibold">{formatCurrency(totals.vat)}</div></div>
                   </div>
 
-                  <div className="border rounded-lg max-h-64 overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-background">
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Dept</TableHead>
-                          <TableHead className="text-right">Qty</TableHead>
-                          <TableHead className="text-right">Gross</TableHead>
-                          <TableHead className="text-right">Net</TableHead>
-                          <TableHead className="text-right">VAT</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {parsed.rows.slice(0, 100).map((r) => (
-                          <TableRow key={r.external_item_id}>
-                            <TableCell className="font-medium">{r.item_name}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{r.department}</TableCell>
-                            <TableCell className="text-right">{r.quantity}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(r.gross_sales)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(r.net_sales)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(r.vat_amount)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    {parsed.rows.length > 100 && (
-                      <div className="text-xs text-muted-foreground text-center py-2">
-                        Showing first 100 of {parsed.rows.length} rows
+                  <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" className="h-11 w-full justify-between px-3">
+                        <span className="text-sm font-medium">Import details</span>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", detailsOpen && "rotate-180")} />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-3 pt-2">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div>
+                          <Label className="text-xs">Preview rows from</Label>
+                          <Select value={sheetName} onValueChange={setSheetName}>
+                            <SelectTrigger className="h-11 mt-1"><SelectValue placeholder="Select sheet" /></SelectTrigger>
+                            <SelectContent>
+                              {availableSheets.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <div className="flex items-center gap-2 mt-2">
+                            <Checkbox id="incInactive" checked={includeInactive} onCheckedChange={(v) => setIncludeInactive(!!v)} />
+                            <Label htmlFor="incInactive" className="text-xs font-normal cursor-pointer">
+                              Also allow "No Activity" sheet
+                            </Label>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div>Parser classification: {classification} · detected report: Products Sold</div>
+                          {detectedStores.filter((s) => s.isAggregate).map((s) => (
+                            <div key={s.key}>Ignored: {s.label} (aggregate total)</div>
+                          ))}
+                          {eligibleStores.filter((s) => ignoredStores[s.key]).map((s) => (
+                            <div key={s.key}>Ignored: {s.label} (removed by you)</div>
+                          ))}
+                          <div>Idempotent: re-importing the same date + location + item IDs updates existing rows instead of duplicating.</div>
+                        </div>
                       </div>
-                    )}
-                  </div>
 
-                  {importableStores.length === 1 && (
-                  <div className="rounded-lg border p-3 space-y-2">
-                    <div className="text-sm font-medium">Daily summary (optional)</div>
-                    <p className="text-xs text-muted-foreground">
-                      Product rows are not receipts. Enter true order/visitor counts from the Captiva journal summary if available. Leave blank if unknown.
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <Label className="text-xs">Orders</Label>
-                        <Input type="number" min="0" placeholder="e.g. 26" value={orderCountInput} onChange={(e) => setOrderCountInput(e.target.value)} />
+                      <div className="border rounded-lg max-h-64 overflow-y-auto">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-background">
+                            <TableRow>
+                              <TableHead>Name</TableHead>
+                              <TableHead>Dept</TableHead>
+                              <TableHead className="text-right">Qty</TableHead>
+                              <TableHead className="text-right">Gross</TableHead>
+                              <TableHead className="text-right">Net</TableHead>
+                              <TableHead className="text-right">VAT</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {parsed.rows.slice(0, 100).map((r) => (
+                              <TableRow key={r.external_item_id}>
+                                <TableCell className="font-medium">{r.item_name}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground">{r.department}</TableCell>
+                                <TableCell className="text-right">{r.quantity}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(r.gross_sales)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(r.net_sales)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(r.vat_amount)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        {parsed.rows.length > 100 && (
+                          <div className="text-xs text-muted-foreground text-center py-2">
+                            Showing first 100 of {parsed.rows.length} rows
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <Label className="text-xs">Visitors</Label>
-                        <Input type="number" min="0" placeholder="e.g. 106" value={visitorCountInput} onChange={(e) => setVisitorCountInput(e.target.value)} />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Avg order value</Label>
-                        <Input type="number" min="0" step="0.01" placeholder="auto" value={aovInput} onChange={(e) => setAovInput(e.target.value)} />
-                      </div>
-                    </div>
-                  </div>
-                  )}
 
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
-                      Idempotent: re-importing the same date + location + item IDs updates existing staged rows instead of duplicating.
-                    </AlertDescription>
-                  </Alert>
+                      {importableStores.length === 1 && (
+                        <div className="rounded-lg border p-3 space-y-2">
+                          <div className="text-sm font-medium">Receipt &amp; visitor counts (optional)</div>
+                          <p className="text-xs text-muted-foreground">
+                            Product rows are not receipts. Enter true order/visitor counts from the Captiva journal summary if available. Leave blank if unknown — blank never overwrites a known value.
+                          </p>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <Label className="text-xs">Orders</Label>
+                              <Input type="number" min="0" placeholder="e.g. 26" value={orderCountInput} onChange={(e) => setOrderCountInput(e.target.value)} />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Visitors</Label>
+                              <Input type="number" min="0" placeholder="e.g. 106" value={visitorCountInput} onChange={(e) => setVisitorCountInput(e.target.value)} />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Avg order value</Label>
+                              <Input type="number" min="0" step="0.01" placeholder="auto" value={aovInput} onChange={(e) => setAovInput(e.target.value)} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
                 </>
               ) : null}
             </>
@@ -1895,10 +1995,32 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
           {file && classification !== "historical" && detectedStores.length > 0 && (
             <div className="rounded-lg border p-3 space-y-1">
               <div className="text-sm font-medium">
-                {writableDates.length} trading day{writableDates.length === 1 ? "" : "s"} will be imported
+                Ready to import — {writableDates.length} trading day{writableDates.length === 1 ? "" : "s"}
                 {destinationLocationCount > 0 &&
                   ` to ${destinationLocationCount} location${destinationLocationCount === 1 ? "" : "s"}`}
               </div>
+              {detectedType === "products" ? (
+                <div className="text-xs space-y-0.5 pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Sales, net and VAT will be populated for each day
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Product detail will be added ({totals.count} product rows · {totals.qty} items)
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Circle className="h-3.5 w-3.5" /> Sales Summary not supplied — optional (adds receipts, visitors and reconciliation)
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs space-y-0.5 pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Receipts, visitors, discounts and control totals will be added
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Circle className="h-3.5 w-3.5" /> Product-level detail comes from a Products Sold report — revenue is never counted twice
+                  </div>
+                </div>
+              )}
               {writableDates.map((p) => (
                 <div key={p.id} className="text-xs text-muted-foreground">
                   <span className="text-foreground">{p.label} → {locationName(p.locationId)}</span>
