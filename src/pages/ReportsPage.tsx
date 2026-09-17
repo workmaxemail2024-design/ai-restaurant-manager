@@ -899,7 +899,7 @@ function DayCard({
                   )}
 
                   {/* Daily Performance — from Captiva import */}
-                  {day.hasData && (
+                  {(day.hasData || posSourceFlags(day).hasAnyPos || ordersMetric.value != null || visitorsMetric.value != null) && (
                     <div className="rounded-md border border-border bg-secondary/10 p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -910,16 +910,25 @@ function DayCard({
                         )}
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
-                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{day.summary?.grossSales != null ? formatCurrency(day.summary.grossSales) : formatCurrency(day.revenue)}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Gross Revenue</span><span className="font-medium">{grossForDisplay != null ? formatCurrency(grossForDisplay) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Net Revenue</span><span className="font-medium">{day.summary?.netSales != null ? formatCurrency(day.summary.netSales) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">VAT</span><span className="font-medium">{day.summary?.vat != null ? formatCurrency(day.summary.vat) : "—"}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Discounts</span><span className="font-medium">{day.summary?.discounts != null ? formatCurrency(day.summary.discounts) : "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">Orders</span><span className="font-medium">{day.orders ?? "—"}</span></div>
-                        <div className="flex justify-between"><span className="text-muted-foreground">AOV</span><span className="font-medium">{day.aov != null ? formatCurrency(day.aov) : "—"}</span></div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Covers / Visitors{day.visitors != null && day.visitors > 0 ? " (Captiva)" : ""}</span>
-                          <span className="font-medium">{day.visitors ?? (coversUnknown ? "Unknown" : (covers || "—"))}</span>
-                        </div>
+                        <EditableMetric
+                          label="Orders / Receipts"
+                          metric={ordersMetric}
+                          onSave={handleSaveOrders}
+                          onReset={handleResetOrders}
+                          disabled={isSaving}
+                        />
+                        <div className="flex justify-between"><span className="text-muted-foreground">Average Order Value</span><span className="font-medium">{aovForDisplay != null ? formatCurrency(aovForDisplay) : "—"}</span></div>
+                        <EditableMetric
+                          label="Covers / Visitors"
+                          metric={visitorsMetric}
+                          onSave={handleSaveVisitors}
+                          onReset={handleResetVisitors}
+                          disabled={isSaving}
+                        />
                         <div className="flex justify-between"><span className="text-muted-foreground">Qty Sold</span><span className="font-medium">{day.qtySold}</span></div>
                       </div>
                       {/* Product vs daily-summary reconciliation — shown only when both exist */}
