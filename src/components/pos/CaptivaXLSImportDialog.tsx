@@ -650,6 +650,20 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     });
   }, [detectedStores, locations, matchLocationFor, defaultLocationId]);
 
+  const eligibleStores = useMemo(
+    () => detectedStores.filter((s) => !s.isAggregate),
+    [detectedStores],
+  );
+  /** Every genuine store is already resolved — no mapping table needed. */
+  const simpleLocation =
+    !showLocationDetails &&
+    eligibleStores.length > 0 &&
+    eligibleStores.some((s) => !ignoredStores[s.key]) &&
+    eligibleStores.every((s) => {
+      const m = storeMappings[s.key];
+      return !!ignoredStores[s.key] || (m?.action === "existing" && !!m.locationId);
+    });
+
 
   const parsed = useMemo(() => {
     if (!workbook || !sheetName) return null;
