@@ -116,24 +116,45 @@ export function useDashboardOverview(locationId?: string | null) {
       const { data: summaries } = await summaryQuery;
 
       const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
-      const posOrders = sumNullable(canonicalDays.map((d) => d.orderCount));
-      const posVisitors = sumNullable(canonicalDays.map((d) => d.visitorCount));
 
       // Manual corrections made in Reports → Daily Performance become the effective
-      // values here too. The POS figures themselves are never modified.
+      // values here too, per trading day. The POS figures themselves are never modified.
       let ledgerQuery = supabase
         .from("daily_ledger_entries")
-        .select("entry_date, location_id, manual_orders, covers")
+        .select("entry_date, manual_orders, covers")
         .eq("restaurant_id", restaurantId)
         .gte("entry_date", startDate)
         .lte("entry_date", endDate);
       if (locationId) ledgerQuery = ledgerQuery.eq("location_id", locationId);
       const { data: ledgerRows } = await ledgerQuery;
-      const manualOrdersTotal = sumNullable((ledgerRows || []).map((r: any) => (r.manual_orders != null ? Number(r.manual_orders) : null)));
-      const manualCoversTotal = sumNullable((ledgerRows || []).map((r: any) => (r.covers != null && Number(r.covers) > 0 ? Number(r.covers) : null)));
+      const manualByDate = new Map<string, { orders: number | null; covers: number | null }>();
+      for (const r of (ledgerRows || []) as any[]) {
+        const prev = manualByDate.get(r.entry_date) || { orders: null, covers: null };
+        if (r.manual_orders != null) prev.orders = (prev.orders ?? 0) + Number(r.manual_orders);
+        if (r.covers != null && Number(r.covers) > 0) prev.covers = (prev.covers ?? 0) + Number(r.covers);
+        manualByDate.set(r.entry_date, prev);
+      }
 
-      const ordersToday = manualOrdersTotal != null ? manualOrdersTotal : posOrders;
-      const visitorsToday = manualCoversTotal != null ? manualCoversTotal : posVisitors;
+      const posByDate = new Map<string, { orders: number | null; visitors: number | null }>();
+      for (const d of canonicalDays) {
+        const prev = posByDate.get(d.reportDate) || { orders: null, visitors: null };
+        posByDate.set(d.reportDate, {
+          orders: sumNullable([prev.orders, d.orderCount]),
+          visitors: sumNullable([prev.visitors, d.visitorCount]),
+        });
+      }
+
+      const allDates = new Set<string>([...posByDate.keys(), ...manualByDate.keys()]);
+      const effOrders: (number | null)[] = [];
+      const effVisitors: (number | null)[] = [];
+      for (const d of allDates) {
+        const pos = posByDate.get(d) || { orders: null, visitors: null };
+        const man = manualByDate.get(d) || { orders: null, covers: null };
+        effOrders.push(man.orders != null ? man.orders : pos.orders);
+        effVisitors.push(man.covers != null ? man.covers : pos.visitors);
+      }
+      const ordersToday = sumNullable(effOrders);
+      const visitorsToday = sumNullable(effVisitors);
       const aovToday = ordersToday != null && ordersToday > 0 ? revenueToday / ordersToday : null;
 
 
