@@ -1506,16 +1506,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                         : "";
                       const sumGrossTotal = s.summaries.reduce(
                         (a: number | null, x) => x.gross != null ? (a ?? 0) + x.gross : a, null);
+                      const ignored = !!ignoredStores[s.key];
                       return (
-                        <TableRow key={s.key}>
+                        <TableRow key={s.key} className={cn((s.isAggregate || ignored) && "opacity-60")}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2 flex-wrap">
                               {s.label}
                               <Badge variant="outline" className="text-[10px]">
                                 {s.kind === "summary" ? "Daily summary" : "Products sold"}
                               </Badge>
+                              {s.isAggregate && (
+                                <Badge variant="secondary" className="text-[10px]">Aggregate — not imported</Badge>
+                              )}
+                              {!s.isAggregate && ignored && (
+                                <Badge variant="secondary" className="text-[10px]">Skipped</Badge>
+                              )}
                             </div>
-                            {s.missing.length > 0 && s.kind !== "summary" && (
+                            {s.isAggregate && (
+                              <div className="text-xs text-muted-foreground">
+                                Roll-up of the individual stores — importing it would duplicate the same revenue.
+                              </div>
+                            )}
+                            {s.missing.length > 0 && s.kind !== "summary" && !s.isAggregate && (
                               <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
                             )}
                             {s.kind === "summary" && (
@@ -1525,6 +1537,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                               </div>
                             )}
                           </TableCell>
+
                           <TableCell className="text-xs">
                             {s.rowDates.length > 1
                               ? `${s.rowDates[0]} → ${s.rowDates[s.rowDates.length - 1]}`
