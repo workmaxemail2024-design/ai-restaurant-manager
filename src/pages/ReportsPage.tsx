@@ -653,6 +653,51 @@ function DayCard({
     toast.success(`Covers marked as unknown for ${label}`);
   };
 
+  // ── Manual corrections of operational metrics ──
+  // The POS value stays untouched in pos_daily_summaries; the correction is stored
+  // in the existing daily-ledger fields and logged for audit.
+  const logMetricAudit = (metricLabel: string, from: number | null, to: number | null) => {
+    if (!auditRestaurantId) return;
+    supabase
+      .rpc("log_audit_event", {
+        p_restaurant_id: auditRestaurantId,
+        p_event_type: "daily_metric_adjusted",
+        p_description: `${metricLabel} for ${day.date} changed from ${from ?? "unknown"} to ${to ?? "POS value"}`,
+        p_data: { entry_date: day.date, metric: metricLabel, pos_value: from, new_value: to } as any,
+      })
+      .then(() => undefined, () => undefined);
+  };
+
+  const persistLedger = (patch: Partial<LedgerEntry>) => {
+    onSaveLedger({ ...localLedger, ...patch });
+  };
+
+  const handleSaveOrders = (value: number) => {
+    setManualOrders(value);
+    persistLedger({ manual_orders: value });
+    logMetricAudit("Orders", ordersMetric.posValue, value);
+    toast.success(`Orders updated for ${label}`);
+  };
+  const handleResetOrders = () => {
+    setManualOrders(null);
+    persistLedger({ manual_orders: null });
+    logMetricAudit("Orders", ordersMetric.posValue, null);
+    toast.success(`Orders reset to the POS value for ${label}`);
+  };
+  const handleSaveVisitors = (value: number) => {
+    setCovers(value);
+    setCoversUnknown(false);
+    persistLedger({ covers: value, covers_unknown: false });
+    logMetricAudit("Covers / Visitors", visitorsMetric.posValue, value);
+    toast.success(`Covers / Visitors updated for ${label}`);
+  };
+  const handleResetVisitors = () => {
+    setCovers(0);
+    persistLedger({ covers: 0 });
+    logMetricAudit("Covers / Visitors", visitorsMetric.posValue, null);
+    toast.success(`Covers / Visitors reset to the POS value for ${label}`);
+  };
+
   const hasAnyData = day.hasData || isClosed || (manualRevenue != null && manualRevenue > 0);
 
   return (
