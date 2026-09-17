@@ -799,12 +799,22 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         const sameSideExists = s.kind === "summary" ? hasS : hasP;
         const otherSideGross = s.kind === "summary" ? existProd : existSum;
 
+        // Receipt/visitor counts the summary side would add for the first time.
+        const existCount = rows.reduce(
+          (a: number | null, r: any) => (r.order_count != null ? Number(r.order_count) : a),
+          null as number | null,
+        );
+        const addsNewCount = s.kind === "summary" && count != null && existCount == null;
+
         let action: DateAction;
         if (isClosedDay(locId, d)) action = "closed";
         else if (!hasP && !hasS) action = "add";
-        else if (sameSideExists && nearlyEqual(sameSideExisting, gross)) action = "up_to_date";
-        else if (sameSideExists) action = "review";
-        else action = "enrich";
+        // "Already up to date" only when THIS report kind is stored with the
+        // same figures — a matching total on the other side never counts.
+        else if (!sameSideExists) action = "enrich";
+        else if (sameSideExisting == null || addsNewCount) action = "enrich";
+        else if (nearlyEqual(sameSideExisting, gross)) action = "up_to_date";
+        else action = "review";
 
         const existingLabel = isClosedDay(locId, d)
           ? "Day closed"
