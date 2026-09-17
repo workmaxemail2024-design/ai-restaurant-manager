@@ -178,7 +178,8 @@ export function useCreateIngredient() {
     mutationFn: async (ingredient: IngredientInsert) => {
       // Every ingredient must be tenanted, otherwise it is invisible to RLS and
       // can never be costed.
-      const restaurantId = ingredient.restaurant_id ?? currentRestaurant?.id;
+      const restaurantId =
+        (ingredient as { restaurant_id?: string | null }).restaurant_id ?? currentRestaurant?.id;
       if (!restaurantId) throw new Error("No restaurant selected");
 
       const { data, error } = await supabase
