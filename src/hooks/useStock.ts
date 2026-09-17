@@ -37,11 +37,16 @@ export const useStock = useStockLevels;
 
 export function useUpdateStock() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async ({ ingredient_id, location_id, quantity }: { ingredient_id: string; location_id: string; quantity: number }) => {
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
       const { data, error } = await supabase
         .from("stock_levels")
-        .upsert({ ingredient_id, location_id, quantity }, { onConflict: "ingredient_id,location_id" })
+        .upsert(
+          { ingredient_id, location_id, quantity, restaurant_id: currentRestaurant.id },
+          { onConflict: "ingredient_id,location_id" }
+        )
         .select()
         .single();
       if (error) throw error;
