@@ -409,6 +409,101 @@ function CalendarStrip({
   );
 }
 
+// ─── Editable operational metric (Orders, Covers / Visitors) ───
+function EditableMetric({
+  label,
+  metric,
+  onSave,
+  onReset,
+  disabled,
+}: {
+  label: string;
+  metric: EffectiveMetric;
+  onSave: (value: number) => void;
+  onReset: () => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string>(metric.value != null ? String(metric.value) : "");
+
+  useEffect(() => {
+    if (open) setDraft(metric.value != null ? String(metric.value) : "");
+  }, [open, metric.value]);
+
+  const display = metric.value != null ? String(metric.value) : "—";
+
+  return (
+    <div className="flex justify-between items-center gap-1">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="flex items-center gap-1">
+        <span className="font-medium">{display}</span>
+        {metric.source === "pos" && (
+          <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal text-muted-foreground">POS</Badge>
+        )}
+        {metric.source === "manual" && (
+          <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal">
+            {metric.adjusted ? "Adjusted" : "Manual"}
+          </Badge>
+        )}
+        {!disabled && (
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground" aria-label={`Edit ${label}`}>
+                <Pencil className="h-3 w-3" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-60 space-y-2 z-[60]">
+              <p className="text-xs font-medium">{label}</p>
+              {metric.posValue != null && (
+                <p className="text-[11px] text-muted-foreground">
+                  Imported from POS: {metric.posValue}
+                  {metric.adjusted ? " (kept for audit)" : ""}
+                </p>
+              )}
+              <Input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                className="h-9 text-sm"
+                placeholder="—"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 text-xs flex-1"
+                  onClick={() => {
+                    const n = Number(draft);
+                    if (draft === "" || Number.isNaN(n) || n < 0) return;
+                    onSave(Math.round(n));
+                    setOpen(false);
+                  }}
+                >
+                  Save
+                </Button>
+                {metric.source === "manual" && metric.posValue != null && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs gap-1"
+                    onClick={() => {
+                      onReset();
+                      setOpen(false);
+                    }}
+                  >
+                    <RotateCcw className="h-3 w-3" /> Reset to POS
+                  </Button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </span>
+    </div>
+  );
+}
+
 // ─── Day Card ───
 function DayCard({
   day,
