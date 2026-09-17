@@ -22,3 +22,10 @@
 - [ ] Single canonical daily figure per location/date across providers in readers:
       useDailyBreakdown, useDashboardOverview, useDailyFinancialSummary, ai-assistant, ai-daily-summary
 - [ ] Test matrix: products only / summary only / both orders / re-upload / mismatch / blank counts
+
+## Historical food costing (proposal awaiting approval)
+- [ ] Blended item-level food cost (actual + 30% only on uncosted revenue)
+- [ ] Date-aware costing: get_ingredient_cost_at_date / calculate_dish_cost_at_date
+- [ ] ingredient_prices reused as dated history + seed current costs
+- [ ] Single shared resolver (get_period_food_cost / get_daily_food_cost) for Reports, Dashboard, P&L, AI
+- [ ] Reports UI: coverage %, actual vs estimated split, missing-cost item count -> Dishes filter
