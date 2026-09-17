@@ -718,7 +718,7 @@ function DayCard({
                   )}
 
                   {/* Data Completeness Checklist */}
-                  <DataChecklist checklist={liveMissing.checklist} />
+                  <DataChecklist checklist={liveMissing.checklist} day={day} isClosed={isClosed} />
 
                   {/* Completed indicator */}
                   {liveMissing.status === "accounted" && (
