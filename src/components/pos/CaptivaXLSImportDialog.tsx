@@ -477,6 +477,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
               kind: "summary",
               rows: [], missing: [], summaries: sums,
               headerDates: dates, rowDates: dates, totals: empty,
+              isAggregate: isAggregateLabel(storeLabel),
             });
           }
           continue;
@@ -489,12 +490,12 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
             key: n, sheet: n, label: n, kind: "summary",
             rows: [], missing: [], summaries: [single],
             headerDates: dates.length ? dates : p.headerDates, rowDates: dates, totals: empty,
+            isAggregate: isAggregateLabel(n),
           });
           continue;
         }
       }
 
-      if (isAggregateSheet(n)) continue;
       const rowDates = Array.from(
         new Set(p.rows.map((r) => r.sale_date).filter(Boolean) as string[])
       ).sort();
@@ -502,7 +503,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         key: n, sheet: n, label: n, kind: "products",
         rows: p.rows, missing: p.missing, summaries: [],
         headerDates: p.headerDates, rowDates, totals: sumRows(p.rows),
+        isAggregate: isAggregateSheet(n) || isAggregateLabel(n),
       });
+
     }
     return out;
   }, [workbook, includeInactive, parseSheet]);
