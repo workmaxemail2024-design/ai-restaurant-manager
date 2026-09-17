@@ -374,6 +374,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     setDateMismatchAck(false);
     setStoreMappings({});
     setReviewDecisions({});
+    setIgnoredStores({});
+    setDateManuallySet(false);
+
     try {
       const buf = await f.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array", cellDates: true });
