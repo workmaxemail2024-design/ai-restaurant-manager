@@ -332,11 +332,16 @@ function CalendarStrip({
 
           const { status } = evaluateMissing(coverage?.hasData || false, ledger, bookingDays.has(dateStr), coverage?.visitors ?? null);
           const dotClass = getDotClass(status);
+          // A day with POS sales but no product detail is NOT the same as a day
+          // with no POS sales at all — show a hollow marker instead of red.
+          const sources = coverage ? posSourceFlags(coverage) : null;
+          const salesNoProductDetail = !!sources?.hasAnyPos && !sources.productsUploaded;
 
           return (
             <button
               key={dateStr}
               onClick={() => onDayClick(dateStr)}
+              title={salesNoProductDetail ? "Sales recorded — product detail not uploaded" : undefined}
               className={cn(
                 "relative flex flex-col items-center justify-center rounded-md p-1 text-xs transition-colors",
                 "hover:bg-secondary",
@@ -349,6 +354,9 @@ function CalendarStrip({
               <span>{format(day, "d")}</span>
               <div className="flex gap-0.5 mt-0.5 h-1.5">
                 <span className={cn("w-1.5 h-1.5 rounded-full", dotClass)} />
+                {salesNoProductDetail && (
+                  <span className="w-1.5 h-1.5 rounded-full border border-muted-foreground/60" />
+                )}
               </div>
             </button>
           );
