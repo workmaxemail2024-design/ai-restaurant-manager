@@ -1774,6 +1774,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                   </div>
                 )}
               </div>
+              )}
 
               {/* Date-by-date plan: every trading date judged independently */}
               {classification !== "historical" && datePlan.length > 0 && (
