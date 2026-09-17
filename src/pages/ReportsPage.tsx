@@ -1375,6 +1375,7 @@ export default function ReportsPage() {
       aov: null as number | null, foodCostPct: 0, profit: 0,
       totalLabourCost: 0, labourPct: 0,
       foodCostIsEstimated: true, itemsMissingCost: 0, hasAnyLabour: false,
+      costing: buildFoodCostView(null, 0),
     };
     if (!dailyData || dailyData.length === 0) return empty;
 
