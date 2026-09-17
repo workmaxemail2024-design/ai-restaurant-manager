@@ -1985,10 +1985,32 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
           {file && classification !== "historical" && detectedStores.length > 0 && (
             <div className="rounded-lg border p-3 space-y-1">
               <div className="text-sm font-medium">
-                {writableDates.length} trading day{writableDates.length === 1 ? "" : "s"} will be imported
+                Ready to import — {writableDates.length} trading day{writableDates.length === 1 ? "" : "s"}
                 {destinationLocationCount > 0 &&
                   ` to ${destinationLocationCount} location${destinationLocationCount === 1 ? "" : "s"}`}
               </div>
+              {detectedType === "products" ? (
+                <div className="text-xs space-y-0.5 pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Sales, net and VAT will be populated for each day
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Product detail will be added ({totals.count} product rows · {totals.qty} items)
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Circle className="h-3.5 w-3.5" /> Sales Summary not supplied — optional (adds receipts, visitors and reconciliation)
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs space-y-0.5 pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Receipts, visitors, discounts and control totals will be added
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Circle className="h-3.5 w-3.5" /> Product-level detail comes from a Products Sold report — revenue is never counted twice
+                  </div>
+                </div>
+              )}
               {writableDates.map((p) => (
                 <div key={p.id} className="text-xs text-muted-foreground">
                   <span className="text-foreground">{p.label} → {locationName(p.locationId)}</span>
