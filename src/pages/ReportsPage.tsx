@@ -376,6 +376,9 @@ function CalendarStrip({
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" /> No data
         </span>
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full border border-muted-foreground/60" /> No product detail
+        </span>
       </div>
     </div>
   );
