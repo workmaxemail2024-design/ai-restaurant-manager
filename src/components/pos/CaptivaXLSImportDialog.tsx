@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
-import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import { CalendarIcon, Upload, FileSpreadsheet, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,6 +108,20 @@ function detectSheetDates(grid: any[][], headerIdx: number): string[] {
 function isAggregateSheet(name: string): boolean {
   return /all\s*stores|summary|totals?$|grand/i.test(name.trim());
 }
+
+/**
+ * Strict aggregate/roll-up detector used for STORE LABELS (sheet names and the
+ * Store column of a tabular Daily Sales Summary). A Captiva roll-up line such as
+ * "All Stores" repeats the same revenue as the individual store lines, so it must
+ * never be mapped to a location or imported.
+ */
+function isAggregateLabel(name: string): boolean {
+  const s = String(name || "").trim().toLowerCase().replace(/[.*]/g, "").trim();
+  if (!s) return false;
+  if (/\ball\s*(stores?|locations?|sites?|branches|outlets|shops)\b/.test(s)) return true;
+  return /^(grand\s*total|totals?|company\s*total|overall|all)$/.test(s);
+}
+
 
 type StoreMapping =
   | { action: "unset" }
@@ -271,7 +285,10 @@ type DetectedStore = {
   headerDates: string[];
   rowDates: string[];
   totals: { qty: number; gross: number; net: number; vat: number; disc: number; count: number };
+  /** Captiva roll-up line (e.g. "All Stores") — shown, never imported. */
+  isAggregate: boolean;
 };
+
 
 /** Per trading date, what this import would do to existing canonical data. */
 type DateAction = "add" | "enrich" | "up_to_date" | "review" | "closed";
@@ -321,6 +338,11 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   const [dateMismatchAck, setDateMismatchAck] = useState(false);
   // Per-date Keep existing / Replace decisions for "Needs review" dates.
   const [reviewDecisions, setReviewDecisions] = useState<Record<string, "keep" | "replace">>({});
+  // Sheets the Owner removed from this import with ×. Reversible before Apply.
+  const [ignoredStores, setIgnoredStores] = useState<Record<string, boolean>>({});
+  // True once the Owner has picked the trading date by hand — a manual choice is
+  // never silently replaced by a date detected in the file.
+  const [dateManuallySet, setDateManuallySet] = useState(false);
 
   const sheetNames = workbook?.SheetNames || [];
   const availableSheets = includeInactive
@@ -331,8 +353,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     setFile(null); setWorkbook(null); setSheetName(""); setError(null);
     setStoreMappings({}); setNewLocationFor(null); setNewLocationName("");
     setDateConfirmed(false); setTypeMismatchAck(false); setDateMismatchAck(false);
-    setReviewDecisions({});
+    setReviewDecisions({}); setIgnoredStores({}); setDateManuallySet(false);
   };
+
 
   const reset = () => {
     clearFile();
@@ -351,6 +374,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     setDateMismatchAck(false);
     setStoreMappings({});
     setReviewDecisions({});
+    setIgnoredStores({});
+    setDateManuallySet(false);
+
     try {
       const buf = await f.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array", cellDates: true });
@@ -460,6 +486,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
               kind: "summary",
               rows: [], missing: [], summaries: sums,
               headerDates: dates, rowDates: dates, totals: empty,
+              isAggregate: isAggregateLabel(storeLabel),
             });
           }
           continue;
@@ -472,12 +499,12 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
             key: n, sheet: n, label: n, kind: "summary",
             rows: [], missing: [], summaries: [single],
             headerDates: dates.length ? dates : p.headerDates, rowDates: dates, totals: empty,
+            isAggregate: isAggregateLabel(n),
           });
           continue;
         }
       }
 
-      if (isAggregateSheet(n)) continue;
       const rowDates = Array.from(
         new Set(p.rows.map((r) => r.sale_date).filter(Boolean) as string[])
       ).sort();
@@ -485,7 +512,9 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
         key: n, sheet: n, label: n, kind: "products",
         rows: p.rows, missing: p.missing, summaries: [],
         headerDates: p.headerDates, rowDates, totals: sumRows(p.rows),
+        isAggregate: isAggregateSheet(n) || isAggregateLabel(n),
       });
+
     }
     return out;
   }, [workbook, includeInactive, parseSheet]);
@@ -519,13 +548,16 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     return { kind: "owner" as const, dates: [] as string[], start: null, end: null };
   }, [detectedStores]);
 
-  // Pre-fill the picker from a detected single date (Owner can still correct it).
+  // Pre-fill the picker from a detected single date. A date the Owner picked by
+  // hand is kept — it is only replaced through "Use detected date".
   useEffect(() => {
+    if (dateManuallySet) return;
     if (dateInfo.kind === "detected" && dateInfo.start) {
       setReportDate(new Date(`${dateInfo.start}T00:00:00`));
       setDateConfirmed(true);
     }
-  }, [dateInfo.kind, dateInfo.start]);
+  }, [dateInfo.kind, dateInfo.start, dateManuallySet]);
+
 
   const classification: "daily" | "multi_day" | "historical" =
     dateInfo.kind === "row_dates" ? "multi_day"
@@ -557,16 +589,24 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   );
   const blockingMismatch = (typeMismatch && !typeMismatchAck) || (dateMismatch && !dateMismatchAck);
 
+  /** Sheets the Owner has removed from this import (reversible before Apply). */
+  const isEligible = useCallback(
+    (s: DetectedStore) => !s.isAggregate && !ignoredStores[s.key],
+    [ignoredStores],
+  );
   const importableStores = detectedStores.filter((s) => {
+    if (!isEligible(s)) return false;
     const m = storeMappings[s.key];
     if (!m || m.action !== "existing" || !m.locationId) return false;
     if (s.kind === "summary") return s.summaries.length > 0;
     return s.rows.length > 0 && !s.missing.length;
   });
   const unresolvedStores = detectedStores.filter((s) => {
+    if (!isEligible(s)) return false;
     const m = storeMappings[s.key];
     return !m || m.action === "unset";
   });
+
 
   const parsed = useMemo(() => {
     if (!workbook || !sheetName) return null;
@@ -711,6 +751,12 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
     (p) => p.action === "add" || p.action === "enrich" ||
       (p.action === "review" && reviewDecisions[p.id] === "replace"),
   );
+  const destinationLocationCount = new Set(writableDates.map((p) => p.locationId)).size;
+  const locationName = useCallback(
+    (id: string) => locations.find((l) => l.id === id)?.name || "Unknown location",
+    [locations],
+  );
+
   /** Fast lookup used by the importer to skip dates that must not be written. */
   const shouldWriteDate = useCallback(
     (storeKey: string, locationId: string, date: string) =>
@@ -1321,7 +1367,17 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                       <div>
                         This file contains data for {detectedStart}{detectedEnd !== detectedStart ? ` – ${detectedEnd}` : ""}, which differs from the dates you selected.
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-10"
+                          onClick={() => setDateMismatchAck(true)}
+                        >
+                          Keep my date{intendedScope === "single"
+                            ? ` — ${format(intendedDate, "d MMM")}`
+                            : ` — ${format(intendedStart, "d MMM")} – ${format(intendedEnd, "d MMM")}`}
+                        </Button>
                         <Button
                           size="sm"
                           className="h-10"
@@ -1331,16 +1387,22 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                             if (detectedStart && detectedStart === detectedEnd) {
                               setIntendedScope("single");
                               setIntendedDate(new Date(`${detectedStart}T00:00:00`));
+                              setReportDate(new Date(`${detectedStart}T00:00:00`));
+                              setDateConfirmed(true);
+                              setDateManuallySet(false);
                             } else {
                               setIntendedScope("range");
                             }
                             setDateMismatchAck(true);
                           }}
                         >
-                          Use detected date range
+                          Use detected date{detectedStart && detectedStart === detectedEnd
+                            ? ` — ${format(new Date(`${detectedStart}T00:00:00`), "d MMM")}`
+                            : " range"}
                         </Button>
                         <Button size="sm" variant="outline" className="h-10" onClick={clearFile}>Choose another file</Button>
                       </div>
+
                     </AlertDescription>
                   </Alert>
                 )}
@@ -1382,7 +1444,30 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar mode="single" selected={reportDate} onSelect={(d) => { if (d) { setReportDate(d); setDateConfirmed(true); } }} initialFocus className={cn("p-3 pointer-events-auto")} />
+                          <Calendar
+                            mode="single"
+                            selected={reportDate}
+                            defaultMonth={reportDate}
+                            onSelect={(d) => { if (d) { setReportDate(d); setDateConfirmed(true); setDateManuallySet(true); } }}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                            classNames={{
+                              // Today = subtle permanent outline; selected trading date keeps the strong fill.
+                              day_today:
+                                "bg-transparent text-foreground font-semibold ring-1 ring-inset ring-primary/60 rounded-md",
+                              day_selected:
+                                "bg-primary text-primary-foreground font-semibold ring-0 hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                            }}
+                          />
+                          <div className="flex items-center gap-4 border-t px-3 py-2 text-[11px] text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <span className="h-3 w-3 rounded-[3px] ring-1 ring-inset ring-primary/60" /> Today
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="h-3 w-3 rounded-[3px] bg-primary" /> Selected trading date
+                            </span>
+                          </div>
+
                         </PopoverContent>
                       </Popover>
                       <p className={cn("text-xs mt-1", dateConfirmed ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400")}>
@@ -1466,16 +1551,28 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                         : "";
                       const sumGrossTotal = s.summaries.reduce(
                         (a: number | null, x) => x.gross != null ? (a ?? 0) + x.gross : a, null);
+                      const ignored = !!ignoredStores[s.key];
                       return (
-                        <TableRow key={s.key}>
+                        <TableRow key={s.key} className={cn((s.isAggregate || ignored) && "opacity-60")}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2 flex-wrap">
                               {s.label}
                               <Badge variant="outline" className="text-[10px]">
                                 {s.kind === "summary" ? "Daily summary" : "Products sold"}
                               </Badge>
+                              {s.isAggregate && (
+                                <Badge variant="secondary" className="text-[10px]">Aggregate — not imported</Badge>
+                              )}
+                              {!s.isAggregate && ignored && (
+                                <Badge variant="secondary" className="text-[10px]">Skipped</Badge>
+                              )}
                             </div>
-                            {s.missing.length > 0 && s.kind !== "summary" && (
+                            {s.isAggregate && (
+                              <div className="text-xs text-muted-foreground">
+                                Roll-up of the individual stores — importing it would duplicate the same revenue.
+                              </div>
+                            )}
+                            {s.missing.length > 0 && s.kind !== "summary" && !s.isAggregate && (
                               <div className="text-xs text-destructive">Missing columns: {s.missing.slice(0, 3).join(", ")}</div>
                             )}
                             {s.kind === "summary" && (
@@ -1485,6 +1582,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                               </div>
                             )}
                           </TableCell>
+
                           <TableCell className="text-xs">
                             {s.rowDates.length > 1
                               ? `${s.rowDates[0]} → ${s.rowDates[s.rowDates.length - 1]}`
@@ -1503,6 +1601,23 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                               : formatCurrency(s.totals.gross)}
                           </TableCell>
                           <TableCell>
+                            {s.isAggregate ? (
+                              <div className="text-xs text-muted-foreground">
+                                Not imported — no location needed
+                              </div>
+                            ) : ignored ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground">Removed from this import</span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-9"
+                                  onClick={() => setIgnoredStores((p) => { const n = { ...p }; delete n[s.key]; return n; })}
+                                >
+                                  Undo
+                                </Button>
+                              </div>
+                            ) : (
                             <div className="flex items-center gap-2">
                               <Select
                                 value={value}
@@ -1524,7 +1639,22 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                                   <SelectItem value="__skip">Skip this store</SelectItem>
                                 </SelectContent>
                               </Select>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-11 w-11 shrink-0"
+                                title="Remove this sheet from the import"
+                                aria-label={`Remove ${s.label} from this import`}
+                                onClick={() => {
+                                  setIgnoredStores((p) => ({ ...p, [s.key]: true }));
+                                  setNewLocationFor((cur) => (cur === s.key ? null : cur));
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
                             </div>
+                            )}
+
                             {newLocationFor === s.key && (
                               <div className="mt-2 flex items-center gap-2">
                                 <Input
@@ -1762,6 +1892,32 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
               ) : null}
             </>
           )}
+          {file && classification !== "historical" && detectedStores.length > 0 && (
+            <div className="rounded-lg border p-3 space-y-1">
+              <div className="text-sm font-medium">
+                {writableDates.length} trading day{writableDates.length === 1 ? "" : "s"} will be imported
+                {destinationLocationCount > 0 &&
+                  ` to ${destinationLocationCount} location${destinationLocationCount === 1 ? "" : "s"}`}
+              </div>
+              {writableDates.map((p) => (
+                <div key={p.id} className="text-xs text-muted-foreground">
+                  <span className="text-foreground">{p.label} → {locationName(p.locationId)}</span>
+                  {" · "}{format(new Date(`${p.date}T00:00:00`), "d MMM yyyy")}
+                  {p.gross != null && ` · ${formatCurrency(p.gross)}`}
+                </div>
+              ))}
+              {detectedStores.filter((s) => s.isAggregate).map((s) => (
+                <div key={s.key} className="text-xs text-muted-foreground">
+                  {s.label} → Aggregate · Not imported
+                </div>
+              ))}
+              {detectedStores.filter((s) => !s.isAggregate && ignoredStores[s.key]).map((s) => (
+                <div key={s.key} className="text-xs text-muted-foreground">
+                  {s.label} → Removed by you · Not imported
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -1773,7 +1929,8 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
               : classification === "historical"
                 ? "Confirm — store as historical"
                 : detectedType === "summary"
-                  ? `Apply ${writableDates.length} date(s)`
+                  ? `Apply ${writableDates.length} day${writableDates.length === 1 ? "" : "s"} to ${destinationLocationCount} location${destinationLocationCount === 1 ? "" : "s"}`
+
                   : mode === "apply" ? "Confirm Import & Apply" : "Confirm — Stage Import"}
           </Button>
         </DialogFooter>
