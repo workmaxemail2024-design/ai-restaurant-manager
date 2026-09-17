@@ -100,11 +100,15 @@ export function usePurchaseOrderItems(orderId: string | null) {
 
 export function useCreatePurchaseOrder() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async (order: PurchaseOrderInsert) => {
+      const restaurantId =
+        (order as { restaurant_id?: string | null }).restaurant_id ?? currentRestaurant?.id;
+      if (!restaurantId) throw new Error("No restaurant selected");
       const { data, error } = await supabase
         .from("purchase_orders")
-        .insert(order)
+        .insert({ ...order, restaurant_id: restaurantId })
         .select()
         .single();
       if (error) throw error;
