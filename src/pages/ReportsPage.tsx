@@ -580,9 +580,13 @@ function DayCard({
   const grossForDisplay: number | null =
     day.summary?.grossSales != null ? day.summary.grossSales : day.hasData ? day.revenue : manualRevenue;
   const aovForDisplay = effectiveAov(grossForDisplay, ordersMetric, day.summary?.aov ?? day.aov);
-  const effectiveFoodCost = day.hasData ? day.foodCost : effectiveRevenue * 0.3;
-  const effectiveFoodCostPct = effectiveRevenue > 0 ? (effectiveFoodCost / effectiveRevenue) * 100 : 0;
-  const foodCostIsEstimated = day.hasData ? day.foodCostIsEstimated : true;
+  // Food cost comes from the shared date-aware resolver; the 30% assumption is
+  // applied only to revenue that genuinely cannot be costed.
+  const costing = buildFoodCostView(costRow, effectiveRevenue);
+  const effectiveFoodCost = costing.blendedCost;
+  const effectiveFoodCostPct = costing.foodCostPct ?? 0;
+  const foodCostIsEstimated = costing.isEstimated;
+  const [missingOpen, setMissingOpen] = useState(false);
 
   // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. planned shifts
   const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
