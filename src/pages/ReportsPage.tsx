@@ -1270,6 +1270,10 @@ export default function ReportsPage() {
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
   const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(startDate, endDate, selectedLocationId);
   const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(startDate, endDate, selectedLocationId);
+  // Single costing source — date-aware ingredient costs resolved server-side.
+  const { data: dailyCostMap } = useDailyFoodCosting(startDate, endDate, selectedLocationId);
+  const { data: periodCostRow } = usePeriodFoodCosting(startDate, endDate, selectedLocationId);
+  const [missingCostsOpen, setMissingCostsOpen] = useState(false);
 
   // Fetch actual attendance for date range
   const restaurantId = currentRestaurant?.id;
