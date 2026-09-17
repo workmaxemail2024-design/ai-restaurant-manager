@@ -234,7 +234,7 @@ export function useDataCoverage(locationId?: string | null) {
       if (salesMissing > 0) {
         warnings.push({
           type: "missing_sales",
-          message: `Sales data missing for ${salesMissing} day${salesMissing > 1 ? "s" : ""}.`,
+          message: `Sales missing: ${salesMissing} day${salesMissing > 1 ? "s" : ""}.`,
           severity: salesMissing === totalDays ? "error" : "warning",
           page: "Sales",
           route: "/sales",
@@ -244,7 +244,7 @@ export function useDataCoverage(locationId?: string | null) {
       if (productMissingWithSummary > 0) {
         warnings.push({
           type: "missing_product_detail",
-          message: `Product-level sales missing for ${productMissingWithSummary} day${productMissingWithSummary > 1 ? "s" : ""} — totals are available, dish-level analysis is not.`,
+          message: `Product detail missing: ${productMissingWithSummary} day${productMissingWithSummary > 1 ? "s" : ""} — sales totals are available, dish-level analysis is not.`,
           severity: "info",
           page: "Sales",
           route: "/sales",

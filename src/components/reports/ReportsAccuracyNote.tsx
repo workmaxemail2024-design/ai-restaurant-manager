@@ -11,19 +11,32 @@ export function ReportsAccuracyNote({ locationId }: ReportsAccuracyNoteProps) {
   const { data: coverage } = useDataCoverage(locationId);
   const navigate = useNavigate();
 
-  if (!coverage || coverage.overallLevel === "complete") return null;
+  if (!coverage) return null;
 
   const criticalWarnings = coverage.warnings.filter(w => w.severity === "warning" || w.severity === "error");
-  if (criticalWarnings.length === 0) return null;
+  // Product-detail absence is informational — reported separately, not as missing sales.
+  const productDetailNote = coverage.warnings.find(w => w.type === "missing_product_detail");
+  if (criticalWarnings.length === 0 && !productDetailNote) return null;
+
+  const isInfoOnly = criticalWarnings.length === 0;
 
   return (
-    <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-1.5">
+    <div className={cn(
+      "rounded-md border p-3 space-y-1.5",
+      isInfoOnly ? "border-border bg-secondary/20" : "border-warning/30 bg-warning/5"
+    )}>
       <div className="flex items-center gap-1.5">
-        <AlertTriangle className="h-3.5 w-3.5 text-warning" />
-        <span className="text-xs font-medium text-warning">Some metrics are estimated due to missing operational data</span>
+        {isInfoOnly ? (
+          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+        ) : (
+          <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+        )}
+        <span className={cn("text-xs font-medium", isInfoOnly ? "text-muted-foreground" : "text-warning")}>
+          {isInfoOnly ? "Data coverage note" : "Some metrics are estimated due to missing operational data"}
+        </span>
       </div>
       <div className="space-y-1 pl-5">
-        {criticalWarnings.slice(0, 4).map((w, i) => (
+        {[...criticalWarnings.slice(0, 4), ...(productDetailNote ? [productDetailNote] : [])].map((w, i) => (
           <button
             key={i}
             onClick={() => w.route && navigate(w.route)}
