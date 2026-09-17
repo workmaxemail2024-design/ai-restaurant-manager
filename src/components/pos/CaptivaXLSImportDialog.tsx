@@ -1361,7 +1361,17 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                       <div>
                         This file contains data for {detectedStart}{detectedEnd !== detectedStart ? ` – ${detectedEnd}` : ""}, which differs from the dates you selected.
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-10"
+                          onClick={() => setDateMismatchAck(true)}
+                        >
+                          Keep my date{intendedScope === "single"
+                            ? ` — ${format(intendedDate, "d MMM")}`
+                            : ` — ${format(intendedStart, "d MMM")} – ${format(intendedEnd, "d MMM")}`}
+                        </Button>
                         <Button
                           size="sm"
                           className="h-10"
@@ -1371,16 +1381,22 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
                             if (detectedStart && detectedStart === detectedEnd) {
                               setIntendedScope("single");
                               setIntendedDate(new Date(`${detectedStart}T00:00:00`));
+                              setReportDate(new Date(`${detectedStart}T00:00:00`));
+                              setDateConfirmed(true);
+                              setDateManuallySet(false);
                             } else {
                               setIntendedScope("range");
                             }
                             setDateMismatchAck(true);
                           }}
                         >
-                          Use detected date range
+                          Use detected date{detectedStart && detectedStart === detectedEnd
+                            ? ` — ${format(new Date(`${detectedStart}T00:00:00`), "d MMM")}`
+                            : " range"}
                         </Button>
                         <Button size="sm" variant="outline" className="h-10" onClick={clearFile}>Choose another file</Button>
                       </div>
+
                     </AlertDescription>
                   </Alert>
                 )}
