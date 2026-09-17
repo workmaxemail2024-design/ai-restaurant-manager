@@ -151,12 +151,15 @@ function DataChecklist({
   checklist,
   day,
   isClosed,
+  locationId,
 }: {
   checklist: Record<MissingField, boolean>;
   day: DailyMetrics;
   isClosed?: boolean;
+  locationId?: string | null;
 }) {
   const { productsUploaded, summaryUploaded } = posSourceFlags(day);
+  const [uploadKind, setUploadKind] = useState<"summary" | "products" | null>(null);
 
   const reconciliation = (() => {
     if (!day.summary || !productsUploaded || !summaryUploaded) return null;
