@@ -242,6 +242,7 @@ export interface ReceiveDeliveryItem {
 
 export function useReceiveDelivery() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async ({ 
       orderId, 
