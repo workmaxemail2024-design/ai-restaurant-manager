@@ -353,6 +353,25 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
   const [showLocationDetails, setShowLocationDetails] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Preconfigure the setup step when opened from a context that already knows
+  // the report type, trading date and location (e.g. a Reports daily card).
+  // File validation, mismatch warnings and location mapping are untouched.
+  useEffect(() => {
+    if (!open) return;
+    if (presetType) setIntendedType(presetType);
+    if (presetDate) {
+      const d = new Date(`${presetDate}T00:00:00`);
+      if (!isNaN(d.getTime())) {
+        setIntendedScope("single");
+        setIntendedDate(d);
+        setIntendedStart(d);
+        setIntendedEnd(d);
+        setReportDate(d);
+      }
+    }
+    if (defaultLocationId) setLocationId(defaultLocationId);
+  }, [open, presetType, presetDate, defaultLocationId]);
+
   const sheetNames = workbook?.SheetNames || [];
   const availableSheets = includeInactive
     ? sheetNames
