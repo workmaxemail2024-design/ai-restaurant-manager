@@ -100,11 +100,15 @@ export function usePurchaseOrderItems(orderId: string | null) {
 
 export function useCreatePurchaseOrder() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async (order: PurchaseOrderInsert) => {
+      const restaurantId =
+        (order as { restaurant_id?: string | null }).restaurant_id ?? currentRestaurant?.id;
+      if (!restaurantId) throw new Error("No restaurant selected");
       const { data, error } = await supabase
         .from("purchase_orders")
-        .insert(order)
+        .insert({ ...order, restaurant_id: restaurantId })
         .select()
         .single();
       if (error) throw error;
@@ -159,7 +163,10 @@ export function useAddPurchaseOrderItem() {
       },
     ) => {
       const { order_status, ...row } = item;
-      const { error } = await supabase.from("purchase_order_items").insert(row);
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
+      const { error } = await supabase
+        .from("purchase_order_items")
+        .insert({ ...row, restaurant_id: currentRestaurant.id });
       if (error) throw error;
 
       if (order_status && order_status !== "pending" && currentRestaurant?.id) {
@@ -189,9 +196,15 @@ export function useAddPurchaseOrderItem() {
 
 export function useAddPurchaseOrderItems() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async ({ purchaseOrderId, items }: { purchaseOrderId: string; items: { ingredient_id: string; quantity: number; cost_price: number }[] }) => {
-      const itemsWithPO = items.map(item => ({ ...item, purchase_order_id: purchaseOrderId }));
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
+      const itemsWithPO = items.map(item => ({
+        ...item,
+        purchase_order_id: purchaseOrderId,
+        restaurant_id: currentRestaurant.id,
+      }));
       const { error } = await supabase.from("purchase_order_items").insert(itemsWithPO);
       if (error) throw error;
     },
@@ -229,6 +242,7 @@ export interface ReceiveDeliveryItem {
 
 export function useReceiveDelivery() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async ({ 
       orderId, 
@@ -278,6 +292,7 @@ export function useReceiveDelivery() {
               ingredient_id: item.ingredient_id,
               location_id: locationId,
               quantity: item.delivered_quantity,
+              restaurant_id: currentRestaurant?.id ?? null,
             });
           if (error) throw error;
         }
