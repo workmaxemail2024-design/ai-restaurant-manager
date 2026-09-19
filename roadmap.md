@@ -40,3 +40,11 @@
 - [x] Backfilled NULL restaurant_id in ingredients, stock_levels, purchase_orders, purchase_order_items
 - [x] Client creation paths always set restaurant_id (ingredients, stock levels, POs, PO items)
 - [ ] Optional migration (needs approval): NOT NULL + default trigger on restaurant_id for these 4 tables
+
+## Role Builder + User Assignments upgrade (approved)
+- [ ] Migration: invite full_name + location_ids, user_restaurants.is_active, active-aware helpers, owner lockout guard
+- [ ] Post-migration verification (memberships active, owner full access, manager/staff + locations unchanged, pending invites valid, RLS intact)
+- [ ] Shared sidebar route map + page-level permissions (page overrides category, explicit false wins)
+- [ ] Role Builder roles tab: collapsible sidebar-mirroring sections, per-category bulk controls, Owner locked
+- [ ] Route guards for every page (URL access denied, not just hidden)
+- [ ] User Assignments: invite (name/email/role/locations) via Supabase Auth, status Active/Invited/Inactive, change role/locations, resend, deactivate/reactivate
