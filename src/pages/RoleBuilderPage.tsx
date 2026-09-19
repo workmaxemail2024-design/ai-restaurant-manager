@@ -328,59 +328,27 @@ function RoleForm({ role, onSuccess }: { role?: Role; onSuccess: () => void }) {
         </div>
       </div>
 
-      {!isOwnerRole && (
-        <div className="space-y-4">
-          <Label>Permissions</Label>
-          <div className="border rounded-lg overflow-hidden">
-            <div className="grid grid-cols-4 gap-4 p-3 bg-muted/50 text-sm font-medium">
-              <div>Category</div>
-              <div className="text-center flex items-center justify-center gap-1">
-                <Eye className="h-3 w-3" /> View
-              </div>
-              <div className="text-center flex items-center justify-center gap-1">
-                <Pencil className="h-3 w-3" /> Edit
-              </div>
-              <div className="text-center flex items-center justify-center gap-1">
-                <Crown className="h-3 w-3" /> Admin
-              </div>
-            </div>
-            <div className="divide-y">
-              {PERMISSION_CATEGORIES.map(({ resource, label, description }) => {
-                const perms = permissions[resource] || { view: false, edit: false, admin: false };
-                return (
-                  <div key={resource} className="grid grid-cols-4 gap-4 p-3 items-center hover:bg-muted/30 transition-colors">
-                    <div>
-                      <div className="font-medium text-sm">{label}</div>
-                      <div className="text-xs text-muted-foreground">{description}</div>
-                    </div>
-                    <div className="flex justify-center">
-                      <Switch
-                        checked={perms.view}
-                        onCheckedChange={() => togglePermission(resource, 'view')}
-                      />
-                    </div>
-                    <div className="flex justify-center">
-                      <Switch
-                        checked={perms.edit}
-                        onCheckedChange={() => togglePermission(resource, 'edit')}
-                      />
-                    </div>
-                    <div className="flex justify-center">
-                      <Switch
-                        checked={perms.admin}
-                        onCheckedChange={() => togglePermission(resource, 'admin')}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+      {isOwnerRole ? (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+          <div className="font-medium flex items-center gap-2"><Crown className="h-4 w-4 text-primary" /> Full access</div>
+          <p className="text-muted-foreground mt-1">
+            The Owner role always has access to every page. It cannot be limited.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <Label>Page access</Label>
+            <p className="text-xs text-muted-foreground mt-1">
+              Same sections and pages as the sidebar. Turning View off hides the page and blocks its address.
+            </p>
           </div>
+          <RolePermissionMatrix pages={pageMap} onChange={setPageMap} />
         </div>
       )}
 
       <div className="flex justify-end gap-2">
-        <Button type="submit" disabled={isSubmitting || !name.trim() || isOwnerRole}>
+        <Button type="submit" className="min-h-11" disabled={isSubmitting || !name.trim() || isOwnerRole}>
           {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           {role ? 'Update Role' : 'Create Role'}
         </Button>
