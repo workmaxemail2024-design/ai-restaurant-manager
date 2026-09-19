@@ -373,14 +373,48 @@ function DeleteRoleButton({ roleId, onSuccess }: { roleId: string; onSuccess: ()
   );
 }
 
+function LocationPicker({
+  locations,
+  selected,
+  onToggle,
+  disabled,
+}: {
+  locations: { id: string; name: string }[];
+  selected: string[];
+  onToggle: (id: string, on: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-1 rounded-md border p-2 max-h-52 overflow-y-auto">
+      {locations.length === 0 && (
+        <p className="text-xs text-muted-foreground p-2">No locations yet.</p>
+      )}
+      {locations.map((loc) => (
+        <label
+          key={loc.id}
+          className="flex items-center gap-3 min-h-11 px-2 rounded-md hover:bg-muted/40 cursor-pointer"
+        >
+          <Checkbox
+            checked={selected.includes(loc.id)}
+            disabled={disabled}
+            onCheckedChange={(v) => onToggle(loc.id, v === true)}
+          />
+          <span className="text-sm">{loc.name}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
 function InviteUserDialog({ roles }: { roles: Role[] }) {
   const { data: locations } = useLocations();
   const { hasFullAccess } = usePermissions();
   const createInvite = useCreateInvite();
   const [open, setOpen] = useState(false);
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [roleId, setRoleId] = useState('');
-  const [locationId, setLocationId] = useState('');
+  const [locationIds, setLocationIds] = useState<string[]>([]);
 
   const selectedRole = roles.find(r => r.id === roleId);
   const roleIsFullAccess = (selectedRole?.permissions as Permissions | undefined)?.full_access === true;
@@ -389,17 +423,13 @@ function InviteUserDialog({ roles }: { roles: Role[] }) {
     ? roles
     : roles.filter(r => (r.permissions as Permissions).full_access !== true);
   const locationRequired = !!selectedRole && !roleIsFullAccess;
-  const canSubmit = !!email.trim() && !!roleId && (!locationRequired || !!locationId);
+  const canSubmit = !!email.trim() && !!roleId && (!locationRequired || locationIds.length > 0);
 
-  const reset = () => { setEmail(''); setRoleId(''); setLocationId(''); };
+  const reset = () => { setFullName(''); setEmail(''); setRoleId(''); setLocationIds([]); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createInvite.mutateAsync({
-      email,
-      roleId,
-      locationId: roleIsFullAccess ? (locationId || null) : locationId,
-    });
+    await createInvite.mutateAsync({ email, fullName, roleId, locationIds });
     reset();
     setOpen(false);
   };
@@ -407,19 +437,29 @@ function InviteUserDialog({ roles }: { roles: Role[] }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <Button>
+        <Button className="min-h-11">
           <UserPlus className="h-4 w-4 mr-2" />
           Invite user
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Invite user</DialogTitle>
           <DialogDescription>
-            They join this restaurant automatically the next time they log in.
+            They receive an email invitation and set their own password. You never see it.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="invite-name">Name</Label>
+            <Input
+              id="invite-name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Alex Moreau"
+              className="h-11"
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="invite-email">Email</Label>
             <Input
@@ -428,13 +468,14 @@ function InviteUserDialog({ roles }: { roles: Role[] }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="manager@restaurant.com"
+              className="h-11"
               required
             />
           </div>
           <div className="space-y-2">
             <Label>Role</Label>
             <Select value={roleId} onValueChange={setRoleId}>
-              <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+              <SelectTrigger className="h-11"><SelectValue placeholder="Select role" /></SelectTrigger>
               <SelectContent>
                 {availableRoles.map((role) => (
                   <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
@@ -444,28 +485,26 @@ function InviteUserDialog({ roles }: { roles: Role[] }) {
           </div>
           <div className="space-y-2">
             <Label>
-              Location {locationRequired && <span className="text-destructive">*</span>}
+              Locations {locationRequired && <span className="text-destructive">*</span>}
             </Label>
-            <Select value={locationId} onValueChange={setLocationId}>
-              <SelectTrigger>
-                <SelectValue placeholder={roleIsFullAccess ? 'All locations (owner)' : 'Select location'} />
-              </SelectTrigger>
-              <SelectContent>
-                {(locations ?? []).map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <LocationPicker
+              locations={locations ?? []}
+              selected={locationIds}
+              disabled={roleIsFullAccess}
+              onToggle={(id, on) =>
+                setLocationIds((prev) => (on ? [...prev, id] : prev.filter((x) => x !== id)))
+              }
+            />
             <p className="text-xs text-muted-foreground">
               {roleIsFullAccess
                 ? 'Owners get access to every location automatically.'
-                : 'Managers and staff are locked to their assigned location.'}
+                : 'Managers and staff only see the locations you tick here.'}
             </p>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" disabled={!canSubmit || createInvite.isPending}>
+            <Button type="submit" className="min-h-11" disabled={!canSubmit || createInvite.isPending}>
               {createInvite.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save invitation
+              Send invitation
             </Button>
           </div>
         </form>
@@ -478,43 +517,67 @@ function PendingInvites() {
   const { data: invites } = useInvites();
   const { data: locations } = useLocations();
   const revoke = useRevokeInvite();
+  const resend = useResendInvite();
   const pending = (invites ?? []).filter(i => i.status === 'pending');
 
   if (pending.length === 0) return null;
+
+  const locationLabel = (invite: typeof pending[number]) => {
+    const ids = invite.location_ids?.length
+      ? invite.location_ids
+      : invite.location_id ? [invite.location_id] : [];
+    if (ids.length === 0) return 'All locations';
+    return ids
+      .map((id) => locations?.find(l => l.id === id)?.name ?? 'Assigned location')
+      .join(', ');
+  };
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Pending invitations</CardTitle>
-        <CardDescription>Accepted automatically on the invited user's next login</CardDescription>
+        <CardDescription>Access is granted automatically on the invited user's first login</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y">
           {pending.map((invite) => (
-            <div key={invite.id} className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+            <div key={invite.id} className="flex items-center justify-between gap-3 p-4 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
                   <Mail className="h-5 w-5 text-muted-foreground" />
                 </div>
-                <div>
-                  <div className="font-medium text-sm">{invite.email}</div>
+                <div className="min-w-0">
+                  <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                    {invite.full_name || invite.email}
+                    <Badge variant="outline" className="text-[10px]">Invited</Badge>
+                  </div>
                   <div className="text-xs text-muted-foreground">
-                    {invite.role}
-                    {invite.location_id
-                      ? ` · ${locations?.find(l => l.id === invite.location_id)?.name ?? 'Assigned location'}`
-                      : ' · All locations'}
+                    {invite.full_name ? `${invite.email} · ` : ''}
+                    {invite.role} · {locationLabel(invite)}
                     {` · expires ${new Date(invite.expires_at).toLocaleDateString()}`}
                   </div>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => revoke.mutate(invite.id)}
-                disabled={revoke.isPending}
-              >
-                Revoke
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => resend.mutate(invite)}
+                  disabled={resend.isPending}
+                >
+                  Resend
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => revoke.mutate(invite.id)}
+                  disabled={revoke.isPending}
+                >
+                  Revoke
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -523,13 +586,48 @@ function PendingInvites() {
   );
 }
 
+function MemberLocationsDialog({ userId, name }: { userId: string; name: string }) {
+  const [open, setOpen] = useState(false);
+  const { data: locations } = useLocations();
+  const { data: assignments } = useLocationAssignments();
+  const setAssignment = useSetLocationAssignment();
+  const selected = (assignments ?? []).filter(a => a.user_id === userId).map(a => a.location_id);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="min-h-11">
+          <MapPin className="h-4 w-4 mr-2" />
+          Locations
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Locations for {name}</DialogTitle>
+          <DialogDescription>Only ticked locations are visible to this user.</DialogDescription>
+        </DialogHeader>
+        <LocationPicker
+          locations={locations ?? []}
+          selected={selected}
+          onToggle={(locationId, enabled) =>
+            setAssignment.mutate({ userId, locationId, enabled })
+          }
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function UserAssignments({ users, roles, isLoading }: { 
-  users: Array<{ id: string; user_id: string; role_id: string | null; role?: Role }>;
+  users: Array<{ id: string; user_id: string; role_id: string | null; is_active?: boolean; role?: Role }>;
   roles: Role[];
   isLoading: boolean;
 }) {
   const assignRole = useAssignRole();
+  const setActive = useSetMemberActive();
   const { data: profiles } = useMemberProfiles(users.map(u => u.user_id));
+  const { data: locations } = useLocations();
+  const { data: assignments } = useLocationAssignments();
 
   if (isLoading) {
     return (
@@ -539,13 +637,20 @@ function UserAssignments({ users, roles, isLoading }: {
     );
   }
 
+  const locationsFor = (userId: string, fullAccess: boolean) => {
+    if (fullAccess) return 'All locations';
+    const ids = (assignments ?? []).filter(a => a.user_id === userId).map(a => a.location_id);
+    if (ids.length === 0) return 'No locations assigned';
+    return ids.map(id => locations?.find(l => l.id === id)?.name ?? 'Location').join(', ');
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h3 className="text-lg font-semibold">User Role Assignments</h3>
+          <h3 className="text-lg font-semibold">User accounts</h3>
           <p className="text-sm text-muted-foreground">
-            Assign roles to users in your restaurant
+            Invite people, set their role and locations, and switch access on or off
           </p>
         </div>
         <InviteUserDialog roles={roles} />
@@ -566,40 +671,58 @@ function UserAssignments({ users, roles, isLoading }: {
             <div className="divide-y">
               {users.map((user) => {
                 const profile = profiles?.[user.user_id];
+                const fullAccess = (user.role?.permissions as Permissions | undefined)?.full_access === true;
+                const active = user.is_active !== false;
+                const name = profile?.full_name || profile?.email || `User ${user.user_id.slice(0, 8)}…`;
                 return (
-                  <div key={user.id} className="flex items-center justify-between p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <div key={user.id} className="flex items-center justify-between gap-3 p-4 flex-wrap">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                         <Users className="h-5 w-5 text-primary" />
                       </div>
-                      <div>
-                        <div className="font-medium text-sm">
-                          {profile?.full_name || profile?.email || `User ID: ${user.user_id.slice(0, 8)}…`}
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
+                          {name}
+                          <Badge variant={active ? 'secondary' : 'outline'} className="text-[10px]">
+                            {active ? 'Active' : 'Inactive'}
+                          </Badge>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {profile?.full_name && profile.email ? `${profile.email} · ` : ''}
-                          Current role: {user.role?.name || 'No role assigned'}
+                          {user.role?.name || 'No role assigned'} · {locationsFor(user.user_id, fullAccess)}
                         </div>
                       </div>
                     </div>
-                    <Select
-                      value={user.role_id || ''}
-                      onValueChange={(value) => assignRole.mutate({ 
-                        userRestaurantId: user.id, 
-                        roleId: value 
-                      })}
-                    >
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map((role) => (
-                          <SelectItem key={role.id} value={role.id}>
-                            {role.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Select
+                        value={user.role_id || ''}
+                        onValueChange={(value) => assignRole.mutate({ 
+                          userRestaurantId: user.id, 
+                          roleId: value 
+                        })}
+                      >
+                        <SelectTrigger className="w-44 h-11">
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roles.map((role) => (
+                            <SelectItem key={role.id} value={role.id}>
+                              {role.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!fullAccess && <MemberLocationsDialog userId={user.user_id} name={name} />}
+                      <Button
+                        variant={active ? 'ghost' : 'outline'}
+                        size="sm"
+                        className="min-h-11"
+                        disabled={setActive.isPending}
+                        onClick={() => setActive.mutate({ userRestaurantId: user.id, isActive: !active })}
+                      >
+                        {active ? 'Deactivate' : 'Reactivate'}
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
