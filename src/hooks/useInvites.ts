@@ -67,27 +67,68 @@ export function useInvites() {
   });
 }
 
+/** Sends the Supabase Auth invitation email. Never handles passwords. */
+async function sendInviteEmail(email: string): Promise<{ emailSent: boolean; message?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('invite-user', {
+      body: { email, redirectTo: `${window.location.origin}/login` },
+    });
+    if (error) return { emailSent: false, message: error.message };
+    return { emailSent: data?.emailSent === true, message: data?.message };
+  } catch (e) {
+    return { emailSent: false, message: e instanceof Error ? e.message : undefined };
+  }
+}
+
 export function useCreateInvite() {
   const { currentRestaurant, user } = useRestaurant();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ email, roleId, locationId }: {
+    mutationFn: async ({ email, fullName, roleId, locationIds }: {
       email: string;
+      fullName?: string | null;
       roleId: string;
-      locationId: string | null;
+      locationIds: string[];
     }) => {
+      const cleanEmail = email.trim().toLowerCase();
       const { error } = await db.from('restaurant_invites').insert({
         restaurant_id: currentRestaurant!.id,
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
+        full_name: fullName?.trim() || null,
         role_id: roleId,
-        location_id: locationId,
+        location_id: locationIds[0] ?? null,
+        location_ids: locationIds.length ? locationIds : null,
         invited_by: user!.id,
       });
       if (error) throw error;
+      return sendInviteEmail(cleanEmail);
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['restaurant-invites'] });
-      toast.success('Invitation saved. The user joins on their next login.');
+      toast.success(
+        result.emailSent
+          ? 'Invitation sent by email.'
+          : 'Invitation saved. The user joins on their next login.',
+      );
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useResendInvite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (invite: RestaurantInvite) => {
+      const { error } = await db
+        .from('restaurant_invites')
+        .update({ expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() })
+        .eq('id', invite.id);
+      if (error) throw error;
+      return sendInviteEmail(invite.email);
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['restaurant-invites'] });
+      toast.success(result.emailSent ? 'Invitation sent again.' : 'Invitation renewed.');
     },
     onError: (e: Error) => toast.error(e.message),
   });
