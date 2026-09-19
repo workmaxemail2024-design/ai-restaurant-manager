@@ -1,172 +1,31 @@
 import { cn } from "@/lib/utils";
-import { 
-  LayoutDashboard, 
-  Store, 
-  Truck, 
-  Package, 
-  BarChart3,
-  Settings,
+import {
+  LayoutDashboard,
   ChefHat,
   Bell,
   LogOut,
-  Warehouse,
-  ShoppingCart,
-  Receipt,
-  Users,
-  Calendar,
-  Clock,
-  Target,
-  Euro,
-  Brain,
-  TrendingUp,
-  Sparkles,
-  CalendarClock,
   ChevronDown,
   ChevronRight,
-  Plug,
-  Shield,
-  Zap,
-  FileText,
-  FlaskConical,
-  Play,
-  CalendarCheck,
-  LayoutGrid,
-  UserCircle,
-  Settings2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link, useLocation } from "react-router-dom";
 import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { usePermissions, PermissionResource } from "@/hooks/usePermissions";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useMyMembershipRole } from "@/hooks/useRoles";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { usePendingReservationCount } from "@/hooks/useReservations";
+import { NAV_SECTIONS } from "@/lib/navigation";
 
 interface NavItem {
   icon: typeof LayoutDashboard;
   label: string;
   path: string;
   badge?: number;
-  permission?: { resource: PermissionResource; action: 'view' | 'edit' | 'admin' };
-  ownerOnly?: boolean;
 }
 
-interface NavSection {
-  title: string;
-  icon: typeof LayoutDashboard;
-  items: NavItem[];
-  permission?: PermissionResource;
-}
-
-const navSections: NavSection[] = [
-  {
-    title: "Overview",
-    icon: LayoutDashboard,
-    permission: 'dashboard',
-    items: [
-      { icon: LayoutDashboard, label: "Dashboard", path: "/", permission: { resource: 'dashboard', action: 'view' } },
-      { icon: Store, label: "Locations", path: "/locations", permission: { resource: 'locations', action: 'view' }, ownerOnly: true },
-    ]
-  },
-  {
-    title: "Staff",
-    icon: Users,
-    permission: 'staff',
-    items: [
-      { icon: Users, label: "Staff List", path: "/staff", permission: { resource: 'staff', action: 'view' } },
-      { icon: Calendar, label: "Shifts", path: "/staff/shifts", permission: { resource: 'staff', action: 'view' } },
-      { icon: Clock, label: "Attendance", path: "/staff/attendance", permission: { resource: 'staff', action: 'view' } },
-      { icon: Target, label: "KPIs", path: "/staff/kpis", permission: { resource: 'staff', action: 'view' } },
-    ]
-  },
-  {
-    title: "Menu",
-    icon: ChefHat,
-    permission: 'menu',
-    items: [
-      { icon: ChefHat, label: "Dishes", path: "/dishes", permission: { resource: 'menu', action: 'view' } },
-      { icon: Euro, label: "Cost Analysis", path: "/menu/cost-analysis", permission: { resource: 'menu', action: 'view' } },
-      { icon: Brain, label: "AI Engineering", path: "/menu/engineering", permission: { resource: 'ai_features', action: 'view' } },
-    ]
-  },
-  {
-    title: "Inventory",
-    icon: Warehouse,
-    permission: 'inventory',
-    items: [
-      { icon: Package, label: "Inventory Items", path: "/ingredients", permission: { resource: 'inventory', action: 'view' } },
-      { icon: Warehouse, label: "Stock Levels", path: "/stock", permission: { resource: 'inventory', action: 'view' } },
-      { icon: TrendingUp, label: "Forecasting", path: "/inventory/forecast", permission: { resource: 'ai_features', action: 'view' } },
-    ]
-  },
-  {
-    title: "Operations",
-    icon: ShoppingCart,
-    permission: 'purchase_orders',
-    items: [
-      { icon: Truck, label: "Suppliers", path: "/suppliers", permission: { resource: 'purchase_orders', action: 'view' } },
-      { icon: ShoppingCart, label: "Purchase Orders", path: "/purchase-orders", permission: { resource: 'purchase_orders', action: 'view' } },
-      { icon: FileText, label: "Documents", path: "/operations/documents", permission: { resource: 'purchase_orders', action: 'view' } },
-      { icon: Receipt, label: "Sales", path: "/sales", permission: { resource: 'finance', action: 'view' } },
-      { icon: BarChart3, label: "Reports", path: "/reports", permission: { resource: 'reports', action: 'view' } },
-    ]
-  },
-  {
-    title: "Reservations",
-    icon: CalendarCheck,
-    permission: 'dashboard',
-    items: [
-      { icon: CalendarCheck, label: "Bookings", path: "/reservations", permission: { resource: 'dashboard', action: 'view' } },
-      { icon: LayoutGrid, label: "Floor Plan", path: "/reservations/floor", permission: { resource: 'dashboard', action: 'view' } },
-      { icon: UserCircle, label: "Customers", path: "/reservations/customers", permission: { resource: 'dashboard', action: 'view' } },
-      { icon: Settings2, label: "Settings", path: "/reservations/settings", permission: { resource: 'dashboard', action: 'view' } },
-    ]
-  },
-  {
-    title: "AI Intelligence",
-    icon: Sparkles,
-    permission: 'ai_features',
-    items: [
-      { icon: Brain, label: "Insights Dashboard", path: "/ai/insights", permission: { resource: 'ai_features', action: 'view' } },
-      { icon: Sparkles, label: "AI Assistant", path: "/ai/assistant", permission: { resource: 'ai_features', action: 'view' } },
-      { icon: Sparkles, label: "Daily Summary", path: "/ai/daily-summary", permission: { resource: 'ai_features', action: 'view' } },
-      { icon: CalendarClock, label: "Staff Scheduling", path: "/ai/scheduling", permission: { resource: 'ai_features', action: 'view' } },
-    ]
-  },
-  {
-    title: "Automation",
-    icon: Zap,
-    permission: 'automation',
-    items: [
-      { icon: Zap, label: "Automation Rules", path: "/automation/rules", permission: { resource: 'automation', action: 'view' } },
-    ]
-  },
-  {
-    title: "Analytics",
-    icon: BarChart3,
-    permission: 'analytics',
-    items: [
-      { icon: Store, label: "Multi-Location", path: "/analytics/multi-location", permission: { resource: 'analytics', action: 'view' }, ownerOnly: true },
-      { icon: ChefHat, label: "Menu Performance", path: "/analytics/menu-performance", permission: { resource: 'analytics', action: 'view' }, ownerOnly: true },
-      { icon: TrendingUp, label: "Forecast", path: "/analytics/forecast", permission: { resource: 'analytics', action: 'view' } },
-      { icon: BarChart3, label: "Product Intelligence", path: "/analytics/product-intelligence", permission: { resource: 'analytics', action: 'view' } },
-    ]
-  },
-  {
-    title: "Settings",
-    icon: Settings,
-    permission: 'settings',
-    items: [
-      { icon: Plug, label: "POS Integrations", path: "/settings/pos", permission: { resource: 'pos', action: 'view' } },
-      { icon: Euro, label: "Financial / Overheads", path: "/settings/financial/overheads", permission: { resource: 'settings', action: 'view' } },
-      { icon: Shield, label: "Role Builder", path: "/settings/roles", permission: { resource: 'settings', action: 'view' } },
-      { icon: FileText, label: "Audit Log", path: "/settings/audit-log", permission: { resource: 'settings', action: 'admin' } },
-      { icon: Shield, label: "Backup & Recovery", path: "/settings/backups", permission: { resource: 'settings', action: 'admin' }, ownerOnly: true },
-    ]
-  }
-];
+const navSections = NAV_SECTIONS;
 
 const bottomItems: NavItem[] = [
   { icon: Bell, label: "Notifications", path: "/notifications" },
@@ -174,7 +33,7 @@ const bottomItems: NavItem[] = [
 
 export function PermissionFilteredSidebar() {
   const location = useLocation();
-  const { hasPermission, hasFullAccess, isLoading } = usePermissions();
+  const { hasPagePermission, hasFullAccess, isLoading } = usePermissions();
   const { signOut, user, currentRestaurant } = useRestaurant();
   const { data: pendingCount = 0 } = usePendingReservationCount();
   const { data: myRoleName } = useMyMembershipRole();
@@ -263,18 +122,13 @@ export function PermissionFilteredSidebar() {
     });
   };
 
-  // Filter sections based on permissions
-  const visibleSections = navSections.filter(section => {
-    if (isLoading) return true; // Show all while loading
-    if (!section.permission) return true;
-    return hasPermission(section.permission, 'view');
-  }).map(section => ({
+  // Page-level permissions decide visibility (a page override beats its category)
+  const visibleSections = navSections.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      if (isLoading) return true;
+      if (isLoading) return true; // Show all while loading
       if (item.ownerOnly && !hasFullAccess()) return false;
-      if (!item.permission) return true;
-      return hasPermission(item.permission.resource, item.permission.action);
+      return hasPagePermission(item.path, item.resource, item.action);
     })
   })).filter(section => section.items.length > 0);
 
@@ -345,7 +199,7 @@ export function PermissionFilteredSidebar() {
             <CollapsibleContent className="space-y-0.5 pl-2">
               {section.items.map((item) => {
                 // For reservation items, show pending badge on "Bookings"
-                const itemBadge = item.path === '/reservations' && pendingCount > 0 ? pendingCount : item.badge;
+                const itemBadge = item.path === '/reservations' && pendingCount > 0 ? pendingCount : undefined;
                 // Active: exact match, or for /reservations sub-routes match prefix
                 const isActive = location.pathname === item.path ||
                   (item.path !== '/' && location.pathname.startsWith(item.path + '/'));

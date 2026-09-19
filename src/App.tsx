@@ -8,6 +8,7 @@ import { RestaurantProvider } from "@/contexts/RestaurantContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import { DateRangeProvider } from "@/contexts/DateRangeContext";
 import { AuthGuard } from "@/components/AuthGuard";
+import { PageAccessGuard } from "@/components/PageAccessGuard";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -58,9 +59,14 @@ import { LocationScopeEnforcer } from "@/components/LocationScopeEnforcer";
 
 const queryClient = new QueryClient();
 
-// Wrapper component for protected routes
+// Wrapper component for protected routes:
+// signed in (AuthGuard) + allowed to open this page (PageAccessGuard)
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  return <AuthGuard>{children}</AuthGuard>;
+  return (
+    <AuthGuard>
+      <PageAccessGuard>{children}</PageAccessGuard>
+    </AuthGuard>
+  );
 }
 
 const App = () => (
