@@ -20,6 +20,7 @@ export interface UserWithRole {
   user_id: string;
   role_id: string | null;
   is_default: boolean;
+  is_active: boolean;
   created_at: string;
   role?: Role;
 }
@@ -191,6 +192,33 @@ export function useDeleteRole() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete role: ${error.message}`);
+    }
+  });
+}
+
+/** Enable or disable a member's access. The database blocks disabling the last owner. */
+export function useSetMemberActive() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ userRestaurantId, isActive }: {
+      userRestaurantId: string;
+      isActive: boolean;
+    }) => {
+      const { error } = await (supabase as any)
+        .from('user_restaurants')
+        .update({ is_active: isActive })
+        .eq('id', userRestaurantId);
+
+      if (error) throw error;
+      return isActive;
+    },
+    onSuccess: (isActive) => {
+      queryClient.invalidateQueries({ queryKey: ['users-with-roles'] });
+      toast.success(isActive ? 'Access reactivated' : 'Access deactivated');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
     }
   });
 }
