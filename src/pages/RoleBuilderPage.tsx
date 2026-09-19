@@ -281,47 +281,22 @@ function RoleForm({ role, onSuccess }: { role?: Role; onSuccess: () => void }) {
   
   const [name, setName] = useState(role?.name || '');
   const [description, setDescription] = useState(role?.description || '');
-  const [permissions, setPermissions] = useState<Permissions>(
-    role?.permissions as Permissions || defaultPermissions
+  const [pageMap, setPageMap] = useState<PagePermissionMap>(() =>
+    buildInitialPageMap((role?.permissions as Permissions) || defaultPermissions)
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    const base = (role?.permissions as Permissions) || defaultPermissions;
+    const permissions = mergePagePermissions(base, pageMap);
+
     if (role) {
       await updateRole.mutateAsync({ id: role.id, name, description, permissions });
     } else {
       await createRole.mutateAsync({ name, description, permissions });
     }
     onSuccess();
-  };
-
-  const togglePermission = (resource: PermissionResource, action: 'view' | 'edit' | 'admin') => {
-    setPermissions(prev => {
-      const current = prev[resource] || { view: false, edit: false, admin: false };
-      const newValue = !current[action];
-      
-      // If enabling admin, enable all
-      // If enabling edit, enable view
-      // If disabling view, disable all
-      let newPerms: ResourcePermissions;
-      
-      if (action === 'admin') {
-        newPerms = newValue 
-          ? { view: true, edit: true, admin: true }
-          : { ...current, admin: false };
-      } else if (action === 'edit') {
-        newPerms = newValue
-          ? { ...current, view: true, edit: true }
-          : { ...current, edit: false, admin: false };
-      } else {
-        newPerms = newValue
-          ? { ...current, view: true }
-          : { view: false, edit: false, admin: false };
-      }
-      
-      return { ...prev, [resource]: newPerms };
-    });
   };
 
   const isSubmitting = createRole.isPending || updateRole.isPending;
