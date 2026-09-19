@@ -13,9 +13,11 @@ export interface RestaurantInvite {
   id: string;
   restaurant_id: string;
   email: string;
+  full_name: string | null;
   role: string;
   role_id: string;
   location_id: string | null;
+  location_ids: string[] | null;
   status: 'pending' | 'accepted' | 'revoked' | 'expired';
   created_at: string;
   expires_at: string;
