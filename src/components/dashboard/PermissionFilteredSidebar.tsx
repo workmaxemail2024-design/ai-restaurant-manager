@@ -33,7 +33,7 @@ const bottomItems: NavItem[] = [
 
 export function PermissionFilteredSidebar() {
   const location = useLocation();
-  const { hasPermission, hasFullAccess, isLoading } = usePermissions();
+  const { hasPagePermission, hasFullAccess, isLoading } = usePermissions();
   const { signOut, user, currentRestaurant } = useRestaurant();
   const { data: pendingCount = 0 } = usePendingReservationCount();
   const { data: myRoleName } = useMyMembershipRole();
@@ -122,18 +122,13 @@ export function PermissionFilteredSidebar() {
     });
   };
 
-  // Filter sections based on permissions
-  const visibleSections = navSections.filter(section => {
-    if (isLoading) return true; // Show all while loading
-    if (!section.permission) return true;
-    return hasPermission(section.permission, 'view');
-  }).map(section => ({
+  // Page-level permissions decide visibility (a page override beats its category)
+  const visibleSections = navSections.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      if (isLoading) return true;
+      if (isLoading) return true; // Show all while loading
       if (item.ownerOnly && !hasFullAccess()) return false;
-      if (!item.permission) return true;
-      return hasPermission(item.permission.resource, item.permission.action);
+      return hasPagePermission(item.path, item.resource, item.action);
     })
   })).filter(section => section.items.length > 0);
 
