@@ -2044,9 +2044,11 @@ export type Database = {
           created_at: string
           email: string
           expires_at: string
+          full_name: string | null
           id: string
           invited_by: string | null
           location_id: string | null
+          location_ids: string[] | null
           restaurant_id: string
           role: string
           role_id: string
@@ -2058,9 +2060,11 @@ export type Database = {
           created_at?: string
           email: string
           expires_at?: string
+          full_name?: string | null
           id?: string
           invited_by?: string | null
           location_id?: string | null
+          location_ids?: string[] | null
           restaurant_id: string
           role?: string
           role_id: string
@@ -2072,9 +2076,11 @@ export type Database = {
           created_at?: string
           email?: string
           expires_at?: string
+          full_name?: string | null
           id?: string
           invited_by?: string | null
           location_id?: string | null
+          location_ids?: string[] | null
           restaurant_id?: string
           role?: string
           role_id?: string
@@ -2893,6 +2899,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_active: boolean
           is_default: boolean | null
           restaurant_id: string
           role: string
@@ -2902,6 +2909,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_active?: boolean
           is_default?: boolean | null
           restaurant_id: string
           role?: string
@@ -2911,6 +2919,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_active?: boolean
           is_default?: boolean | null
           restaurant_id?: string
           role?: string
