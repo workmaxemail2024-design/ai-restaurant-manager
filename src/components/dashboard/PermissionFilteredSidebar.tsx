@@ -199,7 +199,7 @@ export function PermissionFilteredSidebar() {
             <CollapsibleContent className="space-y-0.5 pl-2">
               {section.items.map((item) => {
                 // For reservation items, show pending badge on "Bookings"
-                const itemBadge = item.path === '/reservations' && pendingCount > 0 ? pendingCount : item.badge;
+                const itemBadge = item.path === '/reservations' && pendingCount > 0 ? pendingCount : undefined;
                 // Active: exact match, or for /reservations sub-routes match prefix
                 const isActive = location.pathname === item.path ||
                   (item.path !== '/' && location.pathname.startsWith(item.path + '/'));
