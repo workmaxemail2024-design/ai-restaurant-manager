@@ -42,9 +42,18 @@ import {
   useAssignRole,
   Role 
 } from '@/hooks/useRoles';
-import { useInvites, useCreateInvite, useRevokeInvite, useMemberProfiles } from '@/hooks/useInvites';
+import { useSetMemberActive } from '@/hooks/useRoles';
+import { useInvites, useCreateInvite, useRevokeInvite, useResendInvite, useMemberProfiles } from '@/hooks/useInvites';
 import { useLocations } from '@/hooks/useLocations';
-import { Permissions, ResourcePermissions, PermissionResource, usePermissions } from '@/hooks/usePermissions';
+import { useLocationAssignments, useSetLocationAssignment } from '@/hooks/useUserLocationAssignments';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Permissions, usePermissions } from '@/hooks/usePermissions';
+import {
+  RolePermissionMatrix,
+  buildInitialPageMap,
+  mergePagePermissions,
+  type PagePermissionMap,
+} from '@/components/roles/RolePermissionMatrix';
 import { RequirePermission } from '@/components/RequirePermission';
 import { 
   Plus, 
@@ -52,34 +61,13 @@ import {
   Trash2, 
   Shield, 
   Users, 
-  Eye, 
-  Pencil, 
   Crown,
   Loader2,
   Mail,
+  MapPin,
   UserPlus,
   Settings
 } from 'lucide-react';
-
-const PERMISSION_CATEGORIES: { 
-  resource: PermissionResource; 
-  label: string; 
-  description: string;
-}[] = [
-  { resource: 'dashboard', label: 'Dashboard', description: 'View main dashboard and metrics' },
-  { resource: 'staff', label: 'Staff Management', description: 'Manage staff, shifts, and attendance' },
-  { resource: 'menu', label: 'Menu Management', description: 'Manage dishes and menu items' },
-  { resource: 'inventory', label: 'Inventory', description: 'Manage ingredients and stock levels' },
-  { resource: 'purchase_orders', label: 'Purchase Orders', description: 'Create and manage purchase orders' },
-  { resource: 'reports', label: 'Reports', description: 'View and generate reports' },
-  { resource: 'analytics', label: 'Analytics', description: 'Access analytics and insights' },
-  { resource: 'ai_features', label: 'AI Features', description: 'Use AI-powered features' },
-  { resource: 'pos', label: 'POS Integrations', description: 'Manage POS system integrations' },
-  { resource: 'settings', label: 'Settings', description: 'Access system settings' },
-  { resource: 'automation', label: 'Automation', description: 'Configure automation rules' },
-  { resource: 'finance', label: 'Finance', description: 'Access financial data and reports' },
-  { resource: 'locations', label: 'Multi-Location', description: 'Manage multiple locations' },
-];
 
 const defaultPermissions: Permissions = {
   dashboard: { view: false, edit: false, admin: false },
