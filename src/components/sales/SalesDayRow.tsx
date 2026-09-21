@@ -28,7 +28,7 @@ function SalesDayDetail({ date, locationId }: { date: string; locationId: string
 
   return (
     <div className="divide-y divide-border rounded-md border border-border bg-background overflow-x-auto">
-      <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(8rem,1fr)_80px_110px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/40">
+      <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(8rem,1fr)_80px_110px] min-w-[500px] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/40">
         <span>Item</span>
         <span>Location</span>
         <span className="text-right">Qty</span>
@@ -37,7 +37,7 @@ function SalesDayDetail({ date, locationId }: { date: string; locationId: string
       {sales.map((sale) => (
         <div
           key={sale.id}
-          className="grid grid-cols-[minmax(10rem,1fr)_minmax(8rem,1fr)_80px_110px] gap-2 px-3 py-2.5 items-center text-sm"
+          className="grid grid-cols-[minmax(10rem,1fr)_minmax(8rem,1fr)_80px_110px] min-w-[500px] gap-2 px-3 py-2.5 items-center text-sm"
         >
           <span className="truncate">{sale.dishes?.name || "—"}</span>
           <span className="truncate text-muted-foreground">{sale.locations?.name || "—"}</span>

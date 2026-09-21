@@ -79,7 +79,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_hsl(30_100%_50%_/_0.08),_transparent_50%)] pointer-events-none z-0" />
 
-      <PermissionFilteredSidebar />
+      <PermissionFilteredSidebar className="hidden lg:flex" />
 
       <main className="lg:ml-64 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
         <Header showRestaurantSwitcher={false} showScopeSelectors={false} />

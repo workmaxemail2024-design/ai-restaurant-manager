@@ -258,7 +258,7 @@ export default function SalesPage() {
         ) : (
           <div className="rounded-lg border border-border overflow-hidden">
             <div className="divide-y divide-border overflow-x-auto">
-              <div className="grid grid-cols-[90px_minmax(9rem,1fr)_minmax(9rem,1fr)_80px_110px_56px] gap-2 px-4 py-2 text-xs text-muted-foreground font-medium bg-muted/30">
+              <div className="grid grid-cols-[90px_minmax(9rem,1fr)_minmax(9rem,1fr)_80px_110px_56px] min-w-[650px] gap-2 px-4 py-2 text-xs text-muted-foreground font-medium bg-muted/30">
                 <span>Time</span>
                 <span>Location</span>
                 <span>Item</span>
@@ -269,7 +269,7 @@ export default function SalesPage() {
               {daySales.map((sale) => (
                 <div
                   key={sale.id}
-                  className="grid grid-cols-[90px_minmax(9rem,1fr)_minmax(9rem,1fr)_80px_110px_56px] gap-2 px-4 py-2.5 items-center text-sm hover:bg-secondary/30 transition-colors"
+                  className="grid grid-cols-[90px_minmax(9rem,1fr)_minmax(9rem,1fr)_80px_110px_56px] min-w-[650px] gap-2 px-4 py-2.5 items-center text-sm hover:bg-secondary/30 transition-colors"
                 >
                   <span className="text-muted-foreground">
                     {new Date(sale.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}

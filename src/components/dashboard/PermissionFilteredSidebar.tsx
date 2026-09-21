@@ -31,7 +31,7 @@ const bottomItems: NavItem[] = [
   { icon: Bell, label: "Notifications", path: "/notifications" },
 ];
 
-export function PermissionFilteredSidebar() {
+export function PermissionFilteredSidebar({ className }: { className?: string }) {
   const location = useLocation();
   const { hasPagePermission, hasFullAccess, isLoading } = usePermissions();
   const { signOut, user, currentRestaurant } = useRestaurant();
@@ -42,16 +42,12 @@ export function PermissionFilteredSidebar() {
   const scrollStorageKey = `sidebar_scroll_${restaurantKey}`;
   const openStorageKey = `sidebar_open_${restaurantKey}`;
   
-  // Preserve scroll position across re-renders / route changes
   const navRef = useRef<HTMLElement>(null);
   const scrollPosRef = useRef<number>(0);
 
   const [openSections, setOpenSections] = useState<string[]>(() => {
-    // Default: all open
     const fallback = navSections.map(s => s.title);
     if (typeof window === "undefined") return fallback;
-    // We might not know the restaurant yet on first render.
-    // We'll re-hydrate from storage once restaurantKey becomes available.
     return fallback;
   });
 
@@ -68,17 +64,14 @@ export function PermissionFilteredSidebar() {
     }
   };
 
-  // Hydrate persisted state before paint (prevents sidebar jumping to top on navigation)
   useLayoutEffect(() => {
     if (restaurantKey === "none") return;
-
     try {
       const storedScroll = sessionStorage.getItem(scrollStorageKey);
       if (storedScroll !== null) {
         const parsed = Number(storedScroll);
         if (!Number.isNaN(parsed)) scrollPosRef.current = parsed;
       }
-
       const storedOpen = sessionStorage.getItem(openStorageKey);
       if (storedOpen) {
         const parsed = JSON.parse(storedOpen);
@@ -87,11 +80,10 @@ export function PermissionFilteredSidebar() {
         }
       }
     } catch {
-      // ignore storage/JSON failures
+      // ignore
     }
   }, [openStorageKey, restaurantKey, scrollStorageKey]);
 
-  // Keep the active route's section open (so the user stays in the same category)
   useEffect(() => {
     const activeSection = navSections.find((s) => s.items.some((i) => i.path === location.pathname))?.title;
     if (!activeSection) return;
@@ -99,44 +91,37 @@ export function PermissionFilteredSidebar() {
   }, [location.pathname]);
 
   const toggleSection = (title: string) => {
-    // Prevent visual jump when expanding/collapsing by capturing + restoring scrollTop.
     const el = navRef.current;
     const prevTop = el?.scrollTop ?? 0;
     persistScrollNow();
-
     setOpenSections((prev) => {
       const next = prev.includes(title) ? prev.filter((s) => s !== title) : [...prev, title];
       if (restaurantKey !== "none") {
         try {
           sessionStorage.setItem(openStorageKey, JSON.stringify(next));
         } catch {
-          // ignore storage failures
+          // ignore
         }
       }
       return next;
     });
-
-    // Restore scrollTop next frame (after DOM height changes)
     requestAnimationFrame(() => {
       if (navRef.current) navRef.current.scrollTop = prevTop;
     });
   };
 
-  // Page-level permissions decide visibility (a page override beats its category)
   const visibleSections = navSections.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      if (isLoading) return true; // Show all while loading
+      if (isLoading) return true;
       if (item.ownerOnly && !hasFullAccess()) return false;
       return hasPagePermission(item.path, item.resource, item.action);
     })
   })).filter(section => section.items.length > 0);
 
-  // Persist scroll position while the user scrolls, so route changes don't reset it.
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
-
     const onScroll = () => {
       scrollPosRef.current = el.scrollTop;
       if (restaurantKey !== "none") {
@@ -147,12 +132,10 @@ export function PermissionFilteredSidebar() {
         }
       }
     };
-
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, [restaurantKey, scrollStorageKey]);
 
-  // Restore scroll position after DOM updates (route changes and permission filtering can remount the sidebar)
   useLayoutEffect(() => {
     const el = navRef.current;
     if (!el) return;
@@ -160,8 +143,7 @@ export function PermissionFilteredSidebar() {
   }, [location.pathname, restaurantKey, visibleSections.length]);
 
   return (
-    <aside className="fixed left-0 top-0 h-[100dvh] w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
-      {/* Logo */}
+    <aside className={cn("fixed left-0 top-0 h-svh w-64 bg-sidebar border-r border-sidebar-border flex flex-col z-40", className)}>
       <div className="p-6 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-gradient-to-br from-primary to-accent">
@@ -174,7 +156,6 @@ export function PermissionFilteredSidebar() {
         </div>
       </div>
 
-      {/* Main Navigation - scroll position preserved via storage */}
       <nav ref={navRef} className="flex-1 p-3 space-y-1 overflow-y-auto">
         {visibleSections.map((section) => (
           <Collapsible
@@ -198,9 +179,7 @@ export function PermissionFilteredSidebar() {
             </CollapsibleTrigger>
             <CollapsibleContent className="space-y-0.5 pl-2">
               {section.items.map((item) => {
-                // For reservation items, show pending badge on "Bookings"
                 const itemBadge = item.path === '/reservations' && pendingCount > 0 ? pendingCount : undefined;
-                // Active: exact match, or for /reservations sub-routes match prefix
                 const isActive = location.pathname === item.path ||
                   (item.path !== '/' && location.pathname.startsWith(item.path + '/'));
                 return (
@@ -218,7 +197,6 @@ export function PermissionFilteredSidebar() {
         ))}
       </nav>
 
-      {/* Bottom Navigation */}
       <div className="p-3 space-y-1 border-t border-sidebar-border">
         <div className="flex items-center justify-between px-3 py-2">
           <span className="text-sm text-muted-foreground">Theme</span>
@@ -229,6 +207,7 @@ export function PermissionFilteredSidebar() {
         ))}
         <Button 
           variant="ghost" 
+          size="sm"
           className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           onClick={signOut}
         >
@@ -237,7 +216,6 @@ export function PermissionFilteredSidebar() {
         </Button>
       </div>
 
-      {/* User Profile */}
       <div className="p-4 border-t border-sidebar-border">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center">
