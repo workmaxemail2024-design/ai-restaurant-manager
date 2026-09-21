@@ -528,7 +528,7 @@ export default function IngredientsPage() {
               </div>
 
               </div>
-              <div className="flex shrink-0 justify-end gap-2 border-t bg-background pt-4">
+              <div className="flex shrink-0 justify-end gap-2 border-t bg-background pt-4 pb-1">
                 <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
                 <Button 
                   type="submit" 
