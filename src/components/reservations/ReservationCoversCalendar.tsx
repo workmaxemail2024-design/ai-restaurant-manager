@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { format, isSameMonth } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
-import type { Reservation } from "@/hooks/useReservations";
+import { countsAsBookedCovers, type Reservation } from "@/hooks/useReservations";
 
 interface ReservationCoversCalendarProps {
   month: Date;
@@ -10,8 +10,6 @@ interface ReservationCoversCalendarProps {
   onMonthChange: (month: Date) => void;
   onSelect: (date: Date) => void;
 }
-
-const EXCLUDED_STATUSES = new Set(["cancelled", "declined", "no_show"]);
 
 export function ReservationCoversCalendar({
   month,
@@ -23,7 +21,7 @@ export function ReservationCoversCalendar({
   const coversByDate = useMemo(() => {
     const totals = new Map<string, number>();
     reservations.forEach(reservation => {
-      if (EXCLUDED_STATUSES.has(reservation.status)) return;
+      if (!countsAsBookedCovers(reservation.status)) return;
       const key = format(new Date(reservation.start_at), "yyyy-MM-dd");
       totals.set(key, (totals.get(key) ?? 0) + reservation.party_size);
     });

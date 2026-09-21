@@ -21,6 +21,7 @@ import {
   STATUS_LABELS,
   checkCoverConflicts,
   checkTableConflicts,
+  countsAsBookedCovers,
   useCreateCustomer,
   useCreateReservation,
   useReservationCustomers,
@@ -33,8 +34,6 @@ import {
 } from "@/hooks/useReservations";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-
-const EXCLUDED_BOOKED_COVER_STATUSES = new Set(["cancelled", "declined", "no_show"]);
 
 function useWideServiceLayout() {
   const [isWide, setIsWide] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
@@ -97,7 +96,7 @@ export default function ReservationsPage() {
 
   const bookedCovers = useMemo(
     () => reservations
-      .filter(reservation => !EXCLUDED_BOOKED_COVER_STATUSES.has(reservation.status))
+      .filter(reservation => countsAsBookedCovers(reservation.status))
       .reduce((total, reservation) => total + reservation.party_size, 0),
     [reservations],
   );

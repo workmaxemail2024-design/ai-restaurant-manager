@@ -29,6 +29,12 @@ export const STATUS_COLORS: Record<ReservationStatus, string> = {
   no_show: 'bg-destructive/10 text-destructive',
 };
 
+const NON_BOOKED_COVER_STATUSES: ReservationStatus[] = ['cancelled', 'declined', 'no_show'];
+
+export function countsAsBookedCovers(status: ReservationStatus): boolean {
+  return !NON_BOOKED_COVER_STATUSES.includes(status);
+}
+
 export interface ReservationCustomer {
   id: string;
   restaurant_id: string;
