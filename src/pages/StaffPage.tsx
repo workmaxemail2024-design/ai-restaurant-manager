@@ -208,18 +208,18 @@ export default function StaffPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>First Name</Label>
-                  <Input value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
+                  <Input className="h-12" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} required />
                 </div>
                 <div className="space-y-2">
                   <Label>Last Name</Label>
-                  <Input value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
+                  <Input className="h-12" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} required />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Role</Label>
                   <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as StaffRole })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {roles.map((r) => <SelectItem key={r} value={r} className="capitalize">{r.replace("_", " ")}</SelectItem>)}
                     </SelectContent>
@@ -228,7 +228,7 @@ export default function StaffPage() {
                 <div className="space-y-2">
                   <Label>Status</Label>
                   <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as StaffStatus })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {statuses.map((s) => <SelectItem key={s} value={s} className="capitalize">{s.replace("_", " ")}</SelectItem>)}
                     </SelectContent>
@@ -242,7 +242,7 @@ export default function StaffPage() {
                     value={form.pay_type || "hourly"}
                     onValueChange={(v) => setForm({ ...form, pay_type: v as PayType })}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="hourly">Hourly</SelectItem>
                       <SelectItem value="salary">Salary</SelectItem>
@@ -265,13 +265,13 @@ export default function StaffPage() {
                 ) : (
                   <div className="space-y-2">
                     <Label>Hourly Rate ({currencySymbol})</Label>
-                    <Input type="number" step="0.01" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: parseFloat(e.target.value) || 0 })} />
+                    <Input type="number" step="0.01" inputMode="decimal" className="h-12" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: parseFloat(e.target.value) || 0 })} />
                   </div>
                 )}
                 <div className="space-y-2">
                   <Label>Location</Label>
                   <Select value={form.location_id || "_none"} onValueChange={(v) => setForm({ ...form, location_id: v === "_none" ? null : v })}>
-                    <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue placeholder="Select location" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">No location</SelectItem>
                       {locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
@@ -283,7 +283,7 @@ export default function StaffPage() {
                 <div className="space-y-2">
                   <Label>Employment Type</Label>
                   <Select value={form.contract_type || "part_time"} onValueChange={(v) => setForm({ ...form, contract_type: v as ContractType })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {contractTypes.map((ct) => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}
                     </SelectContent>
@@ -295,7 +295,7 @@ export default function StaffPage() {
                     value={form.department || "other"}
                     onValueChange={(v) => setForm({ ...form, department: v as StaffDepartment })}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {STAFF_DEPARTMENTS.map((d) => (
                         <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>

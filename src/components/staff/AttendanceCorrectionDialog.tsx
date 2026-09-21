@@ -111,7 +111,7 @@ export function AttendanceCorrectionDialog({
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Employee</Label>
             <Select value={staffId} onValueChange={setStaffId} disabled={!canEdit}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select staff" /></SelectTrigger>
+              <SelectTrigger className="h-12 text-sm"><SelectValue placeholder="Select staff" /></SelectTrigger>
               <SelectContent>
                 {staff.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-sm">
@@ -125,7 +125,7 @@ export function AttendanceCorrectionDialog({
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Location</Label>
             <Select value={locationId} onValueChange={setLocationId} disabled={!canEdit}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select location" /></SelectTrigger>
+              <SelectTrigger className="h-12 text-sm"><SelectValue placeholder="Select location" /></SelectTrigger>
               <SelectContent>
                 {locations.map((l) => (
                   <SelectItem key={l.id} value={l.id} className="text-sm">{l.name}</SelectItem>
@@ -137,12 +137,12 @@ export function AttendanceCorrectionDialog({
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">Clock in</Label>
-              <Input type="datetime-local" className="h-9 text-sm" value={clockIn} disabled={!canEdit}
+              <Input type="datetime-local" className="h-12 text-sm" value={clockIn} disabled={!canEdit}
                 onChange={(e) => setClockIn(e.target.value)} />
             </div>
             <div className="space-y-1">
               <Label className="text-[11px] text-muted-foreground">Clock out</Label>
-              <Input type="datetime-local" className="h-9 text-sm" value={clockOut} disabled={!canEdit}
+              <Input type="datetime-local" className="h-12 text-sm" value={clockOut} disabled={!canEdit}
                 onChange={(e) => setClockOut(e.target.value)} />
             </div>
           </div>
@@ -150,7 +150,7 @@ export function AttendanceCorrectionDialog({
 
           <div className="space-y-1">
             <Label className="text-[11px] text-muted-foreground">Reason (recorded in audit log)</Label>
-            <Input className="h-9 text-sm" value={reason} onChange={(e) => setReason(e.target.value)}
+            <Input className="h-12 text-sm" value={reason} onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. staff finished 30 min later" />
           </div>
         </div>
@@ -158,11 +158,11 @@ export function AttendanceCorrectionDialog({
         <div className="flex items-center justify-between gap-2 pt-1">
           {canDelete && !sourceInfo.isImported ? (
             confirmDelete ? (
-              <Button variant="destructive" size="sm" className="h-9" onClick={handleDelete} disabled={remove.isPending}>
+              <Button variant="destructive" size="sm" className="h-12" onClick={handleDelete} disabled={remove.isPending}>
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Confirm remove
               </Button>
             ) : (
-              <Button variant="outline" size="sm" className="h-9 text-destructive" onClick={() => setConfirmDelete(true)}>
+              <Button variant="outline" size="sm" className="h-12 text-destructive" onClick={() => setConfirmDelete(true)}>
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Remove record
               </Button>
             )
@@ -171,7 +171,7 @@ export function AttendanceCorrectionDialog({
               {sourceInfo.isImported ? "Imported record — correction only" : ""}
             </span>
           )}
-          <Button size="sm" className="h-9" onClick={handleSave}
+          <Button size="sm" className="h-12" onClick={handleSave}
             disabled={!canEdit || correct.isPending || invalidRange || !clockIn}>
             <Save className="mr-1.5 h-3.5 w-3.5" /> Save correction
           </Button>

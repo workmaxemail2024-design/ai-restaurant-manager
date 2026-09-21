@@ -175,7 +175,7 @@ export function MenuUploadDialog({ open, onOpenChange }: MenuUploadDialogProps) 
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className={cn(
         "max-h-[90vh] overflow-hidden flex flex-col",
-        step === "review" ? "max-w-4xl" : "max-w-md"
+        step === "review" ? "max-w-4xl w-[calc(100vw-2rem)]" : "max-w-md"
       )}>
         <DialogHeader>
           <DialogTitle>

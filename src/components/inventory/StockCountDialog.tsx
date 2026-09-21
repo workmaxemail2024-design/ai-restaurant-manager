@@ -134,7 +134,7 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5" />
@@ -155,13 +155,13 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
                   type="date"
                   value={countDate}
                   onChange={(e) => setCountDate(e.target.value)}
-                  className="min-h-[44px]"
+                  className="h-12"
                 />
               </div>
               <div>
                 <Label>Scope</Label>
                 <Select value={scopeType} onValueChange={(v: ScopeType) => { setScopeType(v); setScopeValue(""); }}>
-                  <SelectTrigger className="min-h-[44px]">
+                  <SelectTrigger className="h-12">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -183,7 +183,7 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
                       type="button"
                       variant={scopeValue === g.value ? "default" : "outline"}
                       onClick={() => setScopeValue(g.value)}
-                      className="min-h-[44px]"
+                      className="h-12"
                     >
                       {g.label}
                     </Button>
@@ -202,7 +202,7 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
                       type="button"
                       variant={scopeValue === c.value ? "default" : "outline"}
                       onClick={() => setScopeValue(c.value)}
-                      className="min-h-[44px]"
+                      className="h-12"
                     >
                       {c.label}
                     </Button>
@@ -223,10 +223,10 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={handleClose} className="min-h-[44px]">
+              <Button type="button" variant="outline" onClick={handleClose} className="h-12">
                 Cancel
               </Button>
-              <Button type="button" disabled={!canStart || availableItems.length === 0} onClick={startCount} className="min-h-[44px]">
+              <Button type="button" disabled={!canStart || availableItems.length === 0} onClick={startCount} className="h-12">
                 Start Count
               </Button>
             </div>
@@ -269,7 +269,7 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
                           min="0"
                           value={line.counted_quantity === 0 ? "" : line.counted_quantity}
                           onChange={(e) => updateCounted(line.ingredient_id, e.target.value)}
-                          className="w-28 ml-auto text-right min-h-[44px]"
+                          className="w-28 ml-auto text-right min-h-[44px]" inputMode="decimal"
                         />
                       </TableCell>
                     </TableRow>
@@ -278,14 +278,14 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
               </Table>
             </div>
             <div className="flex justify-between gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setStep("select")} className="min-h-[44px]">
+              <Button type="button" variant="outline" onClick={() => setStep("select")} className="h-12">
                 Back
               </Button>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={handleClose} className="min-h-[44px]">
+                <Button type="button" variant="outline" onClick={handleClose} className="h-12">
                   Cancel
                 </Button>
-                <Button type="button" onClick={() => setStep("review")} className="min-h-[44px]">
+                <Button type="button" onClick={() => setStep("review")} className="h-12">
                   Review
                 </Button>
               </div>
@@ -395,23 +395,23 @@ export function StockCountDialog({ open, onOpenChange }: Props) {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="e.g. Weekly freezer count"
-                className="min-h-[44px]"
+                className="h-12"
               />
             </div>
 
             <div className="flex justify-between gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setStep("count")} className="min-h-[44px]">
+              <Button type="button" variant="outline" onClick={() => setStep("count")} className="h-12">
                 Back
               </Button>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={handleClose} className="min-h-[44px]">
+                <Button type="button" variant="outline" onClick={handleClose} className="h-12">
                   Cancel
                 </Button>
                 <Button
                   type="button"
                   onClick={handleSubmit}
                   disabled={createCount.isPending}
-                  className="min-h-[44px]"
+                  className="h-12"
                 >
                   {createCount.isPending ? "Submitting…" : "Submit Count"}
                 </Button>

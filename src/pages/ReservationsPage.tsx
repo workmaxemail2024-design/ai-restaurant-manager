@@ -275,7 +275,7 @@ export default function ReservationsPage() {
       </Sheet>
 
       <Sheet open={showDetailSheet && !!selectedReservation} onOpenChange={setShowDetailSheet}>
-        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-md lg:hidden">
+        <SheetContent className="w-full overflow-y-auto p-0 sm:max-w-md lg:hidden">
           <SheetHeader className="sr-only"><SheetTitle>Selected booking</SheetTitle></SheetHeader>
           <ReservationServiceDetails reservation={selectedReservation} reservations={reservations} tables={tables} />
         </SheetContent>
