@@ -56,3 +56,9 @@
 - [x] Selected booking details with repeat-customer history and touch-friendly lifecycle actions
 - [x] Calendar with booked-cover totals and day selection into Service view
 - [x] Narrow/portrait sheets and iPad landscape verification (compiled; signed-in visual check unavailable for external auth)
+
+## iPad usability hardening
+- [ ] Fix shared dialog/sheet viewport containment and touch scrolling
+- [ ] Fix Inventory Item form action reachability
+- [ ] Apply confirmed page-specific responsive overflow fixes only
+- [ ] Verify portrait and landscape operational overlays
