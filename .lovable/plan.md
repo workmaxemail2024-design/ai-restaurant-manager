@@ -1,63 +1,40 @@
-# Role Builder + User Assignments upgrade
+# iPad Bookings service console
 
-## What I found (audit of what already exists)
+## Scope
+Upgrade the existing **Bookings** page only into a live service console. Keep **Floor Plan** as the table-layout editor, **Customers** as full guest history, and **Reservation Settings** as sitting/capacity setup. No new reservation models, statuses, permissions, imports, or database changes.
 
-**Permissions** live in one place: `roles.permissions` (free-form JSON), read by `get_user_permissions()` and `user_has_permission()`, surfaced to the app through `RestaurantContext` → `usePermissions()`. The sidebar (`PermissionFilteredSidebar`) already filters by resource + action, and `RequirePermission` already blocks pages.
+## What will be built
 
-**Page-level permissions need no database change.** The permissions JSON is stored and returned as-is, so page entries can be added alongside the existing category entries. Existing roles keep working unchanged (a page with no explicit entry falls back to its category permission).
+### Service view
+- Make a single selected day the operational focus, while preserving the existing global date selection and location filtering.
+- Add **Service** and **Calendar** tabs beside the existing booking controls.
+- On iPad landscape and wider screens, show three coordinated panels:
+  - **Bookings:** chronological list with time, covers, guest, assigned tables, status, guest search, and daily covers.
+  - **Floor:** read-only rendering of the selected location's saved table positions, shapes, dimensions, seats, and areas. Table styling reflects the relevant booking's current state.
+  - **Booking details:** customer contacts and notes, time/duration, party size, tables, requests, service timestamps, and repeat-guest history.
+- Keep one reservation selection across all three panels: booking selection highlights its tables; table selection selects the relevant booking; status updates refresh the same selection through the existing query cache.
+- Use the existing `getNextActions`, timestamp helper, reservation update mutation, conflict checks, status labels/colors, table data, and customer-history query.
 
-**Real sidebar today** (this is what Role Builder will mirror — note the differences from your example: Staff has "Shifts", Operations includes Documents, AI Intelligence has Insights Dashboard and AI Assistant, Analytics has Product Intelligence, Settings has Role Builder / Audit Log / Backup & Recovery):
+### Calendar view
+- Reuse reservation queries for the visible month and aggregate non-cancelled/non-declined/no-show party sizes by day.
+- Render booked-cover totals in the existing calendar control.
+- Selecting a calendar date updates the existing date context to that day and returns to Service view.
 
-Overview (Dashboard, Locations) · Staff (Staff List, Shifts, Attendance, KPIs) · Menu (Dishes, Cost Analysis, AI Engineering) · Inventory (Inventory Items, Stock Levels, Forecasting) · Operations (Suppliers, Purchase Orders, Documents, Sales, Reports) · Reservations (Bookings, Floor Plan, Customers, Settings) · AI Intelligence (Insights Dashboard, AI Assistant, Daily Summary, Staff Scheduling) · Automation (Automation Rules) · Analytics (Multi-Location, Menu Performance, Forecast, Product Intelligence) · Settings (POS Integrations, Financial / Overheads, Role Builder, Audit Log, Backup & Recovery)
+### Responsive and touch behavior
+- Use the three-panel console at iPad-landscape width where space permits.
+- At narrower widths, keep the booking list primary and open the floor plan and selected booking in sheets instead of squeezing columns.
+- Important actions and selectors will use 44–48px touch targets; each panel will scroll independently within a stable service-height layout.
 
-**Invitations** already exist: `restaurant_invites` (email, role, role_id, location_id, status, expiry) and `ensure_user_restaurant()` accepts a pending invite on the invited person's next login, including their location. Owner-only access is already enforced by RLS. Four gaps: no name is stored, only one location per invite, no email is actually sent, and there is no way to deactivate a member.
+## Technical details
+- Extract small focused reservation components only where needed: a read-only live floor, compact booking list, booking detail content, and covers calendar.
+- Reuse `reservations`, `reservation_tables`, `reservation_customers`, `reservation_sittings`, current hooks, React Query invalidation, restaurant/location contexts, and current RLS.
+- Preserve create-booking behavior, table/capacity checks, and all existing reservation lifecycle behavior.
+- No schema migration is required.
 
-## Smallest database change required (needs your approval)
-
-```sql
--- 1. Invited person's name (display only)
-ALTER TABLE public.restaurant_invites ADD COLUMN IF NOT EXISTS full_name text;
-
--- 2. More than one permitted location per invitation
-ALTER TABLE public.restaurant_invites ADD COLUMN IF NOT EXISTS location_ids uuid[];
-
--- 3. Active / Inactive member status
-ALTER TABLE public.user_restaurants
-  ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
-
--- 4. Deactivated members lose all access everywhere (one helper, used by every RLS policy)
-CREATE OR REPLACE FUNCTION public.user_belongs_to_restaurant(_restaurant_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_restaurants
-    WHERE user_id = auth.uid() AND restaurant_id = _restaurant_id AND is_active
-  )
-$$;
--- get_user_permissions() and user_has_permission() likewise require is_active.
-
--- 5. ensure_user_restaurant(): also grant every location in location_ids on accept.
-
--- 6. Owner lock-out guard: a trigger refuses to deactivate, delete or demote the
---    last active full-access member of a restaurant.
-```
-
-Nothing else changes: no new permission model, no new user table, no change to RLS structure, location scoping or existing role rows.
-
-## Then (after approval)
-
-**Role Builder — Roles tab**
-- One shared route map (single source of truth) used by both the sidebar and Role Builder, so they can never drift.
-- Collapsible category sections in real sidebar order, each page a row with View / Edit / Admin switches, plus per-category "All view" / "All edit" / "Clear" buttons. Admin implies edit implies view, as today.
-- Owner stays Full Access and stays uneditable.
-
-**Enforcement**
-- Sidebar hides pages whose View is off.
-- Every route is wrapped in a page guard so typing the URL is refused too.
-- Security still rests on the database: RLS, location scoping and the existing helpers are untouched.
-
-**User Assignments tab**
-- "Invite user": name, email, role (Manager / Staff / custom), one or more locations. Invitation email is sent through Supabase Auth from a server function; the Owner never sees or sets anyone's password.
-- Member list shows name/email, role, assigned locations and Active / Invited / Inactive.
-- Owner can change role, change locations, resend a pending invite, and deactivate or reactivate access. The last Owner cannot be locked out.
-
-Touch-friendly rows and controls (44–48px) throughout; no other pages changed.
+## Verification
+- Confirm booking → table highlight → detail selection and table → booking selection.
+- Confirm all existing lifecycle actions update the shared service view and conflict protection remains active.
+- Confirm selected-day covers and calendar cover totals exclude non-live statuses consistently.
+- Confirm location-scoped tables and reservations never cross locations.
+- Check iPad landscape and a narrow/portrait viewport for readable panels, sheets, independent scrolling, and touch targets.
+- Confirm Floor Plan, Customers, and Reservation Settings remain unchanged.
