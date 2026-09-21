@@ -170,7 +170,7 @@ export default function ReservationsPage() {
           onSelect={selectCalendarDay}
         />
       ) : (
-        <div className="grid min-h-[620px] grid-cols-1 gap-3 lg:h-[calc(100vh-10.5rem)] lg:min-h-[620px] lg:grid-cols-[minmax(210px,0.85fr)_minmax(330px,1.4fr)_minmax(250px,1fr)]">
+        <div className="grid min-h-[620px] grid-cols-1 gap-2 lg:h-[calc(100vh-10.5rem)] lg:min-h-[620px] lg:grid-cols-[minmax(185px,0.85fr)_minmax(285px,1.4fr)_minmax(205px,1fr)] xl:gap-3 xl:grid-cols-[minmax(250px,0.9fr)_minmax(390px,1.45fr)_minmax(280px,1fr)]">
           <section className="flex min-h-[540px] min-w-0 flex-col overflow-hidden rounded-md border bg-card lg:min-h-0">
             <div className="border-b p-3">
               <div className="flex items-center justify-between gap-3">
