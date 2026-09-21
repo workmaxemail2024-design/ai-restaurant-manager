@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { addMonths, endOfMonth, format, parseISO, startOfMonth, subMonths } from "date-fns";
-import { CalendarDays, ChevronLeft, ChevronRight, Map, Plus, Search, Users } from "lucide-react";
+import { addMinutes, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Map, Plus, Search, Users } from "lucide-react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { LiveFloorPlan } from "@/components/reservations/LiveFloorPlan";
 import { ReservationCoversCalendar } from "@/components/reservations/ReservationCoversCalendar";
@@ -37,9 +37,9 @@ import { cn } from "@/lib/utils";
 const EXCLUDED_BOOKED_COVER_STATUSES = new Set(["cancelled", "declined", "no_show"]);
 
 function useWideServiceLayout() {
-  const [isWide, setIsWide] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches);
+  const [isWide, setIsWide] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
   useEffect(() => {
-    const query = window.matchMedia("(min-width: 1280px)");
+    const query = window.matchMedia("(min-width: 1024px)");
     const update = () => setIsWide(query.matches);
     query.addEventListener("change", update);
     return () => query.removeEventListener("change", update);
@@ -170,8 +170,8 @@ export default function ReservationsPage() {
           onSelect={selectCalendarDay}
         />
       ) : (
-        <div className="grid min-h-[620px] grid-cols-1 gap-3 xl:h-[calc(100vh-10.5rem)] xl:min-h-[620px] xl:grid-cols-[minmax(250px,0.9fr)_minmax(390px,1.45fr)_minmax(280px,1fr)]">
-          <section className="flex min-h-[540px] min-w-0 flex-col overflow-hidden rounded-md border bg-card xl:min-h-0">
+        <div className="grid min-h-[620px] grid-cols-1 gap-3 lg:h-[calc(100vh-10.5rem)] lg:min-h-[620px] lg:grid-cols-[minmax(210px,0.85fr)_minmax(330px,1.4fr)_minmax(250px,1fr)]">
+          <section className="flex min-h-[540px] min-w-0 flex-col overflow-hidden rounded-md border bg-card lg:min-h-0">
             <div className="border-b p-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -234,7 +234,7 @@ export default function ReservationsPage() {
             </div>
           </section>
 
-          <section className="hidden min-h-0 min-w-0 overflow-hidden rounded-md border bg-card xl:block">
+          <section className="hidden min-h-0 min-w-0 overflow-hidden rounded-md border bg-card lg:block">
             <div className="border-b px-4 py-3">
               <h2 className="font-semibold">Live floor</h2>
               <p className="text-xs text-muted-foreground">{currentLocation?.name ?? "Choose a location above"}</p>
@@ -250,14 +250,14 @@ export default function ReservationsPage() {
             </div>
           </section>
 
-          <section className="hidden min-h-0 min-w-0 overflow-hidden rounded-md border bg-card xl:block">
+          <section className="hidden min-h-0 min-w-0 overflow-hidden rounded-md border bg-card lg:block">
             <ReservationServiceDetails reservation={selectedReservation} reservations={reservations} tables={tables} />
           </section>
         </div>
       )}
 
       <Sheet open={showFloorSheet} onOpenChange={setShowFloorSheet}>
-        <SheetContent side="bottom" className="h-[82vh] p-0 xl:hidden">
+        <SheetContent side="bottom" className="h-[82vh] p-0 lg:hidden">
           <SheetHeader className="border-b p-4 text-left"><SheetTitle>Live floor · {currentLocation?.name ?? "Select a location"}</SheetTitle></SheetHeader>
           <div className="h-[calc(100%-61px)]">
             <LiveFloorPlan
@@ -276,7 +276,7 @@ export default function ReservationsPage() {
       </Sheet>
 
       <Sheet open={showDetailSheet && !!selectedReservation} onOpenChange={setShowDetailSheet}>
-        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-md xl:hidden">
+        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-md lg:hidden">
           <SheetHeader className="sr-only"><SheetTitle>Selected booking</SheetTitle></SheetHeader>
           <ReservationServiceDetails reservation={selectedReservation} reservations={reservations} tables={tables} />
         </SheetContent>
