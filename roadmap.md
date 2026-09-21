@@ -48,3 +48,11 @@
 - [ ] Role Builder roles tab: collapsible sidebar-mirroring sections, per-category bulk controls, Owner locked
 - [ ] Route guards for every page (URL access denied, not just hidden)
 - [ ] User Assignments: invite (name/email/role/locations) via Supabase Auth, status Active/Invited/Inactive, change role/locations, resend, deactivate/reactivate
+
+## Reservations iPad service console (approved)
+- [x] Three-panel Bookings service view using existing reservations, tables, customers, statuses and actions
+- [x] Booked Covers definition: future/current expected live covers exclude cancelled, declined and no-show
+- [x] Read-only live floor selection synced with booking selection
+- [x] Selected booking details with repeat-customer history and touch-friendly lifecycle actions
+- [x] Calendar with booked-cover totals and day selection into Service view
+- [x] Narrow/portrait sheets and iPad landscape verification (compiled; signed-in visual check unavailable for external auth)
