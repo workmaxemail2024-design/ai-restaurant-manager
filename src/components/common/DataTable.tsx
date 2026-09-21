@@ -35,7 +35,7 @@ export function DataTable<T extends { id?: string }>({
 }: DataTableProps<T>) {
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="rounded-lg border border-border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -67,7 +67,7 @@ export function DataTable<T extends { id?: string }>({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent border-border">

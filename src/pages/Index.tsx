@@ -81,7 +81,7 @@ const Index = () => {
 
       <PermissionFilteredSidebar />
 
-      <main className="ml-64 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
+      <main className="lg:ml-64 p-4 sm:p-6 lg:p-8 max-w-full overflow-x-hidden">
         <Header showRestaurantSwitcher={false} showScopeSelectors={false} />
 
         {/* 1. Where am I? What date? — single primary location + date control */}
