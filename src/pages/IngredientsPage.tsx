@@ -263,11 +263,12 @@ export default function IngredientsPage() {
               <Plus className="h-4 w-4 mr-2" /> Add Inventory Item
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
+          <DialogContent className="max-w-lg overflow-hidden">
+            <DialogHeader className="shrink-0 pr-10">
               <DialogTitle>{editingItem ? "Edit Inventory Item" : "Add Inventory Item"}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-1 touch-pan-y [-webkit-overflow-scrolling:touch]">
               <div>
                 <Label htmlFor="name">Name</Label>
                 <Input
@@ -526,7 +527,8 @@ export default function IngredientsPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              </div>
+              <div className="flex shrink-0 justify-end gap-2 border-t bg-background pt-4">
                 <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
                 <Button 
                   type="submit" 
