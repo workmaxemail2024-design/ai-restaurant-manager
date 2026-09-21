@@ -58,7 +58,7 @@
 - [x] Narrow/portrait sheets and iPad landscape verification (compiled; signed-in visual check unavailable for external auth)
 
 ## iPad usability hardening
-- [ ] Fix shared dialog/sheet viewport containment and touch scrolling
-- [ ] Fix Inventory Item form action reachability
-- [ ] Apply confirmed page-specific responsive overflow fixes only
-- [ ] Verify portrait and landscape operational overlays
+- [x] Fix shared dialog/sheet viewport containment and touch scrolling
+- [x] Fix Inventory Item form action reachability
+- [x] Apply confirmed page-specific responsive overflow fixes only
+- [x] Verify portrait and landscape viewport bounds (signed-in overlay preview unavailable with external auth)

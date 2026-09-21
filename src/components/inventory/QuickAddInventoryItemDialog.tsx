@@ -126,7 +126,7 @@ export function QuickAddInventoryItemDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="qa-inv-name">Name</Label>
-            <Input
+            <Input className="h-12"
               id="qa-inv-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -143,7 +143,7 @@ export function QuickAddInventoryItemDialog({
               onValueChange={(v: InventoryItemType) => setItemType(v)}
               disabled={!!fixedItemType}
             >
-              <SelectTrigger>
+              <SelectTrigger className="h-12">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -161,7 +161,7 @@ export function QuickAddInventoryItemDialog({
             <div>
               <Label>Group</Label>
               <Select value={itemGroup} onValueChange={(v) => setItemGroup(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -176,7 +176,7 @@ export function QuickAddInventoryItemDialog({
             <div>
               <Label>Category</Label>
               <Select value={category} onValueChange={(v) => setCategory(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -194,7 +194,7 @@ export function QuickAddInventoryItemDialog({
             <div>
               <Label>Base unit</Label>
               <Select value={unit} onValueChange={(v: UnitType) => setUnit(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -209,7 +209,7 @@ export function QuickAddInventoryItemDialog({
             <div>
               <Label>Storage area</Label>
               <Select value={storageType} onValueChange={(v: StorageType) => setStorageType(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="h-12">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -237,9 +237,9 @@ export function QuickAddInventoryItemDialog({
               <Label htmlFor="qa-inv-reorder" className="text-xs">
                 Reorder point
               </Label>
-              <Input
+              <Input className="h-12"
                 id="qa-inv-reorder"
-                type="number"
+                type="number" inputMode="decimal"
                 step="0.01"
                 min="0"
                 placeholder="Optional"
@@ -251,9 +251,9 @@ export function QuickAddInventoryItemDialog({
               <Label htmlFor="qa-inv-par" className="text-xs">
                 Par level
               </Label>
-              <Input
+              <Input className="h-12"
                 id="qa-inv-par"
-                type="number"
+                type="number" inputMode="decimal"
                 step="0.01"
                 min="0"
                 placeholder="Optional"
@@ -265,9 +265,9 @@ export function QuickAddInventoryItemDialog({
               <Label htmlFor="qa-inv-shelf" className="text-xs">
                 Shelf life (days)
               </Label>
-              <Input
+              <Input className="h-12"
                 id="qa-inv-shelf"
-                type="number"
+                type="number" inputMode="decimal"
                 step="1"
                 min="0"
                 placeholder="Optional"

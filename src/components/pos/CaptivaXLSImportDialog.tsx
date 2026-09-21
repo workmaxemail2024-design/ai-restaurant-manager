@@ -1338,7 +1338,7 @@ export function CaptivaXLSImportDialog({ trigger, defaultLocationId, open: openP
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="flex flex-col max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Import Captiva XLS</DialogTitle>
           <DialogDescription>

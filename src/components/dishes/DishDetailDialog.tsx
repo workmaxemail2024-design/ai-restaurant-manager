@@ -135,7 +135,7 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 flex-wrap">
             {dish.name}
@@ -149,7 +149,7 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
           </DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="overview" className="flex-1 overflow-y-auto">
+        <Tabs defaultValue="overview" className="flex-1 overflow-y-auto overscroll-contain">
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="recipe">Recipe / Ingredients</TabsTrigger>
@@ -292,7 +292,7 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
                   }}
                 />
 
-                <div className="border rounded-lg divide-y">
+                <div className="border rounded-lg divide-y overflow-x-auto">
                   <div className="grid grid-cols-6 gap-2 p-3 bg-muted/50 text-xs font-medium text-muted-foreground uppercase">
                     <span className="col-span-2">Ingredient</span>
                     <span className="text-right">Qty</span>

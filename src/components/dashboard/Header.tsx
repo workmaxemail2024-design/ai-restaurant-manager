@@ -1,4 +1,4 @@
-import { Calendar, LogOut } from "lucide-react";
+import { Calendar, LogOut, Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
 import { LocationSelector } from "@/components/LocationSelector";
@@ -13,6 +13,8 @@ import { useLocation } from "@/contexts/LocationContext";
 import { useLocations } from "@/hooks/useLocations";
 import { useRealtimeEvents } from "@/hooks/useRealtimeEvents";
 import { useNavigate } from "react-router-dom";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { PermissionFilteredSidebar } from "@/components/dashboard/PermissionFilteredSidebar";
 import type { OperatingHours } from "@/components/locations/OperatingHoursEditor";
 
 interface HeaderProps {
@@ -54,16 +56,33 @@ export function Header({
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 py-6 relative z-50">
-      <div>
-        <h1 className="text-2xl font-bold">{title}</h1>
-        <div className="flex items-center gap-4 mt-1">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            <span className="text-sm">{today}</span>
+      <div className="flex items-center gap-4">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="lg:hidden h-10 w-10">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-64 border-none">
+            {/* The PermissionFilteredSidebar handles its own display on large screens, 
+                but we force it to show here in the drawer. */}
+            <div className="[&_aside]:flex [&_aside]:lg:flex h-full">
+               <PermissionFilteredSidebar />
+            </div>
+          </SheetContent>
+        </Sheet>
+        
+        <div>
+          <h1 className="text-2xl font-bold">{title}</h1>
+          <div className="flex items-center gap-4 mt-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span className="text-sm">{today}</span>
+            </div>
+            {selectedLocationId && (
+              <TodayHoursIndicator operatingHours={selectedLocationHours} />
+            )}
           </div>
-          {selectedLocationId && (
-            <TodayHoursIndicator operatingHours={selectedLocationHours} />
-          )}
         </div>
       </div>
 
@@ -93,7 +112,7 @@ export function Header({
         <ThemeToggle />
 
         {/* Time indicator */}
-        <div className="px-4 py-2 rounded-lg bg-secondary border border-border">
+        <div className="px-4 py-2 rounded-lg bg-secondary border border-border hidden sm:flex">
           <span className="text-sm font-medium">
             {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
           </span>
