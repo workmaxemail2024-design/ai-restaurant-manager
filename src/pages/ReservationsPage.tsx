@@ -1,220 +1,287 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { addMonths, endOfMonth, format, parseISO, startOfMonth, subMonths } from "date-fns";
+import { CalendarDays, ChevronLeft, ChevronRight, Map, Plus, Search, Users } from "lucide-react";
 import { PageLayout } from "@/components/common/PageLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { LiveFloorPlan } from "@/components/reservations/LiveFloorPlan";
+import { ReservationCoversCalendar } from "@/components/reservations/ReservationCoversCalendar";
+import { ReservationServiceDetails } from "@/components/reservations/ReservationServiceDetails";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Clock, Users, Plus, Search, TrendingUp, AlertTriangle, CheckCircle2, XCircle, MapPin } from "lucide-react";
-import { format, parseISO, addMinutes, eachHourOfInterval, differenceInMinutes } from "date-fns";
 import { useDateRange } from "@/contexts/DateRangeContext";
-import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
+import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocations } from "@/hooks/useLocations";
 import {
-  useReservations,
-  useReservationTables,
-  useReservationSittings,
-  useReservationCustomers,
-  useCreateReservation,
-  useUpdateReservation,
-  useCreateCustomer,
-  checkTableConflicts,
-  checkCoverConflicts,
-  getNextActions,
-  getTimestampPayload,
-  STATUS_LABELS,
   STATUS_COLORS,
+  STATUS_LABELS,
+  checkCoverConflicts,
+  checkTableConflicts,
+  useCreateCustomer,
+  useCreateReservation,
+  useReservationCustomers,
+  useReservations,
+  useReservationSittings,
+  useReservationTables,
   type Reservation,
-  type ReservationStatus,
-  type ReservationSource,
   type ReservationCustomer,
+  type ReservationSource,
 } from "@/hooks/useReservations";
-import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
+
+const EXCLUDED_BOOKED_COVER_STATUSES = new Set(["cancelled", "declined", "no_show"]);
+
+function useWideServiceLayout() {
+  const [isWide, setIsWide] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1280px)").matches);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1280px)");
+    const update = () => setIsWide(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return isWide;
+}
 
 export default function ReservationsPage() {
-  const { startDate, endDate } = useDateRange();
+  const { startDate, setCustomRange } = useDateRange();
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const rid = currentRestaurant?.id;
-  const navigate = useNavigate();
+  const isWide = useWideServiceLayout();
+  const selectedDate = parseISO(startDate);
+  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(selectedDate));
+  const [view, setView] = useState<"service" | "calendar">("service");
+  const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [showFloorSheet, setShowFloorSheet] = useState(false);
+  const [showDetailSheet, setShowDetailSheet] = useState(false);
 
-  const from = `${startDate}T00:00:00`;
-  const to = `${endDate}T23:59:59.999`;
-  const startDateObj = parseISO(startDate);
+  const dayFrom = `${startDate}T00:00:00`;
+  const dayTo = `${startDate}T23:59:59.999`;
+  const monthFrom = `${format(startOfMonth(calendarMonth), "yyyy-MM-dd")}T00:00:00`;
+  const monthTo = `${format(endOfMonth(calendarMonth), "yyyy-MM-dd")}T23:59:59.999`;
 
-  const { data: reservations = [], isLoading } = useReservations(from, to);
+  const { data: reservations = [], isLoading } = useReservations(dayFrom, dayTo);
+  const { data: monthReservations = [] } = useReservations(monthFrom, monthTo);
   const { data: tables = [] } = useReservationTables();
   const { data: sittings = [] } = useReservationSittings();
   const { data: customers = [] } = useReservationCustomers();
   const { data: locations = [] } = useLocations();
 
-  const [selectedRes, setSelectedRes] = useState<Reservation | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const selectedReservation = useMemo(
+    () => reservations.find(reservation => reservation.id === selectedReservationId) ?? null,
+    [reservations, selectedReservationId],
+  );
 
-  // ── KPIs ──
-  const kpis = useMemo(() => {
-    const active = reservations.filter(r => !['cancelled', 'declined'].includes(r.status));
-    const confirmed = reservations.filter(r => ['confirmed', 'arrived', 'seated', 'completed'].includes(r.status));
-    const pending = reservations.filter(r => r.status === 'pending');
-    const completed = reservations.filter(r => r.status === 'completed');
-    const noShows = reservations.filter(r => r.status === 'no_show');
-    const totalCovers = active.reduce((s, r) => s + r.party_size, 0);
-    const confirmedCovers = confirmed.reduce((s, r) => s + r.party_size, 0);
-    const pendingCovers = pending.reduce((s, r) => s + r.party_size, 0);
-    const totalSeats = tables.filter(t => t.is_active).reduce((s, t) => s + t.seats, 0);
-    const utilisation = totalSeats > 0 ? Math.round((confirmedCovers / totalSeats) * 100) : 0;
-    const avgParty = active.length > 0 ? (totalCovers / active.length).toFixed(1) : '0';
-    const spendData = completed.filter(r => r.actual_spend != null);
-    const avgSpend = spendData.length > 0 ? (spendData.reduce((s, r) => s + (r.actual_spend || 0), 0) / spendData.length).toFixed(2) : '—';
-    const noShowRate = (active.length + noShows.length) > 0 ? Math.round((noShows.length / (active.length + noShows.length)) * 100) : 0;
-    return { totalCovers, confirmedCovers, pendingCovers, utilisation, avgParty, avgSpend, noShowRate };
-  }, [reservations, tables]);
+  useEffect(() => {
+    if (selectedReservationId && !selectedReservation) setSelectedReservationId(null);
+  }, [selectedReservation, selectedReservationId]);
 
-  // ── Filtered list ──
-  const filteredReservations = useMemo(() => {
-    let list = reservations;
-    if (statusFilter !== 'all') list = list.filter(r => r.status === statusFilter);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(r => {
-        const name = r.customer ? `${r.customer.first_name} ${r.customer.last_name}`.toLowerCase() : '';
-        return name.includes(q) || r.special_requests?.toLowerCase().includes(q);
-      });
-    }
-    return list;
-  }, [reservations, statusFilter, searchQuery]);
+  const sortedReservations = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return [...reservations]
+      .filter(reservation => {
+        if (!query) return true;
+        const guest = reservation.customer ? `${reservation.customer.first_name} ${reservation.customer.last_name}` : "walk-in";
+        const tableNames = reservation.table_ids.map(tableId => tables.find(table => table.id === tableId)?.name ?? "").join(" ");
+        return `${guest} ${reservation.customer?.phone ?? ""} ${tableNames}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+  }, [reservations, searchQuery, tables]);
+
+  const bookedCovers = useMemo(
+    () => reservations
+      .filter(reservation => !EXCLUDED_BOOKED_COVER_STATUSES.has(reservation.status))
+      .reduce((total, reservation) => total + reservation.party_size, 0),
+    [reservations],
+  );
+
+  const moveDay = (offset: number) => {
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() + offset);
+    const nextDate = format(next, "yyyy-MM-dd");
+    setCustomRange(nextDate, nextDate);
+    setSelectedReservationId(null);
+  };
+
+  const selectReservation = (reservation: Reservation) => {
+    setSelectedReservationId(reservation.id);
+    if (!isWide) setShowDetailSheet(true);
+  };
+
+  const selectCalendarDay = (date: Date) => {
+    const value = format(date, "yyyy-MM-dd");
+    setCustomRange(value, value);
+    setSelectedReservationId(null);
+    setView("service");
+  };
+
+  const currentLocation = locations.find(location => location.id === selectedLocationId);
 
   return (
     <PageLayout
-      title="Reservations"
-      subtitle="Manage bookings, covers and table assignments."
+      title="Bookings"
+      subtitle="Live reservations, table status and guest details."
       action={
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Add Booking
+        <Button className="min-h-11" onClick={() => setShowCreate(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Add Booking
         </Button>
       }
     >
-      {/* KPI Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
-        <KPICard label="Total Covers" value={kpis.totalCovers} icon={Users} />
-        <KPICard label="Confirmed" value={kpis.confirmedCovers} icon={CheckCircle2} className="text-success" />
-        <KPICard label="Pending" value={kpis.pendingCovers} icon={Clock} className="text-warning" />
-        <KPICard label="Utilisation" value={`${kpis.utilisation}%`} icon={TrendingUp} />
-        <KPICard label="Avg Party" value={kpis.avgParty} icon={Users} />
-        <KPICard label="Avg Spend" value={kpis.avgSpend === '—' ? '—' : `€${kpis.avgSpend}`} icon={TrendingUp} />
-        <KPICard label="No-show %" value={`${kpis.noShowRate}%`} icon={XCircle} className={kpis.noShowRate > 10 ? 'text-destructive' : ''} />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <Tabs value={view} onValueChange={value => setView(value as "service" | "calendar")}>
+          <TabsList className="h-11">
+            <TabsTrigger value="service" className="min-h-10 px-4">Service</TabsTrigger>
+            <TabsTrigger value="calendar" className="min-h-10 px-4">Calendar</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <div className="flex items-center gap-1 rounded-md border bg-card p-1">
+          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => moveDay(-1)} aria-label="Previous day">
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <label className="relative">
+            <CalendarDays className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="date"
+              className="h-10 w-[168px] border-0 bg-transparent pl-9 font-medium shadow-none"
+              value={startDate}
+              onChange={event => event.target.value && setCustomRange(event.target.value, event.target.value)}
+              aria-label="Booking date"
+            />
+          </label>
+          <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => moveDay(1)} aria-label="Next day">
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="timeline" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="list">List View</TabsTrigger>
-        </TabsList>
-
-        {/* ── Timeline View ── */}
-        <TabsContent value="timeline">
-          <TimelineView
-            reservations={reservations}
-            tables={tables}
-            startDate={startDateObj}
-            onSelect={setSelectedRes}
-          />
-        </TabsContent>
-
-        {/* ── List View ── */}
-        <TabsContent value="list">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search customer..." className="pl-8" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+      {view === "calendar" ? (
+        <ReservationCoversCalendar
+          month={calendarMonth}
+          selected={selectedDate}
+          reservations={monthReservations}
+          onMonthChange={setCalendarMonth}
+          onSelect={selectCalendarDay}
+        />
+      ) : (
+        <div className="grid min-h-[620px] grid-cols-1 gap-3 xl:h-[calc(100vh-10.5rem)] xl:min-h-[620px] xl:grid-cols-[minmax(250px,0.9fr)_minmax(390px,1.45fr)_minmax(280px,1fr)]">
+          <section className="flex min-h-[540px] min-w-0 flex-col overflow-hidden rounded-md border bg-card xl:min-h-0">
+            <div className="border-b p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">{format(selectedDate, "EEE, d MMM")}</h2>
+                  <p className="text-xs text-muted-foreground">{currentLocation?.name ?? "All permitted locations"}</p>
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    {Object.entries(STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="text-right">
+                  <p className="text-xl font-semibold text-primary">{bookedCovers}</p>
+                  <p className="text-[11px] text-muted-foreground">Booked Covers</p>
+                </div>
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-muted-foreground">
-                      <th className="text-left p-3 font-medium">Time</th>
-                      <th className="text-left p-3 font-medium">Duration</th>
-                      <th className="text-left p-3 font-medium">Customer</th>
-                      <th className="text-left p-3 font-medium">Party</th>
-                      <th className="text-left p-3 font-medium">Status</th>
-                      <th className="text-left p-3 font-medium">Tables</th>
-                      <th className="text-left p-3 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReservations.length === 0 && (
-                      <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">No bookings found for this period. Create a reservation or adjust the date range.</td></tr>
-                    )}
-                    {filteredReservations.map(r => {
-                      const durationMin = differenceInMinutes(parseISO(r.end_at), parseISO(r.start_at));
-                      const actions = getNextActions(r.status);
-                      return (
-                        <tr key={r.id} className="border-b hover:bg-muted/50">
-                          <td className="p-3 whitespace-nowrap cursor-pointer" onClick={() => setSelectedRes(r)}>
-                            {format(parseISO(r.start_at), 'HH:mm')} – {format(parseISO(r.end_at), 'HH:mm')}
-                          </td>
-                          <td className="p-3 text-muted-foreground text-xs">{durationMin}min</td>
-                          <td className="p-3 cursor-pointer" onClick={() => setSelectedRes(r)}>
-                            {r.customer ? `${r.customer.first_name} ${r.customer.last_name}` : <span className="text-muted-foreground italic">Walk-in</span>}
-                          </td>
-                          <td className="p-3">{r.party_size}</td>
-                          <td className="p-3"><Badge variant="outline" className={cn('text-xs', STATUS_COLORS[r.status])}>{STATUS_LABELS[r.status]}</Badge></td>
-                          <td className="p-3 text-muted-foreground text-xs">
-                            {(r.table_ids || []).map(tid => tables.find(t => t.id === tid)?.name).filter(Boolean).join(', ') || '—'}
-                            {r.table_ids.length > 0 && (
-                              <button
-                                className="ml-1 text-primary hover:underline"
-                                onClick={(e) => { e.stopPropagation(); navigate(`/reservations/floor?highlight=${r.table_ids[0]}`); }}
-                                title="View on floor plan"
-                              >
-                                <MapPin className="h-3 w-3 inline" />
-                              </button>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            <QuickActions reservation={r} reservations={reservations} tables={tables} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="relative mt-3">
+                <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                <Input className="h-11 pl-9" placeholder="Search guest or table" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} />
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              {!isWide && (
+                <Button variant="outline" className="mt-2 min-h-11 w-full" onClick={() => setShowFloorSheet(true)}>
+                  <Map className="mr-2 h-4 w-4" /> Open live floor
+                </Button>
+              )}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {isLoading ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">Loading bookings…</p>
+              ) : sortedReservations.length === 0 ? (
+                <div className="flex h-full min-h-64 flex-col items-center justify-center px-6 text-center">
+                  <CalendarDays className="mb-3 h-6 w-6 text-muted-foreground" />
+                  <p className="text-sm font-medium">No bookings found</p>
+                  <p className="mt-1 text-xs text-muted-foreground">No reservations match this day and search.</p>
+                </div>
+              ) : (
+                sortedReservations.map(reservation => {
+                  const selected = reservation.id === selectedReservationId;
+                  const tableNames = reservation.table_ids.map(tableId => tables.find(table => table.id === tableId)?.name).filter(Boolean).join(", ");
+                  return (
+                    <button
+                      key={reservation.id}
+                      type="button"
+                      onClick={() => selectReservation(reservation)}
+                      className={cn(
+                        "flex min-h-[76px] w-full items-center gap-3 border-b px-3 py-2 text-left transition-colors last:border-b-0",
+                        selected ? "bg-primary/10 ring-inset ring-primary" : "hover:bg-muted/50",
+                      )}
+                    >
+                      <div className="w-12 shrink-0 text-center">
+                        <p className="font-semibold tabular-nums">{format(parseISO(reservation.start_at), "HH:mm")}</p>
+                        <p className="mt-1 flex items-center justify-center gap-1 text-xs text-muted-foreground"><Users className="h-3 w-3" />{reservation.party_size}</p>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{reservation.customer ? `${reservation.customer.first_name} ${reservation.customer.last_name}` : "Walk-in"}</p>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{tableNames || "Table unassigned"}</p>
+                      </div>
+                      <Badge variant="outline" className={cn("max-w-[92px] shrink-0 truncate text-[10px]", STATUS_COLORS[reservation.status])}>
+                        {STATUS_LABELS[reservation.status]}
+                      </Badge>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </section>
 
-      {/* ── Detail Drawer ── */}
-      <ReservationDrawer
-        reservation={selectedRes}
-        onClose={() => setSelectedRes(null)}
-        reservations={reservations}
-        tables={tables}
-        sittings={sittings}
-      />
+          <section className="hidden min-h-0 min-w-0 overflow-hidden rounded-md border bg-card xl:block">
+            <div className="border-b px-4 py-3">
+              <h2 className="font-semibold">Live floor</h2>
+              <p className="text-xs text-muted-foreground">{currentLocation?.name ?? "Choose a location above"}</p>
+            </div>
+            <div className="h-[calc(100%-61px)]">
+              <LiveFloorPlan
+                tables={tables}
+                reservations={reservations}
+                selectedReservationId={selectedReservationId}
+                selectedLocationId={selectedLocationId}
+                onSelectReservation={selectReservation}
+              />
+            </div>
+          </section>
 
-      {/* ── Create Modal ── */}
+          <section className="hidden min-h-0 min-w-0 overflow-hidden rounded-md border bg-card xl:block">
+            <ReservationServiceDetails reservation={selectedReservation} reservations={reservations} tables={tables} />
+          </section>
+        </div>
+      )}
+
+      <Sheet open={showFloorSheet} onOpenChange={setShowFloorSheet}>
+        <SheetContent side="bottom" className="h-[82vh] p-0 xl:hidden">
+          <SheetHeader className="border-b p-4 text-left"><SheetTitle>Live floor · {currentLocation?.name ?? "Select a location"}</SheetTitle></SheetHeader>
+          <div className="h-[calc(100%-61px)]">
+            <LiveFloorPlan
+              tables={tables}
+              reservations={reservations}
+              selectedReservationId={selectedReservationId}
+              selectedLocationId={selectedLocationId}
+              onSelectReservation={reservation => {
+                setSelectedReservationId(reservation.id);
+                setShowFloorSheet(false);
+                setShowDetailSheet(true);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={showDetailSheet && !!selectedReservation} onOpenChange={setShowDetailSheet}>
+        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-md xl:hidden">
+          <SheetHeader className="sr-only"><SheetTitle>Selected booking</SheetTitle></SheetHeader>
+          <ReservationServiceDetails reservation={selectedReservation} reservations={reservations} tables={tables} />
+        </SheetContent>
+      </Sheet>
+
       <CreateReservationSheet
         open={showCreate}
         onClose={() => setShowCreate(false)}
@@ -223,326 +290,15 @@ export default function ReservationsPage() {
         sittings={sittings}
         reservations={reservations}
         locations={locations}
+        initialDate={startDate}
       />
     </PageLayout>
   );
 }
 
-// ── Quick Actions (inline in list) ──
-
-function QuickActions({ reservation, reservations, tables }: { reservation: Reservation; reservations: Reservation[]; tables: any[] }) {
-  const updateRes = useUpdateReservation();
-  const actions = getNextActions(reservation.status);
-
-  const handleAction = (newStatus: ReservationStatus) => {
-    // Table conflict check for confirm/arrived
-    if (['confirmed', 'arrived'].includes(newStatus) && reservation.table_ids.length > 0) {
-      const conflicts = checkTableConflicts(reservations, reservation.table_ids, reservation.start_at, reservation.end_at, reservation.id);
-      if (conflicts.length > 0) {
-        toast({ title: "Table conflict", description: `Table(s) already booked at this time.`, variant: "destructive" });
-        return;
-      }
-    }
-
-    if (newStatus === 'cancelled') {
-      const reason = prompt("Cancellation reason (optional):");
-      updateRes.mutate({ id: reservation.id, status: newStatus, cancellation_reason: reason || null, ...getTimestampPayload(newStatus) } as any);
-      return;
-    }
-
-    if (newStatus === 'no_show') {
-      updateRes.mutate({ id: reservation.id, status: newStatus, ...getTimestampPayload(newStatus) } as any);
-      return;
-    }
-
-    updateRes.mutate({ id: reservation.id, status: newStatus, ...getTimestampPayload(newStatus) } as any);
-  };
-
-  if (actions.length === 0) return null;
-
-  return (
-    <div className="flex gap-1">
-      {actions.slice(0, 2).map(a => (
-        <Button
-          key={a.status}
-          size="sm"
-          variant={(a.variant as any) || 'default'}
-          className="h-7 text-xs px-2"
-          onClick={() => handleAction(a.status)}
-          disabled={updateRes.isPending}
-        >
-          {a.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
-// ── KPI Card ──
-
-function KPICard({ label, value, icon: Icon, className }: { label: string; value: string | number; icon: any; className?: string }) {
-  return (
-    <Card>
-      <CardContent className="p-3 flex items-center gap-3">
-        <Icon className={cn("h-4 w-4 text-muted-foreground shrink-0", className)} />
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{label}</p>
-          <p className={cn("text-lg font-semibold", className)}>{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Timeline View ──
-
-function TimelineView({ reservations, tables, startDate, onSelect }: {
-  reservations: Reservation[];
-  tables: any[];
-  startDate: Date;
-  onSelect: (r: Reservation) => void;
-}) {
-  const activeTables = tables.filter(t => t.is_active);
-  const hours = eachHourOfInterval({ start: new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 9), end: new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 23) });
-
-  if (activeTables.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-muted-foreground">
-          <p className="text-sm font-medium">No tables configured</p>
-          <p className="text-xs mt-1">Add tables in the Floor Plan page to enable the timeline view.</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-0 overflow-x-auto">
-        <div className="min-w-[800px]">
-          <div className="flex border-b sticky top-0 bg-card z-10">
-            <div className="w-24 shrink-0 p-2 text-xs font-medium text-muted-foreground border-r">Table</div>
-            {hours.map(h => (
-              <div key={h.toISOString()} className="flex-1 min-w-[60px] p-2 text-xs text-center text-muted-foreground border-r last:border-r-0">
-                {format(h, 'HH:mm')}
-              </div>
-            ))}
-          </div>
-          {activeTables.map(table => {
-            const tableRes = reservations.filter(r =>
-              Array.isArray(r.table_ids) && r.table_ids.includes(table.id) &&
-              !['cancelled', 'declined'].includes(r.status)
-            );
-            return (
-              <div key={table.id} className="flex border-b last:border-b-0 relative" style={{ height: 48 }}>
-                <div className="w-24 shrink-0 p-2 text-xs font-medium border-r flex items-center gap-1">
-                  {table.name} <span className="text-muted-foreground">({table.seats})</span>
-                </div>
-                <div className="flex-1 relative">
-                  {hours.map(h => (
-                    <div key={h.toISOString()} className="absolute top-0 bottom-0 border-r" style={{ left: `${((h.getHours() - 9) / 14) * 100}%`, width: 0 }} />
-                  ))}
-                  {tableRes.map(r => {
-                    const rStart = parseISO(r.start_at);
-                    const rEnd = parseISO(r.end_at);
-                    const startH = rStart.getHours() + rStart.getMinutes() / 60;
-                    const endH = rEnd.getHours() + rEnd.getMinutes() / 60;
-                    const left = Math.max(0, ((startH - 9) / 14) * 100);
-                    const width = Math.min(100 - left, ((endH - startH) / 14) * 100);
-                    const bgColor = STATUS_COLORS[r.status] || 'bg-muted border-muted-foreground/20';
-                    return (
-                      <button
-                        key={r.id}
-                        className={cn("absolute top-1 bottom-1 rounded border text-xs px-1 truncate cursor-pointer hover:opacity-80 transition-opacity", bgColor)}
-                        style={{ left: `${left}%`, width: `${width}%` }}
-                        onClick={() => onSelect(r)}
-                        title={`${r.customer ? `${r.customer.first_name} ${r.customer.last_name}` : `Party of ${r.party_size}`} · ${STATUS_LABELS[r.status]}`}
-                      >
-                        {r.customer ? `${r.customer.first_name} ${r.customer.last_name.charAt(0)}.` : `P${r.party_size}`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Reservation Detail Drawer ──
-
-function ReservationDrawer({ reservation, onClose, reservations, tables, sittings }: {
-  reservation: Reservation | null;
-  onClose: () => void;
-  reservations: Reservation[];
-  tables: any[];
-  sittings: any[];
-}) {
-  const updateRes = useUpdateReservation();
-  const navigate = useNavigate();
-  if (!reservation) return null;
-
-  const r = reservation;
-  const durationMin = differenceInMinutes(parseISO(r.end_at), parseISO(r.start_at));
-  const actions = getNextActions(r.status);
-
-  const handleStatus = (newStatus: ReservationStatus) => {
-    if (['confirmed', 'arrived'].includes(newStatus) && r.table_ids.length > 0) {
-      const conflicts = checkTableConflicts(reservations, r.table_ids, r.start_at, r.end_at, r.id);
-      if (conflicts.length > 0) {
-        toast({ title: "Conflict detected", description: `Table(s) already booked at this time by ${conflicts.length} reservation(s).`, variant: "destructive" });
-        return;
-      }
-    }
-
-    if (newStatus === 'cancelled') {
-      const reason = prompt("Cancellation reason (optional):");
-      updateRes.mutate({ id: r.id, status: newStatus, cancellation_reason: reason || null, ...getTimestampPayload(newStatus) } as any);
-      return;
-    }
-
-    updateRes.mutate({ id: r.id, status: newStatus, ...getTimestampPayload(newStatus) } as any);
-  };
-
-  return (
-    <Sheet open={!!reservation} onOpenChange={() => onClose()}>
-      <SheetContent className="w-[400px] sm:w-[480px] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            Reservation
-            <Badge variant="outline" className={cn('text-xs ml-2', STATUS_COLORS[r.status])}>{STATUS_LABELS[r.status]}</Badge>
-          </SheetTitle>
-        </SheetHeader>
-        <div className="space-y-4 mt-4">
-          {/* Customer info */}
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground font-medium uppercase">Customer</p>
-            {r.customer ? (
-              <div>
-                <p className="font-medium">{r.customer.first_name} {r.customer.last_name}</p>
-                {r.customer.phone && <p className="text-sm text-muted-foreground">{r.customer.phone}</p>}
-                {r.customer.email && <p className="text-sm text-muted-foreground">{r.customer.email}</p>}
-              </div>
-            ) : <p className="text-sm text-muted-foreground italic">Walk-in / No customer</p>}
-          </div>
-          <Separator />
-          {/* Booking details */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-xs text-muted-foreground">Date</p>
-              <p className="font-medium">{format(parseISO(r.start_at), 'EEE, d MMM yyyy')}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Time & Duration</p>
-              <p className="font-medium">{format(parseISO(r.start_at), 'HH:mm')} – {format(parseISO(r.end_at), 'HH:mm')}</p>
-              <p className="text-xs text-muted-foreground">{durationMin} minutes</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Party Size</p>
-              <p className="font-medium">{r.party_size}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Source</p>
-              <p className="font-medium capitalize">{r.source.replace('_', ' ')}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Sitting</p>
-              <p className="font-medium">{r.sitting?.name || '—'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Tables</p>
-              <div className="flex items-center gap-1">
-                <p className="font-medium">{r.table_ids.map(tid => tables.find(t => t.id === tid)?.name).filter(Boolean).join(', ') || '—'}</p>
-                {r.table_ids.length > 0 && (
-                  <button
-                    className="text-primary hover:underline text-xs"
-                    onClick={() => navigate(`/reservations/floor?highlight=${r.table_ids[0]}`)}
-                  >
-                    <MapPin className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Service timestamps */}
-          {(r.arrived_at || r.seated_at || r.completed_at) && (
-            <>
-              <Separator />
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground font-medium uppercase">Service Tracking</p>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  {r.arrived_at && (
-                    <div>
-                      <p className="text-muted-foreground">Arrived</p>
-                      <p className="font-medium">{format(parseISO(r.arrived_at), 'HH:mm')}</p>
-                    </div>
-                  )}
-                  {r.seated_at && (
-                    <div>
-                      <p className="text-muted-foreground">Seated</p>
-                      <p className="font-medium">{format(parseISO(r.seated_at), 'HH:mm')}</p>
-                    </div>
-                  )}
-                  {r.completed_at && (
-                    <div>
-                      <p className="text-muted-foreground">Completed</p>
-                      <p className="font-medium">{format(parseISO(r.completed_at), 'HH:mm')}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {r.special_requests && (
-            <>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground font-medium uppercase">Special Requests</p>
-                <p className="text-sm mt-1">{r.special_requests}</p>
-              </div>
-            </>
-          )}
-          {r.decline_reason && (
-            <div className="p-2 rounded bg-destructive/10 text-destructive text-sm">
-              <strong>Decline reason:</strong> {r.decline_reason}
-            </div>
-          )}
-          {r.cancellation_reason && (
-            <div className="p-2 rounded bg-muted text-muted-foreground text-sm">
-              <strong>Cancellation reason:</strong> {r.cancellation_reason}
-            </div>
-          )}
-          <Separator />
-          {/* Status Actions */}
-          {actions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {actions.map(a => (
-                <Button
-                  key={a.status}
-                  size="sm"
-                  variant={(a.variant as any) || 'default'}
-                  onClick={() => handleStatus(a.status)}
-                  disabled={updateRes.isPending}
-                >
-                  {a.label}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 // ── Create Reservation Sheet ──
 
-function CreateReservationSheet({ open, onClose, customers, tables, sittings, reservations, locations }: {
+function CreateReservationSheet({ open, onClose, customers, tables, sittings, reservations, locations, initialDate }: {
   open: boolean;
   onClose: () => void;
   customers: ReservationCustomer[];
@@ -550,6 +306,7 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
   sittings: any[];
   reservations: Reservation[];
   locations: any[];
+  initialDate: string;
 }) {
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
@@ -564,7 +321,7 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState("19:00");
   const [partySize, setPartySize] = useState(2);
   const [source, setSource] = useState<ReservationSource>('phone');

@@ -40,7 +40,7 @@ function tableReservation(tableId: string, reservations: Reservation[], selected
 function tableStateClass(status?: ReservationStatus) {
   if (status === "seated") return "border-primary bg-primary/20 text-primary";
   if (status === "arrived") return "border-warning bg-warning/15 text-warning";
-  if (status === "confirmed" || status === "pending") return "border-info bg-info/10 text-foreground";
+  if (status === "confirmed" || status === "pending") return "border-secondary bg-secondary/70 text-foreground";
   return "border-success/50 bg-success/10 text-foreground";
 }
 
@@ -80,7 +80,7 @@ export function LiveFloorPlan({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-success" />Available</span>
-        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-info" />Reserved</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-secondary" />Reserved</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-warning" />Arrived</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-primary" />Seated</span>
       </div>
