@@ -330,6 +330,12 @@ function CreateReservationSheet({ open, onClose, customers, tables, sittings, re
   const [specialRequests, setSpecialRequests] = useState("");
   const [locationId, setLocationId] = useState(selectedLocationId || (locations.length > 0 ? locations[0].id : ''));
 
+  useEffect(() => {
+    if (!open) return;
+    setDate(initialDate);
+    setLocationId(selectedLocationId || (locations.length > 0 ? locations[0].id : ''));
+  }, [initialDate, locations, open, selectedLocationId]);
+
   const filteredCustomers = customerSearch.length >= 2
     ? customers.filter(c => `${c.first_name} ${c.last_name} ${c.phone || ''} ${c.email || ''}`.toLowerCase().includes(customerSearch.toLowerCase()))
     : [];
