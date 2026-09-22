@@ -30,13 +30,27 @@ export function setRememberMe(value: boolean): void {
 
 export function rememberMeStorage(persistent: SupportedStorage): SupportedStorage {
   const sessionStore: SupportedStorage = {
-    getItem: (key) => Promise.resolve(sessionStorage.getItem(key)),
+    getItem: (key) => {
+      try {
+        return Promise.resolve(sessionStorage.getItem(key));
+      } catch {
+        return Promise.resolve(null);
+      }
+    },
     setItem: (key, value) => {
-      sessionStorage.setItem(key, value);
+      try {
+        sessionStorage.setItem(key, value);
+      } catch {
+        // ignore
+      }
       return Promise.resolve();
     },
     removeItem: (key) => {
-      sessionStorage.removeItem(key);
+      try {
+        sessionStorage.removeItem(key);
+      } catch {
+        // ignore
+      }
       return Promise.resolve();
     },
   };
@@ -45,14 +59,30 @@ export function rememberMeStorage(persistent: SupportedStorage): SupportedStorag
   const inactive = () => (getRememberMe() ? sessionStore : persistent);
 
   return {
-    getItem: (key) => active().getItem(key),
-    setItem: async (key, value) => {
-      // Write to the chosen store and clear the other so a stale session can't
-      // resurrect after the user switches modes.
+    getItem: async (key) => {
+      const value = await active().getItem(key);
+      if (value != null) return value;
+
+      // Recovery path: a session can legitimately land in the other store when
+      // the token is written before the preference is applied (e.g. a session
+      // restored during page load, or a login that set the flag mid-flight).
+      // Reading only the active store would look like "logged out" to the app
+      // and silently drop a remembered session, so adopt it instead of losing it.
+      const fallback = await inactive().getItem(key);
+      if (fallback == null) return null;
+      await active().setItem(key, fallback);
       await inactive().removeItem(key);
+      return fallback;
+    },
+    setItem: async (key, value) => {
+      // Write to the chosen store first so a failure on the other store can
+      // never leave the session unwritten, then clear the other copy so a
+      // stale session can't resurrect after the user switches modes.
       await active().setItem(key, value);
+      await inactive().removeItem(key);
     },
     removeItem: async (key) => {
+      // Explicit sign-out must clear both stores.
       await persistent.removeItem(key);
       await sessionStore.removeItem(key);
     },
