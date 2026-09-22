@@ -136,18 +136,29 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
+    // Ref (not state) so the listener is registered once. Re-running this
+    // effect would tear the listener down and re-create it, losing auth
+    // events (including a token refresh) in the gap.
+    let initialized = false;
 
-    const initializeAuth = async () => {
+    const initializeAuth = async (attempt = 0) => {
       console.log('[RestaurantContext] Initializing auth...');
-      
+
       // First, get the current session
       const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-      
+
       if (error) {
         console.error('[RestaurantContext] Error getting session:', error);
+        // A transient failure (offline iPad, backgrounded app resuming) must
+        // not be treated as "signed out": retry briefly before giving up.
+        if (mounted && attempt < 2) {
+          setTimeout(() => { if (mounted) initializeAuth(attempt + 1); }, 1000 * (attempt + 1));
+          return;
+        }
         if (mounted) {
           setIsLoading(false);
           setIsInitialized(true);
+          initialized = true;
         }
         return;
       }
@@ -169,6 +180,7 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
 
       if (mounted) {
         setIsInitialized(true);
+        initialized = true;
       }
     };
 
@@ -193,9 +205,13 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
       if (newSession?.user) {
         setSession(newSession);
         setUser(newSession.user);
-        
+
+        // A plain token refresh keeps the same user: no need to reload the
+        // workspace (and no spinner) — that only causes churn on iPad wake-up.
+        if (event === 'TOKEN_REFRESHED') return;
+
         // Only load data if we're initialized (avoid duplicate loading on init)
-        if (isInitialized) {
+        if (initialized) {
           setIsLoading(true);
           // Use setTimeout to avoid Supabase deadlock
           setTimeout(() => {
@@ -210,11 +226,22 @@ export function RestaurantProvider({ children }: { children: ReactNode }) {
     // Initialize
     initializeAuth();
 
+    // iPad/Safari suspends background timers, so nudge Supabase to refresh the
+    // session when the app comes back to the foreground or regains network.
+    const resume = () => {
+      if (!mounted || document.visibilityState !== 'visible') return;
+      supabase.auth.getSession().catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('online', resume);
+
     return () => {
       mounted = false;
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('online', resume);
       subscription.unsubscribe();
     };
-  }, [loadUserData, isInitialized]);
+  }, [loadUserData]);
 
   const refreshPermissions = useCallback(async () => {
     try {
