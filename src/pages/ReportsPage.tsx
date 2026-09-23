@@ -1287,7 +1287,10 @@ export default function ReportsPage() {
   const [reportView, setReportView] = useState<"daily" | "monthly">("daily");
   const [reportYear, setReportYear] = useState(() => parseISO(startDate).getFullYear());
   const reportStartDate = reportView === "monthly" ? format(startOfYear(new Date(reportYear, 0, 1)), "yyyy-MM-dd") : startDate;
-  const reportEndDate = reportView === "monthly" ? format(endOfYear(new Date(reportYear, 0, 1)), "yyyy-MM-dd") : endDate;
+  const currentYear = new Date().getFullYear();
+  const reportEndDate = reportView === "monthly"
+    ? format(reportYear === currentYear ? new Date() : endOfYear(new Date(reportYear, 0, 1)), "yyyy-MM-dd")
+    : endDate;
   const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(reportStartDate, reportEndDate, selectedLocationId);
   const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(reportStartDate, reportEndDate, selectedLocationId);
   // Single costing source — date-aware ingredient costs resolved server-side.
@@ -1422,7 +1425,7 @@ export default function ReportsPage() {
       if (day.orders != null) orderTotal = (orderTotal ?? 0) + day.orders;
       if (day.visitors != null) visitorTotal = (visitorTotal ?? 0) + day.visitors;
 
-      if (actual && actual.hours > 0) {
+      if (actual && (actual.hours > 0 || actual.cost > 0)) {
         totalLabourCost += actual.cost;
         hasAnyLabour = true;
       } else if (ledger && ledger.labour_hours > 0) {

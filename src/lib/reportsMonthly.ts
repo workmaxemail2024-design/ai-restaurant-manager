@@ -105,7 +105,7 @@ export function buildReportsPeriod({
     if (visitorMetric.value != null) visitors = (visitors ?? 0) + visitorMetric.value;
     qtySold += day.qtySold;
 
-    if (attendance && attendance.hours > 0) {
+    if (attendance && (attendance.hours > 0 || attendance.cost > 0)) {
       totalLabourCost += attendance.cost;
       hasAnyLabour = true;
     } else if (ledger && ledger.labour_hours > 0) {
