@@ -78,7 +78,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
-import { buildMonthSummaries, buildWeekSummaries, type ReportsPeriodSummary } from "@/lib/reportsMonthly";
+import { buildMonthSummaries, buildWeekSummaries, sumCanonicalRevenue, type ReportsPeriodSummary } from "@/lib/reportsMonthly";
 
 // ─── Missing field labels ───
 const MISSING_LABELS: Record<MissingField, string> = {
@@ -1511,6 +1511,11 @@ export default function ReportsPage() {
     [reportYear, dailyData, monthlyShared],
   );
 
+  const monthlyRevenueReconciled = useMemo(
+    () => monthSummaries.reduce((sum, month) => sum + month.revenue, 0) === sumCanonicalRevenue(dailyData ?? [], ledgerEntries),
+    [monthSummaries, dailyData, ledgerEntries],
+  );
+
   const weeksForMonth = useCallback(
     (month: ReportsPeriodSummary) => buildWeekSummaries(month, monthlyShared),
     [monthlyShared],
@@ -1783,7 +1788,7 @@ export default function ReportsPage() {
               onYearChange={setReportYear}
               months={monthSummaries}
               weeksFor={weeksForMonth}
-              isLoading={dailyLoading || costingLoading}
+              isLoading={dailyLoading || costingLoading || !monthlyRevenueReconciled}
               renderDailyRows={renderMonthlyDailyRows}
             />
           )}

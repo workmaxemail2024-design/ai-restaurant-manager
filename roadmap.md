@@ -64,7 +64,7 @@
 - [x] Verify portrait and landscape viewport bounds (signed-in overlay preview unavailable with external auth)
 
 ## Reports Monthly view (approved)
-- [ ] Add Daily / Monthly presentation switch without changing Daily Reports
-- [ ] Add responsive 12-month overview using canonical Reports data
-- [ ] Add monthly recap, calendar-week totals, revenue trend, and reused Daily Performance rows
-- [ ] Verify September 2026 reconciliation and iPad portrait/landscape layouts
+- [x] Add Daily / Monthly presentation switch without changing Daily Reports
+- [x] Add responsive 12-month overview using canonical Reports data
+- [x] Add monthly recap, calendar-week totals, revenue trend, and reused Daily Performance rows
+- [x] Verify September 2026 reconciliation and responsive iPad layouts (authenticated preview unavailable with external auth)

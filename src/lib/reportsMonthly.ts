@@ -61,6 +61,13 @@ interface BuildReportsPeriodInput {
   avgHourlyRate: number;
 }
 
+export function sumCanonicalRevenue(days: DailyMetrics[], ledgerEntries: Map<string, LedgerEntry>): number {
+  return days.reduce((total, day) => {
+    const ledger = ledgerEntries.get(day.date);
+    return total + (day.hasData ? day.revenue : (ledger?.manual_revenue ?? 0));
+  }, 0);
+}
+
 export function buildReportsPeriod({
   key,
   label,
