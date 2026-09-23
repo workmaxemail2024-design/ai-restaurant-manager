@@ -35,7 +35,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
-import { reconcileGross } from "@/lib/posDailyCanonical";
+import { reconcileGross, posReportAvailability } from "@/lib/posDailyCanonical";
 import {
   effectiveOrders as computeEffectiveOrders,
   effectiveVisitors as computeEffectiveVisitors,
