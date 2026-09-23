@@ -62,3 +62,9 @@
 - [x] Fix Inventory Item form action reachability
 - [x] Apply confirmed page-specific responsive overflow fixes only
 - [x] Verify portrait and landscape viewport bounds (signed-in overlay preview unavailable with external auth)
+
+## Reports Monthly view (approved)
+- [ ] Add Daily / Monthly presentation switch without changing Daily Reports
+- [ ] Add responsive 12-month overview using canonical Reports data
+- [ ] Add monthly recap, calendar-week totals, revenue trend, and reused Daily Performance rows
+- [ ] Verify September 2026 reconciliation and iPad portrait/landscape layouts
