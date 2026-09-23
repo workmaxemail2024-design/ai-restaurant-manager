@@ -65,6 +65,7 @@ export interface DailyMetrics {
   summary: DailySummary | null;
   itemsMissingCost: number;    // rough count of sold master dishes lacking a recipe cost
   hasData: boolean;
+  /** True only when a Daily Sales Summary report was uploaded for the day. */
   hasSummary: boolean;
   hasImported: boolean;
   hasApplied: boolean;
@@ -347,7 +348,7 @@ export function useDailyBreakdown(
         summary,
         itemsMissingCost: missingCostSet.size,
         hasData,
-        hasSummary: !!summary,
+        hasSummary: availability.summaryUploaded,
         hasImported: cov?.imported || false,
         hasApplied: cov?.applied || false,
       };
