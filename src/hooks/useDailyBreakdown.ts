@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { inferItemType, inferDrinkType, type PosItemType, type DrinkType } from "@/lib/posItemClassification";
-import { canonicalizePosSummaries, sumNullable, type CanonicalPosDay } from "@/lib/posDailyCanonical";
+import { canonicalizePosSummaries, sumNullable, posReportAvailability, type CanonicalPosDay } from "@/lib/posDailyCanonical";
 
 interface DishMetric {
   name: string;
@@ -246,8 +246,11 @@ export function useDailyBreakdown(
     return days.map((day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       const daySales = byDate.get(dateStr) || [];
-      const hasProductDetail = daySales.length > 0;
       const summary = summaries.get(dateStr) || null;
+      // Report availability comes from the shared canonical rule (stored report
+      // provenance), not from how many rows this page happened to load.
+      const availability = posReportAvailability(summary, daySales.length > 0);
+      const hasProductDetail = availability.productsUploaded;
 
       const productRevenue = daySales.reduce((s, r) => s + Number(r.total_price), 0);
       // Canonical revenue: the resolver already prefers product-derived gross where it
