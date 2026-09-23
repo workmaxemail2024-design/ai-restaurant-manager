@@ -28,6 +28,7 @@ export interface ReportsPeriodSummary {
   startDate: string;
   endDate: string;
   days: DailyMetrics[];
+  dailyRevenue: Array<{ date: string; revenue: number }>;
   revenue: number;
   tradingDays: number;
   orders: number | null;
@@ -36,6 +37,7 @@ export interface ReportsPeriodSummary {
   totalLabourCost: number;
   labourPct: number | null;
   hasAnyLabour: boolean;
+  labourMissingDays: number;
   additionalExpenses: number;
   profit: number;
   costing: FoodCostView;
@@ -76,6 +78,7 @@ export function buildReportsPeriod({
   let qtySold = 0;
   let totalLabourCost = 0;
   let hasAnyLabour = false;
+  let labourMissingDays = 0;
   let additionalExpenses = 0;
   let needsAttentionDays = 0;
   let accountedDays = 0;
@@ -85,6 +88,7 @@ export function buildReportsPeriod({
   let bothDays = 0;
 
   const costRows: FoodCostResolverRow[] = [];
+  const dailyRevenue: Array<{ date: string; revenue: number }> = [];
 
   for (const day of days) {
     const ledger = ledgerEntries.get(day.date);
@@ -95,6 +99,7 @@ export function buildReportsPeriod({
     const isTrading = !ledger?.is_closed && effectiveRevenue > 0;
 
     revenue += effectiveRevenue;
+    dailyRevenue.push({ date: day.date, revenue: effectiveRevenue });
     if (isTrading) tradingDays += 1;
     if (orderMetric.value != null) orders = (orders ?? 0) + orderMetric.value;
     if (visitorMetric.value != null) visitors = (visitors ?? 0) + visitorMetric.value;
@@ -106,6 +111,8 @@ export function buildReportsPeriod({
     } else if (ledger && ledger.labour_hours > 0) {
       totalLabourCost += ledger.labour_hours * avgHourlyRate;
       hasAnyLabour = true;
+    } else if (isTrading) {
+      labourMissingDays += 1;
     }
     if (ledger) additionalExpenses += ledger.additional_expenses;
 
@@ -141,6 +148,7 @@ export function buildReportsPeriod({
     startDate: days[0]?.date ?? key,
     endDate: days[days.length - 1]?.date ?? key,
     days,
+    dailyRevenue,
     revenue,
     tradingDays,
     orders,
@@ -149,6 +157,7 @@ export function buildReportsPeriod({
     totalLabourCost,
     labourPct: revenue > 0 ? (totalLabourCost / revenue) * 100 : null,
     hasAnyLabour,
+    labourMissingDays,
     additionalExpenses,
     profit,
     costing,

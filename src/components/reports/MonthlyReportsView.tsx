@@ -88,7 +88,7 @@ export function MonthlyReportsView({
           {months.map((month) => {
             const future = month.key > currentMonthKey;
             const inProgress = month.key === currentMonthKey;
-            const profitEstimated = month.costing.isEstimated || !month.hasAnyLabour;
+            const profitEstimated = month.costing.isEstimated || month.labourMissingDays > 0;
             return (
               <Card key={month.key} className={cn("overflow-hidden", future && "bg-muted/30 opacity-60")}>
                 <CardHeader className="flex-row items-center justify-between space-y-0 px-4 pb-2 pt-4">
@@ -112,7 +112,7 @@ export function MonthlyReportsView({
                   {!future && (
                     <div className="flex flex-wrap gap-1.5">
                       {month.costing.qualityLabel && <Badge variant="outline" className="text-[10px]">{month.costing.qualityLabel}</Badge>}
-                      {!month.hasAnyLabour && month.revenue > 0 && <Badge variant="outline" className="text-[10px] text-warning">Labour unknown</Badge>}
+                      {month.labourMissingDays > 0 && <Badge variant="outline" className="text-[10px] text-warning">Labour missing · {month.labourMissingDays} day{month.labourMissingDays === 1 ? "" : "s"}</Badge>}
                       {profitEstimated && month.revenue > 0 && <Badge variant="secondary" className="text-[10px]">Profit estimated</Badge>}
                     </div>
                   )}
@@ -135,8 +135,8 @@ export function MonthlyReportsView({
     );
   }
 
-  const profitEstimated = selectedMonth.costing.isEstimated || !selectedMonth.hasAnyLabour;
-  const trend = selectedMonth.days.map((day) => ({
+  const profitEstimated = selectedMonth.costing.isEstimated || selectedMonth.labourMissingDays > 0;
+  const trend = selectedMonth.dailyRevenue.map((day) => ({
     date: format(new Date(`${day.date}T00:00:00`), "d MMM"),
     revenue: day.revenue,
   }));
@@ -161,7 +161,7 @@ export function MonthlyReportsView({
         <Metric label="Orders" value={selectedMonth.orders?.toLocaleString() ?? "—"} note="receipts" />
         <Metric label="Covers" value={selectedMonth.visitors?.toLocaleString() ?? "—"} />
         <Metric label={selectedMonth.costing.isEstimated ? "Food Cost (est.)" : "Food Cost"} value={formatCurrency(selectedMonth.costing.blendedCost)} note={`${selectedMonth.costing.foodCostPct?.toFixed(1) ?? "—"}% · ${selectedMonth.costing.qualityLabel ?? "unknown"}`} />
-        <Metric label="Labour" value={selectedMonth.hasAnyLabour ? formatCurrency(selectedMonth.totalLabourCost) : "—"} note={selectedMonth.hasAnyLabour ? `${selectedMonth.labourPct?.toFixed(1) ?? "—"}% of revenue` : "Labour unknown"} />
+        <Metric label="Labour" value={selectedMonth.hasAnyLabour ? formatCurrency(selectedMonth.totalLabourCost) : "—"} note={selectedMonth.labourMissingDays > 0 ? `${selectedMonth.labourMissingDays} trading day${selectedMonth.labourMissingDays === 1 ? "" : "s"} missing` : selectedMonth.hasAnyLabour ? `${selectedMonth.labourPct?.toFixed(1) ?? "—"}% of revenue` : "Labour unknown"} />
         <Metric label={profitEstimated ? "Est. Profit" : "Profit"} value={formatCurrency(selectedMonth.profit)} note={profitEstimated ? "Incomplete inputs" : undefined} />
       </div>
 
