@@ -57,6 +57,8 @@ import { useDateRange } from "@/contexts/DateRangeContext";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 import { ProfitLossReport } from "@/components/reports/ProfitLossReport";
 import { ReportsAccuracyNote } from "@/components/reports/ReportsAccuracyNote";
+import { MonthlyReportsView } from "@/components/reports/MonthlyReportsView";
+import { SegmentedControl } from "@/components/common/SegmentedControl";
 import { CashFlowReport } from "@/components/reports/CashFlowReport";
 import { ReconciliationReport } from "@/components/reports/ReconciliationReport";
 import {
@@ -70,10 +72,13 @@ import {
   isSameDay,
   isWithinInterval,
   getDay,
+  startOfYear,
+  endOfYear,
 } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
+import { buildMonthSummaries, buildWeekSummaries, type ReportsPeriodSummary } from "@/lib/reportsMonthly";
 
 // ─── Missing field labels ───
 const MISSING_LABELS: Record<MissingField, string> = {
@@ -1279,25 +1284,29 @@ export default function ReportsPage() {
   const { selectedLocationId } = useLocation();
   const { currentRestaurant } = useRestaurant();
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
-  const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(startDate, endDate, selectedLocationId);
-  const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(startDate, endDate, selectedLocationId);
+  const [reportView, setReportView] = useState<"daily" | "monthly">("daily");
+  const [reportYear, setReportYear] = useState(() => parseISO(startDate).getFullYear());
+  const reportStartDate = reportView === "monthly" ? format(startOfYear(new Date(reportYear, 0, 1)), "yyyy-MM-dd") : startDate;
+  const reportEndDate = reportView === "monthly" ? format(endOfYear(new Date(reportYear, 0, 1)), "yyyy-MM-dd") : endDate;
+  const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(reportStartDate, reportEndDate, selectedLocationId);
+  const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(reportStartDate, reportEndDate, selectedLocationId);
   // Single costing source — date-aware ingredient costs resolved server-side.
-  const { data: dailyCostMap } = useDailyFoodCosting(startDate, endDate, selectedLocationId);
-  const { data: periodCostRow } = usePeriodFoodCosting(startDate, endDate, selectedLocationId);
+  const { data: dailyCostMap, isLoading: costingLoading } = useDailyFoodCosting(reportStartDate, reportEndDate, selectedLocationId);
+  const { data: periodCostRow } = usePeriodFoodCosting(reportStartDate, reportEndDate, selectedLocationId);
   const [missingCostsOpen, setMissingCostsOpen] = useState(false);
 
   // Fetch actual attendance for date range
   const restaurantId = currentRestaurant?.id;
   const { data: attendanceData } = useQuery({
-    queryKey: ["report-attendance", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryKey: ["report-attendance", restaurantId, selectedLocationId ?? "all", reportStartDate, reportEndDate],
     queryFn: async () => {
       if (!restaurantId) return new Map<string, { hours: number; cost: number }>();
       let q = supabase
         .from("staff_attendance")
         .select("clock_in, clock_out, staff_id, staff(hourly_rate, pay_type, annual_salary)")
         .eq("restaurant_id", restaurantId)
-        .gte("clock_in", `${startDate}T00:00:00`)
-        .lte("clock_in", `${endDate}T23:59:59`)
+        .gte("clock_in", `${reportStartDate}T00:00:00`)
+        .lte("clock_in", `${reportEndDate}T23:59:59`)
         .not("clock_out", "is", null);
       if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
       const { data } = await q;
@@ -1312,10 +1321,10 @@ export default function ReportsPage() {
         dayMap.set(day, { hours: existing.hours + hours, cost: existing.cost + hours * rate });
       }
       // Salaried staff: allocate an equal daily share to every day in the range.
-      const alloc = await fetchSalaryAllocation(restaurantId, selectedLocationId ?? null, startDate, endDate);
+      const alloc = await fetchSalaryAllocation(restaurantId, selectedLocationId ?? null, reportStartDate, reportEndDate);
       if (alloc.perDay > 0) {
-        const cursor = new Date(`${startDate}T00:00:00`);
-        const last = new Date(`${endDate}T00:00:00`);
+        const cursor = new Date(`${reportStartDate}T00:00:00`);
+        const last = new Date(`${reportEndDate}T00:00:00`);
         while (cursor <= last) {
           const day = cursor.toISOString().split("T")[0];
           const existing = dayMap.get(day) || { hours: 0, cost: 0 };
@@ -1330,15 +1339,15 @@ export default function ReportsPage() {
 
   // Fetch planned shifts for date range
   const { data: shiftsData } = useQuery({
-    queryKey: ["report-shifts", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryKey: ["report-shifts", restaurantId, selectedLocationId ?? "all", reportStartDate, reportEndDate],
     queryFn: async () => {
       if (!restaurantId) return new Map<string, number>();
       let q = supabase
         .from("staff_shifts")
         .select("shift_start, shift_end")
         .eq("restaurant_id", restaurantId)
-        .gte("shift_start", `${startDate}T00:00:00`)
-        .lte("shift_start", `${endDate}T23:59:59`);
+        .gte("shift_start", `${reportStartDate}T00:00:00`)
+        .lte("shift_start", `${reportEndDate}T23:59:59`);
       if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
       const { data } = await q;
       const dayMap = new Map<string, number>();
@@ -1357,15 +1366,15 @@ export default function ReportsPage() {
 
   // Fetch reservation dates in range for bookings checklist
   const { data: bookingDays } = useQuery({
-    queryKey: ["report-booking-days", restaurantId, selectedLocationId ?? "all", startDate, endDate],
+    queryKey: ["report-booking-days", restaurantId, selectedLocationId ?? "all", reportStartDate, reportEndDate],
     queryFn: async () => {
       if (!restaurantId) return new Set<string>();
       let q = supabase
         .from("reservations")
         .select("start_at")
         .eq("restaurant_id", restaurantId)
-        .gte("start_at", `${startDate}T00:00:00`)
-        .lte("start_at", `${endDate}T23:59:59`);
+        .gte("start_at", `${reportStartDate}T00:00:00`)
+        .lte("start_at", `${reportEndDate}T23:59:59`);
       if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
       const { data } = await q;
       const days = new Set<string>();
@@ -1486,6 +1495,52 @@ export default function ReportsPage() {
     }
   }, []);
 
+  const monthlyShared = useMemo(() => ({
+    ledgerEntries,
+    attendanceMap,
+    bookingDays: bookingDaysSet,
+    costMap: dailyCostMap ?? new Map<string, FoodCostResolverRow>(),
+    avgHourlyRate,
+  }), [ledgerEntries, attendanceMap, bookingDaysSet, dailyCostMap, avgHourlyRate]);
+
+  const monthSummaries = useMemo(
+    () => buildMonthSummaries(reportYear, dailyData ?? [], monthlyShared),
+    [reportYear, dailyData, monthlyShared],
+  );
+
+  const weeksForMonth = useCallback(
+    (month: ReportsPeriodSummary) => buildWeekSummaries(month, monthlyShared),
+    [monthlyShared],
+  );
+
+  const availableYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const first = Math.min(currentYear - 2, parseISO(startDate).getFullYear());
+    return Array.from({ length: currentYear - first + 1 }, (_, index) => currentYear - index);
+  }, [startDate]);
+
+  const renderMonthlyDailyRows = useCallback((month: ReportsPeriodSummary) => (
+    <div className="space-y-2">
+      {month.days.map((day) => (
+        <DayCard
+          key={day.date}
+          day={day}
+          ledger={ledgerEntries.get(day.date)}
+          onSaveLedger={upsertLedger}
+          isSaving={isSaving}
+          avgHourlyRate={avgHourlyRate}
+          isFocused={focusedDate === day.date}
+          cardRef={(el) => setDayCardRef(day.date, el)}
+          hasBookings={bookingDaysSet.has(day.date)}
+          actualAttendance={attendanceMap.get(day.date)}
+          plannedShiftHours={shiftsMap.get(day.date)}
+          costRow={dailyCostMap?.get(day.date)}
+          locationId={selectedLocationId}
+        />
+      ))}
+    </div>
+  ), [ledgerEntries, upsertLedger, isSaving, avgHourlyRate, focusedDate, setDayCardRef, bookingDaysSet, attendanceMap, shiftsMap, dailyCostMap, selectedLocationId]);
+
   return (
     <PageLayout title="Reports" subtitle="Review revenue, costs and profit, and reconcile each trading day.">
       <Tabs defaultValue="daily" className="space-y-6">
@@ -1509,6 +1564,18 @@ export default function ReportsPage() {
         </TabsList>
 
         <TabsContent value="daily" className="space-y-4">
+          <SegmentedControl
+            value={reportView}
+            onChange={setReportView}
+            ariaLabel="Reports view"
+            className="w-full max-w-xs"
+            options={[
+              { value: "daily", label: "Daily", icon: <CalendarDays className="h-4 w-4" /> },
+              { value: "monthly", label: "Monthly", icon: <Calendar className="h-4 w-4" /> },
+            ]}
+          />
+          {reportView === "daily" ? (
+            <>
           {/* Date range control */}
           <div className="flex flex-wrap items-center gap-2">
             <DateRangeSelector />
@@ -1704,6 +1771,18 @@ export default function ReportsPage() {
                 label={startDate === endDate ? startDate : `${startDate} → ${endDate}`}
               />
             </>
+          )}
+            </>
+          ) : (
+            <MonthlyReportsView
+              year={reportYear}
+              years={availableYears}
+              onYearChange={setReportYear}
+              months={monthSummaries}
+              weeksFor={weeksForMonth}
+              isLoading={dailyLoading || costingLoading}
+              renderDailyRows={renderMonthlyDailyRows}
+            />
           )}
         </TabsContent>
 
