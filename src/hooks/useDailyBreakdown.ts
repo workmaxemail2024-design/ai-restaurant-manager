@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { inferItemType, inferDrinkType, type PosItemType, type DrinkType } from "@/lib/posItemClassification";
-import { canonicalizePosSummaries, sumNullable, type CanonicalPosDay } from "@/lib/posDailyCanonical";
+import { canonicalizePosSummaries, sumNullable, posReportAvailability, type CanonicalPosDay } from "@/lib/posDailyCanonical";
 
 interface DishMetric {
   name: string;
@@ -65,6 +65,7 @@ export interface DailyMetrics {
   summary: DailySummary | null;
   itemsMissingCost: number;    // rough count of sold master dishes lacking a recipe cost
   hasData: boolean;
+  /** True only when a Daily Sales Summary report was uploaded for the day. */
   hasSummary: boolean;
   hasImported: boolean;
   hasApplied: boolean;
@@ -107,17 +108,29 @@ export function useDailyBreakdown(
     queryKey: ["daily-breakdown-sales", restaurantId, locationKey, targetStart, targetEnd],
     queryFn: async () => {
       if (!restaurantId) return [] as SaleRow[];
-      let q = supabase
-        .from("sales")
-        .select("dish_id, quantity, total_price, sale_date, location_id, dishes(name, selling_price), locations(name)")
-        .eq("restaurant_id", restaurantId)
-        .gte("sale_date", targetStart)
-        .lte("sale_date", targetEnd)
-        .order("sale_date", { ascending: true });
-      if (locationId) q = q.eq("location_id", locationId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as SaleRow[];
+      // PostgREST caps a response at 1000 rows. A month of product lines easily
+      // exceeds that, which previously truncated the most recent days (they then
+      // looked like they had no product detail). Page through the full range.
+      const PAGE = 1000;
+      const all: SaleRow[] = [];
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from("sales")
+          .select("dish_id, quantity, total_price, sale_date, location_id, dishes(name, selling_price), locations(name)")
+          .eq("restaurant_id", restaurantId)
+          .gte("sale_date", targetStart)
+          .lte("sale_date", targetEnd)
+          .order("sale_date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (locationId) q = q.eq("location_id", locationId);
+        const { data, error } = await q;
+        if (error) throw error;
+        const batch = (data || []) as SaleRow[];
+        all.push(...batch);
+        if (batch.length < PAGE) break;
+      }
+      return all;
     },
     enabled: !!restaurantId,
   });
@@ -234,8 +247,11 @@ export function useDailyBreakdown(
     return days.map((day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       const daySales = byDate.get(dateStr) || [];
-      const hasProductDetail = daySales.length > 0;
       const summary = summaries.get(dateStr) || null;
+      // Report availability comes from the shared canonical rule (stored report
+      // provenance), not from how many rows this page happened to load.
+      const availability = posReportAvailability(summary, daySales.length > 0);
+      const hasProductDetail = availability.productsUploaded;
 
       const productRevenue = daySales.reduce((s, r) => s + Number(r.total_price), 0);
       // Canonical revenue: the resolver already prefers product-derived gross where it
@@ -332,7 +348,7 @@ export function useDailyBreakdown(
         summary,
         itemsMissingCost: missingCostSet.size,
         hasData,
-        hasSummary: !!summary,
+        hasSummary: availability.summaryUploaded,
         hasImported: cov?.imported || false,
         hasApplied: cov?.applied || false,
       };

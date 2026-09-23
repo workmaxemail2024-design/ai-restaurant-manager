@@ -35,7 +35,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
-import { reconcileGross } from "@/lib/posDailyCanonical";
+import { reconcileGross, posReportAvailability } from "@/lib/posDailyCanonical";
 import {
   effectiveOrders as computeEffectiveOrders,
   effectiveVisitors as computeEffectiveVisitors,
@@ -124,12 +124,8 @@ function getDotClass(status: DayStatus): string {
 
 // ─── POS source flags for a day (Sales Summary vs Products Sold) ───
 export function posSourceFlags(day: DailyMetrics) {
-  const s = day.summary;
-  // Product detail: real product/transaction rows, or the resolver's flag.
-  const productsUploaded = day.hasProductDetail || s?.hasProductDetail === true;
-  // Sales summary: resolver flag, or a summary-side gross being present.
-  const summaryUploaded = s?.hasSummaryReport === true || s?.summaryGross != null;
-  return { productsUploaded, summaryUploaded, hasAnyPos: productsUploaded || summaryUploaded };
+  // Single shared rule: availability comes from stored report provenance only.
+  return posReportAvailability(day.summary, day.hasProductDetail);
 }
 
 function StatusRow({
