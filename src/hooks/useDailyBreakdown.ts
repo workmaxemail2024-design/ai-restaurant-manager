@@ -107,17 +107,29 @@ export function useDailyBreakdown(
     queryKey: ["daily-breakdown-sales", restaurantId, locationKey, targetStart, targetEnd],
     queryFn: async () => {
       if (!restaurantId) return [] as SaleRow[];
-      let q = supabase
-        .from("sales")
-        .select("dish_id, quantity, total_price, sale_date, location_id, dishes(name, selling_price), locations(name)")
-        .eq("restaurant_id", restaurantId)
-        .gte("sale_date", targetStart)
-        .lte("sale_date", targetEnd)
-        .order("sale_date", { ascending: true });
-      if (locationId) q = q.eq("location_id", locationId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data || []) as SaleRow[];
+      // PostgREST caps a response at 1000 rows. A month of product lines easily
+      // exceeds that, which previously truncated the most recent days (they then
+      // looked like they had no product detail). Page through the full range.
+      const PAGE = 1000;
+      const all: SaleRow[] = [];
+      for (let from = 0; ; from += PAGE) {
+        let q = supabase
+          .from("sales")
+          .select("dish_id, quantity, total_price, sale_date, location_id, dishes(name, selling_price), locations(name)")
+          .eq("restaurant_id", restaurantId)
+          .gte("sale_date", targetStart)
+          .lte("sale_date", targetEnd)
+          .order("sale_date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (locationId) q = q.eq("location_id", locationId);
+        const { data, error } = await q;
+        if (error) throw error;
+        const batch = (data || []) as SaleRow[];
+        all.push(...batch);
+        if (batch.length < PAGE) break;
+      }
+      return all;
     },
     enabled: !!restaurantId,
   });

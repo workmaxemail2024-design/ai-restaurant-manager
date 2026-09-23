@@ -142,6 +142,25 @@ export function canonicalizePosSummaries(rows: PosDailySummaryRow[]): CanonicalP
 }
 
 /**
+ * Single canonical rule for "which Captiva report exists for this day?".
+ *
+ * Availability is derived ONLY from the stored report provenance flags of the
+ * canonical day (has_product_detail / has_summary_report). The presence of
+ * revenue, or of product rows currently loaded in a page, never implies that a
+ * report type was uploaded — a page may have loaded a partial set of rows.
+ * `hasLoadedProductRows` can only ADD product availability for legacy days that
+ * predate the provenance flags; it can never mark the summary report uploaded.
+ */
+export function posReportAvailability(
+  day: { hasProductDetail: boolean; hasSummaryReport: boolean } | null | undefined,
+  hasLoadedProductRows = false
+): { productsUploaded: boolean; summaryUploaded: boolean; hasAnyPos: boolean } {
+  const productsUploaded = day?.hasProductDetail === true || hasLoadedProductRows;
+  const summaryUploaded = day?.hasSummaryReport === true;
+  return { productsUploaded, summaryUploaded, hasAnyPos: productsUploaded || summaryUploaded };
+}
+
+/**
  * Reconciliation between the product-lines gross and the daily-summary gross
  * for one canonical day. null when only one report type exists.
  */
