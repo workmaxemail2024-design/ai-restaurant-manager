@@ -1566,13 +1566,13 @@ export default function ReportsPage() {
         <TabsContent value="daily" className="space-y-4">
           <SegmentedControl
             value={reportView}
-            onChange={setReportView}
+            onChange={(value: "daily" | "monthly") => setReportView(value)}
             ariaLabel="Reports view"
             className="w-full max-w-xs"
             options={[
               { value: "daily", label: "Daily", icon: <CalendarDays className="h-4 w-4" /> },
               { value: "monthly", label: "Monthly", icon: <Calendar className="h-4 w-4" /> },
-            ]}
+            ] as const}
           />
           {reportView === "daily" ? (
             <>

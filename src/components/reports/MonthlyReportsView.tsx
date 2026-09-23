@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { format } from "date-fns";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Receipt, TrendingUp, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
