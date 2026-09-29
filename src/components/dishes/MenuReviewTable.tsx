@@ -30,6 +30,7 @@ interface MenuReviewTableProps {
 
 export function MenuReviewTable({ dishes, onDishesChange, onConfirm, onCancel }: MenuReviewTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { names: categories } = useActiveCategoryNames();
   
   const selectedCount = dishes.filter(d => d.selected).length;
   const allSelected = dishes.length > 0 && selectedCount === dishes.length;
