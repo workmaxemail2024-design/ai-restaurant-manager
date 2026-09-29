@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useRestaurant } from "@/contexts/RestaurantContext";
 
 export type DishItemType = "food" | "drink" | "alcoholic" | "non_alcoholic" | "modifier" | "other";
 
@@ -129,11 +130,15 @@ export function useDishIngredients(dishId: string | null) {
 
 export function useCreateDish() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async (dish: DishInsert) => {
+      // Tenant always comes from the signed-in user's current restaurant, never from form input.
+      if (!currentRestaurant?.id) throw new Error("No active restaurant selected");
+      const { restaurant_id: _ignored, ...rest } = dish as DishInsert & { restaurant_id?: unknown };
       const { data, error } = await supabase
         .from("dishes")
-        .insert(dish as any)
+        .insert({ ...rest, restaurant_id: currentRestaurant.id } as any)
         .select()
         .single();
       if (error) throw error;
