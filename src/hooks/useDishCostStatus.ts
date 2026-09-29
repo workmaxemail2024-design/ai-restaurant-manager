@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { convertRecipeQty } from "@/lib/units";
-import type { Dish } from "@/hooks/useDishes";
+import { resolveRecipeSource, type Dish } from "@/hooks/useDishes";
 
 /**
  * Costing setup status for a dish. Derived from the SAME canonical inputs the
@@ -33,6 +33,8 @@ interface RecipeLine {
   dish_id: string;
   quantity: number | null;
   unit: string | null;
+  cost_mode: string | null;
+  manual_line_cost: number | null;
   ingredients: {
     unit: string | null;
     pack_size: number | null;
@@ -50,7 +52,7 @@ export function useRecipeLines() {
       const { data, error } = await supabase
         .from("dish_ingredients")
         .select(
-          "dish_id, quantity, unit, ingredients(unit, pack_size, pack_unit, cost_per_pack, default_cost_price)"
+          "dish_id, quantity, unit, cost_mode, manual_line_cost, ingredients(unit, pack_size, pack_unit, cost_per_pack, default_cost_price)"
         );
       if (error) throw error;
       return (data || []) as unknown as RecipeLine[];
@@ -88,8 +90,10 @@ export function useDishCostStatuses(dishes: Dish[]) {
       fully_costed: 0,
     };
 
+    const byId = new Map(dishes.map((d) => [d.id, d]));
     for (const dish of dishes) {
-      const recipe = byDish.get(dish.id) || [];
+      const src = resolveRecipeSource(dish.id, byId);
+      const recipe = src.broken ? [] : byDish.get(src.sourceId) || [];
       const usesDirectCost = !!dish.use_direct_cost;
       let status: DishCostStatus;
 
@@ -101,8 +105,9 @@ export function useDishCostStatuses(dishes: Dish[]) {
         !usesDirectCost &&
         recipe.some(
           (l) =>
-            ingredientBaseCost(l.ingredients) <= 0 ||
-            convertRecipeQty(l.ingredients, Number(l.quantity), l.unit) === null
+            !(l.cost_mode === "manual" && l.manual_line_cost != null) &&
+            (ingredientBaseCost(l.ingredients) <= 0 ||
+            convertRecipeQty(l.ingredients, Number(l.quantity), l.unit) === null)
         )
       ) {
         status = "missing_costs";

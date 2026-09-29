@@ -24,6 +24,9 @@ export interface Dish {
   archived_by: string | null;
   /** Set when this dish was merged into a master canonical dish. */
   merged_into_id: string | null;
+  /** Linked recipe: this dish uses base_dish_id's recipe × recipe_multiplier. */
+  base_dish_id: string | null;
+  recipe_multiplier: number | null;
   locations?: { name: string } | null;
   /** Computed cost (recipe or direct). null = no cost configured. */
   dish_cost: number | null;
@@ -42,6 +45,10 @@ export interface DishIngredient {
   unit: string | null;
   /** True when the legacy unit could not be determined safely. */
   needs_unit_review: boolean;
+  /** 'inventory' (calculated) or 'manual' (manual_line_cost for this line). */
+  cost_mode: "inventory" | "manual";
+  manual_line_cost: number | null;
+  manual_cost_effective_from: string | null;
   ingredients?: { name: string; unit: string };
 }
 
@@ -191,6 +198,9 @@ export function useAddDishIngredient() {
       quantity: number;
       /** Required: recipe quantities are always unit-explicit. */
       unit: string;
+      cost_mode?: "inventory" | "manual";
+      manual_line_cost?: number | null;
+      manual_cost_effective_from?: string | null;
     }) => {
       const { error } = await supabase
         .from("dish_ingredients")
@@ -199,6 +209,7 @@ export function useAddDishIngredient() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["dish-ingredients", variables.dish_id] });
+      queryClient.invalidateQueries({ queryKey: ["dish-recipe-lines"] });
       queryClient.invalidateQueries({ queryKey: ["dishes"] });
       toast({ title: "Ingredient added to dish" });
     },
@@ -212,15 +223,27 @@ export function useAddDishIngredient() {
 export function useUpdateDishIngredient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { id: string; dish_id: string; quantity: number; unit: string }) => {
+    mutationFn: async (data: {
+      id: string;
+      dish_id: string;
+      quantity?: number;
+      unit?: string;
+      cost_mode?: "inventory" | "manual";
+      manual_line_cost?: number | null;
+      manual_cost_effective_from?: string | null;
+    }) => {
+      const { id, dish_id: _d, ...rest } = data;
+      const patch: Record<string, unknown> = { ...rest };
+      if (rest.quantity !== undefined || rest.unit !== undefined) patch.needs_unit_review = false;
       const { error } = await supabase
         .from("dish_ingredients")
-        .update({ quantity: data.quantity, unit: data.unit, needs_unit_review: false } as any)
-        .eq("id", data.id);
+        .update(patch as any)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["dish-ingredients", variables.dish_id] });
+      queryClient.invalidateQueries({ queryKey: ["dish-ingredients"] });
+      queryClient.invalidateQueries({ queryKey: ["dish-recipe-lines"] });
       queryClient.invalidateQueries({ queryKey: ["dishes"] });
       toast({ title: "Recipe line updated" });
     },
@@ -241,6 +264,7 @@ export function useRemoveDishIngredient() {
     },
     onSuccess: (dish_id) => {
       queryClient.invalidateQueries({ queryKey: ["dish-ingredients", dish_id] });
+      queryClient.invalidateQueries({ queryKey: ["dish-recipe-lines"] });
       queryClient.invalidateQueries({ queryKey: ["dishes"] });
       toast({ title: "Ingredient removed from dish" });
     },
@@ -248,4 +272,62 @@ export function useRemoveDishIngredient() {
       toast({ title: "Error removing ingredient", description: error.message, variant: "destructive" });
     },
   });
+}
+
+/** Set / change / clear a dish's linked base recipe. */
+export function useSetDishRecipeLink() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (d: { id: string; base_dish_id: string | null; recipe_multiplier: number | null }) => {
+      const { error } = await supabase
+        .from("dishes")
+        .update({ base_dish_id: d.base_dish_id, recipe_multiplier: d.recipe_multiplier } as any)
+        .eq("id", d.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dishes"] });
+      queryClient.invalidateQueries({ queryKey: ["dish-recipe-lines"] });
+      toast({ title: "Recipe link saved" });
+    },
+    onError: (error) => toast({ title: "Could not link recipe", description: error.message, variant: "destructive" }),
+  });
+}
+
+/** Explicit unlink: copies the scaled lines into the dish's own recipe. */
+export function useConvertLinkedRecipe() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dishId: string) => {
+      const { error } = await supabase.rpc("convert_linked_recipe", { p_dish_id: dishId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dishes"] });
+      queryClient.invalidateQueries({ queryKey: ["dish-ingredients"] });
+      queryClient.invalidateQueries({ queryKey: ["dish-recipe-lines"] });
+      toast({ title: "Converted to own recipe" });
+    },
+    onError: (error) => toast({ title: "Could not convert recipe", description: error.message, variant: "destructive" }),
+  });
+}
+
+/** Resolve a dish's recipe source by following links (max depth 5, mirrors the DB). */
+export function resolveRecipeSource(
+  dishId: string,
+  byId: Map<string, Pick<Dish, "id" | "base_dish_id" | "recipe_multiplier" | "use_direct_cost">>
+): { sourceId: string; factor: number; broken: boolean } {
+  let cur = dishId;
+  let factor = 1;
+  for (let i = 0; i < 6; i++) {
+    const d = byId.get(cur);
+    if (!d || !d.base_dish_id) {
+      const broken = cur !== dishId && !!d?.use_direct_cost;
+      return { sourceId: cur, factor, broken };
+    }
+    if (i === 5 || !d.recipe_multiplier || d.recipe_multiplier <= 0) return { sourceId: cur, factor, broken: true };
+    factor *= Number(d.recipe_multiplier);
+    cur = d.base_dish_id;
+  }
+  return { sourceId: cur, factor, broken: true };
 }
