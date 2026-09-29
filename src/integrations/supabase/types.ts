@@ -348,30 +348,45 @@ export type Database = {
       }
       dish_ingredients: {
         Row: {
+          cost_mode: string
           created_at: string
           dish_id: string
           id: string
           ingredient_id: string
+          manual_cost_effective_from: string | null
+          manual_cost_set_at: string | null
+          manual_cost_set_by: string | null
+          manual_line_cost: number | null
           needs_unit_review: boolean
           quantity: number
           restaurant_id: string | null
           unit: string | null
         }
         Insert: {
+          cost_mode?: string
           created_at?: string
           dish_id: string
           id?: string
           ingredient_id: string
+          manual_cost_effective_from?: string | null
+          manual_cost_set_at?: string | null
+          manual_cost_set_by?: string | null
+          manual_line_cost?: number | null
           needs_unit_review?: boolean
           quantity?: number
           restaurant_id?: string | null
           unit?: string | null
         }
         Update: {
+          cost_mode?: string
           created_at?: string
           dish_id?: string
           id?: string
           ingredient_id?: string
+          manual_cost_effective_from?: string | null
+          manual_cost_set_at?: string | null
+          manual_cost_set_by?: string | null
+          manual_line_cost?: number | null
           needs_unit_review?: boolean
           quantity?: number
           restaurant_id?: string | null
@@ -405,6 +420,7 @@ export type Database = {
         Row: {
           archived_at: string | null
           archived_by: string | null
+          base_dish_id: string | null
           captiva_external_id: string | null
           category: string | null
           created_at: string
@@ -417,6 +433,7 @@ export type Database = {
           merged_into_id: string | null
           name: string
           needs_review: boolean
+          recipe_multiplier: number | null
           restaurant_id: string | null
           selling_price: number
           source: string
@@ -426,6 +443,7 @@ export type Database = {
         Insert: {
           archived_at?: string | null
           archived_by?: string | null
+          base_dish_id?: string | null
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
@@ -438,6 +456,7 @@ export type Database = {
           merged_into_id?: string | null
           name: string
           needs_review?: boolean
+          recipe_multiplier?: number | null
           restaurant_id?: string | null
           selling_price?: number
           source?: string
@@ -447,6 +466,7 @@ export type Database = {
         Update: {
           archived_at?: string | null
           archived_by?: string | null
+          base_dish_id?: string | null
           captiva_external_id?: string | null
           category?: string | null
           created_at?: string
@@ -459,6 +479,7 @@ export type Database = {
           merged_into_id?: string | null
           name?: string
           needs_review?: boolean
+          recipe_multiplier?: number | null
           restaurant_id?: string | null
           selling_price?: number
           source?: string
@@ -466,6 +487,13 @@ export type Database = {
           use_direct_cost?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "dishes_base_dish_id_fkey"
+            columns: ["base_dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "dishes_location_id_fkey"
             columns: ["location_id"]
@@ -3125,6 +3153,7 @@ export type Database = {
         Args: { _date: string; _location_id: string; _restaurant_id: string }
         Returns: undefined
       }
+      assert_dish_access: { Args: { p_dish_id: string }; Returns: undefined }
       calculate_dish_cost: { Args: { p_dish_id: string }; Returns: number }
       calculate_dish_cost_at_date: {
         Args: { p_date: string; p_dish_id: string }
@@ -3138,6 +3167,7 @@ export type Database = {
         Args: { p_date: string; p_staff_id: string }
         Returns: number
       }
+      convert_linked_recipe: { Args: { p_dish_id: string }; Returns: number }
       convert_recipe_qty: {
         Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
         Returns: number
@@ -3309,6 +3339,24 @@ export type Database = {
       operating_day: {
         Args: { _location_id: string; _ts: string }
         Returns: string
+      }
+      recipe_lines_for_dish: {
+        Args: { p_dish_id: string }
+        Returns: {
+          cost_mode: string
+          factor: number
+          ingredient_id: string
+          line_id: string
+          manual_cost_effective_from: string
+          manual_line_cost: number
+          quantity: number
+          source_dish_id: string
+          unit: string
+        }[]
+      }
+      recipe_qty_in_stock_unit: {
+        Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
+        Returns: number
       }
       restaurant_has_members: {
         Args: { _restaurant_id: string }
