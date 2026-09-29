@@ -89,6 +89,7 @@ export interface Ingredient {
   item_group: string | null;
   category: string | null;
   linked_dish_id: string | null;
+  archived_at?: string | null;
   purchase_unit: PurchaseUnit | null;
   pack_size: number | null;
   pack_unit: PackUnit | null;
@@ -157,7 +158,14 @@ export function getBaseUnit(packUnit: PackUnit | null | undefined): string {
   }
 }
 
-export function useIngredients() {
+/**
+ * Active inventory items by default. Archived items are hidden from lists and
+ * selectors but remain in the database for historical costing; pass
+ * `includeArchived` where existing records must still resolve (recipe lines,
+ * stock rows, the Inventory Items "show archived" view).
+ */
+export function useIngredients(opts: { includeArchived?: boolean } = {}) {
+  const includeArchived = !!opts.includeArchived;
   return useQuery({
     queryKey: ["ingredients"],
     queryFn: async () => {
@@ -166,7 +174,56 @@ export function useIngredients() {
         .select("*, item_group, category, suppliers(name)")
         .order("name");
       if (error) throw error;
-      return data as Ingredient[];
+      return data as unknown as Ingredient[];
+    },
+    select: (rows) => (includeArchived ? rows : rows.filter((r) => !r.archived_at)),
+  });
+}
+
+export function isArchivedIngredient(item: { archived_at?: string | null }): boolean {
+  return !!item.archived_at;
+}
+
+export interface IngredientDependencies {
+  recipe_lines: number;
+  linked_dish: number;
+  purchase_lines: number;
+  adjustments: number;
+  count_lines: number;
+  stock_on_hand: number;
+  price_entries: number;
+  can_delete: boolean;
+}
+
+export function useIngredientDependencies(id: string | null) {
+  return useQuery({
+    queryKey: ["ingredient-dependencies", id],
+    enabled: !!id,
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("ingredient_dependencies", { p_ingredient_id: id });
+      if (error) throw error;
+      return data as IngredientDependencies;
+    },
+  });
+}
+
+export function useRestoreIngredient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("ingredients")
+        .update({ archived_at: null, archived_by: null } as never)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["ingredients"] });
+      toast({ title: "Inventory item restored" });
+    },
+    onError: (error) => {
+      toast({ title: "Error restoring item", description: error.message, variant: "destructive" });
     },
   });
 }
@@ -234,13 +291,18 @@ export function useUpdateIngredient() {
 export function useDeleteIngredient() {
   const queryClient = useQueryClient();
   return useMutation({
+    // Server decides: permanent delete only if never used, otherwise archive.
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("ingredients").delete().eq("id", id);
+      const { data, error } = await (supabase as any).rpc("delete_or_archive_ingredient", { p_ingredient_id: id });
       if (error) throw error;
+      return data as "deleted" | "archived";
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["ingredients"] });
-      toast({ title: "Ingredient deleted successfully" });
+      toast({
+        title: result === "deleted" ? "Inventory item deleted" : "Inventory item archived",
+        description: result === "archived" ? "Hidden from active lists. Past reports and costs are unchanged." : undefined,
+      });
     },
     onError: (error) => {
       toast({ title: "Error deleting ingredient", description: error.message, variant: "destructive" });

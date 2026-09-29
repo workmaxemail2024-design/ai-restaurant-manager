@@ -7,12 +7,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { 
   useIngredients, 
   useCreateIngredient, 
   useUpdateIngredient, 
   useDeleteIngredient, 
+  useRestoreIngredient,
+  useIngredientDependencies,
   Ingredient, 
   IngredientInsert, 
   UnitType, 
@@ -44,12 +50,20 @@ interface FormData extends IngredientInsert {
 }
 
 export default function IngredientsPage() {
-  const { data: ingredients = [], isLoading } = useIngredients();
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: allIngredients = [], isLoading } = useIngredients({ includeArchived: true });
+  const ingredients = useMemo(
+    () => allIngredients.filter((i) => (showArchived ? !!i.archived_at : !i.archived_at)),
+    [allIngredients, showArchived]
+  );
   const { data: suppliers = [] } = useSuppliers();
   const { data: dishes = [] } = useDishes();
   const createIngredient = useCreateIngredient();
   const updateIngredient = useUpdateIngredient();
   const deleteIngredient = useDeleteIngredient();
+  const restoreIngredient = useRestoreIngredient();
+  const [pendingDelete, setPendingDelete] = useState<Ingredient | null>(null);
+  const { data: deps, isLoading: depsLoading } = useIngredientDependencies(pendingDelete?.id ?? null);
   
   const [isOpen, setIsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Ingredient | null>(null);
@@ -571,15 +585,76 @@ export default function IngredientsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Button
+          variant={showArchived ? "secondary" : "outline"}
+          className="min-h-[44px]"
+          onClick={() => setShowArchived((v) => !v)}
+        >
+          {showArchived ? "Show active" : "Show archived"}
+        </Button>
       </div>
 
       <DataTable
         data={filteredIngredients}
         columns={columns}
         isLoading={isLoading}
-        onEdit={handleEdit}
-        onDelete={(item) => deleteIngredient.mutate(item.id)}
+        onEdit={showArchived ? (item) => restoreIngredient.mutate(item.id) : handleEdit}
+        onDelete={showArchived ? undefined : (item) => setPendingDelete(item)}
       />
+      {showArchived && (
+        <p className="text-sm text-muted-foreground mt-2">
+          Archived items are hidden from lists and selectors but still used for past reports and costs. Use the edit button to restore one.
+        </p>
+      )}
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {depsLoading || !deps
+                ? "Checking item…"
+                : deps.can_delete
+                  ? `Permanently delete "${pendingDelete?.name}"?`
+                  : `Archive "${pendingDelete?.name}"?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                {deps && deps.can_delete && (
+                  <p>This item has never been used. It will be removed permanently.</p>
+                )}
+                {deps && !deps.can_delete && (
+                  <>
+                    <p>This item has history, so it will be archived instead of deleted:</p>
+                    <ul className="list-disc pl-5">
+                      {deps.recipe_lines > 0 && <li>Used in {deps.recipe_lines} recipe line(s)</li>}
+                      {deps.linked_dish > 0 && <li>Linked to a dish</li>}
+                      {deps.purchase_lines > 0 && <li>{deps.purchase_lines} purchase order line(s)</li>}
+                      {deps.adjustments > 0 && <li>{deps.adjustments} stock adjustment(s)</li>}
+                      {deps.count_lines > 0 && <li>{deps.count_lines} stock count line(s)</li>}
+                      {deps.stock_on_hand > 0 && <li>Stock on hand</li>}
+                      {deps.price_entries > 1 && <li>{deps.price_entries} price history entries</li>}
+                    </ul>
+                    <p>It will disappear from active lists and selectors. Past reports and dish costs stay exactly the same, and you can restore it later.</p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="min-h-[44px]">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="min-h-[44px] bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!deps || deleteIngredient.isPending}
+              onClick={() => {
+                if (pendingDelete) deleteIngredient.mutate(pendingDelete.id);
+                setPendingDelete(null);
+              }}
+            >
+              {deps?.can_delete ? "Delete permanently" : "Archive"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageLayout>
   );
 }

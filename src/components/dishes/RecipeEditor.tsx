@@ -63,7 +63,8 @@ interface Props {
 
 export function RecipeEditor({ dish, onRecipeCost }: Props) {
   const { data: graph = [] } = useDishLinkGraph();
-  const { data: ingredients = [] } = useIngredients();
+  // Include archived so existing recipe lines keep resolving and costing.
+  const { data: ingredients = [] } = useIngredients({ includeArchived: true });
   const byId = useMemo(() => new Map(graph.map((d) => [d.id, d])), [graph]);
   const self = byId.get(dish.id);
   const baseDishId = self ? self.base_dish_id : dish.base_dish_id;
@@ -260,7 +261,7 @@ function OwnRecipe({
   const [search, setSearch] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const filtered = ingredients.filter(
-    (i) => isRecipeIngredient(i) && i.name.toLowerCase().includes(search.trim().toLowerCase())
+    (i) => !i.archived_at && isRecipeIngredient(i) && i.name.toLowerCase().includes(search.trim().toLowerCase())
   );
   const selected = ingredients.find((i) => i.id === form.ingredient_id);
   const unitOptions = compatibleUnits(getIngredientCostUnit(selected));

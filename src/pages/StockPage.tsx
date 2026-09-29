@@ -34,7 +34,7 @@ import { formatDistanceToNow } from "date-fns";
 export default function StockPage() {
   const { selectedLocationId } = useLocation();
   const { data: stockLevels = [], isLoading } = useStockLevels(selectedLocationId);
-  const { data: ingredients = [] } = useIngredients();
+  const { data: ingredients = [] } = useIngredients({ includeArchived: true });
   const { data: locations = [] } = useLocations();
   const { data: stockCounts = [] } = useStockCounts(selectedLocationId);
   const updateStock = useUpdateStock();

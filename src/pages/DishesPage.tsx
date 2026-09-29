@@ -44,7 +44,7 @@ export default function DishesPage() {
   );
   const archivedCount = useMemo(() => allDishes.filter((d) => !!d.archived_at).length, [allDishes]);
   const { data: locations = [] } = useLocations();
-  const { data: ingredients = [] } = useIngredients();
+  const { data: ingredients = [] } = useIngredients({ includeArchived: true });
   const { data: posMappings = [] } = usePOSMappings(undefined, "captiva");
   const createDish = useCreateDish();
   const updateDish = useUpdateDish();
