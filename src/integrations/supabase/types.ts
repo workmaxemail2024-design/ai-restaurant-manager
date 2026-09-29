@@ -346,6 +346,44 @@ export type Database = {
           },
         ]
       }
+      dish_categories: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          id: string
+          name: string
+          restaurant_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          restaurant_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          restaurant_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dish_categories_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dish_ingredients: {
         Row: {
           cost_mode: string
@@ -3371,6 +3409,14 @@ export type Database = {
       recipe_qty_in_stock_unit: {
         Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
         Returns: number
+      }
+      remove_dish_category: {
+        Args: { p_id: string; p_move_to?: string }
+        Returns: Json
+      }
+      rename_dish_category: {
+        Args: { p_id: string; p_merge?: boolean; p_new_name: string }
+        Returns: Json
       }
       restaurant_has_members: {
         Args: { _restaurant_id: string }
