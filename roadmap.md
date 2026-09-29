@@ -68,3 +68,8 @@
 - [x] Add responsive 12-month overview using canonical Reports data
 - [x] Add monthly recap, calendar-week totals, revenue trend, and reused Daily Performance rows
 - [x] Verify September 2026 reconciliation and responsive iPad layouts (authenticated preview unavailable with external auth)
+
+## Linked recipes + manual recipe-line costs
+- [x] Migration applied (links, manual line cost with effective date, unit-safe helpers; stock reduction left unattached)
+- [x] Recipe editor: setup choice, scaled preview, unlink, manual vs calculated, delete confirmation
+- [ ] Signed-in Owner/Manager check on iPad (needs user; external sign-in)
