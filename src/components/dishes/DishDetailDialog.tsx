@@ -15,6 +15,7 @@ import { useUpdateDish } from "@/hooks/useDishes";
 import { usePOSMappings } from "@/hooks/usePOS";
 import { Link2, AlertCircle } from "lucide-react";
 import { RecipeEditor } from "@/components/dishes/RecipeEditor";
+import { useActiveCategoryNames } from "@/hooks/useDishCategories";
 
 interface Props {
   dish: Dish | null;
@@ -41,6 +42,8 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
   const [itemType, setItemType] = useState<string>("food");
   const [needsReview, setNeedsReview] = useState<boolean>(false);
   const [isActive, setIsActive] = useState<boolean>(true);
+  const [category, setCategory] = useState<string>("");
+  const { names: activeCategoryNames } = useActiveCategoryNames();
 
   useEffect(() => {
     if (dish) {
@@ -49,6 +52,7 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
       setItemType(dish.item_type || "food");
       setNeedsReview(Boolean(dish.needs_review));
       setIsActive(dish.is_active !== false);
+      setCategory(dish.category || "");
     }
   }, [dish?.id]);
 
@@ -67,6 +71,7 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
   const saveOverview = () => {
     updateDish.mutate({
       id: dish.id,
+      category: category || null,
       item_type: itemType,
       needs_review: needsReview,
       is_active: isActive,
@@ -109,7 +114,17 @@ export function DishDetailDialog({ dish, open, onOpenChange }: Props) {
           {/* OVERVIEW */}
           <TabsContent value="overview" className="space-y-4 pt-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><span className="text-muted-foreground">Category:</span> {dish.category || "—"}</div>
+              <div className="col-span-2 sm:col-span-1">
+                <Label className="text-muted-foreground font-normal">Category</Label>
+                <Select value={category || "_none"} onValueChange={(v) => setCategory(v === "_none" ? "" : v)}>
+                  <SelectTrigger className="h-11 mt-1"><SelectValue placeholder="Choose category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">No category</SelectItem>
+                    {(category && !activeCategoryNames.includes(category) ? [category, ...activeCategoryNames] : activeCategoryNames)
+                      .map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div><span className="text-muted-foreground">Department:</span> {dish.department || "—"}</div>
               <div><span className="text-muted-foreground">Location:</span> {dish.locations?.name || "All"}</div>
               <div><span className="text-muted-foreground">Selling Price:</span> {formatCurrency(price)}</div>

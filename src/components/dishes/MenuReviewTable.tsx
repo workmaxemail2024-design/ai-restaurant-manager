@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Check, X, Pencil } from "lucide-react";
 import { formatCurrency, currencySymbol } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import { useActiveCategoryNames } from "@/hooks/useDishCategories";
 
 export interface ExtractedDish {
   id: string;
@@ -19,7 +20,6 @@ export interface ExtractedDish {
   selected: boolean;
 }
 
-const categories = ["Appetizers", "Mains", "Desserts", "Beverages", "Sides", "Salads", "Soups", "Pizza", "Pasta", "Sandwiches", "Seafood", "Grills", "Other"];
 
 interface MenuReviewTableProps {
   dishes: ExtractedDish[];
@@ -30,6 +30,7 @@ interface MenuReviewTableProps {
 
 export function MenuReviewTable({ dishes, onDishesChange, onConfirm, onCancel }: MenuReviewTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { names: categories } = useActiveCategoryNames();
   
   const selectedCount = dishes.filter(d => d.selected).length;
   const allSelected = dishes.length > 0 && selectedCount === dishes.length;
@@ -141,7 +142,7 @@ export function MenuReviewTable({ dishes, onDishesChange, onConfirm, onCancel }:
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
+                      {(dish.category && !categories.includes(dish.category) ? [dish.category, ...categories] : categories).map((cat) => (
                         <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                       ))}
                     </SelectContent>

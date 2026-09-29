@@ -25,10 +25,9 @@ import { useLocation } from "@/contexts/LocationContext";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 
-const categories = ["Appetizers", "Mains", "Desserts", "Beverages", "Sides", "Other"];
-
-// Category display order for visual hierarchy
-const categoryDisplayOrder = ["Appetizers", "Starters", "Mains", "Sides", "Desserts", "Beverages", "Drinks", "Other"];
+import { useDishCategories } from "@/hooks/useDishCategories";
+import { ManageCategoriesDialog } from "@/components/dishes/ManageCategoriesDialog";
+import { Settings2 } from "lucide-react";
 
 type MappingStatusFilter = "all" | "mapped" | "unmapped";
 type CategoryFilter = "all" | string;
@@ -62,6 +61,9 @@ export default function DishesPage() {
   const [editingItem, setEditingItem] = useState<Dish | null>(null);
   const [formData, setFormData] = useState<DishInsert>({ name: "", category: "", selling_price: 0 });
   const [priceText, setPriceText] = useState("");
+  const [isManageCatsOpen, setIsManageCatsOpen] = useState(false);
+  const { data: categoryList = [] } = useDishCategories();
+  const activeCategoryNames = categoryList.filter(c => !c.archived_at).map(c => c.name);
   const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0, unit: "" });
   const [mappingSearch, setMappingSearch] = useState("");
   const [mappingStatusFilter, setMappingStatusFilter] = useState<MappingStatusFilter>("all");
@@ -129,10 +131,13 @@ export default function DishesPage() {
       ? baseFiltered
       : baseFiltered.filter(d => costStatuses.get(d.id) === costFilter);
 
-    // Get unique categories from all dishes (not filtered)
+    // Custom restaurant order from Manage Categories; unknown names go last (A–Z).
+    const orderIdx = new Map(categoryList.map((c, i) => [c.name.trim().toLowerCase(), i]));
+    const rank = (c: string) => orderIdx.get(c.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    const byOrder = (a: string, b: string) => rank(a) - rank(b) || a.localeCompare(b);
+
     const allCategories = [...new Set(dishes.map(d => d.category || "Uncategorized"))];
-    
-    // Group filtered dishes
+
     const grouped = filtered.reduce((acc, dish) => {
       const cat = dish.category || "Uncategorized";
       if (!acc[cat]) acc[cat] = [];
@@ -140,22 +145,14 @@ export default function DishesPage() {
       return acc;
     }, {} as Record<string, Dish[]>);
 
-    // Sort categories by display order
-    const sortedCategories = Object.keys(grouped).sort((a, b) => {
-      const aIdx = categoryDisplayOrder.findIndex(c => a.toLowerCase().includes(c.toLowerCase()));
-      const bIdx = categoryDisplayOrder.findIndex(c => b.toLowerCase().includes(c.toLowerCase()));
-      if (aIdx === -1 && bIdx === -1) return a.localeCompare(b);
-      if (aIdx === -1) return 1;
-      if (bIdx === -1) return -1;
-      return aIdx - bIdx;
-    });
+    const sortedCategories = Object.keys(grouped).sort(byOrder);
 
     return { 
       groupedDishes: sortedCategories.map(cat => ({ category: cat, dishes: grouped[cat] })),
-      availableCategories: allCategories.sort(),
+      availableCategories: allCategories.sort(byOrder),
       filteredCount: filtered.length
     };
-  }, [dishes, baseFiltered, costFilter, costStatuses]);
+  }, [dishes, baseFiltered, costFilter, costStatuses, categoryList]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -235,7 +232,11 @@ export default function DishesPage() {
             </TabsTrigger>
           </TabsList>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <Button variant="outline" onClick={() => setIsManageCatsOpen(true)}>
+              <Settings2 className="h-4 w-4 mr-2" /> Manage Categories
+            </Button>
+            <ManageCategoriesDialog open={isManageCatsOpen} onOpenChange={setIsManageCatsOpen} />
             <Button variant="outline" onClick={() => setIsMenuUploadOpen(true)}>
               <Upload className="h-4 w-4 mr-2" /> Upload Menu
             </Button>
@@ -267,7 +268,10 @@ export default function DishesPage() {
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((cat) => (
+                      {(formData.category && !activeCategoryNames.includes(formData.category)
+                        ? [formData.category, ...activeCategoryNames]
+                        : activeCategoryNames
+                      ).map((cat) => (
                         <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                       ))}
                     </SelectContent>
