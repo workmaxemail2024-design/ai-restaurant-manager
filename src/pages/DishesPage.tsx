@@ -61,6 +61,7 @@ export default function DishesPage() {
   const [selectedDish, setSelectedDish] = useState<Dish | null>(null);
   const [editingItem, setEditingItem] = useState<Dish | null>(null);
   const [formData, setFormData] = useState<DishInsert>({ name: "", category: "", selling_price: 0 });
+  const [priceText, setPriceText] = useState("");
   const [recipeForm, setRecipeForm] = useState({ ingredient_id: "", quantity: 0, unit: "" });
   const [mappingSearch, setMappingSearch] = useState("");
   const [mappingStatusFilter, setMappingStatusFilter] = useState<MappingStatusFilter>("all");
@@ -174,6 +175,7 @@ export default function DishesPage() {
       location_id: item.location_id,
       selling_price: Number(item.selling_price)
     });
+    setPriceText(Number(item.selling_price) ? String(Number(item.selling_price)) : "");
     setIsOpen(true);
   };
 
@@ -181,6 +183,7 @@ export default function DishesPage() {
     setIsOpen(false);
     setEditingItem(null);
     setFormData({ name: "", category: "", selling_price: 0 });
+    setPriceText("");
   };
 
   const handleAddIngredient = async (e: React.FormEvent) => {
@@ -288,11 +291,15 @@ export default function DishesPage() {
                   <Label htmlFor="price">Selling Price</Label>
                   <Input
                     id="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={formData.selling_price}
-                    onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })}
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={priceText}
+                    onChange={(e) => {
+                      const t = e.target.value.replace(",", ".").replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1").replace(/^0+(?=\d)/, "");
+                      setPriceText(t);
+                      setFormData({ ...formData, selling_price: t === "" || t === "." ? 0 : Number(t) });
+                    }}
                     required
                   />
                 </div>
