@@ -830,6 +830,8 @@ export type Database = {
       }
       ingredients: {
         Row: {
+          archived_at: string | null
+          archived_by: string | null
           category: string | null
           cost_per_pack: number | null
           created_at: string
@@ -852,6 +854,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           cost_per_pack?: number | null
           created_at?: string
@@ -874,6 +878,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
+          archived_by?: string | null
           category?: string | null
           cost_per_pack?: number | null
           created_at?: string
@@ -3195,6 +3201,10 @@ export type Database = {
         Args: { _date: string; _location_id: string; _restaurant_id: string }
         Returns: boolean
       }
+      delete_or_archive_ingredient: {
+        Args: { p_ingredient_id: string }
+        Returns: string
+      }
       ensure_user_restaurant: { Args: never; Returns: Json }
       expire_stale_invites: { Args: { _email: string }; Returns: number }
       get_daily_food_cost: {
@@ -3299,6 +3309,10 @@ export type Database = {
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
+      ingredient_dependencies: {
+        Args: { p_ingredient_id: string }
+        Returns: Json
+      }
       insert_ingredient_price_row: {
         Args: {
           p_cost_per_base_unit: number
