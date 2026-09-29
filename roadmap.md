@@ -75,7 +75,7 @@
 - [ ] Signed-in Owner/Manager check on iPad (needs user; external sign-in)
 
 ## Manageable Dish Categories
-- [ ] Migration: dish_categories table seeded exactly from existing dishes.category (no dish changes); verify
-- [ ] Manage Categories dialog: add, rename, merge (with counts confirmation), reorder up/down, archive/restore
-- [ ] Add/Edit Dish + Dish Overview use active list; Captiva new departments auto-added at end
-- [ ] Test with temporary data
+- [x] Migration: dish_categories table seeded exactly from existing dishes.category (no dish changes); verify
+- [x] Manage Categories dialog: add, rename, merge (with counts confirmation), reorder up/down, archive/restore
+- [x] Add/Edit Dish + Dish Overview use active list; Captiva new departments auto-added at end
+- [x] Test with temporary data (DB-level; signed-in UI check pending)

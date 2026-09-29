@@ -1,0 +1,1 @@
+- Dish categories: `dish_categories` is the per-restaurant list/order; `dishes.category` text stays the stored value (rename/merge via RPCs update it) — keeps Reports/POS/Captiva readers unchanged.
