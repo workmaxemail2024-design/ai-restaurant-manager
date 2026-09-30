@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronsUpDown, Check } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { compatibleUnits, getIngredientCostUnit } from "@/lib/units";
 import { batchToPortion, cleanDecimal, parseDecimal } from "@/lib/batchRecipe";
 import { cn } from "@/lib/utils";
@@ -27,12 +28,10 @@ export function BatchRecipeCalculator({
 }) {
   const [portions, setPortions] = useState("");
   const [rows, setRows] = useState<Row[]>([blankRow()]);
-  const [search, setSearch] = useState("");
-  useEffect(() => { if (open) { setPortions(""); setRows([blankRow()]); setSearch(""); } }, [open]);
+  useEffect(() => { if (open) { setPortions(""); setRows([blankRow()]); } }, [open]);
 
   const p = parseDecimal(portions);
   const portionsValid = p !== null && p > 0;
-  const choosable = ingredients.filter((i) => !i.archived_at && i.name.toLowerCase().includes(search.trim().toLowerCase()));
   const nameOf = (id: string) => ingredients.find((i) => i.id === id)?.name ?? "";
   const unitsFor = (id: string) => {
     const o = compatibleUnits(getIngredientCostUnit(ingredients.find((i) => i.id === id)));
@@ -69,20 +68,12 @@ export function BatchRecipeCalculator({
               <div key={r.key} className="rounded-lg border p-3 grid gap-2 sm:grid-cols-12 items-end">
                 <div className="sm:col-span-5">
                   <Label>Ingredient</Label>
-                  <Select value={r.ingredient_id || undefined}
-                    onValueChange={(v) => upd(r.key, { ingredient_id: v, unit: unitsFor(v).includes(r.unit) ? r.unit : "" })}>
-                    <SelectTrigger className="h-12"><SelectValue placeholder="Select ingredient" /></SelectTrigger>
-                    <SelectContent>
-                      <div className="p-1 sticky top-0 bg-popover z-10">
-                        <Input placeholder="Search ingredients..." value={search} className="h-10"
-                          onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
-                      </div>
-                      {r.ingredient_id && !choosable.some((i) => i.id === r.ingredient_id) && (
-                        <SelectItem value={r.ingredient_id}>{nameOf(r.ingredient_id)}</SelectItem>
-                      )}
-                      {choosable.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <IngredientPicker
+                    valueId={r.ingredient_id}
+                    valueName={nameOf(r.ingredient_id)}
+                    ingredients={ingredients}
+                    onPick={(v) => upd(r.key, { ingredient_id: v, unit: unitsFor(v).includes(r.unit) ? r.unit : "" })}
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <Label>Batch qty</Label>
@@ -135,5 +126,46 @@ export function BatchRecipeCalculator({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Touch-safe ingredient picker: search box + plain buttons in a popover.
+ * Stores the ingredient ID; selection is on click, so tapping a result while the
+ * iPad keyboard is open selects it reliably (Radix Select's pointer-up selection did not).
+ */
+function IngredientPicker({
+  valueId, valueName, ingredients, onPick,
+}: { valueId: string; valueName: string; ingredients: Ingredient[]; onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const list = ingredients
+    .filter((i) => !i.archived_at && i.name.toLowerCase().includes(q.trim().toLowerCase()))
+    .slice(0, 200);
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(""); }}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label="Select ingredient"
+          className="h-12 w-full justify-between font-normal">
+          <span className={cn("truncate", !valueId && "text-muted-foreground")}>{valueId ? valueName || "Selected ingredient" : "Select ingredient"}</span>
+          <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="p-1 w-[var(--radix-popover-trigger-width)] min-w-[260px]"
+        onOpenAutoFocus={(e) => e.preventDefault()}>
+        <Input placeholder="Search ingredients..." value={q} onChange={(e) => setQ(e.target.value)} className="h-11 mb-1" />
+        <div className="max-h-64 overflow-y-auto overscroll-contain" role="listbox">
+          {list.length === 0 && <p className="p-3 text-sm text-muted-foreground">No ingredients found</p>}
+          {list.map((i) => (
+            <button key={i.id} type="button" role="option" aria-selected={i.id === valueId}
+              className="w-full flex items-center gap-2 text-left px-3 min-h-11 rounded-sm text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+              onClick={() => { onPick(i.id); setOpen(false); setQ(""); }}>
+              <Check className={cn("h-4 w-4 shrink-0", i.id === valueId ? "opacity-100" : "opacity-0")} />
+              <span className="truncate">{i.name}</span>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
