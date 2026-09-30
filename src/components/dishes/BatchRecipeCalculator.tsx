@@ -48,7 +48,7 @@ export function BatchRecipeCalculator({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Batch Recipe Calculator</DialogTitle>
           <DialogDescription>Enter the kitchen recipe as supplied. Nothing is saved from here.</DialogDescription>
