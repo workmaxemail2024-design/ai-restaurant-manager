@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, ChevronsUpDown, Check } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { compatibleUnits, getIngredientCostUnit } from "@/lib/units";
 import { batchToPortion, cleanDecimal, parseDecimal } from "@/lib/batchRecipe";
 import { cn } from "@/lib/utils";
@@ -49,13 +48,13 @@ export function BatchRecipeCalculator({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl w-[calc(100vw-2rem)] max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Batch Recipe Calculator</DialogTitle>
           <DialogDescription>Enter the kitchen recipe as supplied. Nothing is saved from here.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain space-y-4 pr-1">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] space-y-4 pr-1">
           <div className="space-y-1">
             <Label htmlFor="batch-portions" className="text-base">How many portions does this kitchen recipe make?</Label>
             <Input id="batch-portions" inputMode="decimal" placeholder="e.g. 20" className="h-12 text-lg w-40"
@@ -130,42 +129,49 @@ export function BatchRecipeCalculator({
 }
 
 /**
- * Touch-safe ingredient picker: search box + plain buttons in a popover.
- * Stores the ingredient ID; selection is on click, so tapping a result while the
- * iPad keyboard is open selects it reliably (Radix Select's pointer-up selection did not).
+ * Touch-safe ingredient picker rendered INLINE (not portaled): the results sit inside
+ * the modal's own scroll area, so the Dialog's scroll lock can't block iPad touch
+ * scrolling and no floating overlay can intercept taps on other controls.
  */
 function IngredientPicker({
   valueId, valueName, ingredients, onPick,
 }: { valueId: string; valueName: string; ingredients: Ingredient[]; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const list = ingredients
-    .filter((i) => !i.archived_at && i.name.toLowerCase().includes(q.trim().toLowerCase()))
-    .slice(0, 200);
+  const ref = useRef<HTMLDivElement>(null);
+  const close = () => { setOpen(false); setQ(""); };
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) close(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => { document.removeEventListener("pointerdown", onDown, true); document.removeEventListener("keydown", onKey, true); };
+  }, [open]);
+  const list = ingredients.filter((i) => !i.archived_at && i.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(""); }}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" role="combobox" aria-expanded={open} aria-label="Select ingredient"
-          className="h-12 w-full justify-between font-normal">
-          <span className={cn("truncate", !valueId && "text-muted-foreground")}>{valueId ? valueName || "Selected ingredient" : "Select ingredient"}</span>
-          <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="p-1 w-[var(--radix-popover-trigger-width)] min-w-[260px]"
-        onOpenAutoFocus={(e) => e.preventDefault()}>
-        <Input placeholder="Search ingredients..." value={q} onChange={(e) => setQ(e.target.value)} className="h-11 mb-1" />
-        <div className="max-h-64 overflow-y-auto overscroll-contain" role="listbox">
-          {list.length === 0 && <p className="p-3 text-sm text-muted-foreground">No ingredients found</p>}
-          {list.map((i) => (
-            <button key={i.id} type="button" role="option" aria-selected={i.id === valueId}
-              className="w-full flex items-center gap-2 text-left px-3 min-h-11 rounded-sm text-sm hover:bg-accent focus:bg-accent focus:outline-none"
-              onClick={() => { onPick(i.id); setOpen(false); setQ(""); }}>
-              <Check className={cn("h-4 w-4 shrink-0", i.id === valueId ? "opacity-100" : "opacity-0")} />
-              <span className="truncate">{i.name}</span>
-            </button>
-          ))}
+    <div ref={ref}>
+      <Button type="button" variant="outline" aria-expanded={open} aria-label="Select ingredient"
+        className="h-12 w-full justify-between font-normal" onClick={() => (open ? close() : setOpen(true))}>
+        <span className={cn("truncate", !valueId && "text-muted-foreground")}>{valueId ? valueName || "Selected ingredient" : "Select ingredient"}</span>
+        <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+      </Button>
+      {open && (
+        <div className="mt-1 rounded-md border bg-popover shadow-sm p-1">
+          <Input placeholder="Search ingredients..." value={q} onChange={(e) => setQ(e.target.value)} className="h-11 mb-1" />
+          <div className="max-h-[min(16rem,40vh)] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]" role="listbox">
+            {list.length === 0 && <p className="p-3 text-sm text-muted-foreground">No ingredients found</p>}
+            {list.map((i) => (
+              <button key={i.id} type="button" role="option" aria-selected={i.id === valueId}
+                className="w-full flex items-center gap-2 text-left px-3 min-h-11 rounded-sm text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                onClick={() => { onPick(i.id); close(); }}>
+                <Check className={cn("h-4 w-4 shrink-0", i.id === valueId ? "opacity-100" : "opacity-0")} />
+                <span className="truncate">{i.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   );
 }
