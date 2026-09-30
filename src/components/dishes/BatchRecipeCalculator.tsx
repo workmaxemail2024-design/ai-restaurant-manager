@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,49 +129,46 @@ export function BatchRecipeCalculator({
 }
 
 /**
- * Touch-safe ingredient picker rendered INLINE (not portaled): the results sit inside
- * the modal's own scroll area, so the Dialog's scroll lock can't block iPad touch
- * scrolling and no floating overlay can intercept taps on other controls.
+ * Ingredient picker: the field opens its own small dialog with a search box and a
+ * scrollable list of plain buttons. Each button calls onPick(ingredient.id) and then
+ * explicitly closes the dialog — no popover, no outside-pointer listener, no inline
+ * expansion inside the parent scroll area.
  */
 function IngredientPicker({
   valueId, valueName, ingredients, onPick,
 }: { valueId: string; valueName: string; ingredients: Ingredient[]; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
-  const close = () => { setOpen(false); setQ(""); };
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) close(); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
-    document.addEventListener("pointerdown", onDown, true);
-    document.addEventListener("keydown", onKey, true);
-    return () => { document.removeEventListener("pointerdown", onDown, true); document.removeEventListener("keydown", onKey, true); };
-  }, [open]);
   const list = ingredients.filter((i) => !i.archived_at && i.name.toLowerCase().includes(q.trim().toLowerCase()));
   return (
-    <div ref={ref}>
-      <Button type="button" variant="outline" aria-expanded={open} aria-label="Select ingredient"
-        className="h-12 w-full justify-between font-normal" onClick={() => (open ? close() : setOpen(true))}>
+    <>
+      <Button type="button" variant="outline" aria-label="Select ingredient"
+        className="h-12 w-full justify-between font-normal" onClick={() => { setQ(""); setOpen(true); }}>
         <span className={cn("truncate", !valueId && "text-muted-foreground")}>{valueId ? valueName || "Selected ingredient" : "Select ingredient"}</span>
         <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
       </Button>
-      {open && (
-        <div className="mt-1 rounded-md border bg-popover shadow-sm p-1">
-          <Input placeholder="Search ingredients..." value={q} onChange={(e) => setQ(e.target.value)} className="h-11 mb-1" />
-          <div className="max-h-[min(16rem,40vh)] overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]" role="listbox">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[80vh] flex flex-col gap-3"
+          onOpenAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Select ingredient</DialogTitle>
+            <DialogDescription className="sr-only">Search and tap an ingredient</DialogDescription>
+          </DialogHeader>
+          <Input placeholder="Search ingredients..." value={q} onChange={(e) => setQ(e.target.value)} className="h-12" />
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] border rounded-md divide-y" role="listbox">
             {list.length === 0 && <p className="p-3 text-sm text-muted-foreground">No ingredients found</p>}
             {list.map((i) => (
               <button key={i.id} type="button" role="option" aria-selected={i.id === valueId}
-                className="w-full flex items-center gap-2 text-left px-3 min-h-11 rounded-sm text-sm hover:bg-accent focus:bg-accent focus:outline-none"
-                onClick={() => { onPick(i.id); close(); }}>
+                data-ingredient-id={i.id}
+                className="w-full flex items-center gap-2 text-left px-3 min-h-12 text-base active:bg-accent focus:outline-none"
+                onClick={() => { onPick(i.id); setOpen(false); }}>
                 <Check className={cn("h-4 w-4 shrink-0", i.id === valueId ? "opacity-100" : "opacity-0")} />
                 <span className="truncate">{i.name}</span>
               </button>
             ))}
           </div>
-        </div>
-      )}
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
