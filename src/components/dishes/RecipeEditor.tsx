@@ -20,6 +20,7 @@ import {
 import { useIngredients, calculateBaseCost, isRecipeIngredient } from "@/hooks/useIngredients";
 import { compatibleUnits, convertRecipeQty, getIngredientCostUnit } from "@/lib/units";
 import { QuickAddIngredientDialog } from "@/components/dishes/QuickAddIngredientDialog";
+import { BatchRecipeCalculator, type CalculatedLine } from "@/components/dishes/BatchRecipeCalculator";
 import { Link2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -210,7 +211,12 @@ export function RecipeEditor({ dish, onRecipeCost }: Props) {
       )}
 
       {isLinked ? (
-        <LinesTable lines={lines} readOnly recipeCost={recipeCost} hasInvalid={hasInvalid} dishId={dish.id} caption="Scaled preview (read-only)" />
+        <>
+          <p className="text-sm text-muted-foreground">
+            Batch Recipe Calculator isn't available for a linked recipe. Use "Convert to own recipe" first.
+          </p>
+          <LinesTable lines={lines} readOnly recipeCost={recipeCost} hasInvalid={hasInvalid} dishId={dish.id} caption="Scaled preview (read-only)" />
+        </>
       ) : mode === "own" ? (
         <OwnRecipe dish={dish} ingredients={ingredients} lines={lines} recipeCost={recipeCost} hasInvalid={hasInvalid} />
       ) : null}
@@ -257,9 +263,16 @@ function OwnRecipe({
   hasInvalid: boolean;
 }) {
   const addIngredient = useAddDishIngredient();
+  const updateLine = useUpdateDishIngredient();
+  const removeLine = useRemoveDishIngredient();
   const [form, setForm] = useState({ ingredient_id: "", quantity: "", unit: "", manualCost: "", effectiveFrom: today() });
   const [search, setSearch] = useState("");
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState<CalculatedLine[] | null>(null);
+  const [pending, setPending] = useState<CalculatedLine[] | null>(null);
+  const [savingPending, setSavingPending] = useState(false);
+  useEffect(() => setPending(null), [dish.id]);
   const filtered = ingredients.filter(
     (i) => !i.archived_at && isRecipeIngredient(i) && i.name.toLowerCase().includes(search.trim().toLowerCase())
   );
@@ -286,12 +299,98 @@ function OwnRecipe({
     setForm({ ingredient_id: "", quantity: "", unit: "", manualCost: "", effectiveFrom: today() });
   };
 
+  const applyBatch = (calc: CalculatedLine[]) => {
+    if (lines.length > 0) { setConfirmReplace(calc); return; }
+    setPending(calc); setBatchOpen(false);
+  };
+
+  // Writes happen only here, when the user presses Save recipe.
+  // Existing lines for the same ingredient are updated in place so their costing settings are preserved.
+  const savePending = async () => {
+    if (!pending) return;
+    setSavingPending(true);
+    try {
+      const existing = new Map(lines.map((l) => [l.item.ingredient_id, l.item]));
+      for (const p of pending) {
+        const ex = existing.get(p.ingredient_id);
+        if (ex) {
+          await updateLine.mutateAsync({ id: ex.id, dish_id: dish.id, quantity: p.quantity, unit: p.unit });
+          existing.delete(p.ingredient_id);
+        } else {
+          await addIngredient.mutateAsync({ dish_id: dish.id, ingredient_id: p.ingredient_id, quantity: p.quantity, unit: p.unit });
+        }
+      }
+      for (const ex of existing.values()) await removeLine.mutateAsync({ id: ex.id, dish_id: dish.id });
+      setPending(null);
+    } finally {
+      setSavingPending(false);
+    }
+  };
+  const pendingManualKept = pending
+    ? lines.filter((l) => l.isManual && pending.some((p) => p.ingredient_id === l.item.ingredient_id))
+    : [];
+
   return (
     <>
-      <p className="text-sm text-muted-foreground">
-        Quantities are the amount consumed when <strong>one</strong> unit of this dish is sold. A manual line cost is
-        optional — use it when the inventory item has no price yet.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-sm text-muted-foreground flex-1 min-w-[220px]">
+          Quantities are the amount consumed when <strong>one</strong> unit of this dish is sold. A manual line cost is
+          optional — use it when the inventory item has no price yet.
+        </p>
+        <Button type="button" variant="outline" className="h-11" onClick={() => setBatchOpen(true)} disabled={!!pending}>
+          Enter Batch Recipe
+        </Button>
+      </div>
+      <BatchRecipeCalculator open={batchOpen} onOpenChange={setBatchOpen}
+        ingredients={ingredients.filter(isRecipeIngredient)} onApply={applyBatch} />
+      <AlertDialog open={!!confirmReplace} onOpenChange={(o) => !o && setConfirmReplace(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace current recipe?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This dish already has a recipe. Do you want to replace the current recipe with the calculated batch recipe?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-11">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="h-11" onClick={() => { setPending(confirmReplace); setConfirmReplace(null); setBatchOpen(false); }}>
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {pending && (
+        <div className="rounded-lg border-2 border-primary/40 bg-primary/5 p-3 space-y-2">
+          <p className="font-medium">Calculated recipe per 1 portion — not saved yet</p>
+          {lines.length > 0 && (
+            <p className="text-sm text-muted-foreground">Saving replaces the {lines.length} current line{lines.length === 1 ? "" : "s"} below.</p>
+          )}
+          <div className="divide-y rounded-md border bg-background">
+            {pending.map((p, i) => (
+              <div key={p.ingredient_id} className="flex items-center gap-2 p-2 text-sm">
+                <span className="flex-1 font-medium">{ingredients.find((x) => x.id === p.ingredient_id)?.name}</span>
+                <Input className="h-11 w-28 text-right" inputMode="decimal" value={String(p.quantity)}
+                  onChange={(e) => {
+                    const v = parseQty(cleanNumeric(e.target.value));
+                    setPending(pending.map((x, j) => (j === i ? { ...x, quantity: v ?? 0 } : x)));
+                  }} />
+                <span className="w-12">{p.unit}</span>
+              </div>
+            ))}
+          </div>
+          {pendingManualKept.length > 0 && (
+            <p className="text-xs text-warning">
+              {pendingManualKept.map((l) => l.ing?.name).join(", ")} keep their manual cost, which isn't adjusted to the new quantity. Check it after saving.
+            </p>
+          )}
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" className="h-11" onClick={() => setPending(null)} disabled={savingPending}>Discard</Button>
+            <Button className="h-11" onClick={savePending} disabled={savingPending || pending.some((p) => !(p.quantity > 0))}>
+              {savingPending ? "Saving…" : "Save recipe"}
+            </Button>
+          </div>
+        </div>
+      )}
       <form onSubmit={submit} className="grid gap-2 sm:grid-cols-12 items-end">
         <div className="sm:col-span-4">
           <Label>Ingredient</Label>
