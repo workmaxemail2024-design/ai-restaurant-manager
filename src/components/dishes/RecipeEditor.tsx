@@ -366,15 +366,11 @@ function OwnRecipe({
             <p className="text-sm text-muted-foreground">Saving replaces the {lines.length} current line{lines.length === 1 ? "" : "s"} below.</p>
           )}
           <div className="divide-y rounded-md border bg-background">
-            {pending.map((p, i) => (
+            {pending.map((p) => (
               <div key={p.ingredient_id} className="flex items-center gap-2 p-2 text-sm">
                 <span className="flex-1 font-medium">{ingredients.find((x) => x.id === p.ingredient_id)?.name}</span>
-                <Input className="h-11 w-28 text-right" inputMode="decimal" value={String(p.quantity)}
-                  onChange={(e) => {
-                    const v = parseQty(cleanNumeric(e.target.value));
-                    setPending(pending.map((x, j) => (j === i ? { ...x, quantity: v ?? 0 } : x)));
-                  }} />
-                <span className="w-12">{p.unit}</span>
+                <span className="text-base font-semibold">{p.quantity} {p.unit}</span>
+
               </div>
             ))}
           </div>
