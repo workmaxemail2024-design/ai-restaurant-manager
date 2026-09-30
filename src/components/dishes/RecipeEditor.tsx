@@ -314,10 +314,20 @@ function OwnRecipe({
       for (const p of pending) {
         const ex = existing.get(p.ingredient_id);
         if (ex) {
-          await updateLine.mutateAsync({ id: ex.id, dish_id: dish.id, quantity: p.quantity, unit: p.unit });
+          await updateLine.mutateAsync({
+            id: ex.id, dish_id: dish.id, quantity: p.quantity, unit: p.unit,
+            ...(p.manual_line_cost !== null
+              ? { cost_mode: "manual" as const, manual_line_cost: p.manual_line_cost, manual_cost_effective_from: today() }
+              : { cost_mode: "inventory" as const }),
+          });
           existing.delete(p.ingredient_id);
         } else {
-          await addIngredient.mutateAsync({ dish_id: dish.id, ingredient_id: p.ingredient_id, quantity: p.quantity, unit: p.unit });
+          await addIngredient.mutateAsync({
+            dish_id: dish.id, ingredient_id: p.ingredient_id, quantity: p.quantity, unit: p.unit,
+            ...(p.manual_line_cost !== null
+              ? { cost_mode: "manual" as const, manual_line_cost: p.manual_line_cost, manual_cost_effective_from: today() }
+              : {}),
+          });
         }
       }
       for (const ex of existing.values()) await removeLine.mutateAsync({ id: ex.id, dish_id: dish.id });
@@ -326,9 +336,6 @@ function OwnRecipe({
       setSavingPending(false);
     }
   };
-  const pendingManualKept = pending
-    ? lines.filter((l) => l.isManual && pending.some((p) => p.ingredient_id === l.item.ingredient_id))
-    : [];
 
   return (
     <>
@@ -370,15 +377,13 @@ function OwnRecipe({
               <div key={p.ingredient_id} className="flex items-center gap-2 p-2 text-sm">
                 <span className="flex-1 font-medium">{ingredients.find((x) => x.id === p.ingredient_id)?.name}</span>
                 <span className="text-base font-semibold">{p.quantity} {p.unit}</span>
+                <span className="w-28 text-right text-muted-foreground">
+                  {p.manual_line_cost !== null ? `Manual ${formatCurrency(p.manual_line_cost)}` : "Inventory cost"}
+                </span>
 
               </div>
             ))}
           </div>
-          {pendingManualKept.length > 0 && (
-            <p className="text-xs text-warning">
-              {pendingManualKept.map((l) => l.ing?.name).join(", ")} keep their manual cost, which isn't adjusted to the new quantity. Check it after saving.
-            </p>
-          )}
           <div className="flex gap-2 justify-end">
             <Button variant="outline" className="h-11" onClick={() => setPending(null)} disabled={savingPending}>Discard</Button>
             <Button className="h-11" onClick={savePending} disabled={savingPending || pending.some((p) => !(p.quantity > 0))}>
