@@ -8,7 +8,7 @@ import { Plus, Trash2, ChevronsUpDown, Check } from "lucide-react";
 import { compatibleUnits, getIngredientCostUnit } from "@/lib/units";
 import { batchToPortion, cleanDecimal, parseDecimal } from "@/lib/batchRecipe";
 import { cn } from "@/lib/utils";
-import { QuickAddInventoryItemDialog } from "@/components/inventory/QuickAddInventoryItemDialog";
+import { QuickAddIngredientDialog } from "@/components/dishes/QuickAddIngredientDialog";
 
 export interface CalculatedLine { ingredient_id: string; quantity: number; unit: string }
 type Ingredient = { id: string; name: string; archived_at?: string | null; pack_size?: number | null; cost_per_pack?: number | null; pack_unit?: string | null; unit?: string | null };
@@ -184,11 +184,10 @@ function IngredientPicker({
           </Button>
         </DialogContent>
       </Dialog>
-      <QuickAddInventoryItemDialog
+      <QuickAddIngredientDialog
         open={addOpen}
         onOpenChange={setAddOpen}
         initialName={addName}
-        fixedItemType="recipe_ingredient"
         onCreated={(id) => onPick(id)}
       />
     </>
