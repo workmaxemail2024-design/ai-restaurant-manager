@@ -1,1 +1,2 @@
 - Dish categories: `dish_categories` is the per-restaurant list/order; `dishes.category` text stays the stored value (rename/merge via RPCs update it) — keeps Reports/POS/Captiva readers unchanged.
+- Initial stock list import: parsing/matching is client-side (src/lib/stockListImport.ts) and writes nothing until Apply; starting prices go only through set_initial_import_price (source 'initial_import', refuses items with any price history) — keeps normal price-history behaviour untouched.
