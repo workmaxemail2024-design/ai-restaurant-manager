@@ -23,6 +23,7 @@ export const INVENTORY_ITEM_GROUPS: { value: string; label: string }[] = [
 
 export const INVENTORY_CATEGORIES: { value: string; label: string; group?: string }[] = [
   { value: "meat", label: "Meat", group: "food" },
+  { value: "poultry", label: "Poultry", group: "food" },
   { value: "fish_seafood", label: "Fish & Seafood", group: "food" },
   { value: "dairy", label: "Dairy", group: "food" },
   { value: "fruit", label: "Fruit", group: "food" },
@@ -36,6 +37,7 @@ export const INVENTORY_CATEGORIES: { value: string; label: string; group?: strin
   { value: "soft_drinks", label: "Soft Drinks", group: "beverage" },
   { value: "packaging", label: "Packaging", group: "operational" },
   { value: "cleaning", label: "Cleaning", group: "operational" },
+  { value: "ppe", label: "PPE", group: "operational" },
   { value: "other", label: "Other" },
 ];
 
