@@ -44,7 +44,7 @@ export default function PurchaseOrdersPage() {
   const [draftOrder, setDraftOrder] = useState<PurchaseOrder | null>(null);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [formData, setFormData] = useState<PurchaseOrderInsert & { order_date?: string }>({ supplier_id: "", location_id: "" });
-  const [itemForm, setItemForm] = useState({ ingredient_id: "", quantity: 0, cost_price: 0 });
+  const [itemForm, setItemForm] = useState<{ ingredient_id: string; quantity: number; cost_price: number | null }>({ ingredient_id: "", quantity: 0, cost_price: null });
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineDraft, setLineDraft] = useState({ quantity: 0, cost_price: 0 });
 
@@ -195,13 +195,14 @@ export default function PurchaseOrdersPage() {
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedOrder) {
+    if (selectedOrder && itemForm.cost_price !== null) {
       await addItem.mutateAsync({
         purchase_order_id: selectedOrder.id,
         ...itemForm,
+        cost_price: itemForm.cost_price,
         order_status: selectedOrder.status,
       });
-      setItemForm({ ingredient_id: "", quantity: 0, cost_price: 0 });
+      setItemForm({ ingredient_id: "", quantity: 0, cost_price: null });
     }
   };
 
@@ -319,7 +320,7 @@ export default function PurchaseOrdersPage() {
                   id: ing.id,
                   name: ing.name,
                   unit: ing.unit,
-                  default_cost_price: Number(ing.default_cost_price),
+                  default_cost_price: Number(ing.default_cost_price) || 0,
                 }))}
                 onAutoFillItems={async (items) => {
                   await addItems.mutateAsync({ purchaseOrderId: selectedOrder.id, items });
@@ -335,7 +336,7 @@ export default function PurchaseOrdersPage() {
                     value={itemForm.ingredient_id || undefined}
                     onValueChange={(v) => {
                       const ing = ingredients.find(i => i.id === v);
-                      setItemForm({ ...itemForm, ingredient_id: v, cost_price: ing ? Number(ing.default_cost_price) : 0 });
+                      setItemForm({ ...itemForm, ingredient_id: v, cost_price: ing && Number(ing.default_cost_price) > 0 ? Number(ing.default_cost_price) : null });
                     }}
                     placeholder="Select inventory item"
                     triggerClassName="h-11"
@@ -361,11 +362,12 @@ export default function PurchaseOrdersPage() {
                     inputMode="decimal"
                     step="0.01"
                     min="0"
-                    value={itemForm.cost_price}
-                    onChange={(e) => setItemForm({ ...itemForm, cost_price: parseFloat(e.target.value) || 0 })}
+                    value={itemForm.cost_price ?? ""}
+                    placeholder="Missing cost"
+                    onChange={(e) => setItemForm({ ...itemForm, cost_price: e.target.value === "" ? null : parseFloat(e.target.value) })}
                   />
                 </div>
-                <Button type="submit" className="h-11" disabled={addItem.isPending || !itemForm.ingredient_id}>
+                <Button type="submit" className="h-11" disabled={addItem.isPending || !itemForm.ingredient_id || itemForm.cost_price === null || Number.isNaN(itemForm.cost_price)}>
                   Add
                 </Button>
               </form>

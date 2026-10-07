@@ -180,7 +180,8 @@ export default function IngredientsPage() {
       header: "Base Cost",
       render: (item: Ingredient) => {
         const baseCost = calculateBaseCost(item);
-        const unit = getBaseUnit(item.pack_unit);
+        if (!(baseCost > 0)) return <span className="text-warning">Missing cost</span>;
+        const unit = item.pack_size && item.cost_per_pack ? getBaseUnit(item.pack_unit) : item.unit;
         return `${formatCurrency(baseCost)}/${unit}`;
       }
     },
