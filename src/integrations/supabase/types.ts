@@ -873,7 +873,7 @@ export type Database = {
           category: string | null
           cost_per_pack: number | null
           created_at: string
-          default_cost_price: number
+          default_cost_price: number | null
           id: string
           item_group: string | null
           item_type: string
@@ -897,7 +897,7 @@ export type Database = {
           category?: string | null
           cost_per_pack?: number | null
           created_at?: string
-          default_cost_price?: number
+          default_cost_price?: number | null
           id?: string
           item_group?: string | null
           item_type?: string
@@ -921,7 +921,7 @@ export type Database = {
           category?: string | null
           cost_per_pack?: number | null
           created_at?: string
-          default_cost_price?: number
+          default_cost_price?: number | null
           id?: string
           item_group?: string | null
           item_type?: string
@@ -3421,6 +3421,16 @@ export type Database = {
       restaurant_has_members: {
         Args: { _restaurant_id: string }
         Returns: boolean
+      }
+      set_initial_import_price: {
+        Args: {
+          p_cost_per_pack: number
+          p_ingredient_id: string
+          p_pack_size: number
+          p_pack_unit: string
+          p_unit_cost: number
+        }
+        Returns: undefined
       }
       storage_doc_extension_allowed: {
         Args: { _name: string }

@@ -99,7 +99,7 @@ export function RecipeEditor({ dish, onRecipeCost }: Props) {
     const calculated = converted === null || unitCost <= 0 ? null : converted * unitCost;
     const manual = item.manual_line_cost == null ? null : Number(item.manual_line_cost) * factor;
     const isManual = item.cost_mode === "manual" && manual !== null;
-    const lineCost = isManual ? manual : converted === null ? null : converted * unitCost;
+    const lineCost = isManual ? manual : calculated;
     return { item, ing, costUnit, unitCost, qty, calculated, manual, isManual, lineCost, invalid: lineCost === null };
   });
   const hasInvalid = lines.some((l) => l.invalid);
@@ -415,7 +415,7 @@ function OwnRecipe({
                 const cu = getIngredientCostUnit(ing);
                 return (
                   <SelectItem key={ing.id} value={ing.id}>
-                    {ing.name} — {cu ? `${formatCurrency(calculateBaseCost(ing))}/${cu}` : "no price yet"}
+                    {ing.name} — {cu && calculateBaseCost(ing) > 0 ? `${formatCurrency(calculateBaseCost(ing))}/${cu}` : "Missing cost"}
                   </SelectItem>
                 );
               })}
@@ -538,7 +538,7 @@ function LineRow({ line, readOnly, dishId }: { line: Line; readOnly?: boolean; d
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 text-sm items-center">
         <span className="font-medium">{item.ingredients?.name}</span>
         <span className="text-right">{Number(qty.toFixed(3))} {item.unit}</span>
-        <span className="text-right text-muted-foreground">{isManual ? "Manual" : costUnit ? `${formatCurrency(unitCost)}/${costUnit}` : "no price"}</span>
+        <span className="text-right text-muted-foreground">{isManual ? "Manual" : costUnit && unitCost > 0 ? `${formatCurrency(unitCost)}/${costUnit}` : "Missing cost"}</span>
         <span className={cn("text-right font-medium", invalid && "text-warning")}>
           {lineCost === null ? "Unknown" : formatCurrency(lineCost)}
         </span>
