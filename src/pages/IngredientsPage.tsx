@@ -39,6 +39,9 @@ import { useDishes } from "@/hooks/useDishes";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
 import { formatCurrency } from "@/lib/currency";
+import { usePermissions } from "@/hooks/usePermissions";
+import { ImportStockListDialog } from "@/components/inventory/ImportStockListDialog";
+import { Upload } from "lucide-react";
 
 const unitOptions: UnitType[] = ["kg", "g", "L", "ml", "oz", "each"];
 const storageOptions: StorageType[] = ["freezer", "fridge", "dry"];
@@ -65,6 +68,9 @@ export default function IngredientsPage() {
   const [pendingDelete, setPendingDelete] = useState<Ingredient | null>(null);
   const { data: deps, isLoading: depsLoading } = useIngredientDependencies(pendingDelete?.id ?? null);
   
+  const { hasPermission, hasFullAccess } = usePermissions();
+  const canImport = hasFullAccess() || hasPermission("inventory", "edit");
+  const [importOpen, setImportOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Ingredient | null>(null);
   const [formData, setFormData] = useState<FormData>({ 
@@ -271,7 +277,15 @@ export default function IngredientsPage() {
 
   return (
     <PageLayout title="Inventory Items" subtitle="Manage the ingredients, products and supplies used by your restaurant.">
-      <div className="flex justify-end mb-4">
+      <div className="flex flex-wrap justify-end gap-2 mb-4">
+        {canImport && (
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4 mr-2" /> Import Stock List
+            </Button>
+            <ImportStockListDialog open={importOpen} onOpenChange={setImportOpen} />
+          </>
+        )}
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>
             <Button onClick={() => setIsOpen(true)}>
