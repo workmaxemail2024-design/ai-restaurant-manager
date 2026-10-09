@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Upload } from "lucide-react";
+import { Camera, Loader2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useIngredients, calculateBaseCost, getBaseUnit, categoryLabel, groupLabel, itemTypeLabel } from "@/hooks/useIngredients";
@@ -22,7 +22,11 @@ import { toast } from "@/hooks/use-toast";
 import {
   readStockGrid, autoMapColumns, buildRows, IMPORT_FIELDS, interpretRow, normalizeName, isNearMatch,
   similarity, defaultStorage, type ParsedItem, type SheetGrid, type ColumnMapping, type FieldKey,
+  toEditable, extractedToGrid, unresolvedCells, type EditableRow,
 } from "@/lib/stockListImport";
+import { ExtractedRowsReview } from "@/components/inventory/ExtractedRowsReview";
+
+const DOC_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
 /** existing id | "new" | "skip" | null (undecided) */
 type Choice = string | null;
@@ -513,13 +517,31 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]">
           {step === "upload" && (
-            <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border text-muted-foreground">
-              <Upload className="h-6 w-6" />
-              <span className="text-sm">Choose a CSV or XLSX stock list</span>
-              <Input type="file" accept=".csv,.xlsx,.xls" className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
-              {parseError && <span className="text-sm text-destructive">{parseError}</span>}
-            </label>
+            reading ? (
+              <div className="flex h-40 flex-col items-center justify-center gap-2 rounded-lg border text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="text-sm">Reading {fileName}… this can take up to a minute. Nothing is saved.</span>
+              </div>
+            ) : (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 text-center text-muted-foreground">
+                  <Upload className="h-6 w-6" />
+                  <span className="text-sm">Choose a file: CSV, XLSX, PDF or photo</span>
+                  <Input type="file" accept=".csv,.xlsx,.xls,.pdf,image/jpeg,image/png,image/webp" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) handleFile(f); }} />
+                </label>
+                <label className="flex h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-4 text-center text-muted-foreground">
+                  <Camera className="h-6 w-6" />
+                  <span className="text-sm">Take a photo of a printed or handwritten list</span>
+                  <Input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) handleFile(f); }} />
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">Photos and PDFs are read by AI, then shown beside the original for you to check. Unclear values are flagged, never guessed. Stock quantities are not read.</p>
+              {parseError && <p className="text-sm text-destructive">{parseError}</p>}
+            </div>
+            )
           )}
 
           {step === "map" && grid && mapping && (
@@ -547,9 +569,13 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
             </div>
           )}
 
+          {step === "extracted" && doc && (
+            <ExtractedRowsReview rows={extracted} onChange={setExtracted} previewUrl={doc.url} mimeType={doc.mime} fileName={fileName ?? ""} />
+          )}
+
           {step === "done" && result && (
             <div className="space-y-2 rounded-lg border p-4 text-sm">
-              <p className="font-medium">Import complete — all rows saved together</p>
+              <p className="font-medium">Import complete — all rows saved together{doc ? " (from photo/PDF)" : ""}</p>
               <p>{result.items_created} new items · {result.items_matched} matched existing · {result.starting_prices} starting prices · {result.suppliers_created} new suppliers · {result.rows_skipped} skipped</p>
               <p>{result.supplier_products_created} new supplier products · {result.supplier_products_linked} linked to existing · {result.supplier_prices_added} supplier prices recorded · {result.supplier_prices_unchanged} unchanged prices not repeated</p>
             </div>
@@ -579,7 +605,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
                     {Object.entries(counts).map(([k, v]) => <SelectItem key={k} value={k}>{k} ({v})</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" className="h-11" onClick={() => setStep("map")}>Back to columns</Button>
+                <Button variant="outline" className="h-11" onClick={() => setStep(doc ? "extracted" : "map")}>{doc ? "Back to extracted rows" : "Back to columns"}</Button>
                 <Button variant="outline" className="h-11" onClick={reset}>Choose another file</Button>
               </div>
 
@@ -722,6 +748,13 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
               {!mapOk && <span className="mr-auto text-sm text-warning">Choose the Item Name column to continue.</span>}
               <Button variant="outline" className="h-11" onClick={reset}>Back</Button>
               <Button className="h-11" disabled={!mapOk} onClick={continueToReview}>Review rows</Button>
+            </>
+          )}
+          {step === "extracted" && (
+            <>
+              {unresolvedCells(extracted) > 0 && <span className="mr-auto text-sm text-warning">{unresolvedCells(extracted)} unclear value(s) to check first.</span>}
+              <Button variant="outline" className="h-11" onClick={reset}>Back</Button>
+              <Button className="h-11" disabled={unresolvedCells(extracted) > 0 || extracted.every((r) => r.skip)} onClick={continueFromExtracted}>Continue to matching</Button>
             </>
           )}
           {step === "review" && (
