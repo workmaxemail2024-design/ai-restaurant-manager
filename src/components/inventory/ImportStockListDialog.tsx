@@ -39,6 +39,29 @@ interface SupplierPlan { key: string; name: string; exactId: string | null; cand
 
 type Status = { label: string; tone: "ok" | "warn" | "bad" | "info" };
 
+type SpPreviewStatus = "new" | "new_pack_variant" | "exact" | "code_differs" | "description_differs" | "pack_differs" | "linked_to_other_item";
+type SpKind = SpPreviewStatus | "none" | "pending" | "dup";
+interface SpPreviewRow {
+  row_no: number; status: SpPreviewStatus; supplier_product_id: string | null; existing_ingredient_id: string | null;
+  existing_code: string | null; existing_name: string | null; existing_pack_size: number | null; existing_pack_unit: string | null;
+}
+interface ImportResult {
+  suppliers_created: number; items_created: number; items_matched: number; rows_skipped: number; starting_prices: number;
+  supplier_products_created: number; supplier_products_linked: number; supplier_prices_added: number; supplier_prices_unchanged: number;
+}
+
+const SP_TAG: Partial<Record<SpKind, Status>> = {
+  new: { label: "New supplier product", tone: "info" },
+  new_pack_variant: { label: "New pack size for supplier product", tone: "info" },
+  exact: { label: "Supplier product already linked", tone: "ok" },
+  dup: { label: "Same supplier product as earlier row", tone: "info" },
+  pending: { label: "Checking supplier product…", tone: "info" },
+  code_differs: { label: "Supplier code differs — confirm", tone: "warn" },
+  description_differs: { label: "Supplier description differs — confirm", tone: "warn" },
+  pack_differs: { label: "Supplier pack differs — conflict", tone: "bad" },
+  linked_to_other_item: { label: "Supplier product linked to another item — conflict", tone: "bad" },
+};
+
 const toneClass = {
   ok: "bg-primary/15 text-primary",
   warn: "bg-warning/15 text-warning",
@@ -78,11 +101,14 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
   const [confirmApply, setConfirmApply] = useState(false);
   const [filter, setFilter] = useState("all");
   const [applying, setApplying] = useState(false);
-  const [result, setResult] = useState<null | { created: number; matched: number; priced: number; suppliers: number; skipped: number; errors: string[] }>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  /** Per-row supplier-product decision for flagged rows. */
+  const [spChoice, setSpChoice] = useState<Record<number, "link" | "none" | "skiprow">>({});
 
   const reset = () => {
     setStep("upload"); setFileName(null); setGrid(null); setMapping(null); setParsed([]); setParseError(null);
-    setItemChoice({}); setSupplierChoice({}); setFilter("all"); setResult(null);
+    setItemChoice({}); setSupplierChoice({}); setFilter("all"); setResult(null); setApplyError(null); setSpChoice({});
   };
 
   const handleFile = async (f: File) => {
@@ -155,17 +181,84 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     return r.candidates.length ? null : "new";
   };
   const effective = (r: RowPlan): Choice => {
+    if (spChoice[r.p.raw.rowNumber] === "skiprow") return "skip";
     const d = decide(r);
     if (d !== "follow") return d;
     const first = planByRow.get(r.sameAsRow!)!;
     const fd = decide(first);
-    return fd === "skip" ? "skip" : fd;
+    return fd === "skip" || spChoice[first.p.raw.rowNumber] === "skiprow" ? "skip" : fd;
   };
 
   const resolveSupplier = (key: string): Choice => {
     const s = supplierPlans.get(key);
     if (!s) return null;
     return s.exactId ?? (s.candidates.length ? supplierChoice[key] ?? null : "new");
+  };
+
+  /** Master item this row maps to: id, null = new item, undefined = not decided/skipped. */
+  const itemIdFor = (r: RowPlan): string | null | undefined => {
+    const ch = effective(r);
+    if (ch === "skip" || ch === null) return undefined;
+    return ch === "new" ? null : ch;
+  };
+
+  // Supplier-product preview (read-only database check) + in-file duplicate detection.
+  const { previewRows, spDupOf } = useMemo(() => {
+    const out: Record<string, unknown>[] = [];
+    const dup = new Map<number, number>();
+    const first = new Map<string, number>();
+    if (step !== "review") return { previewRows: out, spDupOf: dup };
+    for (const r of rowPlans) {
+      if (!r.p.supplierName) continue;
+      const iid = itemIdFor(r);
+      if (iid === undefined) continue;
+      const supKey = normalizeName(r.p.supplierName);
+      const sup = resolveSupplier(supKey);
+      if (!sup) continue;
+      const k = `${supKey}|${normalizeName(r.p.name)}|${r.p.packSize ?? ""}|${r.p.packUnit ?? ""}|${(r.p.productCode ?? "").toLowerCase()}`;
+      const f = first.get(k);
+      if (f != null) { dup.set(r.p.raw.rowNumber, f); continue; }
+      first.set(k, r.p.raw.rowNumber);
+      if (sup === "new") continue;
+      out.push({
+        row: r.p.raw.rowNumber, supplier_id: sup, ingredient_id: iid, product_name: r.p.name,
+        product_code: r.p.productCode, pack_size: r.p.packSize, pack_unit: r.p.packUnit,
+      });
+    }
+    return { previewRows: out, spDupOf: dup };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, rowPlans, itemChoice, supplierChoice, supplierPlans, spChoice]);
+
+  const previewKey = JSON.stringify(previewRows);
+  const { data: spPreview, isFetching: previewLoading, error: previewError } = useQuery({
+    queryKey: ["sp-preview", currentRestaurant?.id, previewKey],
+    enabled: open && step === "review" && previewRows.length > 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("preview_supplier_products", { p_rows: previewRows });
+      if (error) throw error;
+      return new Map((data as SpPreviewRow[]).map((d) => [d.row_no, d]));
+    },
+  });
+
+  const spStatus = (r: RowPlan): { kind: SpKind; preview?: SpPreviewRow; dupOf?: number } => {
+    if (!r.p.supplierName || itemIdFor(r) === undefined) return { kind: "none" };
+    const sup = resolveSupplier(normalizeName(r.p.supplierName));
+    if (!sup) return { kind: "none" };
+    const d = spDupOf.get(r.p.raw.rowNumber);
+    if (d != null) return { kind: "dup", dupOf: d };
+    if (sup === "new") return { kind: "new" };
+    const pv = spPreview?.get(r.p.raw.rowNumber);
+    if (!pv) return { kind: "pending" };
+    return { kind: pv.status, preview: pv };
+  };
+
+  const spNeedsDecision = (r: RowPlan): boolean => {
+    const st = spStatus(r);
+    const pick = spChoice[r.p.raw.rowNumber];
+    if (st.kind === "pending") return true;
+    if (st.kind === "code_differs" || st.kind === "description_differs") return !pick;
+    if (st.kind === "pack_differs" || st.kind === "linked_to_other_item") return !pick || pick === "link";
+    return false;
   };
 
   const priceInfo = (r: RowPlan): { text: string; differs: boolean } => {
@@ -205,6 +298,12 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     if (ch !== "skip" && r.p.missing.length) tags.push({ label: "Missing information", tone: "warn" });
     if (ch !== "skip" && r.p.issues.length) tags.push({ label: "Conflict", tone: "bad" });
     if (priceInfo(r).differs) tags.push({ label: "Price differs", tone: "warn" });
+    if (ch !== "skip") {
+      const st = spStatus(r);
+      const t = SP_TAG[st.kind];
+      if (t && spChoice[r.p.raw.rowNumber] !== "none") tags.push(t);
+      else if (t && spChoice[r.p.raw.rowNumber] === "none") tags.push({ label: "Supplier link not saved", tone: "info" });
+    }
     return tags;
   };
 
@@ -229,7 +328,8 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
 
   const unresolvedItems = rowPlans.filter((r) => effective(r) === null).length;
   const unresolvedSuppliers = [...supplierPlans.values()].filter((s) => resolveSupplier(s.key) === null).length;
-  const unresolved = unresolvedItems + unresolvedSuppliers;
+  const unresolvedSp = rowPlans.filter((r) => spNeedsDecision(r)).length;
+  const unresolved = unresolvedItems + unresolvedSuppliers + unresolvedSp;
 
   const summary = useMemo(() => {
     let created = 0, matched = 0, possible = 0, dupes = 0, missing = 0, skipped = 0, priceDiff = 0, newSup = 0;
@@ -268,89 +368,83 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     setItemChoice({ ...itemChoice, [row]: v });
   };
 
-  const apply = async () => {
-    if (!currentRestaurant?.id || unresolved > 0) return;
-    setApplying(true);
-    const res = { created: 0, matched: 0, priced: 0, suppliers: 0, skipped: 0, errors: [] as string[] };
-    try {
-      const supplierIds = new Map<string, string>();
-      for (const s of supplierPlans.values()) {
-        const ch = resolveSupplier(s.key);
-        if (ch && ch !== "new") { supplierIds.set(s.key, ch); continue; }
-        // Rows using this supplier might all be skipped — only create when needed.
-        const needed = rowPlans.some((r) => r.p.supplierName && normalizeName(r.p.supplierName) === s.key && effective(r) !== "skip");
-        if (!needed) continue;
-        const { data, error } = await supabase.from("suppliers")
-          .insert({ name: s.name.replace(/\s+/g, " ").trim(), restaurant_id: currentRestaurant.id } as never)
-          .select("id").single();
-        if (error) { res.errors.push(`Supplier ${s.name}: ${error.message}`); continue; }
-        supplierIds.set(s.key, (data as { id: string }).id); res.suppliers++;
-      }
+  /** One payload, one database call — all rows are saved together or not at all. */
+  const buildPayload = () => {
+    const newSuppliers = new Map<string, string>();
+    const rows: Record<string, unknown>[] = [];
+    for (const r of rowPlans) {
+      const p = r.p;
+      const row = p.raw.rowNumber;
+      const ch = effective(r);
+      if (ch === "skip" || ch === null) { rows.push({ row, skip: true }); continue; }
+      const isFollow = r.sameAsRow != null && decide(r) === "follow";
+      const supKey = p.supplierName ? normalizeName(p.supplierName) : null;
+      const supC = supKey ? resolveSupplier(supKey) : null;
+      let supplier: Record<string, string> | null = null;
+      if (supC === "new" && supKey) { newSuppliers.set(supKey, p.supplierName!.replace(/\s+/g, " ").trim()); supplier = { ref: `sup:${supKey}` }; }
+      else if (supC) supplier = { id: supC };
 
-      const createdByRow = new Map<number, string>();
-      for (const r of rowPlans) {
-        const p = r.p;
-        const ch = effective(r);
-        if (ch === "skip" || ch === null) { res.skipped++; continue; }
-        const isFollow = r.sameAsRow != null && decide(r) === "follow";
-        if (isFollow) { res.matched++; continue; } // same master item as the first row; nothing to write
-        const supplierId = p.supplierName ? supplierIds.get(normalizeName(p.supplierName)) ?? null : null;
-        try {
-          let id: string;
-          if (ch === "new") {
-            const { data, error } = await supabase.from("ingredients").insert({
-              name: p.name,
-              restaurant_id: currentRestaurant.id,
-              unit: p.packUnit!,
-              storage_type: defaultStorage(p.category, p.group),
-              item_type: p.itemType ?? "recipe_ingredient",
-              item_group: p.group,
-              category: p.category,
-              supplier_id: supplierId,
-              purchase_unit: p.purchaseUnit,
-              pack_size: p.packSize,
-              pack_unit: p.packUnit,
-              cost_per_pack: null,
-              default_cost_price: null,
-            } as never).select("id").single();
-            if (error) throw error;
-            id = (data as { id: string }).id; res.created++;
-            createdByRow.set(p.raw.rowNumber, id);
-          } else {
-            id = ch; res.matched++;
-            const ex = itemById.get(id);
-            const patch: Record<string, unknown> = {};
-            if (ex && !ex.supplier_id && supplierId) patch.supplier_id = supplierId;
-            if (ex && !ex.category && p.category) patch.category = p.category;
-            if (ex && !ex.item_group && p.group) patch.item_group = p.group;
-            if (Object.keys(patch).length) {
-              const { error } = await supabase.from("ingredients").update(patch as never).eq("id", id);
-              if (error) throw error;
-            }
-            if (pricedIds?.has(id)) continue;
-            const exUnit = ex ? getIngredientCostUnit(ex) : null;
-            if (exUnit && p.baseUnit && exUnit !== p.baseUnit) continue; // never re-dimension an existing item
-          }
-          if (p.costPerPack != null && p.packSize && p.packUnit) {
-            const { error } = await (supabase as any).rpc("set_initial_import_price", {
-              p_ingredient_id: id, p_cost_per_pack: p.costPerPack, p_pack_size: p.packSize,
-              p_pack_unit: p.packUnit, p_unit_cost: null,
-            });
-            if (error) throw error;
-            res.priced++;
-          }
-        } catch (e) {
-          res.errors.push(`Row ${p.raw.rowNumber} ${p.name}: ${(e as Error).message}`);
+      let item: Record<string, unknown>;
+      let setMaster = !isFollow;
+      if (isFollow) item = { follow_ref: `r${r.sameAsRow}` };
+      else if (ch === "new") {
+        item = {
+          ref: `r${row}`, name: p.name, unit: p.packUnit, storage_type: defaultStorage(p.category, p.group),
+          item_type: p.itemType ?? "recipe_ingredient", item_group: p.group, category: p.category,
+          purchase_unit: p.purchaseUnit, pack_size: p.packSize, pack_unit: p.packUnit,
+        };
+      } else {
+        item = { id: ch, ref: `r${row}`, category: p.category, item_group: p.group };
+        const ex = itemById.get(ch);
+        const exUnit = ex ? getIngredientCostUnit(ex) : null;
+        if (pricedIds?.has(ch) || (exUnit && p.baseUnit && exUnit !== p.baseUnit)) setMaster = false;
+      }
+      const price = p.costPerPack != null && p.packSize && p.packUnit
+        ? { cost_per_pack: p.costPerPack, pack_size: p.packSize, pack_unit: p.packUnit } : null;
+
+      let supplier_product: Record<string, unknown> | null = null;
+      const st = spStatus(r);
+      const pick = spChoice[row];
+      const base = { product_name: p.name, product_code: p.productCode, pack_size: p.packSize, pack_unit: p.packUnit, purchase_unit: p.purchaseUnit };
+      if (supplier && pick !== "none") {
+        if (st.kind === "new" || st.kind === "new_pack_variant") supplier_product = { ...base, resolution: "new" };
+        else if (st.kind === "exact") supplier_product = { ...base, resolution: "link_existing", supplier_product_id: st.preview!.supplier_product_id };
+        else if ((st.kind === "code_differs" || st.kind === "description_differs") && pick === "link") {
+          supplier_product = {
+            ...base, resolution: "link_existing", supplier_product_id: st.preview!.supplier_product_id,
+            reviewed: [st.kind === "code_differs" ? "code" : "description",
+              ...(normalizeName(st.preview!.existing_name ?? "") !== normalizeName(p.name) ? ["description"] : [])],
+          };
         }
       }
+      rows.push({ row, supplier, item, price, set_master_price: setMaster, supplier_product });
+    }
+    return {
+      effective_date: new Date().toISOString().slice(0, 10),
+      suppliers: [...newSuppliers].map(([key, name]) => ({ ref: `sup:${key}`, name })),
+      rows,
+    };
+  };
+
+  const apply = async () => {
+    if (!currentRestaurant?.id || unresolved > 0) return;
+    setApplying(true); setApplyError(null);
+    try {
+      const { data, error } = await (supabase as any).rpc("apply_stock_list_import", { p_payload: buildPayload() });
+      if (error) throw error;
+      setResult(data as ImportResult);
+      setStep("done");
+      toast({ title: "Stock list imported", description: "All reviewed rows were saved together." });
+    } catch (e) {
+      const msg = (e as Error).message;
+      setApplyError(msg);
+      toast({ title: "Import not saved", description: `Nothing was saved. ${msg}`, variant: "destructive" });
     } finally {
       qc.invalidateQueries({ queryKey: ["ingredients"] });
       qc.invalidateQueries({ queryKey: ["suppliers"] });
       qc.invalidateQueries({ queryKey: ["ingredient-priced-ids"] });
+      qc.invalidateQueries({ queryKey: ["sp-preview"] });
       setApplying(false);
-      setResult(res);
-      setStep("done");
-      toast({ title: "Stock list imported", description: `${res.created} new, ${res.matched} matched, ${res.priced} prices recorded.` });
     }
   };
 
