@@ -79,3 +79,9 @@
 - [x] Manage Categories dialog: add, rename, merge (with counts confirmation), reorder up/down, archive/restore
 - [x] Add/Edit Dish + Dish Overview use active list; Captiva new departments auto-added at end
 - [x] Test with temporary data (DB-level; signed-in UI check pending)
+
+## Supplier products + atomic Stock List import
+- [ ] Apply supplier_products / supplier_product_prices migration (all corrections integrated)
+- [ ] Rollback, isolation, permission, price-history, re-import and €12/5 kg tests
+- [ ] Importer: preview statuses, exact => link_existing, one atomic apply call
+- [ ] First real import (waits on user review)
