@@ -38,7 +38,9 @@ import {
 import { useDishes } from "@/hooks/useDishes";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { SupplierSelect } from "@/components/suppliers/SupplierSelect";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatUnitCost } from "@/lib/currency";
+import { InlineSelectCell, InlineTextCell } from "@/components/inventory/InlineEditCell";
+import { UnitCell, PackSizeCell } from "@/components/inventory/InventoryInlineCells";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ImportStockListDialog } from "@/components/inventory/ImportStockListDialog";
 import { Upload } from "lucide-react";
@@ -532,7 +534,7 @@ export default function IngredientsPage() {
                   {formData.pack_size && formData.pack_size > 0 && formData.cost_per_pack !== null && formData.cost_per_pack >= 0 && (
                     <div className="bg-muted/50 border border-border rounded-md px-3 py-2">
                       <p className="text-sm text-muted-foreground">
-                        Calculated cost: <span className="font-medium text-foreground">{formatCurrency(calculatedBaseCost)} per {baseUnitLabel}</span>
+                        Calculated cost: <span className="font-medium text-foreground">{formatUnitCost(calculatedBaseCost)} per {baseUnitLabel}</span>
                       </p>
                     </div>
                   )}
