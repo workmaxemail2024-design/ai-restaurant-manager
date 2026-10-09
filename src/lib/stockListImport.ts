@@ -422,3 +422,41 @@ export function defaultStorage(category: string | null, group: string | null): "
   if (group === "beverage") return "dry";
   return "dry";
 }
+
+// ---------- Photo / PDF extraction (read-only AI step) ----------
+export const EXTRACT_FIELDS = ["supplier", "itemName", "productCode", "packSize", "packUnit", "packCost", "purchaseUnit", "notes"] as const;
+export type ExtractField = typeof EXTRACT_FIELDS[number];
+export interface ExtractedCell { value: string | null; status: "clear" | "unclear" | "absent"; raw: string | null }
+export type ExtractedRow = Record<ExtractField, ExtractedCell>;
+
+/** Editable working copy: value + whether an unclear cell has been resolved by the user. */
+export interface EditableRow { id: number; skip: boolean; cells: Record<ExtractField, { value: string; unclear: boolean; raw: string | null; resolved: boolean }> }
+
+export function toEditable(rows: ExtractedRow[]): EditableRow[] {
+  return rows.map((r, i) => ({
+    id: i + 1,
+    skip: false,
+    cells: Object.fromEntries(EXTRACT_FIELDS.map((f) => {
+      const c = r?.[f];
+      const unclear = c?.status === "unclear";
+      return [f, { value: unclear ? "" : (c?.value ?? "").trim(), unclear, raw: c?.raw ?? null, resolved: !unclear }];
+    })) as EditableRow["cells"],
+  }));
+}
+
+export const unresolvedCells = (rows: EditableRow[]) =>
+  rows.reduce((n, r) => n + (r.skip ? 0 : EXTRACT_FIELDS.filter((f) => !r.cells[f].resolved).length), 0);
+
+const EXTRACT_HEADERS: Record<ExtractField, string> = {
+  supplier: "Supplier", itemName: "Item Name", productCode: "Product Code", packSize: "Pack Size",
+  packUnit: "Pack Unit", packCost: "Pack Cost", purchaseUnit: "Purchase Unit", notes: "Notes",
+};
+
+/** Builds the same grid the spreadsheet path produces, so the existing review runs unchanged. */
+export function extractedToGrid(rows: EditableRow[]): SheetGrid {
+  return {
+    headers: EXTRACT_FIELDS.map((f) => EXTRACT_HEADERS[f]),
+    headerRow: 0,
+    rows: rows.filter((r) => !r.skip).map((r) => EXTRACT_FIELDS.map((f) => r.cells[f].value.trim())),
+  };
+}

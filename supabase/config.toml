@@ -81,3 +81,6 @@ verify_jwt = true
 [functions.ai-menu-extract]
 verify_jwt = true
 
+
+[functions.stock-list-extract]
+verify_jwt = true
