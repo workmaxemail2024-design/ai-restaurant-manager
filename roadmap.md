@@ -85,4 +85,4 @@
 - [x] Rollback, isolation, permission, price-history, re-import and €12/5 kg tests
 - [x] Importer: preview statuses, exact => link_existing, one atomic apply call
 - [ ] First real import (waits on user review)
-- [ ] Inventory inline editing + cost precision + server-side Inventory Edit guard
+- [x] Inventory inline editing + cost precision + server-side Inventory Edit guard

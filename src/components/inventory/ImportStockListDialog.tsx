@@ -16,7 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useIngredients, calculateBaseCost, getBaseUnit, categoryLabel, groupLabel, itemTypeLabel } from "@/hooks/useIngredients";
 import { useSuppliers } from "@/hooks/useSuppliers";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatUnitCost } from "@/lib/currency";
 import { getIngredientCostUnit } from "@/lib/units";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -735,7 +735,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
                           <TableCell className="whitespace-nowrap">{p.packSize && p.packUnit ? `${p.packSize} ${p.packUnit}` : p.packUnit ? <span className="text-warning">? {p.packUnit}</span> : <span className="text-warning">Unknown</span>}</TableCell>
                           <TableCell>{p.costPerPack != null ? formatCurrency(p.costPerPack) : <span className="text-warning">Unknown</span>}</TableCell>
                           <TableCell className="whitespace-nowrap">
-                            {p.baseCost == null || !p.baseUnit ? <span className="text-warning">Missing cost</span> : `${formatCurrency(p.baseCost)}/${p.baseUnit}`}
+                            {p.baseCost == null || !p.baseUnit ? <span className="text-warning">Missing cost</span> : `${formatUnitCost(p.baseCost)}/${p.baseUnit}`}
                             {p.baseCost != null && p.baseUnit === "g" && <div className="text-xs text-muted-foreground">{formatCurrency(p.baseCost * 1000)}/kg</div>}
                             {p.baseCost != null && p.baseUnit === "ml" && <div className="text-xs text-muted-foreground">{formatCurrency(p.baseCost * 1000)}/L</div>}
                           </TableCell>

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SegmentedControl } from "@/components/common/SegmentedControl";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatUnitCost } from "@/lib/currency";
 import {
   type Dish, type DishIngredient, useDishIngredients, useAddDishIngredient, useUpdateDishIngredient,
   useRemoveDishIngredient, useSetDishRecipeLink, useConvertLinkedRecipe, resolveRecipeSource,
@@ -415,7 +415,7 @@ function OwnRecipe({
                 const cu = getIngredientCostUnit(ing);
                 return (
                   <SelectItem key={ing.id} value={ing.id}>
-                    {ing.name} — {cu && calculateBaseCost(ing) > 0 ? `${formatCurrency(calculateBaseCost(ing))}/${cu}` : "Missing cost"}
+                    {ing.name} — {cu && calculateBaseCost(ing) > 0 ? `${formatUnitCost(calculateBaseCost(ing))}/${cu}` : "Missing cost"}
                   </SelectItem>
                 );
               })}
