@@ -24,6 +24,7 @@ export interface RawRow {
   unitCost: string;
   sellingPrice: string;
   notes: string;
+  productCode: string;
 }
 
 const HEADER_MAP: Record<string, keyof Omit<RawRow, "rowNumber">> = {
@@ -40,6 +41,8 @@ const HEADER_MAP: Record<string, keyof Omit<RawRow, "rowNumber">> = {
   calculatedunitcost: "unitCost", unitcost: "unitCost",
   referencesellingprice: "sellingPrice", sellingprice: "sellingPrice",
   notes: "notes", note: "notes",
+  productcode: "productCode", code: "productCode", sku: "productCode", itemcode: "productCode",
+  suppliercode: "productCode", supplierref: "productCode", articlenumber: "productCode",
 };
 
 const headerKey = (h: string) => h.toLowerCase().replace(/[^a-z]/g, "");
@@ -60,6 +63,7 @@ export const IMPORT_FIELDS: { key: FieldKey; label: string; required?: boolean }
   { key: "unitCost", label: "Calculated Unit Cost" },
   { key: "sellingPrice", label: "Reference Selling Price" },
   { key: "notes", label: "Notes" },
+  { key: "productCode", label: "Supplier Product Code" },
 ];
 
 export type ColumnMapping = Record<FieldKey, number | null>;
@@ -301,6 +305,8 @@ export interface ParsedItem {
   baseCost: number | null;
   baseUnit: "g" | "ml" | "each" | null;
   sellingPrice: number | null;
+  /** Supplier's own product code, if the file has one. */
+  productCode: string | null;
   issues: string[];
   /** Missing data that leaves a field unknown (still importable). */
   missing: string[];
@@ -405,6 +411,7 @@ export function interpretRow(raw: RawRow): ParsedItem {
     group, category, itemType,
     packSize, packUnit, costPerPack, purchaseUnit, baseCost, baseUnit,
     sellingPrice: parseMoney(raw.sellingPrice),
+    productCode: raw.productCode.trim() || null,
     issues, missing, blocking,
   };
 }
