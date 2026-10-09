@@ -92,7 +92,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     },
   });
 
-  const [step, setStep] = useState<"upload" | "map" | "review" | "done">("upload");
+  const [step, setStep] = useState<"upload" | "map" | "extracted" | "review" | "done">("upload");
   const [fileName, setFileName] = useState<string | null>(null);
   const [grid, setGrid] = useState<SheetGrid | null>(null);
   const [mapping, setMapping] = useState<ColumnMapping | null>(null);
@@ -108,28 +108,74 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
   const [applyError, setApplyError] = useState<string | null>(null);
   /** Per-row supplier-product decision for flagged rows. */
   const [spChoice, setSpChoice] = useState<Record<number, "link" | "none" | "skiprow">>({});
+  /** Photo/PDF source: original preview + editable extracted rows. */
+  const [doc, setDoc] = useState<{ url: string; mime: string } | null>(null);
+  const [extracted, setExtracted] = useState<EditableRow[]>([]);
+  const [reading, setReading] = useState(false);
 
   const reset = () => {
     setStep("upload"); setFileName(null); setGrid(null); setMapping(null); setParsed([]); setParseError(null);
     setItemChoice({}); setSupplierChoice({}); setFilter("all"); setResult(null); setApplyError(null); setSpChoice({});
+    setDoc((d) => { if (d) URL.revokeObjectURL(d.url); return null; }); setExtracted([]);
+  };
+
+  const readDocument = async (f: File) => {
+    if (f.size > 10 * 1024 * 1024) throw new Error("File is larger than 10 MB. Please split or compress it.");
+    const b64 = await new Promise<string>((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1] ?? "");
+      r.onerror = () => rej(new Error("Could not read the file."));
+      r.readAsDataURL(f);
+    });
+    const { data, error } = await supabase.functions.invoke("stock-list-extract", {
+      body: { fileBase64: b64, mimeType: f.type, fileName: f.name },
+    });
+    if (error) {
+      let msg = error.message;
+      try { msg = (await (error as { context?: Response }).context?.json())?.error ?? msg; } catch { /* keep */ }
+      throw new Error(msg);
+    }
+    if (data?.error) throw new Error(data.error);
+    const rows = toEditable(data?.rows ?? []);
+    if (!rows.length) throw new Error("No product lines could be read from this document.");
+    setDoc({ url: URL.createObjectURL(f), mime: f.type });
+    setExtracted(rows);
+    setStep("extracted");
   };
 
   const handleFile = async (f: File) => {
     reset();
     setFileName(f.name);
     try {
+      if (DOC_TYPES.includes(f.type)) {
+        setReading(true);
+        await readDocument(f);
+        return;
+      }
       const g = await readStockGrid(f);
       setGrid(g);
       setMapping(autoMapColumns(g.headers));
       setStep("map");
     } catch (e) {
       setParseError((e as Error).message);
+    } finally {
+      setReading(false);
     }
   };
 
   const continueToReview = () => {
     if (!grid || !mapping) return;
     setParsed(buildRows(grid, mapping).map(interpretRow));
+    setItemChoice({}); setSupplierChoice({});
+    setStep("review");
+  };
+
+  const continueFromExtracted = () => {
+    const g = extractedToGrid(extracted);
+    setGrid(g);
+    const m = autoMapColumns(g.headers);
+    setMapping(m);
+    setParsed(buildRows(g, m).map(interpretRow));
     setItemChoice({}); setSupplierChoice({});
     setStep("review");
   };
