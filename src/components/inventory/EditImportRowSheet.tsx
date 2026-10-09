@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { INVENTORY_CATEGORIES } from "@/hooks/useIngredients";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatUnitCost } from "@/lib/currency";
 import { interpretRow, parseCategory, parseItemType, parseGroup, type RawRow } from "@/lib/stockListImport";
 
 export type StorageType = "freezer" | "fridge" | "dry";
@@ -110,7 +110,7 @@ export function EditImportRowSheet({ raw, storage, edited, onSave, onRevert, onC
             <div>
               Calculated cost:{" "}
               {preview.baseCost != null && baseLabel
-                ? <strong>{formatCurrency(preview.baseCost)}/{baseLabel}{baseLabel !== "each" ? ` · ${formatCurrency(preview.baseCost * 1000)}/${baseLabel === "g" ? "kg" : "L"}` : ""}</strong>
+                ? <strong>{formatUnitCost(preview.baseCost)}/{baseLabel}{baseLabel !== "each" ? ` · ${formatCurrency(preview.baseCost * 1000)}/${baseLabel === "g" ? "kg" : "L"}` : ""}</strong>
                 : <span className="text-warning">Missing cost (stays unknown, never €0)</span>}
             </div>
             {preview.blocking.length > 0 && <div className="text-destructive">Cannot import: {preview.blocking.join("; ")}</div>}
