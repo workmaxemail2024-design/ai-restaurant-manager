@@ -50,6 +50,9 @@ interface ImportResult {
   supplier_products_created: number; supplier_products_linked: number; supplier_prices_added: number; supplier_prices_unchanged: number;
 }
 
+/** Mirrors the database supplier_name_key(): lower-case, punctuation to spaces. */
+const spNameKey = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
 const SP_TAG: Partial<Record<SpKind, Status>> = {
   new: { label: "New supplier product", tone: "info" },
   new_pack_variant: { label: "New pack size for supplier product", tone: "info" },
@@ -413,7 +416,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
           supplier_product = {
             ...base, resolution: "link_existing", supplier_product_id: st.preview!.supplier_product_id,
             reviewed: [st.kind === "code_differs" ? "code" : "description",
-              ...(normalizeName(st.preview!.existing_name ?? "") !== normalizeName(p.name) ? ["description"] : [])],
+              ...(st.kind === "code_differs" && spNameKey(st.preview!.existing_name) !== spNameKey(p.name) ? ["description"] : [])],
           };
         }
       }
