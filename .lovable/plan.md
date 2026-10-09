@@ -1,5 +1,104 @@
 # Final migration: supplier products, supplier price history and an all-or-nothing stock import (not applied)
 
+## Read-only check results (latest)
+
+These were checked against the live functions: `record_ingredient_price_history`, `set_initial_import_price`, `insert_ingredient_price_row` and `get_ingredient_base_cost`.
+
+1. **New item without a price stays unknown.**
+   - When an item is created with no pack cost and no default cost, the history trigger finds a cost of 0, treats it as missing and writes no history row.
+   - `default_cost_price` and `cost_per_pack` stay NULL. Confirmed correct, no change needed.
+2. **New item with a known pack cost gets exactly one history row.**
+   - Creating the item writes no row, because there is no cost yet.
+   - `set_initial_import_price` then updates the item once. The trigger fires once and writes 1 row with source `initial_import`, note "Initial stock list import", and cost per base unit = pack cost ÷ (pack size × 1000 for kg/L, or 1 otherwise). That is correctly normalized.
+   - A second call is refused, because the item now has price history.
+3. **Gap found: master per-unit cost left blank.**
+   - The design passed `p_unit_cost = NULL`, the same as today's importer. As a result `default_cost_price` stays NULL even though the pack cost is known.
+   - The history row's legacy `cost_price` column is also stored as 0.
+   - Dish costing still works, because it reads pack cost / cost per base unit. But any screen reading only `default_cost_price` would show Missing.
+   - **Correction:** pass the cost per pack unit (pack cost ÷ pack size).
+4. **Gap found: unit capitalisation.** The existing master cost calculation recognises only `kg`, `L`, `g`, `ml` and `each`, and is case-sensitive. A pack unit like `l` or `KG` would be treated as ×1, which is wrong. **Correction:** accept only those exact spellings for the master starting price.
+5. **Gap found: description matching ignored pack size.**
+   - The preview matched on description alone, so a 5 kg and a 10 kg product with the same description were flagged as one product.
+   - The import's "new" check would also wrongly block a genuine new pack size.
+   - **Correction:** match description together with pack. The same description with a different pack is shown as a new pack variant and created separately. A code match with a different pack remains a conflict.
+6. **Gap found: link-to-existing did not require review of differences.**
+   - `link_existing` checked that the item and pack were the same, but accepted a different code or description without proof that you had reviewed it.
+   - **Correction:** the import recalculates the differences itself and requires each one to be listed in `reviewed`. Otherwise it rejects the whole import. The preview reports "exact" only when code, description and pack all match.
+
+### Exact SQL corrections (replace the matching parts of sections 4 and 5 below)
+
+**Section 4 — `preview_supplier_products`: replace the `SELECT ... INTO by_desc` and the `status := CASE ...` with:**
+
+```sql
+    SELECT * INTO by_desc FROM supplier_products WHERE restaurant_id = rid AND supplier_id = v_sup
+      AND normalized_name = public.supplier_name_key(r->>'product_name')
+      AND coalesce(pack_size,-1) = coalesce(v_size,-1)
+      AND coalesce(lower(pack_unit),'') = coalesce(lower(v_unit),'')
+      AND archived_at IS NULL;
+    IF by_code.id IS NULL AND by_desc.id IS NULL THEN
+      status := CASE WHEN EXISTS (SELECT 1 FROM supplier_products WHERE restaurant_id = rid
+                       AND supplier_id = v_sup AND archived_at IS NULL
+                       AND normalized_name = public.supplier_name_key(r->>'product_name'))
+                     THEN 'new_pack_variant' ELSE 'new' END;
+      RETURN NEXT; CONTINUE;
+    END IF;
+    -- (existing assignment lines unchanged)
+    status := CASE
+      WHEN v_ing IS DISTINCT FROM by_desc.ingredient_id THEN 'linked_to_other_item'
+      WHEN by_desc.pack_size IS DISTINCT FROM v_size
+        OR lower(by_desc.pack_unit) IS DISTINCT FROM lower(v_unit) THEN 'pack_differs'
+      WHEN lower(coalesce(by_desc.product_code,'')) <> lower(coalesce(v_code,'')) THEN 'code_differs'
+      WHEN by_desc.normalized_name <> public.supplier_name_key(r->>'product_name') THEN 'description_differs'
+      ELSE 'exact' END;
+```
+
+**Section 5 — `apply_stock_list_import`, master starting price: replace the price block with:**
+
+```sql
+      IF pr IS NOT NULL AND jsonb_typeof(pr) = 'object'
+         AND NOT EXISTS (SELECT 1 FROM ingredient_prices WHERE ingredient_id = v_ing) THEN
+        v_cost := public.jnum(pr,'cost_per_pack'); v_size := public.jnum(pr,'pack_size');
+        v_unit := pr->>'pack_unit';
+        IF v_unit NOT IN ('each','g','kg','ml','L') THEN RAISE EXCEPTION 'unknown pack unit'; END IF;
+        IF NOT (v_cost > 0 AND v_size > 0) THEN RAISE EXCEPTION 'invalid price or pack size'; END IF;
+        PERFORM public.set_initial_import_price(v_ing, v_cost, v_size, v_unit, v_cost / v_size);
+        n_price := n_price + 1;
+      END IF;
+```
+
+**Section 5, `link_existing`: insert after the pack check:**
+
+```sql
+          IF lower(coalesce(ex.product_code,'')) <> lower(coalesce(v_code,''))
+             AND NOT coalesce(sp->'reviewed' ? 'code', false) THEN
+            RAISE EXCEPTION 'product code differs and was not confirmed'; END IF;
+          IF ex.normalized_name <> public.supplier_name_key(v_name)
+             AND NOT coalesce(sp->'reviewed' ? 'description', false) THEN
+            RAISE EXCEPTION 'description differs and was not confirmed'; END IF;
+```
+
+**Section 5, `new` resolution: replace the conflict check with (pack-aware):**
+
+```sql
+          IF EXISTS (SELECT 1 FROM supplier_products WHERE restaurant_id = rid AND supplier_id = v_sup
+                       AND archived_at IS NULL
+                       AND ((v_code IS NOT NULL AND lower(product_code) = lower(v_code))
+                         OR (normalized_name = public.supplier_name_key(v_name)
+                             AND coalesce(pack_size,-1) = coalesce(v_size,-1)
+                             AND coalesce(lower(pack_unit),'') = coalesce(lower(v_unit),'')))) THEN
+            RAISE EXCEPTION 'supplier product conflict needs review'; END IF;
+```
+
+**Review screen:**
+- **Link to existing:** sends `reviewed: ["code","description"]` listing only the differences you actually ticked on that row.
+- **New pack variant:** shown as information only and created as a separate product.
+
+**Extra checks after applying:**
+- A new item with €12 per 5 kg gives `default_cost_price` 2.40, one `initial_import` row and cost per base unit 0.0024.
+- A new item with no price keeps all cost fields NULL and gets no history row.
+- 5 kg and 10 kg products with the same description become two separate supplier products.
+- Linking to an existing product whose code differs, without confirming the difference, is rejected.
+
 Nothing runs until you approve. Recipe costing, master item prices, stock levels, POS mappings, documents, purchase orders and sales are not changed.
 
 ## What this version fixes
