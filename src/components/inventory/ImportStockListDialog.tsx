@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Camera, Loader2, Upload } from "lucide-react";
+import { Camera, Loader2, Pencil, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useIngredients, calculateBaseCost, getBaseUnit, categoryLabel, groupLabel, itemTypeLabel } from "@/hooks/useIngredients";
@@ -25,6 +25,8 @@ import {
   toEditable, extractedToGrid, unresolvedCells, type EditableRow,
 } from "@/lib/stockListImport";
 import { ExtractedRowsReview } from "@/components/inventory/ExtractedRowsReview";
+import { EditImportRowSheet, type StorageType } from "@/components/inventory/EditImportRowSheet";
+import type { RawRow } from "@/lib/stockListImport";
 
 const DOC_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
@@ -116,11 +118,32 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
   const [doc, setDoc] = useState<{ url: string; mime: string } | null>(null);
   const [extracted, setExtracted] = useState<EditableRow[]>([]);
   const [reading, setReading] = useState(false);
+  /** Review-screen edits (in memory only): original raw rows, storage overrides, row being edited. */
+  const [originalRaw, setOriginalRaw] = useState<Record<number, RawRow>>({});
+  const [storageOverride, setStorageOverride] = useState<Record<number, StorageType>>({});
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+
+  const IDENTITY: (keyof RawRow)[] = ["itemName", "supplier", "productCode", "packSize", "packUnit", "purchaseUnit", "purchaseQty"];
+  const applyRowEdit = (row: number, next: RawRow, storage: StorageType | null) => {
+    const cur = parsed.find((x) => x.raw.rowNumber === row);
+    if (!cur) return;
+    if (!originalRaw[row]) setOriginalRaw((o) => ({ ...o, [row]: cur.raw }));
+    if (IDENTITY.some((k) => (cur.raw[k] ?? "") !== (next[k] ?? ""))) {
+      // Identity changed: earlier decisions for this row are no longer valid.
+      setItemChoice((c) => { const n = { ...c }; delete n[row]; return n; });
+      setSpChoice((c) => { const n = { ...c }; delete n[row]; return n; });
+    }
+    setStorageOverride((o) => { const n = { ...o }; if (storage) n[row] = storage; else delete n[row]; return n; });
+    setParsed((ps) => ps.map((x) => (x.raw.rowNumber === row ? interpretRow(next) : x)));
+  };
+  const isEdited = (row: number) => !!originalRaw[row] &&
+    (JSON.stringify(originalRaw[row]) !== JSON.stringify(parsed.find((x) => x.raw.rowNumber === row)?.raw) || !!storageOverride[row]);
 
   const reset = () => {
     setStep("upload"); setFileName(null); setGrid(null); setMapping(null); setParsed([]); setParseError(null);
     setItemChoice({}); setSupplierChoice({}); setFilter("all"); setResult(null); setApplyError(null); setSpChoice({});
     setDoc((d) => { if (d) URL.revokeObjectURL(d.url); return null; }); setExtracted([]);
+    setOriginalRaw({}); setStorageOverride({}); setEditingRow(null);
   };
 
   const readDocument = async (f: File) => {
@@ -170,7 +193,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
   const continueToReview = () => {
     if (!grid || !mapping) return;
     setParsed(buildRows(grid, mapping).map(interpretRow));
-    setItemChoice({}); setSupplierChoice({});
+    setItemChoice({}); setSupplierChoice({}); setOriginalRaw({}); setStorageOverride({});
     setStep("review");
   };
 
@@ -180,7 +203,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     const m = autoMapColumns(g.headers);
     setMapping(m);
     setParsed(buildRows(g, m).map(interpretRow));
-    setItemChoice({}); setSupplierChoice({});
+    setItemChoice({}); setSupplierChoice({}); setOriginalRaw({}); setStorageOverride({});
     setStep("review");
   };
 
@@ -442,7 +465,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
       if (isFollow) item = { follow_ref: `r${r.sameAsRow}` };
       else if (ch === "new") {
         item = {
-          ref: `r${row}`, name: p.name, unit: p.packUnit, storage_type: defaultStorage(p.category, p.group),
+          ref: `r${row}`, name: p.name, unit: p.packUnit, storage_type: storageOverride[row] ?? defaultStorage(p.category, p.group),
           item_type: p.itemType ?? "recipe_ingredient", item_group: p.group, category: p.category,
           purchase_unit: p.purchaseUnit, pack_size: p.packSize, pack_unit: p.packUnit,
         };
@@ -649,7 +672,13 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
                       return (
                         <TableRow key={p.raw.rowNumber} className="align-top">
                           <TableCell>{p.raw.rowNumber}</TableCell>
-                          <TableCell className="font-medium">{p.name || <span className="text-destructive">—</span>}</TableCell>
+                          <TableCell className="font-medium">
+                            <div>{p.name || <span className="text-destructive">—</span>}</div>
+                            <Button variant="outline" size="sm" className="mt-1 h-11 min-w-[72px]" onClick={() => setEditingRow(p.raw.rowNumber)}>
+                              <Pencil className="mr-1 h-4 w-4" /> Edit
+                            </Button>
+                            {isEdited(p.raw.rowNumber) && <Badge variant="secondary" className="ml-1 mt-1 bg-secondary text-secondary-foreground">Edited</Badge>}
+                          </TableCell>
                           <TableCell><div className="flex flex-col gap-1">{statusOf(r).map((t) => <Badge key={t.label} variant="secondary" className={toneClass[t.tone]}>{t.label}</Badge>)}</div></TableCell>
                           <TableCell className="min-w-64">
                             {p.blocking.length ? <span className="text-muted-foreground">Cannot import</span> : (
@@ -770,6 +799,31 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
           )}
           {step === "done" && <Button className="h-11" onClick={() => { onOpenChange(false); reset(); }}>Done</Button>}
         </div>
+
+        {(() => {
+          const er = editingRow == null ? null : parsed.find((x) => x.raw.rowNumber === editingRow) ?? null;
+          return (
+            <EditImportRowSheet
+              raw={er?.raw ?? null}
+              storage={er ? storageOverride[er.raw.rowNumber] ?? defaultStorage(er.category, er.group) : "dry"}
+              edited={er ? isEdited(er.raw.rowNumber) : false}
+              onClose={() => setEditingRow(null)}
+              onSave={(next, st) => {
+                if (!er) return;
+                const np = interpretRow(next);
+                const auto = defaultStorage(np.category, np.group);
+                applyRowEdit(er.raw.rowNumber, next, st === auto && !storageOverride[er.raw.rowNumber] ? null : st);
+                setEditingRow(null);
+              }}
+              onRevert={() => {
+                if (!er) return;
+                const orig = originalRaw[er.raw.rowNumber];
+                if (orig) applyRowEdit(er.raw.rowNumber, orig, null);
+                setEditingRow(null);
+              }}
+            />
+          );
+        })()}
 
         <AlertDialog open={!!confirmSeparate} onOpenChange={(o) => !o && setConfirmSeparate(null)}>
           <AlertDialogContent>
