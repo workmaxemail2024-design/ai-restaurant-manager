@@ -44,30 +44,66 @@ const HEADER_MAP: Record<string, keyof Omit<RawRow, "rowNumber">> = {
 
 const headerKey = (h: string) => h.toLowerCase().replace(/[^a-z]/g, "");
 
-export async function parseStockFile(file: File): Promise<RawRow[]> {
+export type FieldKey = keyof Omit<RawRow, "rowNumber">;
+
+export const IMPORT_FIELDS: { key: FieldKey; label: string; required?: boolean }[] = [
+  { key: "itemName", label: "Item Name", required: true },
+  { key: "supplier", label: "Supplier" },
+  { key: "group", label: "Group" },
+  { key: "category", label: "Category" },
+  { key: "itemType", label: "Item Type" },
+  { key: "purchaseQty", label: "Purchase Quantity" },
+  { key: "purchaseUnit", label: "Purchase Unit" },
+  { key: "packSize", label: "Pack Size" },
+  { key: "packUnit", label: "Pack Unit" },
+  { key: "packCost", label: "Pack Cost" },
+  { key: "unitCost", label: "Calculated Unit Cost" },
+  { key: "sellingPrice", label: "Reference Selling Price" },
+  { key: "notes", label: "Notes" },
+];
+
+export type ColumnMapping = Record<FieldKey, number | null>;
+
+export interface SheetGrid {
+  headers: string[];
+  headerRow: number; // 1-based sheet row of the header
+  rows: string[][];
+}
+
+/** Reads the first sheet. Header = first row naming an item column, else row 1. */
+export async function readStockGrid(file: File): Promise<SheetGrid> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const sheet = wb.Sheets[wb.SheetNames[0]];
-  const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "" });
-  // Header = first row that names an item column.
-  const headerIdx = grid.findIndex((r) => r.some((c) => HEADER_MAP[headerKey(String(c))] === "itemName"));
-  if (headerIdx < 0) throw new Error("Could not find an 'Item Name' column header.");
-  const headers = grid[headerIdx].map((c) => HEADER_MAP[headerKey(String(c))]);
-  const rows: RawRow[] = [];
-  for (let i = headerIdx + 1; i < grid.length; i++) {
-    const r = grid[i];
-    const row: RawRow = {
-      rowNumber: i + 1, itemName: "", supplier: "", group: "", category: "", itemType: "",
-      purchaseQty: "", purchaseUnit: "", packSize: "", packUnit: "", packCost: "", unitCost: "",
-      sellingPrice: "", notes: "",
-    };
-    headers.forEach((k, j) => {
-      if (k && !row[k]) (row[k] as string) = String(r[j] ?? "").trim();
-    });
-    if (Object.values(row).every((v) => v === "" || typeof v === "number")) continue;
-    rows.push(row);
-  }
-  return rows;
+  const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: false, defval: "" })
+    .map((r) => r.map((c) => String(c ?? "").trim()));
+  if (!grid.length) throw new Error("The file is empty.");
+  let headerIdx = grid.findIndex((r) => r.some((c) => HEADER_MAP[headerKey(c)] === "itemName"));
+  if (headerIdx < 0) headerIdx = 0;
+  return { headers: grid[headerIdx], headerRow: headerIdx + 1, rows: grid.slice(headerIdx + 1) };
+}
+
+export function autoMapColumns(headers: string[]): ColumnMapping {
+  const m = Object.fromEntries(IMPORT_FIELDS.map((f) => [f.key, null])) as ColumnMapping;
+  headers.forEach((h, i) => {
+    const k = HEADER_MAP[headerKey(h)];
+    if (k && m[k] == null) m[k] = i;
+  });
+  return m;
+}
+
+export function buildRows(grid: SheetGrid, mapping: ColumnMapping): RawRow[] {
+  const out: RawRow[] = [];
+  grid.rows.forEach((r, idx) => {
+    const row = { rowNumber: grid.headerRow + idx + 1 } as RawRow;
+    for (const f of IMPORT_FIELDS) {
+      const c = mapping[f.key];
+      (row[f.key] as string) = c == null ? "" : (r[c] ?? "").trim();
+    }
+    if (IMPORT_FIELDS.every((f) => !row[f.key])) return;
+    out.push(row);
+  });
+  return out;
 }
 
 // ---------- normalisation ----------
@@ -82,13 +118,54 @@ export function normalizeName(s: string): string {
     .trim();
 }
 
+/** Common kitchen synonyms / spellings, mapped to one token. Suggestion only. */
+const SYNONYMS: Record<string, string> = {
+  courgette: "zucchini", aubergine: "eggplant", coriander: "cilantro", rocket: "arugula",
+  scallion: "springonion", spring: "spring", capsicum: "pepper", prawn: "shrimp", mince: "minced",
+  ground: "minced", chilli: "chili", chile: "chili", yoghurt: "yogurt", fillet: "filet",
+  breast: "breast", supreme: "supreme", tomatoe: "tomato", potatoe: "potato", mayo: "mayonnaise",
+  veg: "vegetable", choc: "chocolate", bbq: "barbecue", ketchup: "ketchup", catsup: "ketchup",
+};
+
+function singular(w: string): string {
+  if (w.length > 4 && w.endsWith("ies")) return w.slice(0, -3) + "y";
+  if (w.length > 4 && /(oes|ches|shes|xes)$/.test(w)) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  return w;
+}
+
+function tokens(s: string): string[] {
+  return normalizeName(s).split(" ").filter(Boolean).map((w) => {
+    const sg = singular(w);
+    return SYNONYMS[sg] ?? sg;
+  });
+}
+
 /** Looser key used only to SUGGEST a possible match (never auto-merges). */
 function looseKey(s: string): string {
-  return normalizeName(s)
-    .split(" ")
-    .map((w) => (w.length > 3 && w.endsWith("s") ? w.slice(0, -1) : w))
-    .sort()
-    .join(" ");
+  return tokens(s).sort().join(" ");
+}
+
+/** Numbers / sizes / grades that make two products genuinely different. */
+const DISTINGUISHING = /^(\d+([.,]\d+)?[a-z]*|small|medium|large|xl|jumbo|organic|free|range|frozen|fresh|smoked|unsmoked|salted|unsalted|skinless|boneless|bone|whole|diced|sliced|minced|light|full|fat|low|zero|diet)$/;
+function distinguishingDiffer(a: string, b: string): boolean {
+  const da = new Set(tokens(a).filter((t) => DISTINGUISHING.test(t)));
+  const db = new Set(tokens(b).filter((t) => DISTINGUISHING.test(t)));
+  if (da.size !== db.size) return true;
+  for (const t of da) if (!db.has(t)) return true;
+  return false;
+}
+
+/** 0..1 similarity score for ranking suggestions. */
+export function similarity(a: string, b: string): number {
+  const la = looseKey(a), lb = looseKey(b);
+  if (!la || !lb) return 0;
+  if (la === lb) return 0.98;
+  const ta = new Set(la.split(" ")), tb = new Set(lb.split(" "));
+  const inter = [...ta].filter((t) => tb.has(t)).length;
+  const jacc = inter / new Set([...ta, ...tb]).size;
+  const lev = 1 - levenshtein(la, lb) / Math.max(la.length, lb.length);
+  return Math.max(jacc, lev);
 }
 
 function levenshtein(a: string, b: string): number {
@@ -106,13 +183,18 @@ function levenshtein(a: string, b: string): number {
   return prev[n];
 }
 
+/**
+ * Likely the same product? Spelling/plural/synonym variations qualify;
+ * different cuts, sizes or grades never do (they stay separate unless the
+ * user explicitly picks the existing item).
+ */
 export function isNearMatch(a: string, b: string): boolean {
+  if (distinguishingDiffer(a, b)) return false;
   const la = looseKey(a), lb = looseKey(b);
   if (!la || !lb) return false;
   if (la === lb) return true;
-  const na = normalizeName(a), nb = normalizeName(b);
-  if (Math.min(na.length, nb.length) >= 6 && levenshtein(na, nb) <= 2) return true;
-  return false;
+  if (Math.min(la.length, lb.length) >= 6 && levenshtein(la, lb) <= 2) return true;
+  return similarity(a, b) >= 0.75 && Math.min(la.length, lb.length) >= 5;
 }
 
 export function parseMoney(s: string): number | null {
