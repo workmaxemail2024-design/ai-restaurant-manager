@@ -2837,6 +2837,175 @@ export type Database = {
           },
         ]
       }
+      supplier_product_prices: {
+        Row: {
+          base_unit: string
+          cost_per_base_unit: number
+          cost_per_pack: number
+          created_at: string
+          created_by: string | null
+          document_id: string | null
+          effective_date: string
+          id: string
+          note: string | null
+          pack_size: number
+          pack_unit: string
+          purchase_order_id: string | null
+          restaurant_id: string
+          source: string
+          supersedes_id: string | null
+          supplier_product_id: string
+        }
+        Insert: {
+          base_unit: string
+          cost_per_base_unit: number
+          cost_per_pack: number
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          effective_date: string
+          id?: string
+          note?: string | null
+          pack_size: number
+          pack_unit: string
+          purchase_order_id?: string | null
+          restaurant_id: string
+          source: string
+          supersedes_id?: string | null
+          supplier_product_id: string
+        }
+        Update: {
+          base_unit?: string
+          cost_per_base_unit?: number
+          cost_per_pack?: number
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          effective_date?: string
+          id?: string
+          note?: string | null
+          pack_size?: number
+          pack_unit?: string
+          purchase_order_id?: string | null
+          restaurant_id?: string
+          source?: string
+          supersedes_id?: string | null
+          supplier_product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_product_prices_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_product_prices_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_product_prices_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_product_prices_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_product_prices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_product_prices_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_products: {
+        Row: {
+          archived_at: string | null
+          archived_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          ingredient_id: string
+          normalized_name: string
+          pack_size: number | null
+          pack_unit: string | null
+          product_code: string | null
+          product_name: string
+          purchase_unit: string | null
+          restaurant_id: string
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          archived_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ingredient_id: string
+          normalized_name: string
+          pack_size?: number | null
+          pack_unit?: string | null
+          product_code?: string | null
+          product_name: string
+          purchase_unit?: string | null
+          restaurant_id: string
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          archived_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          ingredient_id?: string
+          normalized_name?: string
+          pack_size?: number | null
+          pack_unit?: string | null
+          product_code?: string | null
+          product_name?: string
+          purchase_unit?: string | null
+          restaurant_id?: string
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_products_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_products_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           contact_name: string | null
@@ -3193,6 +3362,7 @@ export type Database = {
         }
         Returns: string
       }
+      apply_stock_list_import: { Args: { p_payload: Json }; Returns: Json }
       assert_day_open: {
         Args: { _date: string; _location_id: string; _restaurant_id: string }
         Returns: undefined
@@ -3211,10 +3381,15 @@ export type Database = {
         Args: { p_date: string; p_staff_id: string }
         Returns: number
       }
+      can_edit_inventory: { Args: never; Returns: boolean }
       convert_linked_recipe: { Args: { p_dish_id: string }; Returns: number }
       convert_recipe_qty: {
         Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
         Returns: number
+      }
+      correct_supplier_product_price: {
+        Args: { p_cost_per_pack: number; p_note: string; p_price_id: string }
+        Returns: string
       }
       create_default_automation_rules: {
         Args: { p_restaurant_id: string }
@@ -3347,6 +3522,8 @@ export type Database = {
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
+      import_jnum: { Args: { _j: Json; _k: string }; Returns: number }
+      import_juuid: { Args: { _j: Json; _k: string }; Returns: string }
       ingredient_dependencies: {
         Args: { p_ingredient_id: string }
         Returns: Json
@@ -3392,6 +3569,19 @@ export type Database = {
         Args: { _location_id: string; _ts: string }
         Returns: string
       }
+      preview_supplier_products: {
+        Args: { p_rows: Json }
+        Returns: {
+          existing_code: string
+          existing_ingredient_id: string
+          existing_name: string
+          existing_pack_size: number
+          existing_pack_unit: string
+          row_no: number
+          status: string
+          supplier_product_id: string
+        }[]
+      }
       recipe_lines_for_dish: {
         Args: { p_dish_id: string }
         Returns: {
@@ -3432,11 +3622,20 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_supplier_product_archived: {
+        Args: { p_archived: boolean; p_id: string }
+        Returns: undefined
+      }
       storage_doc_extension_allowed: {
         Args: { _name: string }
         Returns: boolean
       }
       storage_doc_restaurant_id: { Args: { _name: string }; Returns: string }
+      supplier_cost_per_base: {
+        Args: { _cost: number; _size: number; _unit: string }
+        Returns: number
+      }
+      supplier_name_key: { Args: { _s: string }; Returns: string }
       sync_own_profile: { Args: never; Returns: undefined }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       unit_factor: { Args: { _u: string }; Returns: number }
