@@ -139,47 +139,85 @@ export default function IngredientsPage() {
 
   const baseUnitLabel = getBaseUnit(formData.pack_unit);
 
+  // Inline editing: same permission as the editor/import; archived view stays read-only.
+  const canInline = canImport && !showArchived;
+  const saveField = (id: string, patch: Partial<IngredientInsert>) =>
+    updateIngredient.mutateAsync({ id, silent: true, ...patch }).then(() => undefined);
+
   const columns = [
-    { key: "name", header: "Name" },
+    {
+      key: "name", header: "Name",
+      render: (item: Ingredient) => (
+        <InlineTextCell editable={canInline} label="name" value={item.name} onSave={(v) => saveField(item.id, { name: v })} />
+      ),
+    },
     {
       key: "item_type",
       header: "Type",
       render: (item: Ingredient) => (
-        <Badge variant="outline">{itemTypeLabel(item.item_type)}</Badge>
+        <InlineSelectCell editable={canInline} label="item type" value={item.item_type ?? "recipe_ingredient"}
+          display={<Badge variant="outline">{itemTypeLabel(item.item_type)}</Badge>}
+          options={INVENTORY_ITEM_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+          onSave={(v) => saveField(item.id, { item_type: v as InventoryItemType })} />
       )
     },
     {
       key: "item_group",
       header: "Group",
       render: (item: Ingredient) => (
-        <Badge variant="secondary" className="capitalize">{groupLabel(item.item_group)}</Badge>
+        <InlineSelectCell editable={canInline} label="group" value={item.item_group ?? ""}
+          display={<Badge variant="secondary" className="capitalize">{groupLabel(item.item_group)}</Badge>}
+          options={INVENTORY_ITEM_GROUPS}
+          onSave={(v) => {
+            // Keep category consistent with the group, as the editor does.
+            const cat = INVENTORY_CATEGORIES.find((c) => c.value === item.category);
+            const keepCat = !cat || !cat.group || cat.group === v;
+            return saveField(item.id, keepCat ? { item_group: v } : { item_group: v, category: null });
+          }} />
       )
     },
     {
       key: "category",
       header: "Category",
-      render: (item: Ingredient) => categoryLabel(item.category)
+      render: (item: Ingredient) => (
+        <InlineSelectCell editable={canInline} label="category" value={item.category ?? ""}
+          display={categoryLabel(item.category)}
+          options={INVENTORY_CATEGORIES.filter((c) => !item.item_group || !c.group || c.group === item.item_group)}
+          onSave={(v) => saveField(item.id, { category: v })} />
+      )
     },
-    { key: "unit", header: "Unit" },
+    {
+      key: "unit", header: "Unit",
+      render: (item: Ingredient) => (
+        <UnitCell item={item} editable={canInline} onSave={(u) => saveField(item.id, { unit: u })} />
+      ),
+    },
     { 
       key: "storage_type", 
       header: "Storage",
       render: (item: Ingredient) => (
-        <Badge variant="secondary" className="capitalize">{item.storage_type}</Badge>
+        <InlineSelectCell editable={canInline} label="storage" value={item.storage_type}
+          display={<Badge variant="secondary" className="capitalize">{item.storage_type}</Badge>}
+          options={storageOptions.map((s) => ({ value: s, label: s[0].toUpperCase() + s.slice(1) }))}
+          onSave={(v) => saveField(item.id, { storage_type: v as StorageType })} />
       )
     },
     { 
       key: "suppliers", 
       header: "Supplier",
-      render: (item: Ingredient) => item.suppliers?.name || "-"
+      render: (item: Ingredient) => (
+        <InlineSelectCell editable={canInline} label="supplier" value={item.supplier_id ?? "_none"}
+          display={item.suppliers?.name || "-"}
+          options={[{ value: "_none", label: "No supplier" }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]}
+          onSave={(v) => saveField(item.id, { supplier_id: v === "_none" ? null : v })} />
+      )
     },
     { 
       key: "pack_info", 
       header: "Pack Size",
-      render: (item: Ingredient) => {
-        if (!item.pack_size || !item.cost_per_pack) return "-";
-        return `${item.pack_size} ${item.pack_unit} @ ${formatCurrency(Number(item.cost_per_pack))}`;
-      }
+      render: (item: Ingredient) => (
+        <PackSizeCell item={item} editable={canInline} onSave={(patch) => saveField(item.id, patch)} />
+      )
     },
     { 
       key: "base_cost", 
@@ -187,8 +225,15 @@ export default function IngredientsPage() {
       render: (item: Ingredient) => {
         const baseCost = calculateBaseCost(item);
         if (!(baseCost > 0)) return <span className="text-warning">Missing cost</span>;
-        const unit = getBaseUnit(item.pack_unit);
-        return `${formatCurrency(baseCost)}/${unit}`;
+        const unit = item.pack_size && item.cost_per_pack ? getBaseUnit(item.pack_unit) : item.unit;
+        return (
+          <div className="whitespace-nowrap">
+            {formatUnitCost(baseCost)}/{unit}
+            {(unit === "g" || unit === "ml") && (
+              <div className="text-xs text-muted-foreground">{formatCurrency(baseCost * 1000)}/{unit === "g" ? "kg" : "L"}</div>
+            )}
+          </div>
+        );
       }
     },
   ];
