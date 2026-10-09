@@ -500,11 +500,9 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
 
           {step === "done" && result && (
             <div className="space-y-2 rounded-lg border p-4 text-sm">
-              <p className="font-medium">Import complete</p>
-              <p>{result.created} new items · {result.matched} matched existing · {result.priced} starting prices · {result.suppliers} new suppliers · {result.skipped} skipped</p>
-              {result.errors.length > 0 && (
-                <ul className="list-disc pl-5 text-destructive">{result.errors.map((e) => <li key={e}>{e}</li>)}</ul>
-              )}
+              <p className="font-medium">Import complete — all rows saved together</p>
+              <p>{result.items_created} new items · {result.items_matched} matched existing · {result.starting_prices} starting prices · {result.suppliers_created} new suppliers · {result.rows_skipped} skipped</p>
+              <p>{result.supplier_products_created} new supplier products · {result.supplier_products_linked} linked to existing · {result.supplier_prices_added} supplier prices recorded · {result.supplier_prices_unchanged} unchanged prices not repeated</p>
             </div>
           )}
 
@@ -598,6 +596,28 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
                                 </SelectContent>
                               </Select>
                             )}
+                            {(() => {
+                              const st = spStatus(r);
+                              const conflictKinds: SpKind[] = ["code_differs", "description_differs", "pack_differs", "linked_to_other_item"];
+                              if (!conflictKinds.includes(st.kind)) return null;
+                              const canLink = st.kind === "code_differs" || st.kind === "description_differs";
+                              const row = p.raw.rowNumber;
+                              return (
+                                <Select value={spChoice[row] ?? "_undecided"} onValueChange={(v) => {
+                                  const next = { ...spChoice };
+                                  if (v === "_undecided") delete next[row]; else next[row] = v as "link" | "none" | "skiprow";
+                                  setSpChoice(next);
+                                }}>
+                                  <SelectTrigger className="mt-2 h-11"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="_undecided">Supplier product: choose…</SelectItem>
+                                    {canLink && <SelectItem value="link">Same product — link (I confirm the {st.kind === "code_differs" ? "code" : "description"} difference)</SelectItem>}
+                                    <SelectItem value="none">Don't save a supplier link for this row</SelectItem>
+                                    <SelectItem value="skiprow">Skip this row</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             {!p.supplierName ? <span className="text-muted-foreground">Unassigned</span>
@@ -620,6 +640,20 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
                           <TableCell className="min-w-64 text-xs">
                             {p.raw.notes && <div>{p.raw.notes}</div>}
                             {matchNotes(r).map((n) => <div key={n} className="text-muted-foreground">{n}</div>)}
+                            {(() => {
+                              const st = spStatus(r);
+                              if (st.kind === "dup") return <div className="text-muted-foreground">Supplier product saved once, from row {st.dupOf}</div>;
+                              const pv = st.preview;
+                              if (!pv || st.kind === "exact") return null;
+                              return (
+                                <div className="text-warning">
+                                  Existing supplier product: "{pv.existing_name}"{pv.existing_code ? ` · code ${pv.existing_code}` : " · no code"}
+                                  {pv.existing_pack_size ? ` · ${pv.existing_pack_size} ${pv.existing_pack_unit ?? ""}` : ""}
+                                  {st.kind === "linked_to_other_item" && ` · linked to ${itemById.get(pv.existing_ingredient_id ?? "")?.name ?? "another item"}`}
+                                  <br />File: "{p.name}"{p.productCode ? ` · code ${p.productCode}` : " · no code"}{p.packSize ? ` · ${p.packSize} ${p.packUnit ?? ""}` : ""}
+                                </div>
+                              );
+                            })()}
                             {[...p.blocking, ...p.issues].map((i) => <div key={i} className="text-destructive">{i}</div>)}
                             {p.missing.length > 0 && <div className="text-warning">Unknown: {p.missing.join(", ")}</div>}
                           </TableCell>
@@ -643,9 +677,11 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
           )}
           {step === "review" && (
             <>
-              {unresolved > 0 && <span className="mr-auto text-sm text-warning">{unresolved} decision(s) needed before import.</span>}
+              {applyError && <span className="mr-auto text-sm text-destructive">Nothing was saved: {applyError}</span>}
+              {!applyError && previewError && <span className="mr-auto text-sm text-destructive">Supplier product check failed: {(previewError as Error).message}</span>}
+              {!applyError && !previewError && unresolved > 0 && <span className="mr-auto text-sm text-warning">{unresolved} decision(s) needed before import{previewLoading ? " (checking supplier products…)" : ""}.</span>}
               <Button variant="outline" className="h-11" onClick={() => { onOpenChange(false); reset(); }} disabled={applying}>Cancel</Button>
-              <Button className="h-11" onClick={() => setConfirmApply(true)} disabled={applying || unresolved > 0 || !pricedIds}>
+              <Button className="h-11" onClick={() => setConfirmApply(true)} disabled={applying || unresolved > 0 || !pricedIds || previewLoading || !!previewError}>
                 {applying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Import reviewed rows
               </Button>
             </>
