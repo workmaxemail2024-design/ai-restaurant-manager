@@ -265,7 +265,7 @@ export function useCreateIngredient() {
 export function useUpdateIngredient() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...ingredient }: Partial<IngredientInsert> & { id: string }) => {
+    mutationFn: async ({ id, silent: _silent, ...ingredient }: Partial<IngredientInsert> & { id: string; silent?: boolean }) => {
       const { data, error } = await supabase
         .from("ingredients")
         .update(ingredient)
@@ -278,9 +278,9 @@ export function useUpdateIngredient() {
       // database, so no client-side history insert happens here.
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_d, vars) => {
       queryClient.invalidateQueries({ queryKey: ["ingredients"] });
-      toast({ title: "Ingredient updated successfully" });
+      if (!vars.silent) toast({ title: "Ingredient updated successfully" });
       queryClient.invalidateQueries({ queryKey: ["food-costing-daily"] });
       queryClient.invalidateQueries({ queryKey: ["food-costing-period"] });
     },
