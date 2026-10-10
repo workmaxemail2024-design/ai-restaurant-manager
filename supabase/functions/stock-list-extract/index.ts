@@ -77,64 +77,81 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "AI is not configured." }, 500);
 
-    const dataUrl = `data:${mimeType};base64,${fileBase64}`;
+    const media = mimeType === "application/pdf"
+      ? { type: "input_file", filename: fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`, file_data: `data:application/pdf;base64,${fileBase64}` }
+      : { type: "input_image", image_url: `data:${mimeType};base64,${fileBase64}` };
 
-    // Stop before the platform's 150s wall-clock limit so the user gets a clear message instead of a crash.
+    // Diagnosed failure: long lists ran into the platform's 150s wall-clock limit (546).
+    // Stop shortly before it so the user gets a clear message instead of a crash.
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 135_000);
+    const timer = setTimeout(() => ctrl.abort(), 140_000);
     req.signal.addEventListener("abort", () => ctrl.abort());
+    const tooLong = () => json({ error: "This document took too long to read. Try fewer pages, or one photo per page." }, 504);
 
-    let upstream: Response;
     try {
-      upstream = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      const upstream = await fetch("https://ai.gateway.lovable.dev/v1/responses", {
         method: "POST",
         signal: ctrl.signal,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        headers: { "Content-Type": "application/json", "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "fetch" },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: PROMPT },
-            { role: "user", content: [
-              { type: "text", text: `Extract every product line from this stock list (${fileName}).` },
-              { type: "image_url", image_url: { url: dataUrl } },
-            ] },
-          ],
-          tools: [{ type: "function", function: { name: "stock_list", description: "Return the product lines", parameters: schema } }],
-          tool_choice: { type: "function", function: { name: "stock_list" } },
+          model: "openai/gpt-6-astra",
+          stream: true,
+          store: false,
+          reasoning: { effort: "low" },
+          instructions: PROMPT,
+          input: [{ role: "user", content: [{ type: "input_text", text: "Extract every product line from this stock list." }, media] }],
+          text: { format: { type: "json_schema", name: "stock_list", strict: true, schema } },
         }),
       });
+
+      if (!upstream.ok || !upstream.body) {
+        const t = await upstream.text().catch(() => "");
+        console.error("AI gateway error", upstream.status, t.slice(0, 500));
+        const msg = upstream.status === 429 ? "Too many requests. Please try again in a moment."
+          : upstream.status === 402 ? "AI credits are used up. Please add credits to continue."
+          : "The document could not be read right now.";
+        const status = [400, 402, 403, 429].includes(upstream.status) ? upstream.status : 502;
+        return json({ error: msg }, status);
+      }
+
+      // Consume SSE server-side; parse only the events we use.
+      const reader = upstream.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buf = "", text = "", failed: string | null = null;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += value;
+        let i;
+        while ((i = buf.indexOf("\n\n")) >= 0) {
+          const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+          if (!chunk.includes("output_text.delta") && !chunk.includes("failed") && !chunk.includes("error") && !chunk.includes("refusal")) continue;
+          const data = chunk.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("");
+          if (!data || data === "[DONE]") continue;
+          try {
+            const ev = JSON.parse(data);
+            if (ev.type === "response.output_text.delta") text += ev.delta ?? "";
+            else if (ev.type === "response.failed" || ev.type === "error")
+              failed = ev.response?.error?.message ?? ev.error?.message ?? ev.message ?? "AI reading failed.";
+            else if (ev.type === "response.refusal.delta") failed = "The AI declined to read this document.";
+          } catch { /* ignore partial */ }
+        }
+      }
+      if (failed) return json({ error: failed }, 502);
+      if (!text.trim()) return json({ error: "No rows could be read from this document." }, 422);
+      let parsed: { rows?: unknown[] };
+      try { parsed = JSON.parse(text); } catch { return json({ error: "The AI response was incomplete. Please try again." }, 502); }
+      const rows = (Array.isArray(parsed.rows) ? parsed.rows : []).map((r) => {
+        const o = (r ?? {}) as Record<string, unknown>;
+        return Object.fromEntries(FIELDS.map((f) => [f, toCell(o[f])]));
+      });
+      return json({ rows });
     } catch (e) {
-      clearTimeout(timer);
       if (req.signal.aborted) return new Response(null, { status: 499, headers: corsHeaders });
-      if (ctrl.signal.aborted) return json({ error: "This document took too long to read. Try fewer pages or one photo per page." }, 504);
+      if (ctrl.signal.aborted) return tooLong();
       throw e;
-    }
-
-    if (!upstream.ok) {
+    } finally {
       clearTimeout(timer);
-      const t = await upstream.text().catch(() => "");
-      console.error("AI gateway error", upstream.status, t.slice(0, 500));
-      const msg = upstream.status === 429 ? "Too many requests. Please try again in a moment."
-        : upstream.status === 402 ? "AI credits are used up. Please add credits to continue."
-        : "The document could not be read right now.";
-      const status = [400, 402, 403, 429].includes(upstream.status) ? upstream.status : 502;
-      return json({ error: msg }, status);
     }
-
-    let data: any;
-    try { data = await upstream.json(); }
-    catch { clearTimeout(timer); return json({ error: "This document took too long to read. Try fewer pages or one photo per page." }, 504); }
-    clearTimeout(timer);
-
-    const args = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-    if (!args) return json({ error: "No rows could be read from this document." }, 422);
-    let parsed: { rows?: unknown[] };
-    try { parsed = JSON.parse(args); } catch { return json({ error: "The AI response was incomplete. Please try again." }, 502); }
-    const rows = (Array.isArray(parsed.rows) ? parsed.rows : []).map((r) => {
-      const o = (r ?? {}) as Record<string, unknown>;
-      return Object.fromEntries(FIELDS.map((f) => [f, toCell(o[f])]));
-    });
-    return json({ rows });
   } catch (e) {
     if (req.signal.aborted) return new Response(null, { status: 499, headers: corsHeaders });
     console.error("stock-list-extract error", e);
