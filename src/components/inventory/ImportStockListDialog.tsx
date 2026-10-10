@@ -146,16 +146,34 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     setOriginalRaw({}); setStorageOverride({}); setEditingRow(null);
   };
 
+  // Downscale photos (keeps handwriting legible, avoids oversized uploads that exhaust the extractor).
+  const shrinkImage = async (f: File): Promise<{ b64: string; mime: string }> => {
+    const bmp = await createImageBitmap(f);
+    const MAX = 2400;
+    const scale = Math.min(1, MAX / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * scale); canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close?.();
+    const url = canvas.toDataURL("image/jpeg", 0.85);
+    return { b64: url.split(",")[1] ?? "", mime: "image/jpeg" };
+  };
+
   const readDocument = async (f: File) => {
-    if (f.size > 10 * 1024 * 1024) throw new Error("File is larger than 10 MB. Please split or compress it.");
-    const b64 = await new Promise<string>((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(String(r.result).split(",")[1] ?? "");
-      r.onerror = () => rej(new Error("Could not read the file."));
-      r.readAsDataURL(f);
-    });
+    if (f.size > 10 * 1024 * 1024 && f.type === "application/pdf") throw new Error("File is larger than 10 MB. Please split or compress it.");
+    let b64: string; let mime = f.type;
+    if (f.type.startsWith("image/")) {
+      ({ b64, mime } = await shrinkImage(f).catch(() => { throw new Error("Could not read this photo. Try a JPG or PNG."); }));
+    } else {
+      b64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(",")[1] ?? "");
+        r.onerror = () => rej(new Error("Could not read the file."));
+        r.readAsDataURL(f);
+      });
+    }
     const { data, error } = await supabase.functions.invoke("stock-list-extract", {
-      body: { fileBase64: b64, mimeType: f.type, fileName: f.name },
+      body: { fileBase64: b64, mimeType: mime, fileName: f.name },
     });
     if (error) {
       let msg = error.message;

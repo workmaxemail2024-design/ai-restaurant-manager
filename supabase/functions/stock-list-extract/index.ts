@@ -90,8 +90,7 @@ Deno.serve(async (req) => {
         model: "openai/gpt-6-astra",
         stream: true,
         store: false,
-        reasoning: { effort: "medium", summary: "auto" },
-        include: ["reasoning.encrypted_content"],
+        reasoning: { effort: "low" },
         instructions: PROMPT,
         input: [{ role: "user", content: [{ type: "input_text", text: "Extract every product line from this stock list." }, media] }],
         text: { format: { type: "json_schema", name: "stock_list", strict: true, schema } },
@@ -117,6 +116,8 @@ Deno.serve(async (req) => {
       let i;
       while ((i = buf.indexOf("\n\n")) >= 0) {
         const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+        // Only parse events we use; skip large reasoning/other events cheaply.
+        if (!chunk.includes("output_text.delta") && !chunk.includes("failed") && !chunk.includes("error") && !chunk.includes("refusal")) continue;
         const data = chunk.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("");
         if (!data || data === "[DONE]") continue;
         try {
