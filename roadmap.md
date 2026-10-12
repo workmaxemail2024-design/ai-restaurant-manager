@@ -87,4 +87,4 @@
 - [ ] First real import (waits on user review)
 - [x] Inventory inline editing + cost precision + server-side Inventory Edit guard
 
-- [ ] Stock List Importer: supplier price comparison (unchanged/up/down/pack differs/backdated), explicit record-or-keep and optional master-cost update (approved plan 2026-10-12)
+- [x] Stock List Importer: supplier price comparison (unchanged/up/down/pack differs/backdated), explicit record-or-keep and optional master-cost update (approved plan 2026-10-12)
