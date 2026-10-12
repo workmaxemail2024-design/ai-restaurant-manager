@@ -1,38 +1,43 @@
-# Apple Pages (.pages) in the Stock List Importer
+# Stock List Importer: compare against catalogue and supplier price history
 
-## Findings
+## What exists today (audited)
 
-- A modern .pages file is a zip bundle. Its content lives in `Index/*.iwa` files, which are Apple's own undocumented format (Snappy-compressed protobuf), reverse-engineered by the community [1](https://github.com/obriensp/iWorkFileFormat/blob/master/Docs/index.md) [2](https://den-frie-vilje.github.io/cupertino-files/FORMAT.html).
-- The bundle also holds `preview.jpg` images, but these show **the first page only**, at low resolution. Using them would silently miss pages and rows, so they are not reliable.
-- The AI reader we already use accepts images and PDFs only. It cannot read .pages, and none of our existing tools (the spreadsheet reader, the server reader) can either.
-- Reading tables properly would mean adding a third-party reverse-engineered parser. Table cells in Pages are spread across several internal records, and handwritten annotations (Apple Pencil drawings) are stored as drawing data, not text. Library support for Pages tables and drawings is partial and unverified. Apple can add fields at any time, so parsing could break without warning, which is not acceptable for prices.
+- **Item matching** (client, `stockListImport.ts`): finds exact and possible matches, flags duplicates within the file, and asks you to confirm before creating a separate item. Reused as-is.
+- **Supplier-product matching** (`preview_supplier_products`): matches on product code first, then description plus pack. It returns exact, new, new pack variant, pack differs, code differs, description differs, or linked to another item. Reused as-is.
+- **Import** (`apply_stock_list_import`, one transaction): when a linked supplier product's price changed, it always adds a new supplier price. You can't currently choose "leave unchanged". It never changes the master cost of items that already have price history.
+- **Missing today:** the review screen never shows the *previous supplier price*. The "Price differs" tag only compares against the master item cost. "Supplied by a different supplier" appears as a small note, not as a status.
 
-**Conclusion:** .pages cannot be read reliably with our current setup. I don't recommend building a parser.
+## What you will get
 
-## Recommended approach (small, reliable)
+**Clear status for every row.** Badges for: New item, Existing item, Supplier price unchanged, Price up, Price down, Different supplier for an existing item, and Needs confirmation (uncertain match or different pack). Price up/down badges are prominent (colour plus arrow and %).
 
-Use Apple's own PDF export, which keeps every page, table and handwritten annotation exactly as displayed. Then use the importer's existing PDF path: AI reading, the Check extracted rows screen with the original visible, unclear-value flags, row editing, supplier/item matching and the single all-or-nothing import.
+**Price comparison panel** on changed rows. It shows the supplier, previous pack price (with its date), new pack price, previous and new cost per kg, L or each, the difference in €, and the % change.
+- A % is only shown when both prices use the same kind of unit (weight, volume or count) and the same pack.
+- A different pack size or format is flagged as "Different pack — not directly comparable". Only the per-kg/L/each figures are shown for information, with no %.
+- Missing prices show "No previous price" or "Unknown", never €0.
 
-What I'd build:
-1. The file picker also accepts .pages files, so the user isn't left with a greyed-out file.
-2. Choosing a .pages file **does not import anything**. It shows a clear message with the steps:
-   - iPad/iPhone: in Pages, tap ••• → Export → PDF → Save to Files, then choose that PDF here.
-   - Mac: File → Export To → PDF.
-   - A "Choose the PDF" button opens the picker again.
-3. Old-style Pages files ('09 and earlier) get the same guidance.
+**Two separate explicit choices per changed row:**
+1. **Supplier price:** "Record new supplier price" or "Leave unchanged". It must be chosen; there is no default. Import stays blocked until every changed row is decided, the same way conflicts work today.
+2. **Recipe costing price (optional):** "Also update the master cost used in recipes". It is off by default and only shown to users with Inventory Edit permission. It is never applied automatically. It adds a new dated price entry (effective on the import date) and never edits past prices.
 
-Your file is never partly read or guessed. It is either a PDF read in full, or a clear request to export one.
+**Filters:** a "Changed prices only" quick filter, plus the existing tag filters for the new statuses. The summary adds counts for price up, price down and unchanged.
 
-## Not changing
+**Unchanged:** the one all-or-nothing import, duplicate prevention, existing product mappings, conflict confirmations, tenant isolation, past prices and effective dates. Stock quantities, recipes and POS selling prices are not touched.
 
-No database changes. The AI reader, review screens, matching, permissions and the import process stay as they are.
+## One database change needs your approval
 
-## If you still want direct .pages reading later
+The master-cost option must be saved in the same transaction as the import, and checked on the server. Today's separate price function only checks Manager/Owner, not Inventory Edit. The smallest safe change is to add one optional flag per row (`update_master_price`) to `apply_stock_list_import`. When it is set:
+- the server re-checks `can_edit_inventory()`;
+- it records a new dated master price through the existing `insert_ingredient_price_row` path, with the same normalisation as `add_ingredient_price`;
+- it refuses if the units are not comparable.
 
-It would need a separate trial first: run a parser library on 3–5 of your real Pages stock lists, compare every row against the PDF export, and adopt it only if they match exactly. Even then, handwriting would still need the PDF route.
+Rows without the flag behave exactly as today. I will show you the exact SQL before applying it. If you'd rather not change the database, the master-cost option can be left out, and everything else works without any database change.
 
 ## Technical details
 
-- `ImportStockListDialog.tsx`: add `.pages` to `accept`. In `handleFile`, detect by extension (MIME is often empty or `application/x-iwork-pages-sffpages`) before any parsing, and set a dedicated guidance state instead of `parseError`. The guidance renders on the upload step.
-- No new dependencies, no server changes.
-- Verification: Playwright on the upload step with a dummy `.pages` file confirms the guidance appears, no network request is sent, and PDF/CSV/XLSX/photo uploads behave as before.
+- Previous supplier price: one read-only client query on `supplier_product_prices` (allowed by existing RLS) for the matched `supplier_product_id`s. It takes the latest by `effective_date desc, created_at desc`, the same ordering the import uses for its "unchanged" check. No change to `preview_supplier_products`.
+- Comparability: compare `cost_per_base_unit` only when `base_unit` matches (g/ml/each). Display ×1000 for per kg/L. The % is shown only for `exact`, code-differs or description-differs links with the same pack. `pack_differs` and `new_pack_variant` show per-unit figures for information only.
+- "Leave unchanged" = send `price: null` for that row. The supplier link is still saved and no supplier price is added. This path is only offered when the item already has price history, so starting prices are unaffected.
+- Different-supplier status: reuses the existing `matchNotes` logic (file supplier ≠ item's regular supplier), promoted to a tag. The regular supplier is still never changed.
+- Files: `ImportStockListDialog.tsx` (statuses, choices, filter, payload), a new small `PriceChangePanel.tsx`, and helpers in `stockListImport.ts`. Migration: only the `apply_stock_list_import` addition above.
+- Tests (rolled back): unchanged / up / down / different pack / different unit; "leave unchanged" adds no supplier price; master update off leaves `ingredient_prices` untouched; master update on adds exactly one dated row; read-only role is refused; another restaurant is refused; fingerprints for stock, recipes and sales are unchanged.
