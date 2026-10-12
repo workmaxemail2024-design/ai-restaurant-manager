@@ -23,7 +23,9 @@ import {
   readStockGrid, autoMapColumns, buildRows, IMPORT_FIELDS, interpretRow, normalizeName, isNearMatch,
   similarity, defaultStorage, type ParsedItem, type SheetGrid, type ColumnMapping, type FieldKey,
   toEditable, extractedToGrid, unresolvedCells, type EditableRow,
+  compareSupplierPrice, type SupplierPriceRow, type PriceCompare,
 } from "@/lib/stockListImport";
+import { PriceChangePanel } from "@/components/inventory/PriceChangePanel";
 import { ExtractedRowsReview } from "@/components/inventory/ExtractedRowsReview";
 import { EditImportRowSheet, type StorageType } from "@/components/inventory/EditImportRowSheet";
 import type { RawRow } from "@/lib/stockListImport";
@@ -54,6 +56,7 @@ interface SpPreviewRow {
 interface ImportResult {
   suppliers_created: number; items_created: number; items_matched: number; rows_skipped: number; starting_prices: number;
   supplier_products_created: number; supplier_products_linked: number; supplier_prices_added: number; supplier_prices_unchanged: number;
+  supplier_prices_kept?: number; master_costs_updated?: number; master_history_added?: number;
 }
 
 /** Mirrors the database supplier_name_key(): lower-case, punctuation to spaces. */
@@ -122,6 +125,12 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
   const [originalRaw, setOriginalRaw] = useState<Record<number, RawRow>>({});
   const [storageOverride, setStorageOverride] = useState<Record<number, StorageType>>({});
   const [editingRow, setEditingRow] = useState<number | null>(null);
+  /** Import (effective) date; comparisons use the supplier price in force on this date. */
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [effDate, setEffDate] = useState(todayIso);
+  /** Explicit, separate decisions for changed-price rows. Never preselected. */
+  const [priceChoice, setPriceChoice] = useState<Record<number, "record" | "keep">>({});
+  const [masterChoice, setMasterChoice] = useState<Record<number, boolean>>({});
 
   const IDENTITY: (keyof RawRow)[] = ["itemName", "supplier", "productCode", "packSize", "packUnit", "purchaseUnit", "purchaseQty"];
   const applyRowEdit = (row: number, next: RawRow, storage: StorageType | null) => {
@@ -132,6 +141,8 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
       // Identity changed: earlier decisions for this row are no longer valid.
       setItemChoice((c) => { const n = { ...c }; delete n[row]; return n; });
       setSpChoice((c) => { const n = { ...c }; delete n[row]; return n; });
+      setPriceChoice((c) => { const n = { ...c }; delete n[row]; return n; });
+      setMasterChoice((c) => { const n = { ...c }; delete n[row]; return n; });
     }
     setStorageOverride((o) => { const n = { ...o }; if (storage) n[row] = storage; else delete n[row]; return n; });
     setParsed((ps) => ps.map((x) => (x.raw.rowNumber === row ? interpretRow(next) : x)));
@@ -144,6 +155,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     setItemChoice({}); setSupplierChoice({}); setFilter("all"); setResult(null); setApplyError(null); setSpChoice({});
     setDoc((d) => { if (d) URL.revokeObjectURL(d.url); return null; }); setExtracted([]);
     setOriginalRaw({}); setStorageOverride({}); setEditingRow(null);
+    setPriceChoice({}); setMasterChoice({}); setEffDate(new Date().toISOString().slice(0, 10));
   };
 
   // Downscale photos (keeps handwriting legible, avoids oversized uploads that exhaust the extractor).
@@ -346,6 +358,49 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
     return { kind: pv.status, preview: pv };
   };
 
+  // Supplier price history for matched supplier products (read-only).
+  const spIds = useMemo(() => [...new Set([...(spPreview?.values() ?? [])].map((v) => v.supplier_product_id).filter(Boolean) as string[])].sort(), [spPreview]);
+  const { data: spHistory, isFetching: historyLoading } = useQuery({
+    queryKey: ["sp-price-history", currentRestaurant?.id, spIds.join(",")],
+    enabled: open && step === "review" && spIds.length > 0,
+    queryFn: async () => {
+      const out = new Map<string, SupplierPriceRow[]>();
+      for (let i = 0; i < spIds.length; i += 200) {
+        const { data, error } = await (supabase as any).from("supplier_product_prices")
+          .select("supplier_product_id, effective_date, created_at, cost_per_pack, pack_size, pack_unit, base_unit, cost_per_base_unit")
+          .in("supplier_product_id", spIds.slice(i, i + 200)).limit(5000);
+        if (error) throw error;
+        (data as SupplierPriceRow[]).forEach((h) => out.set(h.supplier_product_id, [...(out.get(h.supplier_product_id) ?? []), h]));
+      }
+      return out;
+    },
+  });
+
+  /** Comparison against the supplier price in force on the import date (linked supplier products only). */
+  const priceCmp = (r: RowPlan): PriceCompare | null => {
+    if (effective(r) === "skip") return null;
+    const st = spStatus(r);
+    const linked = st.kind === "exact" || ((st.kind === "code_differs" || st.kind === "description_differs") && spChoice[r.p.raw.rowNumber] === "link");
+    if (st.kind === "pack_differs" && st.preview?.supplier_product_id) {
+      return compareSupplierPrice(spHistory?.get(st.preview.supplier_product_id) ?? [], effDate, { ...r.p, costPerPack: r.p.costPerPack, baseCost: r.p.baseCost, baseUnit: r.p.baseUnit });
+    }
+    if (!linked || !st.preview?.supplier_product_id || spChoice[r.p.raw.rowNumber] === "none") return null;
+    return compareSupplierPrice(spHistory?.get(st.preview.supplier_product_id) ?? [], effDate, r.p);
+  };
+  const isChanged = (c: PriceCompare | null) => !!c && (c.kind === "up" || c.kind === "down");
+
+  /** Whether an explicit master-cost update can be offered for this row. */
+  const masterOffer = (r: RowPlan): { allowed: true } | { allowed: false; reason: string } | null => {
+    const ch = effective(r);
+    if (!ch || ch === "new" || ch === "skip" || ch === "follow") return null;
+    const ex = itemById.get(ch);
+    if (!ex || r.p.costPerPack == null) return null;
+    if (!ex.pack_size || ex.pack_size <= 0 || !ex.pack_unit) return { allowed: false, reason: "item pack format unknown — update in the item editor" };
+    const exUnit = getIngredientCostUnit(ex);
+    if (!exUnit || exUnit !== r.p.baseUnit) return { allowed: false, reason: `units not comparable (item per ${exUnit ?? "?"}, list per ${r.p.baseUnit ?? "?"})` };
+    return { allowed: true };
+  };
+
   const spNeedsDecision = (r: RowPlan): boolean => {
     const st = spStatus(r);
     const pick = spChoice[r.p.raw.rowNumber];
@@ -397,6 +452,17 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
       const t = SP_TAG[st.kind];
       if (t && spChoice[r.p.raw.rowNumber] !== "none") tags.push(t);
       else if (t && spChoice[r.p.raw.rowNumber] === "none") tags.push({ label: "Supplier link not saved", tone: "info" });
+      const c = priceCmp(r);
+      if (c?.kind === "up") tags.push({ label: "Supplier price up", tone: "bad" });
+      else if (c?.kind === "down") tags.push({ label: "Supplier price down", tone: "ok" });
+      else if (c?.kind === "same") tags.push({ label: "Supplier price unchanged", tone: "ok" });
+      else if (c?.kind === "not_comparable" && c.prev) tags.push({ label: "Price not comparable — check pack", tone: "warn" });
+      if (c?.newer) tags.push({ label: "Historical list — newer price exists", tone: "warn" });
+      const ex = ch && ch !== "new" && ch !== "follow" ? itemById.get(ch) : undefined;
+      if (ex?.supplier_id && r.p.supplierName) {
+        const fs = resolveSupplier(normalizeName(r.p.supplierName));
+        if (fs && fs !== ex.supplier_id) tags.push({ label: "Existing item, different supplier", tone: "info" });
+      }
     }
     return tags;
   };
@@ -423,10 +489,11 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
   const unresolvedItems = rowPlans.filter((r) => effective(r) === null).length;
   const unresolvedSuppliers = [...supplierPlans.values()].filter((s) => resolveSupplier(s.key) === null).length;
   const unresolvedSp = rowPlans.filter((r) => spNeedsDecision(r)).length;
-  const unresolved = unresolvedItems + unresolvedSuppliers + unresolvedSp;
+  const unresolvedPrice = rowPlans.filter((r) => isChanged(priceCmp(r)) && !priceChoice[r.p.raw.rowNumber]).length;
+  const unresolved = unresolvedItems + unresolvedSuppliers + unresolvedSp + unresolvedPrice;
 
   const summary = useMemo(() => {
-    let created = 0, matched = 0, possible = 0, dupes = 0, missing = 0, skipped = 0, priceDiff = 0, newSup = 0;
+    let created = 0, matched = 0, possible = 0, dupes = 0, missing = 0, skipped = 0, priceDiff = 0, newSup = 0, up = 0, down = 0, same = 0;
     for (const r of rowPlans) {
       const ch = effective(r);
       if (ch === "skip") { skipped++; continue; }
@@ -436,20 +503,22 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
       else matched++;
       if (r.p.missing.length) missing++;
       if (priceInfo(r).differs) priceDiff++;
+      const c = priceCmp(r);
+      if (c?.kind === "up") up++; else if (c?.kind === "down") down++; else if (c?.kind === "same") same++;
     }
     for (const s of supplierPlans.values()) if (resolveSupplier(s.key) === "new") newSup++;
-    return { created, matched, possible, dupes, missing, skipped, priceDiff, newSup };
+    return { created, matched, possible, dupes, missing, skipped, priceDiff, newSup, up, down, same };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowPlans, itemChoice, supplierChoice, supplierPlans, pricedIds]);
+  }, [rowPlans, itemChoice, supplierChoice, supplierPlans, pricedIds, spPreview, spHistory, spChoice, effDate]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     rowPlans.forEach((r) => statusOf(r).forEach((t) => (c[t.label] = (c[t.label] ?? 0) + 1)));
     return c;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowPlans, itemChoice, supplierChoice, supplierPlans, pricedIds]);
+  }, [rowPlans, itemChoice, supplierChoice, supplierPlans, pricedIds, spPreview, spHistory, spChoice, effDate]);
 
-  const visible = rowPlans.filter((r) => filter === "all" || statusOf(r).some((t) => t.label === filter));
+  const visible = rowPlans.filter((r) => filter === "all" || (filter === "_changed" ? isChanged(priceCmp(r)) : statusOf(r).some((t) => t.label === filter)));
 
   const onRowChoice = (r: RowPlan, v: string) => {
     const row = r.p.raw.rowNumber;
@@ -511,10 +580,17 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
           };
         }
       }
-      rows.push({ row, supplier, item, price, set_master_price: setMaster, supplier_product });
+      const changed = isChanged(priceCmp(r));
+      const mo = masterOffer(r);
+      rows.push({
+        row, supplier, item, price, set_master_price: setMaster, supplier_product,
+        // Explicit decisions only: changed prices are recorded only when chosen; master cost only when ticked.
+        record_supplier_price: changed ? priceChoice[row] === "record" : true,
+        update_master_price: !!(price && changed && mo?.allowed && masterChoice[row]),
+      });
     }
     return {
-      effective_date: new Date().toISOString().slice(0, 10),
+      effective_date: effDate,
       suppliers: [...newSuppliers].map(([key, name]) => ({ ref: `sup:${key}`, name })),
       rows,
     };
@@ -538,6 +614,9 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
       qc.invalidateQueries({ queryKey: ["suppliers"] });
       qc.invalidateQueries({ queryKey: ["ingredient-priced-ids"] });
       qc.invalidateQueries({ queryKey: ["sp-preview"] });
+      qc.invalidateQueries({ queryKey: ["sp-price-history"] });
+      qc.invalidateQueries({ queryKey: ["food-costing-daily"] });
+      qc.invalidateQueries({ queryKey: ["food-costing-period"] });
       setApplying(false);
     }
   };
@@ -618,17 +697,19 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
             <div className="space-y-2 rounded-lg border p-4 text-sm">
               <p className="font-medium">Import complete — all rows saved together{doc ? " (from photo/PDF)" : ""}</p>
               <p>{result.items_created} new items · {result.items_matched} matched existing · {result.starting_prices} starting prices · {result.suppliers_created} new suppliers · {result.rows_skipped} skipped</p>
-              <p>{result.supplier_products_created} new supplier products · {result.supplier_products_linked} linked to existing · {result.supplier_prices_added} supplier prices recorded · {result.supplier_prices_unchanged} unchanged prices not repeated</p>
+              <p>{result.supplier_products_created} new supplier products · {result.supplier_products_linked} linked to existing · {result.supplier_prices_added} supplier prices recorded · {result.supplier_prices_unchanged} unchanged prices not repeated{result.supplier_prices_kept ? ` · ${result.supplier_prices_kept} changed prices left unchanged` : ""}</p>
+              <p>{result.master_costs_updated ?? 0} master recipe costs updated · {result.master_history_added ?? 0} backdated master price entries added (current cost unchanged)</p>
             </div>
           )}
 
           {step === "review" && (
             <>
-              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:grid-cols-8">
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11">
                 {[
                   ["New items", summary.created], ["Matched", summary.matched], ["Need review", summary.possible],
                   ["Duplicates in file", summary.dupes], ["Missing info", summary.missing], ["Price differs", summary.priceDiff],
                   ["New suppliers", summary.newSup], ["Skipped", summary.skipped],
+                  ["Supplier price up", summary.up], ["Supplier price down", summary.down], ["Supplier price unchanged", summary.same],
                 ].map(([l, v]) => (
                   <div key={l as string} className="rounded-lg border p-2">
                     <div className="text-xs text-muted-foreground">{l}</div>
@@ -643,9 +724,19 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
                   <SelectTrigger className="h-11 w-80"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All rows ({rowPlans.length})</SelectItem>
+                    <SelectItem value="_changed">Changed prices only ({summary.up + summary.down})</SelectItem>
                     {Object.entries(counts).map(([k, v]) => <SelectItem key={k} value={k}>{k} ({v})</SelectItem>)}
                   </SelectContent>
                 </Select>
+                <Button variant={filter === "_changed" ? "default" : "outline"} className="h-11" onClick={() => setFilter(filter === "_changed" ? "all" : "_changed")}>
+                  Changed prices only
+                </Button>
+                <label className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Prices effective</span>
+                  <Input type="date" className="h-11 w-44" value={effDate} max={todayIso}
+                    onChange={(e) => { const v = e.target.value; if (v && v <= todayIso) { setEffDate(v); setPriceChoice({}); setMasterChoice({}); } }} />
+                </label>
+                {effDate < todayIso && <Badge variant="secondary" className={toneClass.warn}>Backdated list — saved as history, never replaces newer prices</Badge>}
                 <Button variant="outline" className="h-11" onClick={() => setStep(doc ? "extracted" : "map")}>{doc ? "Back to extracted rows" : "Back to columns"}</Button>
                 <Button variant="outline" className="h-11" onClick={reset}>Choose another file</Button>
               </div>
@@ -757,7 +848,28 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
                             {p.baseCost != null && p.baseUnit === "g" && <div className="text-xs text-muted-foreground">{formatCurrency(p.baseCost * 1000)}/kg</div>}
                             {p.baseCost != null && p.baseUnit === "ml" && <div className="text-xs text-muted-foreground">{formatCurrency(p.baseCost * 1000)}/L</div>}
                           </TableCell>
-                          <TableCell className="min-w-40 text-xs">{priceInfo(r).text}</TableCell>
+                          <TableCell className="min-w-64 text-xs">
+                            <div>{priceInfo(r).text}</div>
+                            {(() => {
+                              const c = priceCmp(r);
+                              if (!c) return null;
+                              const row = p.raw.rowNumber;
+                              return (
+                                <div className="mt-2">
+                                  <PriceChangePanel
+                                    cmp={c}
+                                    supplierName={supChoice && supChoice !== "new" ? supplierById.get(supChoice)?.name ?? "" : p.supplierName ?? ""}
+                                    newPackCost={p.costPerPack} baseUnit={p.baseUnit}
+                                    recordChoice={priceChoice[row]}
+                                    onRecordChoice={(v) => setPriceChoice((o) => { const n = { ...o }; if (v) n[row] = v; else delete n[row]; return n; })}
+                                    masterOffer={masterOffer(r)}
+                                    masterChecked={!!masterChoice[row]}
+                                    onMasterChecked={(v) => setMasterChoice((o) => ({ ...o, [row]: v }))}
+                                  />
+                                </div>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell>{p.sellingPrice != null ? formatCurrency(p.sellingPrice) : "—"}</TableCell>
                           <TableCell className="min-w-64 text-xs">
                             {p.raw.notes && <div>{p.raw.notes}</div>}
@@ -810,7 +922,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
               {!applyError && previewError && <span className="mr-auto text-sm text-destructive">Supplier product check failed: {(previewError as Error).message}</span>}
               {!applyError && !previewError && unresolved > 0 && <span className="mr-auto text-sm text-warning">{unresolved} decision(s) needed before import{previewLoading ? " (checking supplier products…)" : ""}.</span>}
               <Button variant="outline" className="h-11" onClick={() => { onOpenChange(false); reset(); }} disabled={applying}>Cancel</Button>
-              <Button className="h-11" onClick={() => setConfirmApply(true)} disabled={applying || unresolved > 0 || !pricedIds || previewLoading || !!previewError}>
+              <Button className="h-11" onClick={() => setConfirmApply(true)} disabled={applying || unresolved > 0 || !pricedIds || previewLoading || historyLoading || !!previewError}>
                 {applying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Import reviewed rows
               </Button>
             </>
@@ -869,7 +981,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
               <AlertDialogDescription>
                 {summary.created} new items, {summary.matched} matched existing, {summary.dupes} duplicate rows linked,
                 {" "}{summary.newSup} new suppliers, {summary.skipped} skipped. {summary.missing} rows have missing information
-                (kept unknown). Existing prices are never overwritten; stock quantities do not change.
+                (kept unknown). Supplier prices: {Object.values(priceChoice).filter((v) => v === "record").length} changed recorded, {Object.values(priceChoice).filter((v) => v === "keep").length} left unchanged. Master recipe costs updated: {Object.values(masterChoice).filter(Boolean).length}. Prices effective {effDate}. Stock quantities do not change.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

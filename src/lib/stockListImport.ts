@@ -460,3 +460,51 @@ export function extractedToGrid(rows: EditableRow[]): SheetGrid {
     rows: rows.filter((r) => !r.skip).map((r) => EXTRACT_FIELDS.map((f) => r.cells[f].value.trim())),
   };
 }
+
+/* ---------- Supplier price comparison (read-only, review screen) ---------- */
+
+export interface SupplierPriceRow {
+  supplier_product_id: string; effective_date: string; created_at: string;
+  cost_per_pack: number; pack_size: number; pack_unit: string; base_unit: string | null; cost_per_base_unit: number | null;
+}
+
+export type PriceCompareKind = "no_previous" | "same" | "up" | "down" | "not_comparable";
+
+export interface PriceCompare {
+  kind: PriceCompareKind;
+  prev: SupplierPriceRow | null;
+  /** A later price than the import date exists (backdated list). */
+  newer: SupplierPriceRow | null;
+  diffPack: number | null;
+  pct: number | null;
+  prevBase: number | null;
+  newBase: number | null;
+  reason?: string;
+}
+
+const byDateDesc = (a: SupplierPriceRow, b: SupplierPriceRow) =>
+  b.effective_date.localeCompare(a.effective_date) || b.created_at.localeCompare(a.created_at);
+
+/**
+ * Compare a list price with the supplier price in force on `onDate` (same ordering as the import).
+ * A % is only given when the pack and costing dimension are identical; otherwise "not comparable".
+ */
+export function compareSupplierPrice(
+  history: SupplierPriceRow[], onDate: string,
+  next: { costPerPack: number | null; packSize: number | null; packUnit: string | null; baseCost: number | null; baseUnit: string | null },
+): PriceCompare {
+  const sorted = [...history].sort(byDateDesc);
+  const prev = sorted.find((h) => h.effective_date <= onDate) ?? null;
+  const newer = sorted.find((h) => h.effective_date > onDate) ?? null;
+  const base = { prev, newer, diffPack: null, pct: null, prevBase: prev?.cost_per_base_unit ?? null, newBase: next.baseCost };
+  if (next.costPerPack == null) return { ...base, kind: "not_comparable", reason: "No price in the list" };
+  if (!prev) return { ...base, kind: "no_previous" };
+  if (!prev.base_unit || !next.baseUnit || prev.base_unit !== next.baseUnit)
+    return { ...base, kind: "not_comparable", reason: `Different unit type (${prev.base_unit ?? "?"} vs ${next.baseUnit ?? "?"})` };
+  if (Number(prev.pack_size) !== Number(next.packSize) || prev.pack_unit !== next.packUnit)
+    return { ...base, kind: "not_comparable", reason: "Different pack — not directly comparable" };
+  const diff = next.costPerPack - Number(prev.cost_per_pack);
+  if (Math.abs(diff) < 0.005) return { ...base, kind: "same", diffPack: 0, pct: 0 };
+  const pct = Number(prev.cost_per_pack) > 0 ? (diff / Number(prev.cost_per_pack)) * 100 : null;
+  return { ...base, kind: diff > 0 ? "up" : "down", diffPack: diff, pct };
+}
