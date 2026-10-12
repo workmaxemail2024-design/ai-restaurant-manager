@@ -68,7 +68,7 @@ export function PriceChangePanel({ cmp, supplierName, newPackCost, baseUnit, rec
           <span>Also update the master cost used in recipes (new dated entry)</span>
         </label>
       ) : (
-        <div className="text-muted-foreground">Master recipe cost: {masterOffer.reason}</div>
+        <div className="text-muted-foreground">Master recipe cost: {"reason" in masterOffer ? masterOffer.reason : ""}</div>
       ))}
     </div>
   );
