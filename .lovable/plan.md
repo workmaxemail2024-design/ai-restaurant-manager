@@ -31,7 +31,17 @@ The master-cost option must be saved in the same transaction as the import, and 
 - it records a new dated master price through the existing `insert_ingredient_price_row` path, with the same normalisation as `add_ingredient_price`;
 - it refuses if the units are not comparable.
 
-Rows without the flag behave exactly as today. I will show you the exact SQL before applying it. If you'd rather not change the database, the master-cost option can be left out, and everything else works without any database change.
+Rows without the flag behave exactly as today.
+
+## Backdated lists and master-cost safeguards
+
+- **Import date chosen on the review screen** (defaults to today, cannot be in the future). The comparison uses the supplier price that was effective on that date. If a newer price exists after that date, the row shows "Historical list — a newer price from [date] exists".
+- **An older list never replaces the current price.** A backdated supplier price is saved as history only on its own date. The latest price stays the current one, because "current" is always the latest effective date. Master-cost updates on a backdated list are refused when a newer master price already exists.
+- **Master-cost update safeguards (checked on the server):**
+  - The pack cost is converted into the item's own costing unit (g, ml or each) using the existing unit rules.
+  - It is refused if the item's unit and the list's unit are different kinds (for example kg vs each), or if the pack size or unit is missing or unclear.
+  - It is dated on the chosen import date and only ever adds a new price row; past prices are never edited.
+- Neither "record supplier price" nor "update master cost" is preselected on changed-price rows.
 
 ## Technical details
 
