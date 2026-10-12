@@ -42,7 +42,6 @@ Rows without the flag behave exactly as today.
   - It is refused if the item's unit and the list's unit are different kinds (for example kg vs each), or if the pack size or unit is missing or unclear.
   - It is dated on the chosen import date and only ever adds a new price row; past prices are never edited.
 - Neither "record supplier price" nor "update master cost" is preselected on changed-price rows.
-- The import function also refuses a supplier price row marked "leave unchanged".
 
 ## Technical details
 
