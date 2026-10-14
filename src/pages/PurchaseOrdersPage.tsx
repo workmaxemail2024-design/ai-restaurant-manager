@@ -466,15 +466,19 @@ export default function PurchaseOrdersPage() {
         onOpenChange={setIsReceiveOpen}
         orderItems={orderItems}
         isProcessing={receiveDelivery.isPending}
-        onConfirm={async (items) => {
+        onConfirm={async ({ deliveryDate, items }) => {
           if (!selectedOrder) return;
           await receiveDelivery.mutateAsync({
             orderId: selectedOrder.id,
-            locationId: selectedOrder.location_id,
-            items: items.map((item) => ({
-              ingredient_id: item.ingredient_id,
-              delivered_quantity: item.delivered_quantity,
-            })),
+            deliveryDate,
+            lines: items.map((item) => {
+              const cost = item.unit_cost.trim() === "" ? null : Number(item.unit_cost.replace(",", "."));
+              return {
+                item_id: item.id,
+                received_quantity: item.delivered_quantity,
+                unit_cost: cost != null && Number.isFinite(cost) && cost >= 0 ? cost : null,
+              };
+            }),
           });
           setIsReceiveOpen(false);
           setSelectedOrderId(null);
