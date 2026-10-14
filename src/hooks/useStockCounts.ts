@@ -75,77 +75,25 @@ export function useCreateStockCount() {
 
   return useMutation({
     mutationFn: async (input: StockCountInput) => {
-      const changedLines = input.lines.filter(
-        (line) => Math.abs(line.counted_quantity - line.expected_quantity) > 0.0001
-      );
-
-      const { data: count, error: countError } = await supabase
-        .from("stock_counts")
-        .insert({
-          restaurant_id: input.restaurant_id,
-          location_id: input.location_id,
-          count_date: input.count_date,
-          scope_type: input.scope_type,
-          scope_value: input.scope_value,
-          status: "submitted",
-          notes: input.notes ?? null,
-        })
-        .select()
-        .single();
-
-      if (countError) throw countError;
-
-      if (input.lines.length > 0) {
-        const { error: linesError } = await supabase.from("stock_count_lines").insert(
-          input.lines.map((line) => ({
-            count_id: count.id,
-            ingredient_id: line.ingredient_id,
-            expected_quantity: line.expected_quantity,
-            counted_quantity: line.counted_quantity,
-            location_id: input.location_id,
-            restaurant_id: input.restaurant_id,
-          }))
-        );
-        if (linesError) throw linesError;
-      }
-
-      // Apply physical stock corrections for every line (even unchanged lines refresh the timestamp).
-      for (const line of input.lines) {
-        const { error: upsertError } = await supabase.from("stock_levels").upsert(
-          {
-            ingredient_id: line.ingredient_id,
-            location_id: input.location_id,
-            quantity: line.counted_quantity,
-          },
-          { onConflict: "ingredient_id,location_id" }
-        );
-        if (upsertError) throw upsertError;
-      }
-
-      // Record count-specific audit adjustments for changed lines so the adjustment log
-      // shows a traceable correction tied to this count session.
-      if (changedLines.length > 0) {
-        const { error: adjError } = await supabase.from("stock_adjustments").insert(
-          changedLines.map((line) => ({
-            ingredient_id: line.ingredient_id,
-            location_id: input.location_id,
-            restaurant_id: input.restaurant_id,
-            adjustment_type: "count" as const,
-            quantity: Math.abs(line.counted_quantity - line.expected_quantity),
-            reason: `Stock count ${input.count_date}${input.notes ? " — " + input.notes : ""}`,
-            count_id: count.id,
-          }))
-        );
-        if (adjError) throw adjError;
-      }
-
-      return count;
+      // One server transaction: count header, lines and ledger corrections.
+      // Expected quantities are recalculated server-side from the stock ledger at the count date.
+      const { data, error } = await supabase.rpc("submit_stock_count", {
+        p_location_id: input.location_id,
+        p_count_date: input.count_date,
+        p_scope_type: input.scope_type,
+        p_scope_value: input.scope_value ?? undefined,
+        p_notes: input.notes ?? undefined,
+        p_lines: input.lines.map((l) => ({ ingredient_id: l.ingredient_id, counted_quantity: l.counted_quantity })),
+      } as any);
+      if (error) throw error;
+      return { id: data as unknown as string };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stock-counts"] });
       queryClient.invalidateQueries({ queryKey: ["stock-count-latest-lines"] });
       queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
       queryClient.invalidateQueries({ queryKey: ["stock-adjustments"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       toast({ title: "Stock count submitted" });
     },
     onError: (error) => {

@@ -14,13 +14,20 @@ interface DeliveryItem {
   ingredient_unit: string;
   ordered_quantity: number;
   delivered_quantity: number;
+  /** Cost per stock unit as charged; blank = unknown */
+  unit_cost: string;
+}
+
+export interface DeliveryConfirmation {
+  deliveryDate: string;
+  items: DeliveryItem[];
 }
 
 interface ReceiveDeliveryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   orderItems: PurchaseOrderItem[];
-  onConfirm: (items: DeliveryItem[]) => Promise<void>;
+  onConfirm: (result: DeliveryConfirmation) => Promise<void>;
   isProcessing: boolean;
 }
 
@@ -32,6 +39,8 @@ export function ReceiveDeliveryModal({
   isProcessing,
 }: ReceiveDeliveryModalProps) {
   const [deliveryItems, setDeliveryItems] = useState<DeliveryItem[]>([]);
+  const today = new Date().toISOString().slice(0, 10);
+  const [deliveryDate, setDeliveryDate] = useState(today);
 
   // Initialize delivery items when modal opens
   useEffect(() => {
@@ -44,8 +53,10 @@ export function ReceiveDeliveryModal({
           ingredient_unit: item.ingredients?.unit || "",
           ordered_quantity: Number(item.quantity),
           delivered_quantity: Number(item.quantity), // Default to ordered quantity
+          unit_cost: Number(item.cost_price) > 0 ? String(item.cost_price) : "",
         }))
       );
+      setDeliveryDate(today);
     }
   }, [open, orderItems]);
 
@@ -60,7 +71,7 @@ export function ReceiveDeliveryModal({
   };
 
   const handleConfirm = async () => {
-    await onConfirm(deliveryItems);
+    await onConfirm({ deliveryDate, items: deliveryItems });
   };
 
   const hasDiscrepancies = deliveryItems.some(
@@ -76,11 +87,15 @@ export function ReceiveDeliveryModal({
             Receive Delivery
           </DialogTitle>
           <DialogDescription>
-            Confirm the quantities received. Stock levels will be updated accordingly.
+            Confirm what physically arrived and on which day. This is the delivery, not the invoice or payment.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="delivery-date">Delivery date (when goods arrived)</Label>
+            <Input id="delivery-date" type="date" className="h-11" max={today} value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} />
+          </div>
           {orderItems.length === 0 ? (
             <Alert>
               <AlertCircle className="h-4 w-4" />
@@ -115,6 +130,14 @@ export function ReceiveDeliveryModal({
                         className="w-28"
                       />
                       <span className="text-sm text-muted-foreground">{item.ingredient_unit}</span>
+                      <Input
+                        aria-label="Cost per unit"
+                        inputMode="decimal"
+                        placeholder="€ / unit (Unknown)"
+                        value={item.unit_cost}
+                        onChange={(e) => setDeliveryItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, unit_cost: e.target.value } : i)))}
+                        className="w-32 h-11"
+                      />
                       {item.delivered_quantity !== item.ordered_quantity && (
                         <span className="text-xs text-warning ml-auto">
                           {item.delivered_quantity > item.ordered_quantity ? "+" : ""}
@@ -144,7 +167,7 @@ export function ReceiveDeliveryModal({
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={isProcessing || orderItems.length === 0}
+            disabled={isProcessing || orderItems.length === 0 || !deliveryDate || deliveryDate > today}
           >
             {isProcessing ? (
               <>
