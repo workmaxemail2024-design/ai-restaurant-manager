@@ -1720,6 +1720,8 @@ export type Database = {
           ingredient_id: string
           purchase_order_id: string
           quantity: number
+          received_quantity: number | null
+          received_unit_cost: number | null
           restaurant_id: string | null
         }
         Insert: {
@@ -1729,6 +1731,8 @@ export type Database = {
           ingredient_id: string
           purchase_order_id: string
           quantity?: number
+          received_quantity?: number | null
+          received_unit_cost?: number | null
           restaurant_id?: string | null
         }
         Update: {
@@ -1738,6 +1742,8 @@ export type Database = {
           ingredient_id?: string
           purchase_order_id?: string
           quantity?: number
+          received_quantity?: number | null
+          received_unit_cost?: number | null
           restaurant_id?: string | null
         }
         Relationships: [
@@ -1767,10 +1773,12 @@ export type Database = {
       purchase_orders: {
         Row: {
           created_at: string
+          delivery_date: string | null
           id: string
           location_id: string
           order_date: string
           received_at: string | null
+          received_by: string | null
           restaurant_id: string | null
           status: string
           supplier_id: string
@@ -1778,10 +1786,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delivery_date?: string | null
           id?: string
           location_id: string
           order_date?: string
           received_at?: string | null
+          received_by?: string | null
           restaurant_id?: string | null
           status?: string
           supplier_id: string
@@ -1789,10 +1799,12 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delivery_date?: string | null
           id?: string
           location_id?: string
           order_date?: string
           received_at?: string | null
+          received_by?: string | null
           restaurant_id?: string | null
           status?: string
           supplier_id?: string
@@ -2601,9 +2613,11 @@ export type Database = {
           adjustment_type: string
           count_id: string | null
           created_at: string
+          effective_date: string | null
           id: string
           ingredient_id: string
           location_id: string
+          movement_id: string | null
           quantity: number
           reason: string | null
           restaurant_id: string | null
@@ -2613,9 +2627,11 @@ export type Database = {
           adjustment_type: string
           count_id?: string | null
           created_at?: string
+          effective_date?: string | null
           id?: string
           ingredient_id: string
           location_id: string
+          movement_id?: string | null
           quantity: number
           reason?: string | null
           restaurant_id?: string | null
@@ -2625,9 +2641,11 @@ export type Database = {
           adjustment_type?: string
           count_id?: string | null
           created_at?: string
+          effective_date?: string | null
           id?: string
           ingredient_id?: string
           location_id?: string
+          movement_id?: string | null
           quantity?: number
           reason?: string | null
           restaurant_id?: string | null
@@ -2732,6 +2750,7 @@ export type Database = {
         Row: {
           count_date: string
           created_at: string
+          effective_at: string | null
           id: string
           location_id: string
           notes: string | null
@@ -2746,6 +2765,7 @@ export type Database = {
         Insert: {
           count_date?: string
           created_at?: string
+          effective_at?: string | null
           id?: string
           location_id: string
           notes?: string | null
@@ -2760,6 +2780,7 @@ export type Database = {
         Update: {
           count_date?: string
           created_at?: string
+          effective_at?: string | null
           id?: string
           location_id?: string
           notes?: string | null
@@ -2833,6 +2854,108 @@ export type Database = {
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_movements: {
+        Row: {
+          anchor_count_id: string | null
+          cost_source: string
+          created_at: string
+          created_by: string | null
+          effective_at: string
+          effective_date: string
+          id: string
+          ingredient_id: string
+          location_id: string
+          movement_type: string
+          quantity: number
+          reason: string | null
+          rebase_of_movement_id: string | null
+          restaurant_id: string
+          reverses_movement_id: string | null
+          source_id: string | null
+          source_line_id: string | null
+          source_type: string
+          unit_cost: number | null
+        }
+        Insert: {
+          anchor_count_id?: string | null
+          cost_source: string
+          created_at?: string
+          created_by?: string | null
+          effective_at: string
+          effective_date: string
+          id?: string
+          ingredient_id: string
+          location_id: string
+          movement_type: string
+          quantity: number
+          reason?: string | null
+          rebase_of_movement_id?: string | null
+          restaurant_id: string
+          reverses_movement_id?: string | null
+          source_id?: string | null
+          source_line_id?: string | null
+          source_type: string
+          unit_cost?: number | null
+        }
+        Update: {
+          anchor_count_id?: string | null
+          cost_source?: string
+          created_at?: string
+          created_by?: string | null
+          effective_at?: string
+          effective_date?: string
+          id?: string
+          ingredient_id?: string
+          location_id?: string
+          movement_type?: string
+          quantity?: number
+          reason?: string | null
+          rebase_of_movement_id?: string | null
+          restaurant_id?: string
+          reverses_movement_id?: string | null
+          source_id?: string | null
+          source_line_id?: string | null
+          source_type?: string
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_rebase_of_movement_id_fkey"
+            columns: ["rebase_of_movement_id"]
+            isOneToOne: false
+            referencedRelation: "stock_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_reverses_movement_id_fkey"
+            columns: ["reverses_movement_id"]
+            isOneToOne: false
+            referencedRelation: "stock_movements"
             referencedColumns: ["id"]
           },
         ]
@@ -3544,6 +3667,41 @@ export type Database = {
         Returns: string
       }
       is_trusted_backend_session: { Args: never; Returns: boolean }
+      ledger_apply_movement: {
+        Args: {
+          p_at: string
+          p_cost_source: string
+          p_ingredient_id: string
+          p_location_id: string
+          p_own_count_id?: string
+          p_qty: number
+          p_reason: string
+          p_restaurant_id: string
+          p_reverses: string
+          p_source_id: string
+          p_source_line_id: string
+          p_source_type: string
+          p_type: string
+          p_unit_cost: number
+        }
+        Returns: string
+      }
+      ledger_balance_at: {
+        Args: { p_at: string; p_ingredient_id: string; p_location_id: string }
+        Returns: number
+      }
+      ledger_effective_at: {
+        Args: { p_date: string; p_end_of_day?: boolean }
+        Returns: string
+      }
+      ledger_guard: {
+        Args: { p_date: string; p_location_id: string; p_restaurant_id: string }
+        Returns: undefined
+      }
+      ledger_stock_unit_cost: {
+        Args: { p_date: string; p_ingredient_id: string }
+        Returns: number
+      }
       log_audit_event: {
         Args: {
           p_data?: Json
@@ -3582,6 +3740,23 @@ export type Database = {
           supplier_product_id: string
         }[]
       }
+      receive_direct_delivery: {
+        Args: {
+          p_delivery_date: string
+          p_lines: Json
+          p_location_id: string
+          p_supplier_id: string
+        }
+        Returns: string
+      }
+      receive_purchase_order: {
+        Args: {
+          p_delivery_date: string
+          p_lines: Json
+          p_purchase_order_id: string
+        }
+        Returns: string
+      }
       recipe_lines_for_dish: {
         Args: { p_dish_id: string }
         Returns: {
@@ -3600,6 +3775,17 @@ export type Database = {
         Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
         Returns: number
       }
+      record_stock_adjustment: {
+        Args: {
+          p_adjustment_type: string
+          p_effective_date: string
+          p_ingredient_id: string
+          p_location_id: string
+          p_quantity: number
+          p_reason?: string
+        }
+        Returns: string
+      }
       remove_dish_category: {
         Args: { p_id: string; p_move_to?: string }
         Returns: Json
@@ -3612,6 +3798,10 @@ export type Database = {
         Args: { _restaurant_id: string }
         Returns: boolean
       }
+      reverse_stock_movement: {
+        Args: { p_movement_id: string; p_reason: string }
+        Returns: string
+      }
       set_initial_import_price: {
         Args: {
           p_cost_per_pack: number
@@ -3622,15 +3812,44 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_stock_quantity: {
+        Args: {
+          p_ingredient_id: string
+          p_location_id: string
+          p_new_quantity: number
+          p_reason?: string
+        }
+        Returns: string
+      }
       set_supplier_product_archived: {
         Args: { p_archived: boolean; p_id: string }
         Returns: undefined
+      }
+      stock_ledger_drift: {
+        Args: { p_restaurant_id: string }
+        Returns: {
+          ingredient_id: string
+          ledger_total: number
+          location_id: string
+          stock_level: number
+        }[]
       }
       storage_doc_extension_allowed: {
         Args: { _name: string }
         Returns: boolean
       }
       storage_doc_restaurant_id: { Args: { _name: string }; Returns: string }
+      submit_stock_count: {
+        Args: {
+          p_count_date: string
+          p_lines: Json
+          p_location_id: string
+          p_notes: string
+          p_scope_type: string
+          p_scope_value: string
+        }
+        Returns: string
+      }
       supplier_cost_per_base: {
         Args: { _cost: number; _size: number; _unit: string }
         Returns: number
