@@ -14,6 +14,7 @@ export interface StockAdjustment {
   reason: string | null;
   adjusted_by: string | null;
   count_id: string | null;
+  effective_date?: string | null;
   created_at: string;
   ingredients?: { name: string; unit: string };
   locations?: { name: string };
@@ -28,6 +29,8 @@ export interface StockAdjustmentInsert {
   reason?: string;
   adjusted_by?: string;
   count_id?: string;
+  /** Date the waste/adjustment physically happened (defaults to today). */
+  effective_date?: string;
 }
 
 export function useStockAdjustments(locationId?: string) {
@@ -56,41 +59,23 @@ export function useCreateStockAdjustment() {
 
   return useMutation({
     mutationFn: async (adjustment: StockAdjustmentInsert) => {
-      // Insert the adjustment record
-      const { data, error } = await supabase
-        .from("stock_adjustments")
-        .insert(adjustment)
-        .select()
-        .single();
-
+      if (adjustment.adjustment_type === "count") throw new Error("Use a stock count to record counted quantities");
+      // One server transaction: adjustment record + ledger movement + stock on hand.
+      const { data, error } = await supabase.rpc("record_stock_adjustment", {
+        p_ingredient_id: adjustment.ingredient_id,
+        p_location_id: adjustment.location_id,
+        p_adjustment_type: adjustment.adjustment_type,
+        p_quantity: adjustment.quantity,
+        p_effective_date: adjustment.effective_date ?? new Date().toISOString().slice(0, 10),
+        p_reason: [adjustment.reason, adjustment.adjusted_by ? `by ${adjustment.adjusted_by}` : null].filter(Boolean).join(" — ") || undefined,
+      } as any);
       if (error) throw error;
-
-      // Count adjustments are applied by the stock-count workflow itself; do not
-      // double-update stock levels here.
-      if (adjustment.adjustment_type === "count") return data;
-
-      // Also update the stock level (reduce by the adjustment quantity)
-      const { data: existingStock } = await supabase
-        .from("stock_levels")
-        .select("quantity")
-        .eq("ingredient_id", adjustment.ingredient_id)
-        .eq("location_id", adjustment.location_id)
-        .single();
-
-      if (existingStock) {
-        const newQuantity = Math.max(0, Number(existingStock.quantity) - adjustment.quantity);
-        await supabase
-          .from("stock_levels")
-          .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-          .eq("ingredient_id", adjustment.ingredient_id)
-          .eq("location_id", adjustment.location_id);
-      }
-
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stock-adjustments"] });
       queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       toast({ title: "Stock adjustment recorded" });
     },
     onError: (error) => {

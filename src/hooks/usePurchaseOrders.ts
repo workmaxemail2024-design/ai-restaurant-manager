@@ -235,82 +235,34 @@ export function useDeletePurchaseOrder() {
   });
 }
 
-export interface ReceiveDeliveryItem {
-  ingredient_id: string;
-  delivered_quantity: number;
+export interface ReceiveDeliveryLine {
+  item_id: string;
+  received_quantity: number;
+  /** Cost per stock unit actually charged; null = unknown (never treated as €0). */
+  unit_cost: number | null;
 }
 
 export function useReceiveDelivery() {
   const queryClient = useQueryClient();
-  const { currentRestaurant } = useRestaurant();
   return useMutation({
-    mutationFn: async ({ 
-      orderId, 
-      locationId,
-      items 
-    }: { 
-      orderId: string; 
-      locationId: string;
-      items: ReceiveDeliveryItem[] 
-    }) => {
-      // 1. Update PO status to received and set received_at timestamp
-      const { error: updateError } = await supabase
-        .from("purchase_orders")
-        .update({ 
-          status: "received", 
-          received_at: new Date().toISOString() 
-        })
-        .eq("id", orderId);
-      
-      if (updateError) throw updateError;
-
-      // 2. Update stock levels for each item
-      for (const item of items) {
-        if (item.delivered_quantity <= 0) continue;
-
-        // Get current stock level
-        const { data: existing } = await supabase
-          .from("stock_levels")
-          .select("id, quantity")
-          .eq("ingredient_id", item.ingredient_id)
-          .eq("location_id", locationId)
-          .maybeSingle();
-
-        if (existing) {
-          // Update existing stock level
-          const newQuantity = Number(existing.quantity) + item.delivered_quantity;
-          const { error } = await supabase
-            .from("stock_levels")
-            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-            .eq("id", existing.id);
-          if (error) throw error;
-        } else {
-          // Insert new stock level
-          const { error } = await supabase
-            .from("stock_levels")
-            .insert({
-              ingredient_id: item.ingredient_id,
-              location_id: locationId,
-              quantity: item.delivered_quantity,
-              restaurant_id: currentRestaurant?.id ?? null,
-            });
-          if (error) throw error;
-        }
-      }
-
+    mutationFn: async ({ orderId, deliveryDate, lines }: { orderId: string; deliveryDate: string; lines: ReceiveDeliveryLine[] }) => {
+      // One server transaction; refuses an order that has already been received.
+      const { error } = await supabase.rpc("receive_purchase_order", {
+        p_purchase_order_id: orderId,
+        p_delivery_date: deliveryDate,
+        p_lines: lines as any,
+      } as any);
+      if (error) throw error;
       return { orderId };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
       queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
-      toast({ title: "Delivery received", description: "Stock levels have been updated" });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      toast({ title: "Delivery received", description: "Stock recorded on the delivery date" });
     },
     onError: (error) => {
-      toast({ 
-        title: "Error receiving delivery", 
-        description: error.message, 
-        variant: "destructive" 
-      });
+      toast({ title: "Error receiving delivery", description: error.message, variant: "destructive" });
     },
   });
 }

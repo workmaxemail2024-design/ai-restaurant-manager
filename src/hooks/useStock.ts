@@ -42,19 +42,18 @@ export function useUpdateStock() {
   return useMutation({
     mutationFn: async ({ ingredient_id, location_id, quantity }: { ingredient_id: string; location_id: string; quantity: number }) => {
       if (!currentRestaurant?.id) throw new Error("No restaurant selected");
-      const { data, error } = await supabase
-        .from("stock_levels")
-        .upsert(
-          { ingredient_id, location_id, quantity, restaurant_id: currentRestaurant.id },
-          { onConflict: "ingredient_id,location_id" }
-        )
-        .select()
-        .single();
+      // Recorded as a manual correction movement for the difference (never a silent overwrite).
+      const { data, error } = await supabase.rpc("set_stock_quantity", {
+        p_ingredient_id: ingredient_id,
+        p_location_id: location_id,
+        p_new_quantity: quantity,
+      } as any);
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
       toast({ title: "Stock updated successfully" });
     },
     onError: (error) => {
