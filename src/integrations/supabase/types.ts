@@ -3645,8 +3645,12 @@ export type Database = {
       get_user_permissions: { Args: never; Returns: Json }
       get_user_restaurant_id: { Args: never; Returns: string }
       get_user_role_id: { Args: never; Returns: string }
-      import_jnum: { Args: { _j: Json; _k: string }; Returns: number }
-      import_juuid: { Args: { _j: Json; _k: string }; Returns: string }
+      import_jnum:
+        | { Args: { _j: Json; _k: string }; Returns: number }
+        | { Args: { _v: Json }; Returns: number }
+      import_juuid:
+        | { Args: { _j: Json; _k: string }; Returns: string }
+        | { Args: { _v: Json }; Returns: string }
       ingredient_dependencies: {
         Args: { p_ingredient_id: string }
         Returns: Json
