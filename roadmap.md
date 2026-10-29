@@ -95,3 +95,10 @@
 - [x] Phase 3: actual vs theoretical food & beverage cost, stock valuation, waste, unexplained variance, Complete/Estimate reasons
 - [x] Phase 4: monthly/weekly Reports block, supplier cash flow and payables, statement & credit-note reconciliation
 - [ ] Supervised first test with real invoices and stock counts (needs user)
+
+## Expense Import + Actual Payroll (brief 2026-10-29)
+- [ ] Database: import history, overhead provenance, actual expenses, confirmed monthly payroll (append-only corrections), guarded RPCs
+- [ ] Import Expenses on Overheads: XLSX/CSV (all worksheets) + PDF/photo reading, worksheet→location confirmation, editable review, duplicates, nothing saved before Apply
+- [ ] Payroll rows routed to confirmed monthly payroll with month + scope confirmation; corrections audited
+- [ ] Monthly Reports: confirmed payroll replaces estimate (never added), labour % of sales, overheads/expenses, operating profit & margin; weekly stays estimate
+- [ ] Tests: multi-worksheet, monthly/quarterly/annual, duplicates, payroll replace/correct, profit recalculation, isolation/permissions
