@@ -2960,6 +2960,328 @@ export type Database = {
           },
         ]
       }
+      supplier_invoice_lines: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          ingredient_id: string | null
+          invoice_id: string
+          is_stock: boolean
+          line_no: number
+          line_total: number | null
+          match_status: string
+          pack_size: number | null
+          pack_unit: string | null
+          product_code: string | null
+          quantity: number | null
+          restaurant_id: string
+          stock_quantity: number | null
+          supplier_product_id: string | null
+          unit_price: number | null
+          vat_rate: number | null
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          ingredient_id?: string | null
+          invoice_id: string
+          is_stock?: boolean
+          line_no: number
+          line_total?: number | null
+          match_status?: string
+          pack_size?: number | null
+          pack_unit?: string | null
+          product_code?: string | null
+          quantity?: number | null
+          restaurant_id: string
+          stock_quantity?: number | null
+          supplier_product_id?: string | null
+          unit_price?: number | null
+          vat_rate?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          ingredient_id?: string | null
+          invoice_id?: string
+          is_stock?: boolean
+          line_no?: number
+          line_total?: number | null
+          match_status?: string
+          pack_size?: number | null
+          pack_unit?: string | null
+          product_code?: string | null
+          quantity?: number | null
+          restaurant_id?: string
+          stock_quantity?: number | null
+          supplier_product_id?: string | null
+          unit_price?: number | null
+          vat_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoice_lines_ingredient_id_fkey"
+            columns: ["ingredient_id"]
+            isOneToOne: false
+            referencedRelation: "ingredients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_lines_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoice_lines_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_invoices: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          credits_invoice_id: string | null
+          doc_type: string
+          document_id: string | null
+          due_date: string | null
+          expense_class: string
+          gross_amount: number
+          id: string
+          invoice_date: string
+          invoice_number: string
+          location_id: string
+          net_amount: number | null
+          notes: string | null
+          purchase_order_id: string | null
+          restaurant_id: string
+          status: string
+          supplier_id: string
+          updated_at: string
+          vat_amount: number | null
+          verified_at: string | null
+          verified_by: string | null
+          void_reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          credits_invoice_id?: string | null
+          doc_type?: string
+          document_id?: string | null
+          due_date?: string | null
+          expense_class?: string
+          gross_amount: number
+          id?: string
+          invoice_date: string
+          invoice_number: string
+          location_id: string
+          net_amount?: number | null
+          notes?: string | null
+          purchase_order_id?: string | null
+          restaurant_id: string
+          status?: string
+          supplier_id: string
+          updated_at?: string
+          vat_amount?: number | null
+          verified_at?: string | null
+          verified_by?: string | null
+          void_reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          credits_invoice_id?: string | null
+          doc_type?: string
+          document_id?: string | null
+          due_date?: string | null
+          expense_class?: string
+          gross_amount?: number
+          id?: string
+          invoice_date?: string
+          invoice_number?: string
+          location_id?: string
+          net_amount?: number | null
+          notes?: string | null
+          purchase_order_id?: string | null
+          restaurant_id?: string
+          status?: string
+          supplier_id?: string
+          updated_at?: string
+          vat_amount?: number | null
+          verified_at?: string | null
+          verified_by?: string | null
+          void_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoices_credits_invoice_id_fkey"
+            columns: ["credits_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_payment_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_id: string
+          payment_id: string
+          restaurant_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          payment_id: string
+          restaurant_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          payment_id?: string
+          restaurant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payment_allocations_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payment_allocations_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payment_allocations_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          method: string | null
+          notes: string | null
+          payment_date: string
+          reference: string | null
+          restaurant_id: string
+          status: string
+          supplier_id: string
+          void_reason: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          payment_date: string
+          reference?: string | null
+          restaurant_id: string
+          status?: string
+          supplier_id: string
+          void_reason?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          payment_date?: string
+          reference?: string | null
+          restaurant_id?: string
+          status?: string
+          supplier_id?: string
+          void_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_payments_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_payments_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_product_prices: {
         Row: {
           base_unit: string
@@ -3122,6 +3444,141 @@ export type Database = {
           },
           {
             foreignKeyName: "supplier_products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_statement_lines: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          line_date: string | null
+          line_type: string
+          match_status: string
+          matched_invoice_id: string | null
+          matched_payment_id: string | null
+          reference: string | null
+          restaurant_id: string
+          statement_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          line_date?: string | null
+          line_type: string
+          match_status?: string
+          matched_invoice_id?: string | null
+          matched_payment_id?: string | null
+          reference?: string | null
+          restaurant_id: string
+          statement_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          line_date?: string | null
+          line_type?: string
+          match_status?: string
+          matched_invoice_id?: string | null
+          matched_payment_id?: string | null
+          reference?: string | null
+          restaurant_id?: string
+          statement_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_statement_lines_matched_invoice_id_fkey"
+            columns: ["matched_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_statement_lines_matched_payment_id_fkey"
+            columns: ["matched_payment_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_statement_lines_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_statement_lines_statement_id_fkey"
+            columns: ["statement_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_statements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_statements: {
+        Row: {
+          closing_balance: number
+          created_at: string
+          created_by: string | null
+          document_id: string | null
+          id: string
+          notes: string | null
+          period_end: string | null
+          period_start: string | null
+          restaurant_id: string
+          statement_date: string
+          supplier_id: string
+        }
+        Insert: {
+          closing_balance: number
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          id?: string
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          restaurant_id: string
+          statement_date: string
+          supplier_id: string
+        }
+        Update: {
+          closing_balance?: number
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          id?: string
+          notes?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          restaurant_id?: string
+          statement_date?: string
+          supplier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_statements_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_statements_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_statements_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
@@ -3505,6 +3962,10 @@ export type Database = {
         Returns: number
       }
       can_edit_inventory: { Args: never; Returns: boolean }
+      confirm_statement_match: {
+        Args: { p_invoice_id: string; p_line_id: string; p_payment_id: string }
+        Returns: undefined
+      }
       convert_linked_recipe: { Args: { p_dish_id: string }; Returns: number }
       convert_recipe_qty: {
         Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
@@ -3543,6 +4004,10 @@ export type Database = {
       }
       ensure_user_restaurant: { Args: never; Returns: Json }
       expire_stale_invites: { Args: { _email: string }; Returns: number }
+      finance_guard: {
+        Args: { p_payments?: boolean; p_restaurant_id: string }
+        Returns: undefined
+      }
       get_daily_food_cost: {
         Args: {
           p_end: string
@@ -3590,6 +4055,15 @@ export type Database = {
         Args: { p_ingredient_id: string }
         Returns: number
       }
+      get_period_actual_food_cost: {
+        Args: {
+          p_end: string
+          p_location_id: string
+          p_restaurant_id: string
+          p_start: string
+        }
+        Returns: Json
+      }
       get_period_food_cost: {
         Args: {
           p_end: string
@@ -3616,6 +4090,10 @@ export type Database = {
           uncosted_quantity: number
           uncosted_revenue: number
         }[]
+      }
+      get_supplier_cashflow: {
+        Args: { p_end: string; p_restaurant_id: string; p_start: string }
+        Returns: Json
       }
       get_theoretical_usage: {
         Args: { p_end?: string; p_location_id?: string; p_start?: string }
@@ -3651,6 +4129,10 @@ export type Database = {
       import_juuid:
         | { Args: { _j: Json; _k: string }; Returns: string }
         | { Args: { _v: Json }; Returns: string }
+      ingredient_cost_class: {
+        Args: { p_category: string; p_group: string; p_type: string }
+        Returns: string
+      }
       ingredient_dependencies: {
         Args: { p_ingredient_id: string }
         Returns: Json
@@ -3670,6 +4152,7 @@ export type Database = {
         }
         Returns: string
       }
+      invoice_outstanding: { Args: { p_invoice_id: string }; Returns: number }
       is_trusted_backend_session: { Args: never; Returns: boolean }
       ledger_apply_movement: {
         Args: {
@@ -3705,6 +4188,10 @@ export type Database = {
       ledger_stock_unit_cost: {
         Args: { p_date: string; p_ingredient_id: string }
         Returns: number
+      }
+      link_invoice_receipt: {
+        Args: { p_invoice_id: string; p_purchase_order_id: string }
+        Returns: undefined
       }
       log_audit_event: {
         Args: {
@@ -3753,6 +4240,10 @@ export type Database = {
         }
         Returns: string
       }
+      receive_invoice_goods: {
+        Args: { p_delivery_date: string; p_invoice_id: string }
+        Returns: string
+      }
       receive_purchase_order: {
         Args: {
           p_delivery_date: string
@@ -3779,6 +4270,10 @@ export type Database = {
         Args: { p_ingredient_id: string; p_quantity: number; p_unit: string }
         Returns: number
       }
+      reconcile_supplier_statement: {
+        Args: { p_statement_id: string }
+        Returns: Json
+      }
       record_stock_adjustment: {
         Args: {
           p_adjustment_type: string
@@ -3787,6 +4282,17 @@ export type Database = {
           p_location_id: string
           p_quantity: number
           p_reason?: string
+        }
+        Returns: string
+      }
+      record_supplier_payment: {
+        Args: {
+          p_allocations: Json
+          p_amount: number
+          p_method: string
+          p_payment_date: string
+          p_reference: string
+          p_supplier_id: string
         }
         Returns: string
       }
@@ -3804,6 +4310,22 @@ export type Database = {
       }
       reverse_stock_movement: {
         Args: { p_movement_id: string; p_reason: string }
+        Returns: string
+      }
+      save_supplier_invoice_draft: {
+        Args: { p_invoice: Json; p_lines: Json }
+        Returns: string
+      }
+      save_supplier_statement: {
+        Args: {
+          p_closing_balance: number
+          p_document_id: string
+          p_lines: Json
+          p_period_end: string
+          p_period_start: string
+          p_statement_date: string
+          p_supplier_id: string
+        }
         Returns: string
       }
       set_initial_import_price: {
@@ -3934,6 +4456,18 @@ export type Database = {
       user_has_pos_admin: { Args: never; Returns: boolean }
       user_is_manager_or_owner: { Args: never; Returns: boolean }
       user_is_owner: { Args: never; Returns: boolean }
+      verify_supplier_invoice: {
+        Args: { p_invoice_id: string; p_record_supplier_prices?: boolean }
+        Returns: Json
+      }
+      void_supplier_invoice: {
+        Args: { p_invoice_id: string; p_reason: string }
+        Returns: undefined
+      }
+      void_supplier_payment: {
+        Args: { p_payment_id: string; p_reason: string }
+        Returns: undefined
+      }
     }
     Enums: {
       attendance_source: "manual" | "pos" | "auto"
