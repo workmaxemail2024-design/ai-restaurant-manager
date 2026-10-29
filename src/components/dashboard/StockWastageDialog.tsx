@@ -50,6 +50,7 @@ export function StockWastageDialog({ open, onOpenChange, date, locationId }: Pro
   const [quantity, setQuantity] = useState<string>("");
   const [note, setNote] = useState<string>("");
   const [mode, setMode] = useState<"adjust" | "count">("adjust");
+  const [occurredOn, setOccurredOn] = useState<string>(date);
 
   useEffect(() => {
     if (open) {
@@ -58,6 +59,7 @@ export function StockWastageDialog({ open, onOpenChange, date, locationId }: Pro
       setQuantity("");
       setNote("");
       setMode("adjust");
+      setOccurredOn(date);
     }
   }, [open, date, locationId]);
 
@@ -93,6 +95,7 @@ export function StockWastageDialog({ open, onOpenChange, date, locationId }: Pro
         adjustmentType: mode === "count" ? "correction" : reason.type,
         reasonLabel: mode === "count" ? "Spot count" : reason.label,
         note: note || null,
+        effectiveDate: occurredOn || date,
       },
       {
         onSuccess: () => {
@@ -206,6 +209,22 @@ export function StockWastageDialog({ open, onOpenChange, date, locationId }: Pro
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div>
+            <Label>Occurred on</Label>
+            <Input
+              type="date"
+              className="h-12 text-base"
+              value={occurredOn}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setOccurredOn(e.target.value)}
+            />
+            {occurredOn !== date && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Recorded against {occurredOn}. If a later stock count exists, today's stock stays as counted.
+              </p>
+            )}
           </div>
 
           <div>
