@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import type { ReportsPeriodSummary } from "@/lib/reportsMonthly";
+import { ActualVsTheoreticalBlock } from "@/components/reports/ActualVsTheoreticalBlock";
 
 interface MonthlyReportsViewProps {
   year: number;
@@ -164,6 +165,8 @@ export function MonthlyReportsView({
         <Metric label="Labour" value={selectedMonth.hasAnyLabour ? formatCurrency(selectedMonth.totalLabourCost) : "—"} note={selectedMonth.labourMissingDays > 0 ? `${selectedMonth.labourMissingDays} trading day${selectedMonth.labourMissingDays === 1 ? "" : "s"} missing` : selectedMonth.hasAnyLabour ? `${selectedMonth.labourPct?.toFixed(1) ?? "—"}% of revenue` : "Labour unknown"} />
         <Metric label={profitEstimated ? "Est. Profit" : "Profit"} value={formatCurrency(selectedMonth.profit)} note={profitEstimated ? "Incomplete inputs" : undefined} />
       </div>
+
+      <ActualVsTheoreticalBlock month={selectedMonth} weeks={weeks} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(22rem,0.8fr)]">
         <Card>
