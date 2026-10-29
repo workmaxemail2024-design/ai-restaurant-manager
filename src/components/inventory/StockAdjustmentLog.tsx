@@ -38,6 +38,7 @@ export function StockAdjustmentLog() {
     quantity: 0,
     reason: "",
     adjusted_by: "",
+    effective_date: new Date().toISOString().slice(0, 10),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -51,6 +52,7 @@ export function StockAdjustmentLog() {
       quantity: formData.quantity,
       reason: formData.reason || undefined,
       adjusted_by: formData.adjusted_by || undefined,
+      effective_date: formData.effective_date,
     });
 
     setIsOpen(false);
@@ -61,6 +63,7 @@ export function StockAdjustmentLog() {
       quantity: 0,
       reason: "",
       adjusted_by: "",
+      effective_date: new Date().toISOString().slice(0, 10),
     });
   };
 

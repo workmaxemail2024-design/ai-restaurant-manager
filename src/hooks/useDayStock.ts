@@ -40,8 +40,7 @@ export function useDayStockAdjustments(date: string, locationId: string | null) 
       let q = supabase
         .from("stock_adjustments")
         .select("*, ingredients(name, unit)")
-        .gte("created_at", `${date}T00:00:00`)
-        .lte("created_at", `${date}T23:59:59`)
+        .eq("effective_date", date)
         .order("created_at", { ascending: false });
 
       if (locationId) q = q.eq("location_id", locationId);
@@ -78,6 +77,8 @@ export interface RecordDayAdjustmentInput {
   note?: string | null;
   /** Absolute spot-count instead of a decrement */
   spotCount?: number | null;
+  /** Day the waste/count physically happened (YYYY-MM-DD). */
+  effectiveDate: string;
 }
 
 /** Record a wastage / correction using the existing stock_adjustments + stock_levels flow. */
@@ -91,53 +92,36 @@ export function useRecordDayStockAdjustment() {
       if (!restaurantId) throw new Error("No restaurant selected");
       if (!input.locationId) throw new Error("Select a location first");
 
-      const { data: existing } = await supabase
-        .from("stock_levels")
-        .select("quantity")
-        .eq("ingredient_id", input.ingredientId)
-        .eq("location_id", input.locationId)
-        .maybeSingle();
-
-      const current = existing ? Number(existing.quantity) : 0;
-      const isSpotCount = input.spotCount != null;
-      // Spot count: adjustment quantity is the difference vs the counted amount
-      const quantity = isSpotCount ? current - Number(input.spotCount) : input.quantity;
-
       const reason = [input.reasonLabel, input.note?.trim()].filter(Boolean).join(" — ");
-
-      const { error } = await supabase.from("stock_adjustments").insert({
-        restaurant_id: restaurantId,
-        ingredient_id: input.ingredientId,
-        location_id: input.locationId,
-        adjustment_type: input.adjustmentType,
-        quantity,
-        reason,
-      });
+      if (input.spotCount != null) {
+        // Spot count = a one-line stock count on the chosen day (server computes the correction).
+        const { error } = await supabase.rpc("submit_stock_count", {
+          p_location_id: input.locationId,
+          p_count_date: input.effectiveDate,
+          p_scope_type: "all",
+          p_notes: reason || undefined,
+          p_lines: [{ ingredient_id: input.ingredientId, counted_quantity: Number(input.spotCount) }],
+        } as any);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.rpc("record_stock_adjustment", {
+        p_ingredient_id: input.ingredientId,
+        p_location_id: input.locationId,
+        p_adjustment_type: input.adjustmentType,
+        p_quantity: input.quantity,
+        p_effective_date: input.effectiveDate,
+        p_reason: reason || undefined,
+      } as any);
       if (error) throw error;
-
-      const newQuantity = isSpotCount
-        ? Math.max(0, Number(input.spotCount))
-        : Math.max(0, current - input.quantity);
-
-      const { error: stockError } = await supabase
-        .from("stock_levels")
-        .upsert(
-          {
-            restaurant_id: restaurantId,
-            ingredient_id: input.ingredientId,
-            location_id: input.locationId,
-            quantity: newQuantity,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "ingredient_id,location_id" }
-        );
-      if (stockError) throw stockError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["day-stock-adjustments"] });
       queryClient.invalidateQueries({ queryKey: ["stock-adjustments"] });
       queryClient.invalidateQueries({ queryKey: ["stock-levels"] });
       queryClient.invalidateQueries({ queryKey: ["stock-variance"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-movements"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-counts"] });
       toast({ title: "Stock adjustment recorded" });
     },
     onError: (error: Error) =>
