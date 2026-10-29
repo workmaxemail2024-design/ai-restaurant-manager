@@ -88,3 +88,10 @@
 - [x] Inventory inline editing + cost precision + server-side Inventory Edit guard
 
 - [x] Stock List Importer: supplier price comparison (unchanged/up/down/pack differs/backdated), explicit record-or-keep and optional master-cost update (approved plan 2026-10-12)
+
+## Profitability reporting (combined four-phase plan, approved 2026-10-14)
+- [x] Phase 1: immutable stock ledger, dated deliveries/waste/counts, late-entry rebase, reversals, negative-stock policy
+- [x] Phase 2: supplier invoices (photo/PDF reading, line verification, supplier-product matching, duplicate prevention), receipts linking, payments
+- [x] Phase 3: actual vs theoretical food & beverage cost, stock valuation, waste, unexplained variance, Complete/Estimate reasons
+- [x] Phase 4: monthly/weekly Reports block, supplier cash flow and payables, statement & credit-note reconciliation
+- [ ] Supervised first test with real invoices and stock counts (needs user)

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCashFlowSummary } from "@/hooks/useFinancialReports";
+import { useSupplierCashflow } from "@/hooks/useSupplierFinance";
 import { formatCurrency } from "@/lib/currency";
 import { Loader2, ArrowUpCircle, ArrowDownCircle, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 export function CashFlowReport() {
   const { data: cashFlowData = [], isLoading } = useCashFlowSummary(6);
+  const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); sixMonthsAgo.setDate(1);
+  const { data: supplierCash } = useSupplierCashflow(sixMonthsAgo.toISOString().slice(0, 10), new Date().toISOString().slice(0, 10));
 
   // Calculate totals
   const totals = cashFlowData.reduce(
@@ -92,6 +95,25 @@ export function CashFlowReport() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Supplier payments: actual payment dates; shown separately so existing totals are not double-counted */}
+      {supplierCash && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Supplier payments & payables</CardTitle>
+            <CardDescription>
+              Uses actual payment dates and amounts. Shown separately from the totals above; payments for invoices marked
+              "Overhead" are excluded because they are already in Overheads.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-4 md:grid-cols-4 text-sm">
+            <div><p className="text-muted-foreground">Paid for stock (6 months)</p><p className="text-xl font-bold">{formatCurrency(Number(supplierCash.paid_stock))}</p></div>
+            <div><p className="text-muted-foreground">Unallocated payments</p><p className="text-xl font-bold">{formatCurrency(Number(supplierCash.unallocated_payments))}</p></div>
+            <div><p className="text-muted-foreground">Outstanding payables</p><p className="text-xl font-bold">{formatCurrency(Number(supplierCash.payables_outstanding))}</p><p className="text-xs text-muted-foreground">Verified unpaid invoices</p></div>
+            <div><p className="text-muted-foreground">Overdue</p><p className={cn("text-xl font-bold", Number(supplierCash.payables_overdue) > 0 && "text-destructive")}>{formatCurrency(Number(supplierCash.payables_overdue))}</p></div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Chart */}
       <Card>

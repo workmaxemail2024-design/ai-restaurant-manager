@@ -6,7 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, BarChart3 } from "lucide-react";
+import { Plus, Users, BarChart3, FileText, Wallet, Scale } from "lucide-react";
+import { SupplierInvoicesTab } from "@/components/suppliers/SupplierInvoicesTab";
+import { SupplierPaymentsTab } from "@/components/suppliers/SupplierPaymentsTab";
+import { SupplierStatementsTab } from "@/components/suppliers/SupplierStatementsTab";
 import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, Supplier, SupplierInsert } from "@/hooks/useSuppliers";
 import { SupplierAnalytics } from "@/components/suppliers/SupplierAnalytics";
 
@@ -57,7 +60,7 @@ export default function SuppliersPage() {
   return (
     <PageLayout title="Suppliers" subtitle="Manage suppliers and review purchasing, pricing and price history.">
       <Tabs defaultValue="list" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="list" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Suppliers
@@ -65,6 +68,15 @@ export default function SuppliersPage() {
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             Analytics
+          </TabsTrigger>
+          <TabsTrigger value="invoices" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" /> Invoices
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="flex items-center gap-2">
+            <Wallet className="h-4 w-4" /> Payments
+          </TabsTrigger>
+          <TabsTrigger value="statements" className="flex items-center gap-2">
+            <Scale className="h-4 w-4" /> Statements
           </TabsTrigger>
         </TabsList>
 
@@ -134,6 +146,10 @@ export default function SuppliersPage() {
             onDelete={(item) => deleteSupplier.mutate(item.id)}
           />
         </TabsContent>
+
+        <TabsContent value="invoices"><SupplierInvoicesTab /></TabsContent>
+        <TabsContent value="payments"><SupplierPaymentsTab /></TabsContent>
+        <TabsContent value="statements"><SupplierStatementsTab /></TabsContent>
 
         <TabsContent value="analytics">
           <SupplierAnalytics />
