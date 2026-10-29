@@ -102,3 +102,5 @@
 - [ ] Payroll rows routed to confirmed monthly payroll with month + scope confirmation; corrections audited
 - [ ] Monthly Reports: confirmed payroll replaces estimate (never added), labour % of sales, overheads/expenses, operating profit & margin; weekly stays estimate
 - [ ] Tests: multi-worksheet, monthly/quarterly/annual, duplicates, payroll replace/correct, profit recalculation, isolation/permissions
+- [ ] Duplicate rule: invoice number / source reference is the only hard duplicate; same supplier+amount+month without a reference is flagged and needs explicit confirmation (never silently rejected or merged)
+- [ ] Prove in rolled-back tests: a replaced estimate is counted once (actual only) and confirmed payroll replaces estimated labour (never added)
