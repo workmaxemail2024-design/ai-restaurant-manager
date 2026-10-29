@@ -24,6 +24,7 @@ import { InventoryItemSelect } from "@/components/inventory/InventoryItemSelect"
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation } from "@/contexts/LocationContext";
 import { StockAdjustmentLog } from "@/components/inventory/StockAdjustmentLog";
+import { StockMovementHistory } from "@/components/inventory/StockMovementHistory";
 import { TheoreticalUsageReport } from "@/components/inventory/TheoreticalUsageReport";
 import { StockCountDialog } from "@/components/inventory/StockCountDialog";
 import { VarianceReport } from "@/components/inventory/VarianceReport";
@@ -323,7 +324,10 @@ export default function StockPage() {
         </TabsContent>
 
         <TabsContent value="adjustments">
-          <StockAdjustmentLog />
+          <div className="space-y-8">
+            <StockAdjustmentLog />
+            <StockMovementHistory />
+          </div>
         </TabsContent>
 
         <TabsContent value="usage">
