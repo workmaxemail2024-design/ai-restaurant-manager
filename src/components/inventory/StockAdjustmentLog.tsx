@@ -179,6 +179,18 @@ export function StockAdjustmentLog() {
               </div>
 
               <div>
+                <Label htmlFor="occurred">Occurred on</Label>
+                <Input
+                  id="occurred"
+                  type="date"
+                  max={new Date().toISOString().slice(0, 10)}
+                  value={formData.effective_date}
+                  onChange={(e) => setFormData({ ...formData, effective_date: e.target.value })}
+                  className="min-h-[44px]"
+                />
+              </div>
+
+              <div>
                 <Label htmlFor="reason">Reason / Notes</Label>
                 <Textarea
                   id="reason"
