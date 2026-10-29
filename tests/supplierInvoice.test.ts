@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { matchSupplierProduct, stockQuantityFor, totalsReconcile } from "./supplierInvoice";
+import { describe, expect, it } from "bun:test";
+import { matchSupplierProduct, stockQuantityFor, totalsReconcile } from "../src/lib/supplierInvoice";
 
 describe("stockQuantityFor", () => {
   it("converts 3 packs of 5 kg into 15 kg", () => expect(stockQuantityFor(3, 5, "kg", "kg")).toBe(15));
