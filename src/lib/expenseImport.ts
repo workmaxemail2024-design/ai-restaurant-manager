@@ -322,8 +322,8 @@ export interface LocationMatch { locationId: string | null; confidence: "exact" 
 export function matchLocation(sheetName: string, locations: { id: string; name: string }[]): LocationMatch {
   const st = locTokens(sheetName);
   if (!st.length) return { locationId: null, confidence: "none" };
-  const key = st.join(" ");
-  const exact = locations.filter((l) => locTokens(l.name).join(" ") === key);
+  const plain = (x: string) => x.toLowerCase().replace(/['’]s\b/g, "s").replace(/[^a-z0-9]+/g, " ").trim();
+  const exact = locations.filter((l) => plain(l.name) === plain(sheetName));
   if (exact.length === 1) return { locationId: exact[0].id, confidence: "exact" };
   const scored = locations
     .map((l) => {
