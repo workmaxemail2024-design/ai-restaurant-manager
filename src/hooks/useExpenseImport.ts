@@ -5,7 +5,7 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import type { ActualExpenseLike, PayrollLike, PayrollScope, VatTreatment } from "@/lib/monthlyFinancials";
 import type { ExistingActual, ExistingSupplierInvoice } from "@/lib/expenseImport";
 
-export interface ActualExpenseRow extends ActualExpenseLike, ExistingActual {
+export interface ActualExpenseRow extends ActualExpenseLike, Omit<ExistingActual, "status"> {
   supplier_name: string | null;
   invoice_reference: string | null;
   source_ref: string | null;
@@ -180,7 +180,7 @@ export function useApplyExpenseImport() {
         p_import: {
           filename: input.filename, file_hash: input.fileHash, source_type: input.sourceType, document_id: documentId,
           skipped_rows: input.skippedRows, summary: input.summary,
-        },
+        } as never,
         p_rows: input.rows as never,
       });
       if (error) {
