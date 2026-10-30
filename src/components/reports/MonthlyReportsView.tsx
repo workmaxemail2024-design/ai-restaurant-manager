@@ -11,6 +11,8 @@ import { formatCurrency, formatCurrencyShort } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import type { ReportsPeriodSummary } from "@/lib/reportsMonthly";
 import { ActualVsTheoreticalBlock } from "@/components/reports/ActualVsTheoreticalBlock";
+import { MonthlyFinancialsBlock } from "@/components/reports/MonthlyFinancialsBlock";
+import type { MonthFinancials } from "@/lib/monthlyFinancials";
 
 interface MonthlyReportsViewProps {
   year: number;
@@ -20,6 +22,8 @@ interface MonthlyReportsViewProps {
   weeksFor: (month: ReportsPeriodSummary) => ReportsPeriodSummary[];
   isLoading: boolean;
   renderDailyRows: (month: ReportsPeriodSummary) => ReactNode;
+  /** Confirmed payroll / overheads / operating profit per month key. */
+  financials?: Map<string, MonthFinancials>;
 }
 
 function Metric({ label, value, note }: { label: string; value: string; note?: string }) {
@@ -51,6 +55,7 @@ export function MonthlyReportsView({
   weeksFor,
   isLoading,
   renderDailyRows,
+  financials,
 }: MonthlyReportsViewProps) {
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
   const now = new Date();
@@ -89,7 +94,13 @@ export function MonthlyReportsView({
           {months.map((month) => {
             const future = month.key > currentMonthKey;
             const inProgress = month.key === currentMonthKey;
-            const profitEstimated = month.costing.isEstimated || month.labourMissingDays > 0;
+            const fin = financials?.get(month.key);
+            const labourConfirmed = fin?.labour.source === "confirmed";
+            const labourAmount = fin ? fin.labour.amount : (month.hasAnyLabour ? month.totalLabourCost : null);
+            const labourPct = fin ? fin.labour.pctOfSales : month.labourPct;
+            const shownProfit = fin ? (fin.operatingProfit ?? fin.profitBeforeOverheads) : month.profit;
+            const profitLabel = fin?.operatingProfit != null ? "Operating profit" : "Profit before overheads";
+            const profitEstimated = month.costing.isEstimated || (!labourConfirmed && month.labourMissingDays > 0) || !!(fin && (!labourConfirmed || fin.expenses.estimateTotal > 0));
             return (
               <Card key={month.key} className={cn("overflow-hidden", future && "bg-muted/30 opacity-60")}>
                 <CardHeader className="flex-row items-center justify-between space-y-0 px-4 pb-2 pt-4">
@@ -105,15 +116,16 @@ export function MonthlyReportsView({
                     <div><p className="text-xs text-muted-foreground">Revenue</p><p className="font-semibold">{future ? "—" : formatCurrency(month.revenue)}</p></div>
                     <div><p className="text-xs text-muted-foreground">Orders · Covers</p><p className="font-semibold">{future ? "—" : `${month.orders ?? "—"} · ${month.visitors ?? "—"}`}</p></div>
                     <div><p className="text-xs text-muted-foreground">Food cost</p><p className="font-semibold">{future ? "—" : `${formatCurrency(month.costing.blendedCost)} · ${month.costing.foodCostPct?.toFixed(1) ?? "—"}%`}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Labour</p><p className="font-semibold">{future || !month.hasAnyLabour ? "—" : `${formatCurrency(month.totalLabourCost)} · ${month.labourPct?.toFixed(1) ?? "—"}%`}</p></div>
-                    <div><p className="text-xs text-muted-foreground">Profit</p><p className={cn("font-semibold", !future && month.profit < 0 && "text-destructive")}>{future ? "—" : formatCurrency(month.profit)}</p></div>
+                    <div><p className="text-xs text-muted-foreground">{labourConfirmed ? "Labour (confirmed)" : "Labour"}</p><p className="font-semibold">{future || labourAmount == null ? "—" : `${formatCurrency(labourAmount)} · ${labourPct?.toFixed(1) ?? "—"}%`}</p></div>
+                    <div><p className="text-xs text-muted-foreground">{profitLabel}</p><p className={cn("font-semibold", !future && shownProfit < 0 && "text-destructive")}>{future ? "—" : formatCurrency(shownProfit)}</p></div>
                     <div><p className="text-xs text-muted-foreground">Completeness</p><p className="font-semibold">{future ? "—" : statusText(month)}</p></div>
                   </div>
 
                   {!future && (
                     <div className="flex flex-wrap gap-1.5">
                       {month.costing.qualityLabel && <Badge variant="outline" className="text-[10px]">{month.costing.qualityLabel}</Badge>}
-                      {month.labourMissingDays > 0 && <Badge variant="outline" className="text-[10px] text-warning">Labour missing · {month.labourMissingDays} day{month.labourMissingDays === 1 ? "" : "s"}</Badge>}
+                      {labourConfirmed && <Badge className="text-[10px]">Payroll confirmed</Badge>}
+                      {!labourConfirmed && month.labourMissingDays > 0 && <Badge variant="outline" className="text-[10px] text-warning">Labour missing · {month.labourMissingDays} day{month.labourMissingDays === 1 ? "" : "s"}</Badge>}
                       {profitEstimated && month.revenue > 0 && <Badge variant="secondary" className="text-[10px]">Profit estimated</Badge>}
                     </div>
                   )}
@@ -136,7 +148,12 @@ export function MonthlyReportsView({
     );
   }
 
-  const profitEstimated = selectedMonth.costing.isEstimated || selectedMonth.labourMissingDays > 0;
+  const selFin = financials?.get(selectedMonth.key);
+  const selConfirmed = selFin?.labour.source === "confirmed";
+  const profitEstimated = selectedMonth.costing.isEstimated || (!selConfirmed && selectedMonth.labourMissingDays > 0) || !!(selFin && (!selConfirmed || selFin.expenses.estimateTotal > 0));
+  const selLabour = selFin ? selFin.labour.amount : (selectedMonth.hasAnyLabour ? selectedMonth.totalLabourCost : null);
+  const selProfit = selFin ? (selFin.operatingProfit ?? selFin.profitBeforeOverheads) : selectedMonth.profit;
+  const selProfitLabel = selFin?.operatingProfit != null ? "Operating profit" : "Profit before overheads";
   const trend = selectedMonth.dailyRevenue.map((day) => ({
     date: format(new Date(`${day.date}T00:00:00`), "d MMM"),
     revenue: day.revenue,
@@ -162,9 +179,11 @@ export function MonthlyReportsView({
         <Metric label="Orders" value={selectedMonth.orders?.toLocaleString() ?? "—"} note="receipts" />
         <Metric label="Covers" value={selectedMonth.visitors?.toLocaleString() ?? "—"} />
         <Metric label={selectedMonth.costing.isEstimated ? "Food Cost (est.)" : "Food Cost"} value={formatCurrency(selectedMonth.costing.blendedCost)} note={`${selectedMonth.costing.foodCostPct?.toFixed(1) ?? "—"}% · ${selectedMonth.costing.qualityLabel ?? "unknown"}`} />
-        <Metric label="Labour" value={selectedMonth.hasAnyLabour ? formatCurrency(selectedMonth.totalLabourCost) : "—"} note={selectedMonth.labourMissingDays > 0 ? `${selectedMonth.labourMissingDays} trading day${selectedMonth.labourMissingDays === 1 ? "" : "s"} missing` : selectedMonth.hasAnyLabour ? `${selectedMonth.labourPct?.toFixed(1) ?? "—"}% of revenue` : "Labour unknown"} />
-        <Metric label={profitEstimated ? "Est. Profit" : "Profit"} value={formatCurrency(selectedMonth.profit)} note={profitEstimated ? "Incomplete inputs" : undefined} />
+        <Metric label={selConfirmed ? "Labour (confirmed)" : "Labour (est.)"} value={selLabour == null ? "—" : formatCurrency(selLabour)} note={selConfirmed ? `${selFin?.labour.pctOfSales?.toFixed(1) ?? "—"}% of sales · payroll` : selectedMonth.labourMissingDays > 0 ? `${selectedMonth.labourMissingDays} trading day${selectedMonth.labourMissingDays === 1 ? "" : "s"} missing` : selLabour != null ? `${(selFin?.labour.pctOfSales ?? selectedMonth.labourPct)?.toFixed(1) ?? "—"}% of revenue` : "Labour unknown"} />
+        <Metric label={profitEstimated ? `Est. ${selProfitLabel.toLowerCase()}` : selProfitLabel} value={formatCurrency(selProfit)} note={profitEstimated ? "Incomplete inputs" : selFin?.operatingMarginPct != null ? `${selFin.operatingMarginPct.toFixed(1)}% margin` : undefined} />
       </div>
+
+      {selFin && <MonthlyFinancialsBlock month={selectedMonth} fin={selFin} />}
 
       <ActualVsTheoreticalBlock month={selectedMonth} weeks={weeks} />
 
@@ -206,7 +225,7 @@ export function MonthlyReportsView({
         <CardHeader className="pb-2"><CardTitle className="text-base">Calendar-week recap</CardTitle></CardHeader>
         <CardContent className="px-0 pb-2 sm:px-3">
           <Table>
-            <TableHeader><TableRow><TableHead>Week</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Orders</TableHead><TableHead className="text-right">Covers</TableHead><TableHead className="text-right">Food cost</TableHead><TableHead className="text-right">Labour</TableHead><TableHead className="text-right">Profit</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Week</TableHead><TableHead className="text-right">Revenue</TableHead><TableHead className="text-right">Orders</TableHead><TableHead className="text-right">Covers</TableHead><TableHead className="text-right">Food cost</TableHead><TableHead className="text-right">Labour (est.)</TableHead><TableHead className="text-right">Profit before overheads (est.)</TableHead></TableRow></TableHeader>
             <TableBody>
               {weeks.map((week) => (
                 <TableRow key={week.key}>
@@ -221,6 +240,9 @@ export function MonthlyReportsView({
               ))}
             </TableBody>
           </Table>
+          <p className="px-3 pt-2 text-xs text-muted-foreground">
+            Weekly labour is estimated from attendance{selConfirmed ? "; the month total above uses confirmed payroll instead" : ""}. Overheads are not split into weeks.
+          </p>
         </CardContent>
       </Card>
 

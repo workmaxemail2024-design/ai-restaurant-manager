@@ -184,23 +184,28 @@ export function useDeleteDocument() {
 
   return useMutation({
     mutationFn: async (document: Document) => {
-      // 1. Delete from storage
+      // 1. Delete the record first: documents that are the source of saved
+      //    expenses/payroll are protected and must keep their file.
+      const { error: dbError } = await supabase
+        .from("documents")
+        .delete()
+        .eq("id", document.id);
+
+      if (dbError) {
+        if ((dbError as { code?: string }).code === "23503") {
+          throw new Error("This file is the source of saved expenses or payroll and is kept for your records.");
+        }
+        throw dbError;
+      }
+
+      // 2. Then remove the stored file
       const { error: storageError } = await supabase.storage
         .from("documents")
         .remove([document.storage_path]);
 
       if (storageError) {
         console.warn("Storage deletion warning:", storageError);
-        // Continue with DB deletion even if storage fails
       }
-
-      // 2. Delete from database
-      const { error: dbError } = await supabase
-        .from("documents")
-        .delete()
-        .eq("id", document.id);
-
-      if (dbError) throw dbError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
