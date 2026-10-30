@@ -58,6 +58,7 @@ import { formatCurrency, currencySymbol } from "@/lib/currency";
 import { ProfitLossReport } from "@/components/reports/ProfitLossReport";
 import { ReportsAccuracyNote } from "@/components/reports/ReportsAccuracyNote";
 import { MonthlyReportsView } from "@/components/reports/MonthlyReportsView";
+import { useMonthlyFinancials } from "@/hooks/useMonthlyFinancials";
 import { SegmentedControl } from "@/components/common/SegmentedControl";
 import { CashFlowReport } from "@/components/reports/CashFlowReport";
 import { ReconciliationReport } from "@/components/reports/ReconciliationReport";
@@ -1511,6 +1512,8 @@ export default function ReportsPage() {
     [reportYear, dailyData, monthlyShared],
   );
 
+  const { financials: monthFinancials } = useMonthlyFinancials(reportYear, monthSummaries);
+
   const monthlyRevenueReconciled = useMemo(
     () => monthSummaries.reduce((sum, month) => sum + month.revenue, 0) === sumCanonicalRevenue(dailyData ?? [], ledgerEntries),
     [monthSummaries, dailyData, ledgerEntries],
@@ -1790,6 +1793,7 @@ export default function ReportsPage() {
               weeksFor={weeksForMonth}
               isLoading={dailyLoading || costingLoading || !monthlyRevenueReconciled}
               renderDailyRows={renderMonthlyDailyRows}
+              financials={monthFinancials}
             />
           )}
         </TabsContent>
