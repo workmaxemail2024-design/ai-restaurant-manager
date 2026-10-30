@@ -103,32 +103,25 @@ export function overheadCostForMonth(
   if (o.start_date && o.start_date > end) return 0;
   if (o.end_date && o.end_date < start) return 0;
 
-  let amount: number;
+  // Share of the month this estimate is active (1 for a whole month).
+  let fraction = 1;
   if (o.frequency === "one_time") {
     if (!o.start_date || o.start_date < start || o.start_date > end) return 0;
-    amount = o.amount;
   } else {
-    const monthly = monthlyEquivalent(o.amount, o.frequency) ?? 0;
     const from = o.start_date && o.start_date > start ? o.start_date : start;
     const to = o.end_date && o.end_date < end ? o.end_date : end;
-    const activeDays = Math.max(0, dayDiff(from, to) + 1);
-    amount = monthly * (activeDays / days);
+    fraction = Math.max(0, dayDiff(from, to) + 1) / days;
   }
+  const costOf = (base: number) => (o.frequency === "one_time" ? base : (monthlyEquivalent(base, o.frequency) ?? 0) * fraction);
 
   if (selectedLocationId && !o.location_id) {
     const locs = Math.max(1, locationCount);
     const mode = o.allocation_mode ?? "equal";
-    if (mode === "percentage") {
-      const pct = o.allocation_details?.[selectedLocationId] ?? 100 / locs;
-      amount = amount * (pct / 100);
-    } else if (mode === "manual") {
-      const manual = o.allocation_details?.[selectedLocationId] ?? 0;
-      amount = o.frequency === "one_time" ? manual : (monthlyEquivalent(manual, o.frequency) ?? 0) * (amount / ((monthlyEquivalent(o.amount, o.frequency) || 1)));
-    } else {
-      amount = amount / locs;
-    }
+    if (mode === "percentage") return costOf(o.amount) * ((o.allocation_details?.[selectedLocationId] ?? 100 / locs) / 100);
+    if (mode === "manual") return costOf(o.allocation_details?.[selectedLocationId] ?? 0);
+    return costOf(o.amount) / locs;
   }
-  return amount;
+  return costOf(o.amount);
 }
 
 /** Cost recognised for an actual bill: net of VAT when the VAT is known; flagged otherwise. */
