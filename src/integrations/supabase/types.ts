@@ -14,6 +14,237 @@ export type Database = {
   }
   public: {
     Tables: {
+      actual_expenses: {
+        Row: {
+          amount: number
+          bill_date: string | null
+          category: string
+          cost_type: string | null
+          created_at: string
+          created_by: string | null
+          dedupe_key: string
+          description: string
+          document_id: string | null
+          duplicate_confirmed: boolean
+          id: string
+          import_batch_id: string | null
+          invoice_reference: string | null
+          location_id: string
+          notes: string | null
+          period_month: string
+          replaces_overhead_id: string | null
+          restaurant_id: string
+          source_category: string | null
+          source_ref: string | null
+          status: string
+          supplier_key: string
+          supplier_name: string | null
+          updated_at: string
+          vat_amount: number | null
+          vat_treatment: string
+          void_reason: string | null
+          voided_at: string | null
+          voided_by: string | null
+        }
+        Insert: {
+          amount: number
+          bill_date?: string | null
+          category: string
+          cost_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          dedupe_key: string
+          description: string
+          document_id?: string | null
+          duplicate_confirmed?: boolean
+          id?: string
+          import_batch_id?: string | null
+          invoice_reference?: string | null
+          location_id: string
+          notes?: string | null
+          period_month: string
+          replaces_overhead_id?: string | null
+          restaurant_id: string
+          source_category?: string | null
+          source_ref?: string | null
+          status?: string
+          supplier_key?: string
+          supplier_name?: string | null
+          updated_at?: string
+          vat_amount?: number | null
+          vat_treatment: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Update: {
+          amount?: number
+          bill_date?: string | null
+          category?: string
+          cost_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          dedupe_key?: string
+          description?: string
+          document_id?: string | null
+          duplicate_confirmed?: boolean
+          id?: string
+          import_batch_id?: string | null
+          invoice_reference?: string | null
+          location_id?: string
+          notes?: string | null
+          period_month?: string
+          replaces_overhead_id?: string | null
+          restaurant_id?: string
+          source_category?: string | null
+          source_ref?: string | null
+          status?: string
+          supplier_key?: string
+          supplier_name?: string | null
+          updated_at?: string
+          vat_amount?: number | null
+          vat_treatment?: string
+          void_reason?: string | null
+          voided_at?: string | null
+          voided_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actual_expenses_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_expenses_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "expense_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_expenses_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_expenses_replaces_overhead_id_fkey"
+            columns: ["replaces_overhead_id"]
+            isOneToOne: false
+            referencedRelation: "overheads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_expenses_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      actual_payroll: {
+        Row: {
+          amount: number
+          change_reason: string | null
+          created_at: string
+          created_by: string | null
+          document_id: string | null
+          ended_at: string | null
+          ended_by: string | null
+          ended_reason: string | null
+          id: string
+          import_batch_id: string | null
+          location_id: string
+          period_month: string
+          restaurant_id: string
+          scope: string
+          scope_note: string | null
+          source: string
+          status: string
+          supersedes_id: string | null
+        }
+        Insert: {
+          amount: number
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          ended_reason?: string | null
+          id?: string
+          import_batch_id?: string | null
+          location_id: string
+          period_month: string
+          restaurant_id: string
+          scope: string
+          scope_note?: string | null
+          source: string
+          status?: string
+          supersedes_id?: string | null
+        }
+        Update: {
+          amount?: number
+          change_reason?: string | null
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          ended_reason?: string | null
+          id?: string
+          import_batch_id?: string | null
+          location_id?: string
+          period_month?: string
+          restaurant_id?: string
+          scope?: string
+          scope_note?: string | null
+          source?: string
+          status?: string
+          supersedes_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "actual_payroll_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_payroll_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "expense_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_payroll_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_payroll_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "actual_payroll_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "actual_payroll"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           created_at: string
@@ -641,6 +872,69 @@ export type Database = {
           },
         ]
       }
+      expense_import_batches: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          document_id: string | null
+          file_hash: string | null
+          filename: string
+          id: string
+          restaurant_id: string
+          rows_actual: number
+          rows_estimate: number
+          rows_payroll: number
+          rows_skipped: number
+          source_type: string
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          file_hash?: string | null
+          filename: string
+          id?: string
+          restaurant_id: string
+          rows_actual?: number
+          rows_estimate?: number
+          rows_payroll?: number
+          rows_skipped?: number
+          source_type: string
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          document_id?: string | null
+          file_hash?: string | null
+          filename?: string
+          id?: string
+          restaurant_id?: string
+          rows_actual?: number
+          rows_estimate?: number
+          rows_payroll?: number
+          rows_skipped?: number
+          source_type?: string
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_import_batches_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_import_batches_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_pos_items: {
         Row: {
           archived_at: string | null
@@ -1172,50 +1466,75 @@ export type Database = {
           allocation_mode: string
           amount: number
           category: string
+          cost_type: string | null
           created_at: string
           end_date: string | null
           frequency: string
           id: string
+          import_batch_id: string | null
           is_active: boolean
           location_id: string | null
           name: string
+          notes: string | null
           restaurant_id: string
+          source_category: string | null
           start_date: string | null
+          supplier_name: string | null
           updated_at: string
+          vat_treatment: string
         }
         Insert: {
           allocation_details?: Json
           allocation_mode?: string
           amount?: number
           category?: string
+          cost_type?: string | null
           created_at?: string
           end_date?: string | null
           frequency?: string
           id?: string
+          import_batch_id?: string | null
           is_active?: boolean
           location_id?: string | null
           name: string
+          notes?: string | null
           restaurant_id: string
+          source_category?: string | null
           start_date?: string | null
+          supplier_name?: string | null
           updated_at?: string
+          vat_treatment?: string
         }
         Update: {
           allocation_details?: Json
           allocation_mode?: string
           amount?: number
           category?: string
+          cost_type?: string | null
           created_at?: string
           end_date?: string | null
           frequency?: string
           id?: string
+          import_batch_id?: string | null
           is_active?: boolean
           location_id?: string | null
           name?: string
+          notes?: string | null
           restaurant_id?: string
+          source_category?: string | null
           start_date?: string | null
+          supplier_name?: string | null
           updated_at?: string
+          vat_treatment?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "overheads_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "expense_import_batches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "overheads_location_id_fkey"
             columns: ["location_id"]
@@ -3930,6 +4249,23 @@ export type Database = {
       }
     }
     Functions: {
+      _insert_actual_payroll: {
+        Args: {
+          p_amount: number
+          p_batch_id: string
+          p_document_id: string
+          p_label: string
+          p_location_id: string
+          p_period_month: string
+          p_reason: string
+          p_replace_id: string
+          p_restaurant_id: string
+          p_scope: string
+          p_scope_note: string
+          p_source: string
+        }
+        Returns: string
+      }
       add_ingredient_price: {
         Args: {
           p_cost_per_pack?: number
@@ -3941,6 +4277,10 @@ export type Database = {
           p_unit_cost?: number
         }
         Returns: string
+      }
+      apply_expense_import: {
+        Args: { p_import: Json; p_restaurant_id: string; p_rows: Json }
+        Returns: Json
       }
       apply_stock_list_import: { Args: { p_payload: Json }; Returns: Json }
       assert_day_open: {
@@ -4003,6 +4343,31 @@ export type Database = {
         Returns: string
       }
       ensure_user_restaurant: { Args: never; Returns: Json }
+      expense_dedupe_key: {
+        Args: { p_amount: number; p_description: string; p_supplier: string }
+        Returns: string
+      }
+      expense_finance_guard: {
+        Args: { p_restaurant_id: string }
+        Returns: undefined
+      }
+      expense_jamount: {
+        Args: { p_label: string; p_v: string }
+        Returns: number
+      }
+      expense_jdate: {
+        Args: { p_field: string; p_label: string; p_v: string }
+        Returns: string
+      }
+      expense_location_guard: {
+        Args: {
+          p_label: string
+          p_location_id: string
+          p_restaurant_id: string
+        }
+        Returns: undefined
+      }
+      expense_supplier_key: { Args: { p_supplier: string }; Returns: string }
       expire_stale_invites: { Args: { _email: string }; Returns: number }
       finance_guard: {
         Args: { p_payments?: boolean; p_restaurant_id: string }
@@ -4274,6 +4639,20 @@ export type Database = {
         Args: { p_statement_id: string }
         Returns: Json
       }
+      record_actual_payroll: {
+        Args: {
+          p_amount: number
+          p_change_reason?: string
+          p_document_id?: string
+          p_location_id: string
+          p_period_month: string
+          p_replace_payroll_id?: string
+          p_restaurant_id: string
+          p_scope: string
+          p_scope_note?: string
+        }
+        Returns: string
+      }
       record_stock_adjustment: {
         Args: {
           p_adjustment_type: string
@@ -4459,6 +4838,14 @@ export type Database = {
       verify_supplier_invoice: {
         Args: { p_invoice_id: string; p_record_supplier_prices?: boolean }
         Returns: Json
+      }
+      void_actual_expense: {
+        Args: { p_expense_id: string; p_reason: string }
+        Returns: undefined
+      }
+      void_actual_payroll: {
+        Args: { p_payroll_id: string; p_reason: string }
+        Returns: undefined
       }
       void_supplier_invoice: {
         Args: { p_invoice_id: string; p_reason: string }
