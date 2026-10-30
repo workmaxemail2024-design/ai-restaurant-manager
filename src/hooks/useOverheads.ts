@@ -4,7 +4,7 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { toast } from "sonner";
 import { differenceInDays, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
 
-export const OVERHEAD_CATEGORIES = ['Rent', 'Utilities', 'Insurance', 'Marketing', 'Software', 'Licences', 'Waste', 'Internet', 'Other'] as const;
+export const OVERHEAD_CATEGORIES = ['Rent', 'Utilities', 'Insurance', 'Marketing', 'Software', 'Licences', 'Waste', 'Internet', 'Professional fees', 'Bank & card fees', 'Repairs & maintenance', 'Cleaning', 'Equipment', 'Other'] as const;
 export const OVERHEAD_FREQUENCIES = ['one_time', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'] as const;
 export const ALLOCATION_MODES = ['single', 'equal', 'percentage', 'manual'] as const;
 
@@ -41,6 +41,12 @@ export interface Overhead {
   is_active: boolean;
   allocation_mode: AllocationMode;
   allocation_details: Record<string, number>; // locationId -> amount or percentage
+  supplier_name?: string | null;
+  cost_type?: 'fixed' | 'variable' | null;
+  vat_treatment?: 'unknown' | 'inc_vat' | 'ex_vat' | 'no_vat';
+  notes?: string | null;
+  source_category?: string | null;
+  import_batch_id?: string | null;
   created_at: string;
   updated_at: string;
   locations?: { name: string } | null;

@@ -191,7 +191,7 @@ export function ImportExpensesDialog({ open, onOpenChange }: { open: boolean; on
   const patchSheet = (name: string, patch: Partial<SheetState>) =>
     setSheets((ss) => ss.map((s) => (s.name === name ? { ...s, ...patch } : s)));
   const setAllKind = (kind: "estimate" | "actual") =>
-    setRows((rs) => rs.map((r) => (r.kind === "estimate" || r.kind === "actual" ? { ...r, kind, frequency: kind === "actual" ? r.frequency : r.frequency } : r)));
+    setRows((rs) => rs.map((r) => (r.kind === "estimate" || r.kind === "actual" ? { ...r, kind } : r)));
 
   const doApply = async () => {
     setApplyError(null);

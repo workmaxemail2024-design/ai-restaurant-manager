@@ -122,8 +122,9 @@ function ReasonDialog({ title, open, onCancel, onConfirm, pending }: { title: st
 }
 
 export function ExpenseRecordsPanel({ locationId }: { locationId: string | null }) {
-  const { hasPermission, isOwner } = usePermissions() as ReturnType<typeof usePermissions> & { isOwner?: boolean };
-  const canEdit = !!isOwner || hasPermission("finance" as never, "edit" as never);
+  const { hasPermission } = usePermissions();
+  // UI hint only; the save functions enforce Owner / Finance Edit on the server.
+  const canEdit = hasPermission("finance", "edit");
   const { data: payroll = [] } = useActualPayroll("2000-01-01", "2100-12-01", locationId);
   const { data: actuals = [] } = useActualExpenses("2000-01-01", "2100-12-01", locationId);
   const { data: batches = [] } = useExpenseImportBatches();
