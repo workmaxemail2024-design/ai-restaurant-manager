@@ -87,3 +87,6 @@ verify_jwt = true
 
 [functions.supplier-invoice-extract]
 verify_jwt = true
+
+[functions.expense-sheet-extract]
+verify_jwt = true
