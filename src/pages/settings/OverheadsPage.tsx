@@ -20,7 +20,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Euro, Building2, CalendarClock, MapPin } from "lucide-react";
+import { Plus, Pencil, Trash2, Euro, Building2, CalendarClock, MapPin, FileUp } from "lucide-react";
+import { ImportExpensesDialog } from "@/components/overheads/ImportExpensesDialog";
+import { ExpenseRecordsPanel } from "@/components/overheads/ExpenseRecordsPanel";
+import { usePermissions } from "@/hooks/usePermissions";
 import { DataWarningBanner } from "@/components/common/DataWarningBanner";
 import { format } from "date-fns";
 import { useLocation as useLocationContext } from "@/contexts/LocationContext";
@@ -97,6 +100,9 @@ function OverheadsContent() {
   const deleteOverhead = useDeleteOverhead();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canImport = hasPermission("finance", "edit");
   const [editingOverhead, setEditingOverhead] = useState<Overhead | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState<OverheadFormData>(defaultFormData);
@@ -179,6 +185,11 @@ function OverheadsContent() {
       Licences: "bg-indigo-500/10 text-indigo-500 border-indigo-500/20",
       Waste: "bg-orange-500/10 text-orange-500 border-orange-500/20",
       Internet: "bg-teal-500/10 text-teal-500 border-teal-500/20",
+      "Professional fees": "bg-primary/10 text-primary border-primary/20",
+      "Bank & card fees": "bg-primary/10 text-primary border-primary/20",
+      "Repairs & maintenance": "bg-primary/10 text-primary border-primary/20",
+      Cleaning: "bg-primary/10 text-primary border-primary/20",
+      Equipment: "bg-primary/10 text-primary border-primary/20",
       Other: "bg-gray-500/10 text-gray-500 border-gray-500/20",
     };
     return colors[category] || colors.Other;
@@ -200,10 +211,18 @@ function OverheadsContent() {
             <Euro className="h-4 w-4" />
             <span>{overheads?.length || 0} overhead{overheads?.length !== 1 ? "s" : ""} configured</span>
           </div>
-          <Button onClick={openCreateDialog}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Overhead
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {canImport && (
+              <Button variant="outline" className="h-11" onClick={() => setImportOpen(true)}>
+                <FileUp className="h-4 w-4 mr-2" />
+                Import Expenses
+              </Button>
+            )}
+            <Button className="h-11" onClick={openCreateDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Overhead
+            </Button>
+          </div>
         </div>
 
         {!isLoading && overheads && overheads.length > 0 && (
@@ -244,7 +263,14 @@ function OverheadsContent() {
               <TableBody>
                 {overheads?.map((overhead) => (
                   <TableRow key={overhead.id} className={!overhead.is_active ? "opacity-50" : ""}>
-                    <TableCell className="font-medium">{overhead.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {overhead.name}
+                      {(overhead.supplier_name || overhead.import_batch_id) && (
+                        <span className="block text-xs font-normal text-muted-foreground">
+                          {[overhead.supplier_name, overhead.import_batch_id ? "Imported estimate" : null, overhead.vat_treatment && overhead.vat_treatment !== "unknown" ? (overhead.vat_treatment === "inc_vat" ? "incl. VAT" : overhead.vat_treatment === "ex_vat" ? "excl. VAT" : "no VAT") : overhead.import_batch_id ? "VAT unknown" : null].filter(Boolean).join(" · ")}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={getCategoryColor(overhead.category)}>
                         {overhead.category}
@@ -296,7 +322,11 @@ function OverheadsContent() {
             </Table>
           </div>
         )}
+
+        <ExpenseRecordsPanel locationId={selectedLocationId} />
       </div>
+
+      <ImportExpensesDialog open={importOpen} onOpenChange={setImportOpen} />
 
       {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
