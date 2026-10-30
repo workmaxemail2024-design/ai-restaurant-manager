@@ -97,10 +97,11 @@
 - [ ] Supervised first test with real invoices and stock counts (needs user)
 
 ## Expense Import + Actual Payroll (brief 2026-10-29)
-- [ ] Database: import history, overhead provenance, actual expenses, confirmed monthly payroll (append-only corrections), guarded RPCs
-- [ ] Import Expenses on Overheads: XLSX/CSV (all worksheets) + PDF/photo reading, worksheet→location confirmation, editable review, duplicates, nothing saved before Apply
-- [ ] Payroll rows routed to confirmed monthly payroll with month + scope confirmation; corrections audited
-- [ ] Monthly Reports: confirmed payroll replaces estimate (never added), labour % of sales, overheads/expenses, operating profit & margin; weekly stays estimate
-- [ ] Tests: multi-worksheet, monthly/quarterly/annual, duplicates, payroll replace/correct, profit recalculation, isolation/permissions
-- [ ] Duplicate rule: invoice number / source reference is the only hard duplicate; same supplier+amount+month without a reference is flagged and needs explicit confirmation (never silently rejected or merged)
-- [ ] Prove in rolled-back tests: a replaced estimate is counted once (actual only) and confirmed payroll replaces estimated labour (never added)
+- [x] Database: import history, overhead provenance, actual expenses, confirmed monthly payroll (append-only corrections), guarded RPCs
+- [x] Import Expenses on Overheads: XLSX/CSV (all worksheets) + PDF/photo reading, worksheet→location confirmation, editable review, duplicates, nothing saved before Apply
+- [x] Payroll rows routed to confirmed monthly payroll with month + scope confirmation; corrections audited
+- [x] Monthly Reports: confirmed payroll replaces estimate (never added), labour % of sales, overheads/expenses, operating profit & margin; weekly stays estimate
+- [x] Tests: multi-worksheet, monthly/quarterly/annual, duplicates, payroll replace/correct, profit recalculation, isolation/permissions
+- [x] Duplicate rule: invoice number / source reference is the only hard duplicate; same supplier+amount+month without a reference is flagged and needs explicit confirmation (never silently rejected or merged)
+- [x] Prove in rolled-back tests: a replaced estimate is counted once (actual only) and confirmed payroll replaces estimated labour (never added)
+- [ ] First supervised import of the real accountant workbook (needs you; signed-in check not possible here)
