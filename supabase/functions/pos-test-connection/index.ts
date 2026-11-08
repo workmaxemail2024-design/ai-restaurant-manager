@@ -96,66 +96,63 @@ serve(async (req) => {
 
           const responseText = await response.text();
           console.log("Captiva response status:", response.status);
-          console.log("Captiva response body (first 500 chars):", responseText.substring(0, 500));
-
-          // Try to parse response as JSON
+          // Do not log raw API responses: they may contain credentials or sales data.
+          // Captiva can return HTTP 200 with result: "Error", resultcode and resultdesc.
           let responseData: Record<string, unknown> | null = null;
           try {
-            responseData = JSON.parse(responseText);
+            const parsed: unknown = JSON.parse(responseText);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              responseData = parsed as Record<string, unknown>;
+            }
           } catch {
-            // Response might not be JSON
-            console.log("Response is not JSON, treating as text");
+            // Non-JSON responses cannot be treated as evidence of successful authentication.
           }
 
-          // Check for Captiva-specific error responses
-          if (responseData) {
-            // Captiva API typically returns Success: true/false or ErrorMessage
-            const success = responseData.Success === true || 
-                           responseData.success === true ||
-                           responseData.Status === "OK" ||
-                           responseData.status === "OK" ||
-                           (response.ok && !responseData.ErrorMessage && !responseData.errorMessage);
-
-            const errorMessage = responseData.ErrorMessage || 
-                                responseData.errorMessage || 
-                                responseData.Error || 
-                                responseData.error ||
-                                responseData.Message ||
-                                responseData.message;
-
-            if (success) {
-              testResult = { 
-                success: true, 
-                message: `Captiva Cloud connection validated for outlet ${store_id}` 
-              };
-            } else if (errorMessage) {
-              testResult = { 
-                success: false, 
-                error: `Captiva error: ${String(errorMessage)}` 
-              };
-            } else if (response.ok) {
-              // Response OK but no explicit success flag - treat as success
-              testResult = { 
-                success: true, 
-                message: "Captiva Cloud connection validated" 
-              };
-            } else {
-              testResult = { 
-                success: false, 
-                error: `Captiva returned HTTP ${response.status}` 
-              };
-            }
+          if (!response.ok) {
+            testResult = {
+              success: false,
+              error: `Captiva returned HTTP ${response.status}`,
+            };
+          } else if (!responseData) {
+            testResult = {
+              success: false,
+              error: "Captiva response was not recognized. Authentication has not been verified.",
+            };
           } else {
-            // Non-JSON response
-            if (response.ok) {
-              testResult = { 
-                success: true, 
-                message: "Captiva Cloud connection validated" 
+            const resultType = String(responseData.result ?? "").toLowerCase();
+            const resultCode = responseData.resultcode ? String(responseData.resultcode) : null;
+            const explicitError =
+              responseData.ErrorMessage ??
+              responseData.errorMessage ??
+              responseData.Error ??
+              responseData.error ??
+              (responseData.Success === false || responseData.success === false ||
+               resultType === "error" || resultType === "failed"
+                ? responseData.resultdesc ?? responseData.message ?? "Captiva rejected the request"
+                : null);
+            const explicitSuccess =
+              responseData.Success === true ||
+              responseData.success === true ||
+              responseData.Status === "OK" ||
+              responseData.status === "OK" ||
+              resultType === "success" ||
+              resultType === "ok";
+
+            // An error takes precedence over any success-shaped field in the response.
+            if (explicitError !== null && explicitError !== undefined) {
+              testResult = {
+                success: false,
+                error: `Captiva error${resultCode ? ` ${resultCode}` : ""}: ${String(explicitError)}`,
+              };
+            } else if (explicitSuccess) {
+              testResult = {
+                success: true,
+                message: `Captiva request acknowledged for outlet ${store_id} (sales access not yet verified)`,
               };
             } else {
-              testResult = { 
-                success: false, 
-                error: `Captiva returned HTTP ${response.status}: ${responseText.substring(0, 200)}` 
+              testResult = {
+                success: false,
+                error: "Captiva response did not explicitly confirm success. Authentication is unverified.",
               };
             }
           }
