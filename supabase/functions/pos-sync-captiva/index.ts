@@ -183,6 +183,13 @@ serve(async (req) => {
 
     // Check if simulation mode
     const simulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
+    // Never allow test-mode sales to enter the production staging/apply pipeline.
+    if (simulateMode) {
+      return new Response(
+        JSON.stringify({ success: false, error: "SIMULATE_CAPTIVA is enabled. Real POS sync is disabled; no sales were staged or applied.", fetched: 0 }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     let salesData: unknown[] = [];
 
@@ -424,8 +431,9 @@ serve(async (req) => {
           lastStatus = response.status;
           lastRequestType = rt;
           const rawBody = await response.text();
-          attemptRaw = rawBody.substring(0, 2000);
-          lastRawSample = rawBody.substring(0, 1000);
+          // Diagnostic logs should not contain unredacted credentials or journal content.
+          attemptRaw = redactCaptivaSecrets(rawBody.substring(0, 500), String(apiKey ?? ""), apiPassword);
+          lastRawSample = attemptRaw;
 
           if (!response.ok) {
             console.log(`RequestType ${rt} returned HTTP ${response.status}, trying next.`);
@@ -486,7 +494,7 @@ serve(async (req) => {
         }
       }
 
-      // Always emit a visible sync_debug entry showing exactly what was sent and received,
+      // Always emit a visible sync_debug entry showing sanitized request/response metadata,
       // for every Captiva attempt (success or failure). Credentials are excluded.
       await adminClient.from("pos_sync_logs").insert({
         location_id,
@@ -514,6 +522,35 @@ serve(async (req) => {
           attempts: attemptDebug,
         },
       });
+    }
+
+    // Empty or rejected API responses are NOT successful syncs. Do not advance
+    // the success checkpoint or call the apply function on these responses.
+    if (salesData.length === 0) {
+      const lastError = attemptDebug
+        .map((attempt) => String(attempt.error ?? ""))
+        .filter(Boolean)
+        .at(-1);
+      const errorMessage = lastError
+        ? `Captiva returned no usable sales. Last error: ${lastError}`
+        : "Captiva returned no usable sales. Verify the API response schema before syncing.";
+      await adminClient.from("pos_integrations").update({
+        last_sync_status: "failed",
+        last_sync_error: errorMessage,
+      }).eq("id", integration_id);
+      await adminClient.from("pos_sync_logs").insert({
+        location_id,
+        restaurant_id: integration.restaurant_id,
+        pos_provider: "captiva",
+        event_type: "sync_failed",
+        status: "fail",
+        message: errorMessage,
+        details: { integration_id, date_from, date_to, fetched: 0 },
+      });
+      return new Response(
+        JSON.stringify({ success: false, sales_imported: 0, line_items_imported: 0, skipped_duplicates: 0, failed_rows: 0, fetched: 0, error: errorMessage }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     console.log(`Processing ${salesData.length} sales records`);
@@ -721,7 +758,7 @@ serve(async (req) => {
 
 
     // Determine overall status: fail if every row errored, partial if some, success otherwise
-    // Special case: zero fetched + zero failed = success (nothing to import for that range)
+    // Empty responses are rejected earlier; this status applies only after real rows are retrieved.
     const overallStatus =
       result.failed_rows > 0 && result.sales_imported === 0
         ? "fail"
@@ -755,9 +792,9 @@ serve(async (req) => {
       .update(integrationUpdate)
       .eq("id", integration_id);
 
-    // Auto-apply staged imports into the sales table (default ON)
-    // Skipped when the caller explicitly opts out (auto_apply === false) or when nothing was staged.
-    const shouldAutoApply = auto_apply !== false && result.sales_imported > 0;
+    // Only apply staged imports when explicitly requested by a trusted caller.
+    // Never auto-apply the default on-demand fetch while cross-source reconciliation is unresolved.
+    const shouldAutoApply = auto_apply === true && result.sales_imported > 0;
     if (shouldAutoApply) {
       try {
         const applyRes = await fetch(`${supabaseUrl}/functions/v1/pos-apply-import`, {
