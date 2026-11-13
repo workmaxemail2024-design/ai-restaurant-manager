@@ -38,7 +38,7 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno test supabase/functions/_shared/captivaJournal_test.ts
-      - run: deno check supabase/functions/_shared/captivaJournal.ts supabase/functions/_shared/captivaProductTotals.ts supabase/functions/pos-sync-captiva/index.ts supabase/functions/pos-apply-import/index.ts
+      - run: deno check supabase/functions/_shared/captivaJournal.ts supabase/functions/_shared/captivaProductTotals.ts supabase/functions/pos-sync-captiva/index.ts supabase/functions/pos-apply-import/index.ts supabase/functions/pos-test-connection/index.ts
 
   postgres-migration:
     runs-on: ubuntu-latest
