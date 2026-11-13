@@ -243,7 +243,7 @@ export default function POSIntegrationsPage() {
     }
     if (stage && (!syncPreview || !syncPreviewRange
        || syncPreviewRange.from !== dateFrom || syncPreviewRange.to !== dateTo
-       || syncPreview.results?.some(d=>d.status!=="ready"))) {
+       || !syncPreview.results?.some(d=>d.status==="ready"))) {
       toast({title:"Preview required",description:"Preview every day and resolve any blocked dates before staging.",variant:"destructive"});
       return;
     }
@@ -280,7 +280,7 @@ export default function POSIntegrationsPage() {
         setSyncModalOpen(false);
         setSyncPreview(null);
         setSyncPreviewRange(null);
-        toast({title:"Captiva staged",description:`${totalStaged} product totals staged, not applied. Review mappings then use Apply to Dashboard.`});
+        toast({title:"Captiva staged",description:`${totalStaged} product totals staged; ${results.filter(d=>d.status!=="ready").length} days skipped. No financial sales applied.`});
       }
     } catch (error) {
       // A multi-batch stage can partially stage days; all staged days are still
@@ -1147,7 +1147,7 @@ export default function POSIntegrationsPage() {
                 {syncBusy ? "Checking Captiva..." : "Fetch & Preview"}
               </Button>
               <Button onClick={() => runCaptivaSync(true)}
-                disabled={syncBusy || !syncPreview?.results?.length || syncPreview.results.some(d => d.status!=="ready")}>
+                disabled={syncBusy || !syncPreview?.results?.some(d => d.status==="ready")}>
                 Stage Verified Products
               </Button>
             </DialogFooter>
