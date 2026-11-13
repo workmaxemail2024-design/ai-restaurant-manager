@@ -104,11 +104,21 @@ async function sourceCollision(client: Client, restaurant: string, location: str
     .eq("restaurant_id",restaurant).eq("location_id",location)
     .eq("report_date",date).eq("pos_provider","captiva_xls").limit(1);
   if (await exists(xlsSummary)) return "Captiva XLS financial summary already exists for this date";
-  const closed=await client.rpc("day_is_closed", {
-    _restaurant_id:restaurant,_location_id:location,_date:date,
-  });
-  if (closed.error) throw Error("Could not verify day-closed status");
-  return closed.data ? "Trading day is closed" : null;
+  // Any existing daily control/revenue source needs a human reconciliation.
+  const anySummary=await client.from("pos_daily_summaries").select("id")
+    .eq("restaurant_id",restaurant).eq("location_id",location)
+    .eq("report_date",date).neq("pos_provider","captiva").limit(1);
+  if (await exists(anySummary)) return "Existing financial summary from another import source";
+  const ledger=await client.from("daily_ledger_entries")
+    .select("is_closed,manual_revenue")
+    .eq("restaurant_id",restaurant).eq("entry_date",date)
+    .or(`location_id.eq.${location},location_id.is.null`);
+  if (ledger.error) throw Error("Could not verify manual revenue or closed-day status");
+  if ((ledger.data??[]).some(l=>l.is_closed)) return "Trading day is closed";
+  if ((ledger.data??[]).some(l=>l.manual_revenue!=null && Number(l.manual_revenue)!==0)) {
+    return "Manual daily revenue already exists and requires reconciliation";
+  }
+  return null;
 }
 async function mappedCatalogue(client: Client, restaurant: string, location: string) {
   const [native,legacy,legacyDishes]=await Promise.all([
