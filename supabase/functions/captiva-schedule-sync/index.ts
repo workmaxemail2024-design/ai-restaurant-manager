@@ -113,6 +113,8 @@ serve(async (req) => {
             location_id: integration.location_id,
             date_from: dateFrom,
             date_to: dateTo,
+            preview_only: false,
+            stage_confirmed: true,
           }),
         });
 
@@ -129,7 +131,22 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`  ✅ Sync complete: ${syncResult.sales_imported} sales, ${syncResult.line_items_imported} items`);
+        console.log(`  ✅ Captiva verified/staged: ${syncResult.sales_imported} product totals; no dashboard application`);
+
+        // Automated runs STAGE ONLY. A human must explicitly review and apply.
+        // The old legacy receipt applier must never run automatically.
+        results.push({
+          integration_id: integration.id,
+          success: true,
+          message: "Staged verified Captiva products only; manual approval required",
+          simulation: shouldSimulate,
+          sync_stats: {
+            sales_imported: syncResult.sales_imported,
+            line_items_imported: syncResult.line_items_imported,
+            skipped_duplicates: syncResult.skipped_duplicates,
+          },
+        });
+        continue;
 
         // Step 2: Apply to dashboard
         console.log(`  Step 2: Applying to dashboard...`);
