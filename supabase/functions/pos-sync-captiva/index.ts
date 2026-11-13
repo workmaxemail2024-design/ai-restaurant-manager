@@ -42,14 +42,14 @@ function daysBetween(start: string, end: string): string[] {
 }
 function captivaDate(date: string): string {
   const [y,m,d] = date.split("-").map(Number);
-  return \`\${String(d).padStart(2,"0")}/\${MONTHS[m-1]}/\${y}\`;
+  return `${String(d).padStart(2,"0")}/${MONTHS[m-1]}/${y}`;
 }
 function normalizeReturnedDate(value: unknown): string {
   const match = String(value??"").match(/^(\d{1,2})[\s/-]([A-Za-z]{3})[\s/-](\d{4})$/);
   if (!match) throw Error("Captiva returned an unexpected trading date");
   const month=MONTHS.indexOf(match[2].toLowerCase());
   if (month<0) throw Error("Invalid Captiva trading month");
-  return iso(\`\${match[3]}-\${String(month+1).padStart(2,"0")}-\${match[1].padStart(2,"0")}\`);
+  return iso(`${match[3]}-${String(month+1).padStart(2,"0")}-${match[1].padStart(2,"0")}`);
 }
 function cents(v: unknown): number {
   const value=Number(v);
@@ -74,12 +74,12 @@ async function callCaptiva(userId: string, password: string, request: string, st
       }),
       signal:controller.signal,
     });
-    if (!response.ok) throw Error(\`Captiva HTTP \${response.status}\`);
+    if (!response.ok) throw Error(`Captiva HTTP ${response.status}`);
     const body=rec(await response.json());
     if (String(body.result).toLowerCase() !== "success") {
       const code=String(body.resultcode??"unknown");
       // Only return Captiva's error code: API debug fields may contain sensitive info.
-      throw Error(\`Captiva request \${request} rejected (code \${code})\`);
+      throw Error(`Captiva request ${request} rejected (code ${code})`);
     }
     return body;
   } finally { clearTimeout(timer); }
@@ -121,11 +121,11 @@ async function mappedCatalogue(client: Client, restaurant: string, location: str
   const current=new Map((native.data??[]).map(x=>[x.external_item_id,x]));
   const old=new Map<string,string|null>();
   for (const row of legacy.data??[]) {
-    if (row.mapped_dish_id) old.set(\`\${row.external_item_id}\u0000\${row.external_item_name}\`,row.mapped_dish_id);
+    if (row.mapped_dish_id) old.set(`${row.external_item_id}\u0000${row.external_item_name}`,row.mapped_dish_id);
   }
   for (const row of legacyDishes.data??[]) {
-    if (row.captiva_external_id && !old.has(\`\${row.captiva_external_id}\u0000\${row.name}\`)) {
-      old.set(\`\${row.captiva_external_id}\u0000\${row.name}\`,row.id);
+    if (row.captiva_external_id && !old.has(`${row.captiva_external_id}\u0000${row.name}`)) {
+      old.set(`${row.captiva_external_id}\u0000${row.name}`,row.id);
     }
   }
   return {current,old};
@@ -188,24 +188,24 @@ serve(async(req)=>{
         results.push({date,status:"no_data",message:"No completed dashboard data for this date"});
         continue;
       }
-      if(normalizeReturnedDate(dash.journal_date)!==date) throw Error(\`Dashboard journal date mismatch for \${date}\`);
+      if(normalizeReturnedDate(dash.journal_date)!==date) throw Error(`Dashboard journal date mismatch for ${date}`);
       const kpis=rec(rec(dash.report).kpis);
       const gross=cents(kpis.gross_all_sales), net=cents(kpis.total_all_net_sales),vat=cents(kpis.total_all_vat);
       const orders=nonnegativeCount(kpis.total_all_std_orders),visitors=nonnegativeCount(kpis.total_all_visitors);
-      if(Math.abs(gross-(net+vat))>1) throw Error(\`Dashboard VAT totals inconsistent for \${date}\`);
+      if(Math.abs(gross-(net+vat))>1) throw Error(`Dashboard VAT totals inconsistent for ${date}`);
       const journalResponse=await callCaptiva(apiUserId,password,"get_api_store_journal",[storeId],{
         start_date:captivaDate(date),
       });
       const journal=parseCaptivaJournalResponse(journalResponse,storeId,date);
       if(journal.gross_cents!==gross || Math.abs(journal.net_cents-net)>1 ||
           Math.abs(journal.vat_cents-vat)>1 || journal.receipts!==orders){
-        throw Error(\`Journal does not reconcile to dashboard for \${date}; nothing staged\`);
+        throw Error(`Journal does not reconcile to dashboard for ${date}; nothing staged`);
       }
       const products=toCaptivaProductTotals(journal);
       const mapping=new Map<string,string|null>();
       for(const product of products){
         const found=current.get(product.external_item_id);
-        const dish=found?.mapped_dish_id??old.get(\`\${product.plu}\u0000\${product.name}\`)??null;
+        const dish=found?.mapped_dish_id??old.get(`${product.plu}\u0000${product.name}`)??null;
         mapping.set(product.external_item_id,dish);
       }
       const collision=await sourceCollision(client,restaurant,locationId,date);
@@ -250,7 +250,7 @@ serve(async(req)=>{
       }
       const imports=day.products.map(p=>({
         restaurant_id:restaurant,location_id:locationId,pos_provider:"captiva",
-        external_sale_id:\`api:\${day.date}:\${p.external_item_id}\`,
+        external_sale_id:`api:${day.date}:${p.external_item_id}`,
         mapped_sale_date:day.date,external_item_id:p.external_item_id,item_name:p.name,
         mapped_dish_id:day.mapping.get(p.external_item_id)??null,
         mapped_quantity:p.quantity,mapped_total_price:p.gross_cents/100,
@@ -285,7 +285,7 @@ serve(async(req)=>{
     await client.from("pos_sync_logs").insert({
       restaurant_id:restaurant,location_id:locationId,pos_provider:"captiva",
       event_type:"captiva_api_staged",status:"success",
-      message:\`Staged \${stagedCount} product totals across \${prepared.length} verified trading dates. No sales applied.\`,
+      message:`Staged ${stagedCount} product totals across ${prepared.length} verified trading dates. No sales applied.`,
       details:{integration_id:integrationId,date_from:start,date_to:end,days:prepared.length,products:stagedCount},
     });
     return reply({
