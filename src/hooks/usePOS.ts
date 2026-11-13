@@ -876,10 +876,28 @@ export interface CaptivaSyncParams {
   location_id: string;
   date_from: string;
   date_to: string;
+  preview_only?: boolean;
+  stage_confirmed?: boolean;
 }
 
 export interface CaptivaSyncResult {
   success: boolean;
+  preview_only?: boolean;
+  staged?: boolean;
+  results?: Array<{
+    date: string;
+    status: string;
+    reason?: string | null;
+    gross?: number;
+    net?: number;
+    vat?: number;
+    orders?: number;
+    visitors?: number;
+    product_count?: number;
+    quantity?: number;
+    products_requiring_mapping?: number;
+    ambiguous_plu_count?: number;
+  }>;
   sales_imported: number;
   line_items_imported: number;
   skipped_duplicates: number;
@@ -910,6 +928,11 @@ export function useCaptivaSyncNow() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
       queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });
+      if (data.preview_only) return; // The existing POS page shows a full date-by-date preview.
+      if (data.success && data.staged) {
+        toast({ title: "Captiva products staged", description: `${data.sales_imported} product totals staged. No sales applied to reports.` });
+        return;
+      }
       if (data.success || (data.sales_imported ?? 0) > 0) {
         const fetched = data.fetched ?? data.sales_imported ?? 0;
         const staged = data.sales_imported ?? 0;

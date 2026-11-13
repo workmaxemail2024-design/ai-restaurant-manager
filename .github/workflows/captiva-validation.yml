@@ -1,0 +1,74 @@
+name: Captiva integration draft validation
+on:
+  push:
+    branches:
+      - fix/captiva-sync-safety-2026-11-08
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      # Legacy package-lock.json is not synchronized with package.json; avoid
+      # rewriting unrelated project files during this integration review.
+      - run: npm install --no-package-lock
+      # The main branch already has unrelated Supabase generic typing errors.
+      # Keep the TypeScript audit visible, but gate this PR on the actual Vite build.
+      - name: Audit existing TypeScript errors (non-gating)
+        run: npx tsc --noEmit -p tsconfig.app.json
+        continue-on-error: true
+      - run: npm run build
+
+  deno-journal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno test supabase/functions/_shared/captivaJournal_test.ts
+      - run: deno check supabase/functions/_shared/captivaJournal.ts supabase/functions/_shared/captivaProductTotals.ts supabase/functions/pos-sync-captiva/index.ts supabase/functions/pos-apply-import/index.ts supabase/functions/pos-test-connection/index.ts
+
+  postgres-migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: captiva_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: test_only
+      PGDATABASE: captiva_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create disposable schema
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/captiva_postgres_fixture.sql
+      - name: Validate migration against PostgreSQL 17
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261113150000_apply_captiva_journal_day.sql
+      - name: Verify staged table and protected RPC
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "SELECT 'public.captiva_api_staged_days'::regclass;"
+          psql -v ON_ERROR_STOP=1 -c "SELECT 'public.apply_captiva_journal_day(uuid,date)'::regprocedure;"

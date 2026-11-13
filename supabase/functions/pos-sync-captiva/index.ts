@@ -1,833 +1,344 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller, userHasPermission, userCanAccessLocation, unauthorized } from "../_shared/posAuth.ts";
+import { parseCaptivaJournalResponse } from "../_shared/captivaJournal.ts";
+import { toCaptivaProductTotals } from "../_shared/captivaProductTotals.ts";
+import { createCaptivaHttpClient } from "../_shared/captivaTransport.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+const ENDPOINT = "https://mycaptivaserver001.azurewebsites.net/CaptivaCloudAPIRequest.ashx";
+const MS_PER_DAY = 86400000;
+const MAX_DAYS_PER_REQUEST = 5;
+const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+type AnyRecord = Record<string, unknown>;
+// Supabase Edge functions do not use a generated database type here; the
+// runtime client is scoped by authenticated integration and explicit filters.
+// Use a permissive client boundary so later supabase-js generic changes do
+// not incorrectly infer every table as `never`.
+type Client = any;
 
-interface CaptivaSettings {
-  base_url?: string;
-  store_id?: string; // numeric outlet/store code, e.g. "02137"
-  api_key?: string;
-  // New canonical fields (match Captiva API email):
-  api_account_name?: string;
-  api_password?: string;
-  // Legacy fallback fields (older rows saved these):
-  username?: string;
-  password?: string;
-  user_id?: string; // legacy — no longer sent unless explicitly required
-  journals_service_id?: string; // legacy — no longer sent unless explicitly required
+function reply(value: AnyRecord, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+function rec(value: unknown): AnyRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as AnyRecord : {};
+}
+function iso(value: unknown): string {
+  const input = String(value ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input) || Number.isNaN(Date.parse(input + "T00:00:00Z")) ||
+      new Date(input + "T00:00:00Z").toISOString().slice(0,10) !== input) {
+    throw Error("Invalid date; use yyyy-MM-dd");
+  }
+  return input;
+}
+function daysBetween(start: string, end: string): string[] {
+  const first = Date.parse(start + "T00:00:00Z"), last = Date.parse(end + "T00:00:00Z");
+  if (last < first || (last-first)/MS_PER_DAY+1 > MAX_DAYS_PER_REQUEST) {
+    throw Error("Each Captiva fetch must cover 1–5 days; larger ranges are fetched in separate batches.");
+  }
+  const dates: string[] = [];
+  for(let at=first;at<=last;at+=MS_PER_DAY) dates.push(new Date(at).toISOString().slice(0,10));
+  return dates;
+}
+function captivaDate(date: string): string {
+  const [y,m,d] = date.split("-").map(Number);
+  return `${String(d).padStart(2,"0")}/${MONTHS[m-1]}/${y}`;
+}
+function normalizeReturnedDate(value: unknown): string {
+  const match = String(value??"").match(/^(\d{1,2})[\s/-]([A-Za-z]{3})[\s/-](\d{4})$/);
+  if (!match) throw Error("Captiva returned an unexpected trading date");
+  const month=MONTHS.indexOf(match[2].toLowerCase());
+  if (month<0) throw Error("Invalid Captiva trading month");
+  return iso(`${match[3]}-${String(month+1).padStart(2,"0")}-${match[1].padStart(2,"0")}`);
+}
+function cents(v: unknown): number {
+  const value=Number(v);
+  if (!Number.isFinite(value) || value<0) throw Error("Invalid Captiva financial amount");
+  return Math.round(value * 100);
+}
+function nonnegativeCount(v: unknown): number {
+  const count=Number(v);
+  if (!Number.isSafeInteger(count) || count<0) throw Error("Invalid Captiva count");
+  return count;
+}
+async function callCaptiva(userId: string, password: string, request: string, stores: string[], params: AnyRecord = {}): Promise<AnyRecord> {
+  const proxyClient = createCaptivaHttpClient();
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 25000);
+  try {
+    const response=await fetch(ENDPOINT, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body:JSON.stringify({
+        api_userid:userId, api_pass:password, api_request:request,
+        stores:stores.map(id=>({id})),...params,
+      }),
+      signal:controller.signal,
+      ...(proxyClient ? { client: proxyClient } : {}),
+    });
+    if (!response.ok) throw Error(`Captiva HTTP ${response.status}`);
+    const body=rec(await response.json());
+    if (String(body.result).toLowerCase() !== "success") {
+      const code=String(body.resultcode??"unknown");
+      // Only return Captiva's error code: API debug fields may contain sensitive info.
+      throw Error(`Captiva request ${request} rejected (code ${code})`);
+    }
+    return body;
+  } finally {
+    clearTimeout(timer);
+    proxyClient?.close();
+  }
+}
+async function exists(query: {data:unknown;error:unknown}): Promise<boolean> {
+  const {data,error}=await query;
+  if (error) throw Error("Could not verify existing sales/import coverage");
+  return Array.isArray(data) && data.length>0;
+}
+async function sourceCollision(client: Client, restaurant: string, location: string, date: string): Promise<string|null> {
+  // Never restage a date that already has any applied sale (even Captiva API).
+  // Replacements must be handled through an explicitly reviewed reconciliation flow.
+  const existingSales=await client.from("sales").select("id,source")
+    .eq("restaurant_id",restaurant).eq("location_id",location)
+    .eq("sale_date",date).limit(1);
+  if (await exists(existingSales)) return "Sales already recorded for this date (XLS/API/manual); no duplicate import permitted";
+  const xlsStage=await client.from("pos_sales_import").select("id")
+    .eq("restaurant_id",restaurant).eq("location_id",location)
+    .eq("mapped_sale_date",date).eq("pos_provider","captiva_xls").limit(1);
+  if (await exists(xlsStage)) return "Captiva XLS import already staged for this date";
+  const xlsSummary=await client.from("pos_daily_summaries").select("id")
+    .eq("restaurant_id",restaurant).eq("location_id",location)
+    .eq("report_date",date).eq("pos_provider","captiva_xls").limit(1);
+  if (await exists(xlsSummary)) return "Captiva XLS financial summary already exists for this date";
+  // Any existing daily control/revenue source needs a human reconciliation.
+  const anySummary=await client.from("pos_daily_summaries").select("id")
+    .eq("restaurant_id",restaurant).eq("location_id",location)
+    .eq("report_date",date).neq("pos_provider","captiva").limit(1);
+  if (await exists(anySummary)) return "Existing financial summary from another import source";
+  const ledger=await client.from("daily_ledger_entries")
+    .select("is_closed,manual_revenue")
+    .eq("restaurant_id",restaurant).eq("entry_date",date)
+    .or(`location_id.eq.${location},location_id.is.null`);
+  if (ledger.error) throw Error("Could not verify manual revenue or closed-day status");
+  if ((ledger.data??[]).some((l:AnyRecord)=>l.is_closed)) return "Trading day is closed";
+  if ((ledger.data??[]).some((l:AnyRecord)=>l.manual_revenue!=null && Number(l.manual_revenue)!==0)) {
+    return "Manual daily revenue already exists and requires reconciliation";
+  }
+  return null;
+}
+async function mappedCatalogue(client: Client, restaurant: string, location: string) {
+  const [native,legacy,legacyDishes]=await Promise.all([
+    client.from("external_pos_items").select("external_item_id,external_item_name,mapped_dish_id")
+      .eq("restaurant_id",restaurant).eq("location_id",location).eq("pos_provider","captiva"),
+    client.from("external_pos_items").select("external_item_id,external_item_name,mapped_dish_id")
+      .eq("restaurant_id",restaurant).eq("location_id",location).eq("pos_provider","captiva_xls"),
+    client.from("dishes").select("id,name,captiva_external_id")
+      .eq("restaurant_id",restaurant).eq("location_id",location).not("captiva_external_id","is",null),
+  ]);
+  if (native.error||legacy.error||legacyDishes.error) throw Error("Could not read product mapping catalogue");
+  const current=new Map<string,{mapped_dish_id:string|null}>((native.data??[]).map((x:AnyRecord)=>[String(x.external_item_id),{mapped_dish_id:typeof x.mapped_dish_id === "string" ? x.mapped_dish_id : null}]));
+  const old=new Map<string,string|null>();
+  for (const row of legacy.data??[]) {
+    if (row.mapped_dish_id) old.set(`${row.external_item_id}\u0000${row.external_item_name}`,row.mapped_dish_id);
+  }
+  for (const row of legacyDishes.data??[]) {
+    if (row.captiva_external_id && !old.has(`${row.captiva_external_id}\u0000${row.name}`)) {
+      old.set(`${row.captiva_external_id}\u0000${row.name}`,row.id);
+    }
+  }
+  return {current,old};
+}
+async function hashBatch(value: unknown): Promise<string> {
+  const bytes=new TextEncoder().encode(JSON.stringify(value));
+  const hash=await crypto.subtle.digest("SHA-256",bytes);
+  return Array.from(new Uint8Array(hash)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 
-interface SyncResult {
-  success: boolean;
-  sales_imported: number;
-  line_items_imported: number;
-  skipped_duplicates: number;
-  failed_rows: number;
-  errors: string[];
-  applied?: {
-    applied_count: number;
-    total_revenue: number;
-    line_items_unmapped: number;
-  };
-  error?: string;
-}
+serve(async(req)=>{
+  if(req.method==="OPTIONS") return new Response(null,{headers:corsHeaders});
+  if(req.method!=="POST") return reply({success:false,error:"POST required"},405);
+  const caller=await resolveCaller(req);
+  if(caller.kind==="none") return unauthorized(caller.reason,corsHeaders);
+  try{
+    const body=await req.json();
+    const integrationId=String(body.integration_id??"");
+    const locationId=String(body.location_id??"");
+    const start=iso(body.date_from), end=iso(body.date_to);
+    const dates=daysBetween(start,end);
+    // Preview is the default; stage only after a separate explicit confirmation.
+    const stage=body.preview_only===false && body.stage_confirmed===true;
+    if(body.auto_apply===true) return reply({success:false,error:"Automatic apply is disabled until product reconciliation is confirmed"},409);
 
-const parseCaptivaRows = (rawBody: string): { rows: unknown[]; error: string | null } => {
-  let parsedJson: Record<string, unknown> | unknown[] | null = null;
-  try {
-    parsedJson = JSON.parse(rawBody);
-  } catch {
-    parsedJson = null;
-  }
-
-  if (parsedJson) {
-    const obj = parsedJson as Record<string, unknown>;
-    const error = obj.ErrorMessage || obj.errorMessage || obj.Error || (obj.result === "Error" ? obj.resultdesc : null);
-    const candidate =
-      (Array.isArray(parsedJson) && parsedJson) ||
-      obj.Sales || obj.sales ||
-      obj.Journals || obj.journals ||
-      obj.Data || obj.data ||
-      obj.Results || obj.results ||
-      [];
-    return { rows: Array.isArray(candidate) ? candidate : [], error: error ? String(error) : null };
-  }
-
-  const rows: unknown[] = [];
-  if (rawBody.includes("<")) {
-    const errorMatch = rawBody.match(/<(?:resultdesc|ErrorMessage|error|Error)>([^<]+)<\//i);
-    const matches = rawBody.matchAll(/<(?:sale|journal|transaction)[^>]*>([\s\S]*?)<\/(?:sale|journal|transaction)>/gi);
-    for (const m of matches) {
-      const xml = m[1];
-      const id = xml.match(/<(?:receipt_id|id|ReceiptNumber|TransactionID)>([^<]+)<\//i)?.[1];
-      const total = xml.match(/<(?:total|GrossTotal|NetTotal|Amount)>([^<]+)<\//i)?.[1];
-      const date = xml.match(/<(?:date|sale_date|TransactionDate|DateTime)>([^<]+)<\//i)?.[1];
-      if (id) rows.push({ receipt_id: id, sale_date: date, total: parseFloat(total ?? "0"), raw_xml: xml });
+    const client=createClient(Deno.env.get("SUPABASE_URL")??"",Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"");
+    const {data:integration,error:integrationError}=await client.from("pos_integrations").select("*")
+      .eq("id",integrationId).single();
+    if(integrationError||!integration||integration.pos_provider!=="captiva"||integration.location_id!==locationId){
+      return reply({success:false,error:"Captiva integration not found or location mismatch"},404);
     }
-    return { rows, error: errorMatch?.[1] ?? null };
-  }
-
-  return { rows, error: null };
-};
-
-const isUserIdRequiredError = (error: string | null, rawBody: string): boolean => {
-  const haystack = `${error ?? ""} ${rawBody}`.toLowerCase();
-  return haystack.includes("user id required");
-};
-
-const redactCaptivaSecrets = (value: string, apiKey?: string, apiPassword?: string): string => {
-  let redacted = value;
-  if (apiKey) redacted = redacted.split(apiKey).join("[redacted]");
-  if (apiPassword) redacted = redacted.split(apiPassword).join("[redacted]");
-  return redacted;
-};
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    const body = await req.json();
-    const { integration_id, date_from, date_to, location_id, auto_apply, diagnostic_user_id, diagnostic_format_test } = body;
-
-    // Verify auth: accept either a logged-in user JWT OR the service-role key
-    // (the service-role path lets the nightly cron / captiva-schedule-sync call us safely).
-    // A user caller is verified against the integration's own restaurant below.
-    const caller = await resolveCaller(req);
-    if (caller.kind === "none") {
-      return unauthorized(caller.reason, corsHeaders);
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SERVICE_ROLE_KEY") ?? "";
-
-    if (!integration_id || !date_from || !date_to || !location_id) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing required params: integration_id, date_from, date_to, location_id" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Use service role for DB operations
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-    // Fetch integration details
-    const { data: integration, error: intError } = await adminClient
-      .from("pos_integrations")
-      .select("*")
-      .eq("id", integration_id)
-      .single();
-
-    if (intError || !integration) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Integration not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Tenant is resolved from the integration record, never from the body.
-    if (caller.kind === "user") {
-      const allowed =
-        !!integration.restaurant_id &&
-        (await userHasPermission(adminClient, caller.userId, integration.restaurant_id, "pos", "edit"));
-      if (!allowed) {
-        return unauthorized("Not authorised for this POS integration", corsHeaders, 403);
-      }
-      // The requested location must be one the caller is permitted to operate on,
-      // and it must match the integration's own location.
-      if (location_id !== integration.location_id) {
-        return unauthorized("location_id does not match this POS integration", corsHeaders, 403);
-      }
-      const locOk = await userCanAccessLocation(
-        adminClient, caller.userId, integration.restaurant_id, location_id,
-      );
-      if (!locOk) {
-        return unauthorized("Not authorised for this location", corsHeaders, 403);
+    if(caller.kind==="user"){
+      const permitted=!!integration.restaurant_id&&await userHasPermission(client,caller.userId, integration.restaurant_id,"pos","edit");
+      if(!permitted||!await userCanAccessLocation(client,caller.userId,integration.restaurant_id,locationId)){
+        return unauthorized("Not authorised for this integration/location",corsHeaders,403);
       }
     }
+    const restaurant=String(integration.restaurant_id??"");
+    if(!restaurant) throw Error("Integration has no restaurant");
+    const settings=rec(integration.settings);
+    const apiUserId=String(settings.api_key??"");
+    const password=String(settings.api_password??settings.password??"");
+    const storeId=String(settings.store_id??"");
+    if(!apiUserId||!password||!/^\d{5}$/.test(storeId)) throw Error("Missing Captiva API credentials or store ID");
+    if(Deno.env.get("SIMULATE_CAPTIVA")==="true") throw Error("Simulation mode enabled: real Captiva sync is disabled.");
 
+    const {current,old}=await mappedCatalogue(client,restaurant,locationId);
+    const dashboardResponse=await callCaptiva(apiUserId,password,"get_api_stores_dashboard",[storeId],{
+      start_date:captivaDate(start),end_date:captivaDate(end),
+    });
+    const store=(Array.isArray(dashboardResponse.stores)?dashboardResponse.stores:[])
+      .map(rec).find(s=>String(s.storeid)===storeId);
+    if(!store||!Array.isArray(store.dashboards)) throw Error("Captiva dashboard returned no authorised store data");
 
-    const settings = integration.settings as CaptivaSettings;
-    // Prefer the new canonical field names from the Captiva API email; fall back to
-    // legacy username/password for older rows that haven't been re-saved yet.
-    const apiAccountName = settings?.api_account_name || settings?.username || "";
-    const apiPassword = settings?.api_password || settings?.password || "";
-    if (!settings?.base_url || !settings?.store_id || !apiAccountName || !apiPassword) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Integration missing required Captiva credentials (base_url, store_id, api_account_name, api_password)" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const apiKey = settings.api_key || integration.api_key;
-    const result: SyncResult = {
-      success: true,
-      sales_imported: 0,
-      line_items_imported: 0,
-      skipped_duplicates: 0,
-      failed_rows: 0,
-      errors: [],
-    };
-
-    // Mark the attempt timestamp immediately so we can tell when the integration was last touched
-    // (this is intentionally separate from last_successful_sync_at, which only advances on full success)
-    await adminClient
-      .from("pos_integrations")
-      .update({ last_sync_attempt_at: new Date().toISOString() })
-      .eq("id", integration_id);
-
-    // Check if simulation mode
-    const simulateMode = Deno.env.get("SIMULATE_CAPTIVA") === "true";
-
-    let salesData: unknown[] = [];
-
-    if (simulateMode) {
-      // Generate mock data for testing
-      console.log("Running in SIMULATE_CAPTIVA mode - generating mock data");
-      const mockSales = [];
-      const startDate = new Date(date_from);
-      const endDate = new Date(date_to);
-      
-      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const numSales = Math.floor(Math.random() * 10) + 5;
-        for (let i = 0; i < numSales; i++) {
-          mockSales.push({
-            receipt_id: `SIM-${d.toISOString().split('T')[0]}-${i}`,
-            sale_date: d.toISOString(),
-            total: (Math.random() * 100 + 10).toFixed(2),
-            items: [
-              { name: `Item ${i + 1}`, qty: Math.floor(Math.random() * 3) + 1, price: (Math.random() * 20 + 5).toFixed(2) }
-            ],
-            operator: `OP${Math.floor(Math.random() * 5) + 1}`,
-          });
-        }
-      }
-      salesData = mockSales;
-    } else {
-      // Call Captiva Cloud API dispatcher (.ashx) for sales data.
-      // Safe Base URL normalization:
-      //   - Trim whitespace and trailing slashes
-      //   - If the saved value already ends in /CaptivaCloudAPIRequest.ashx (any case,
-      //     optional trailing slash, optional query string), use it as-is.
-      //   - Otherwise append /CaptivaCloudAPIRequest.ashx exactly once.
-      const savedBaseUrl = (settings.base_url ?? "").trim();
-      const trimmedBaseUrl = savedBaseUrl.replace(/\/+$/, "");
-      const alreadyHasDispatcher = /\/CaptivaCloudAPIRequest\.ashx(\/|\?|$)/i.test(trimmedBaseUrl);
-      const captivaEndpoint = alreadyHasDispatcher
-        ? trimmedBaseUrl
-        : `${trimmedBaseUrl}/CaptivaCloudAPIRequest.ashx`;
-
-      // Try multiple RequestType names since Captiva exposes both sales/journal endpoints.
-      // We attempt them in order until one returns rows or a clearly recognized response.
-      const requestTypes = ["GetSales", "GetJournals", "GetProductSales", "GetSalesJournal"];
-
-      if (diagnostic_format_test === true) {
-        const requestType = "GetSales";
-        const userId = diagnostic_user_id ? String(diagnostic_user_id) : "2";
-        const basePayload: Record<string, string> = {
-          APIKey: String(apiKey ?? ""),
-          UserName: apiAccountName,
-          Password: apiPassword,
-          OutletCode: String(settings.store_id ?? ""),
-          UserID: userId,
-          RequestType: requestType,
-          FromDate: date_from,
-          ToDate: date_to,
-        };
-        const sanitizedPayload: Record<string, string> = {
-          ...basePayload,
-          APIKey: "[redacted]",
-          Password: "[redacted]",
-        };
-        const toQueryString = (payload: Record<string, string>) => new URLSearchParams(payload).toString();
-        const sanitizedQueryString = toQueryString(sanitizedPayload);
-
-        const formatAttempts: Array<{
-          format: string;
-          contentType: string | null;
-          sanitizedRequest: string | Record<string, string>;
-          run: () => Promise<Response>;
-        }> = [
-          {
-            format: "json_body",
-            contentType: "application/json",
-            sanitizedRequest: sanitizedPayload,
-            run: () => fetch(captivaEndpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Accept": "application/json" },
-              body: JSON.stringify(basePayload),
-            }),
-          },
-          {
-            format: "x_www_form_urlencoded_body",
-            contentType: "application/x-www-form-urlencoded",
-            sanitizedRequest: sanitizedQueryString,
-            run: () => fetch(captivaEndpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" },
-              body: toQueryString(basePayload),
-            }),
-          },
-          {
-            format: "multipart_form_data_body",
-            contentType: "multipart/form-data",
-            sanitizedRequest: sanitizedPayload,
-            run: () => {
-              const form = new FormData();
-              Object.entries(basePayload).forEach(([key, value]) => form.append(key, value));
-              return fetch(captivaEndpoint, {
-                method: "POST",
-                headers: { "Accept": "application/json" },
-                body: form,
-              });
-            },
-          },
-          {
-            format: "query_string_parameters",
-            contentType: null,
-            sanitizedRequest: `${captivaEndpoint}?${sanitizedQueryString}`,
-            run: () => fetch(`${captivaEndpoint}?${toQueryString(basePayload)}`, {
-              method: "GET",
-              headers: { "Accept": "application/json" },
-            }),
-          },
-          {
-            format: "xml_body",
-            contentType: "application/xml",
-            sanitizedRequest: `<Request><APIKey>[redacted]</APIKey><UserName>${apiAccountName}</UserName><Password>[redacted]</Password><OutletCode>${settings.store_id}</OutletCode><UserID>${userId}</UserID><RequestType>${requestType}</RequestType><FromDate>${date_from}</FromDate><ToDate>${date_to}</ToDate></Request>`,
-            run: () => fetch(captivaEndpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/xml", "Accept": "application/xml, application/json" },
-              body: `<Request><APIKey>${basePayload.APIKey}</APIKey><UserName>${basePayload.UserName}</UserName><Password>${basePayload.Password}</Password><OutletCode>${basePayload.OutletCode}</OutletCode><UserID>${basePayload.UserID}</UserID><RequestType>${basePayload.RequestType}</RequestType><FromDate>${basePayload.FromDate}</FromDate><ToDate>${basePayload.ToDate}</ToDate></Request>`,
-            }),
-          },
-        ];
-
-        const diagnosticResults: Array<Record<string, unknown>> = [];
-        for (const attempt of formatAttempts) {
-          let httpStatus = 0;
-          let rawFirst2000 = "";
-          let errorMessage: string | null = null;
-          let parsedRowCount = 0;
-          let changedFromUserIdRequired = false;
-
-          try {
-            const response = await attempt.run();
-            httpStatus = response.status;
-            const rawBody = await response.text();
-            rawFirst2000 = redactCaptivaSecrets(rawBody.substring(0, 2000), String(apiKey ?? ""), apiPassword);
-            const parsed = parseCaptivaRows(rawBody);
-            parsedRowCount = parsed.rows.length;
-            errorMessage = parsed.error ?? (response.ok ? null : `HTTP ${response.status}`);
-            changedFromUserIdRequired = !isUserIdRequiredError(errorMessage, rawBody);
-          } catch (err) {
-            errorMessage = err instanceof Error ? err.message : String(err);
-            changedFromUserIdRequired = true;
-          }
-
-          const details = {
-            integration_id,
-            date_from,
-            date_to,
-            final_endpoint_url: captivaEndpoint,
-            format_used: attempt.format,
-            content_type: attempt.contentType,
-            request_type: requestType,
-            user_id_sent: userId,
-            sanitized_request: attempt.sanitizedRequest,
-            http_status: httpStatus,
-            raw_response_first_2000: rawFirst2000,
-            error_changed_from_user_id_required: changedFromUserIdRequired,
-            parsed_row_count: parsedRowCount,
-            error_message: errorMessage,
-            note: "Diagnostic-only request format test; no sales are staged or applied by this branch.",
-          };
-
-          diagnosticResults.push(details);
-          await adminClient.from("pos_sync_logs").insert({
-            location_id,
-            restaurant_id: integration.restaurant_id,
-            pos_provider: "captiva",
-            event_type: "sync_debug",
-            status: parsedRowCount > 0 ? "info" : changedFromUserIdRequired ? "warning" : "warning",
-            message: `Captiva format diagnostic ${attempt.format}: ${parsedRowCount} rows, ${errorMessage ?? "no error"}`,
-            details,
-          });
-
-          if (changedFromUserIdRequired) {
-            break;
-          }
-        }
-
-        return new Response(
-          JSON.stringify({ success: true, diagnostic_only: true, applied: false, results: diagnosticResults }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const attemptDebug: Array<Record<string, unknown>> = [];
-      let lastRawSample = "";
-      let lastStatus = 0;
-      let lastRequestType = "";
-
-      for (const rt of requestTypes) {
-        const userIdForDiagnostic = diagnostic_user_id ? String(diagnostic_user_id) : null;
-
-        // Captiva API request body — fields per the Captiva API email:
-        //   APIKey, UserName (= API Account Name), Password (= API Password), OutletCode
-        // ServiceID is intentionally not sent. UserID is sent only when a one-off
-        // diagnostic request explicitly provides diagnostic_user_id.
-        const requestPayload: Record<string, unknown> = {
-          APIKey: apiKey,
-          UserName: apiAccountName,
-          Password: apiPassword,
-          OutletCode: settings.store_id,
-          RequestType: rt,
-          FromDate: date_from,
-          ToDate: date_to,
-        };
-        if (userIdForDiagnostic) {
-          requestPayload.UserID = userIdForDiagnostic;
-        }
-
-        console.log(`Captiva fetch: ${captivaEndpoint} RequestType=${rt} OutletCode=${settings.store_id} Account=${apiAccountName} ${date_from} -> ${date_to}`);
-
-        // Sanitized payload (excludes APIKey/Password) for debug logging.
-        const sanitizedPayload = {
-          APIKey: "[redacted]",
-          UserName: apiAccountName,
-          Password: "[redacted]",
-          OutletCode: settings.store_id,
-          ...(userIdForDiagnostic ? { UserID: userIdForDiagnostic } : {}),
-          RequestType: rt,
-          FromDate: date_from,
-          ToDate: date_to,
-        };
-
-        let attemptStatus = 0;
-        let attemptRaw = "";
-        let attemptRowCount = 0;
-        let attemptError: string | null = null;
-
-        try {
-          const response = await fetch(captivaEndpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Accept": "application/json" },
-            body: JSON.stringify(requestPayload),
-          });
-          attemptStatus = response.status;
-          lastStatus = response.status;
-          lastRequestType = rt;
-          const rawBody = await response.text();
-          attemptRaw = rawBody.substring(0, 2000);
-          lastRawSample = rawBody.substring(0, 1000);
-
-          if (!response.ok) {
-            console.log(`RequestType ${rt} returned HTTP ${response.status}, trying next.`);
-            attemptError = `HTTP ${response.status}`;
-            attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
-            continue;
-          }
-
-          // Parse response: prefer JSON, fall back to XML scraping.
-          let parsedRows: unknown[] = [];
-          let parsedJson: Record<string, unknown> | null = null;
-          try {
-            parsedJson = JSON.parse(rawBody);
-          } catch {
-            parsedJson = null;
-          }
-
-          if (parsedJson) {
-            const errMsg = parsedJson.ErrorMessage || parsedJson.errorMessage || parsedJson.Error || (parsedJson.result === "Error" ? parsedJson.resultdesc : null);
-            if (errMsg && !parsedJson.Sales && !parsedJson.Data) {
-              console.log(`RequestType ${rt} returned error: ${String(errMsg)}`);
-              attemptError = String(errMsg);
-              attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
-              continue;
-            }
-            const candidate =
-              (Array.isArray(parsedJson) && parsedJson) ||
-              parsedJson.Sales || parsedJson.sales ||
-              parsedJson.Journals || parsedJson.journals ||
-              parsedJson.Data || parsedJson.data ||
-              parsedJson.Results || parsedJson.results ||
-              [];
-            parsedRows = Array.isArray(candidate) ? candidate : [];
-          } else if (rawBody.includes("<")) {
-            const matches = rawBody.matchAll(/<(?:sale|journal|transaction)[^>]*>([\s\S]*?)<\/(?:sale|journal|transaction)>/gi);
-            for (const m of matches) {
-              const xml = m[1];
-              const id = xml.match(/<(?:receipt_id|id|ReceiptNumber|TransactionID)>([^<]+)<\//i)?.[1];
-              const total = xml.match(/<(?:total|GrossTotal|NetTotal|Amount)>([^<]+)<\//i)?.[1];
-              const date = xml.match(/<(?:date|sale_date|TransactionDate|DateTime)>([^<]+)<\//i)?.[1];
-              if (id) parsedRows.push({ receipt_id: id, sale_date: date, total: parseFloat(total ?? "0"), raw_xml: xml });
-            }
-          }
-
-          attemptRowCount = parsedRows.length;
-          attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: attemptRowCount, error: null, raw_first_2000: attemptRaw });
-
-          if (parsedRows.length > 0) {
-            salesData = parsedRows;
-            console.log(`RequestType ${rt} returned ${parsedRows.length} rows`);
-            break;
-          }
-          console.log(`RequestType ${rt} returned 0 rows, trying next.`);
-        } catch (err) {
-          attemptError = err instanceof Error ? err.message : String(err);
-          console.error(`RequestType ${rt} fetch error:`, err);
-          attemptDebug.push({ request_type: rt, RequestType: rt, user_id_sent: userIdForDiagnostic, sanitized_payload: sanitizedPayload, http_status: attemptStatus, parsed_row_count: 0, error: attemptError, raw_first_2000: attemptRaw });
-        }
-      }
-
-      // Always emit a visible sync_debug entry showing exactly what was sent and received,
-      // for every Captiva attempt (success or failure). Credentials are excluded.
-      await adminClient.from("pos_sync_logs").insert({
-        location_id,
-        restaurant_id: integration.restaurant_id,
-        pos_provider: "captiva",
-        event_type: "sync_debug",
-        status: salesData.length === 0 ? "warning" : "info",
-        message: `Captiva ${salesData.length === 0 ? "returned 0 rows" : `returned ${salesData.length} rows`} for ${date_from}..${date_to} (endpoint: ${captivaEndpoint})`,
-        details: {
-          integration_id,
-          date_from,
-          date_to,
-          saved_base_url: savedBaseUrl,
-          final_endpoint_url: captivaEndpoint,
-          already_had_dispatcher: alreadyHasDispatcher,
-          store_id_sent: settings.store_id,
-          api_account_name_sent: apiAccountName,
-          user_id_sent: diagnostic_user_id ? String(diagnostic_user_id) : null,
-          service_id_sent: null,
-          note: diagnostic_user_id ? "One-off diagnostic request sent UserID and omitted ServiceID" : "UserID and ServiceID intentionally omitted per Captiva API email spec",
-          date_format_sent: "YYYY-MM-DD",
-          last_request_type: lastRequestType,
-          last_http_status: lastStatus,
-          last_raw_sample: lastRawSample,
-          attempts: attemptDebug,
-        },
-      });
-    }
-
-    console.log(`Processing ${salesData.length} sales records`);
-
-    // Normalize raw Captiva rows into a consistent shape that captures item-level fields
-    // (product ID/PLU, name, department, qty, gross, net, VAT, discounts) where present.
-    const normalizeItems = (raw: Record<string, unknown>): Array<Record<string, unknown>> => {
-      const itemSrc =
-        (raw.Items as unknown[]) || (raw.items as unknown[]) ||
-        (raw.LineItems as unknown[]) || (raw.lineItems as unknown[]) ||
-        (raw.Products as unknown[]) || (raw.products as unknown[]) ||
-        (raw.Lines as unknown[]) || (raw.lines as unknown[]) || [];
-      if (!Array.isArray(itemSrc)) return [];
-      return itemSrc.map((it) => {
-        const i = it as Record<string, unknown>;
-        return {
-          product_id: i.ProductID ?? i.product_id ?? i.PLU ?? i.plu ?? i.ID ?? i.id ?? null,
-          name: i.Name ?? i.name ?? i.ProductName ?? i.product_name ?? null,
-          department: i.Department ?? i.department ?? i.DepartmentName ?? null,
-          quantity: Number(i.Qty ?? i.qty ?? i.Quantity ?? i.quantity ?? 0) || 0,
-          gross_sales: Number(i.GrossSales ?? i.gross_sales ?? i.Gross ?? i.AllSales ?? i.Sales ?? i.sales ?? i.Total ?? 0) || 0,
-          net_sales: Number(i.NetSales ?? i.net_sales ?? i.Net ?? 0) || 0,
-          vat: Number(i.VAT ?? i.vat ?? i.Tax ?? i.tax ?? 0) || 0,
-          discounts: Number(i.Discounts ?? i.discounts ?? i.Discount ?? i.discount ?? 0) || 0,
-          unit_price: Number(i.UnitPrice ?? i.unit_price ?? i.Price ?? i.price ?? 0) || 0,
-          raw: i,
-        };
-      });
-    };
-
-    // Log a raw-parsed sample of the first sale (with normalized items) BEFORE applying to dashboard,
-    // so the user can verify field mapping is correct in Sync Logs.
-    if (salesData.length > 0) {
-      const sample = salesData[0] as Record<string, unknown>;
-      await adminClient.from("pos_sync_logs").insert({
-        location_id,
-        restaurant_id: integration.restaurant_id,
-        pos_provider: "captiva",
-        event_type: "sync_raw_sample",
-        status: "info",
-        message: `Raw parsed sample: 1 of ${salesData.length} sales (pre-apply)`,
-        details: {
-          integration_id,
-          date_from,
-          date_to,
-          total_fetched: salesData.length,
-          sample_raw: sample,
-          sample_normalized_items: normalizeItems(sample),
-        },
-      });
-    }
-
-    // Identity rules for staged rows (B3 idempotency depends entirely on this):
-    //  1. Use a stable identifier supplied by Captiva when one exists.
-    //  2. Otherwise derive a DETERMINISTIC id from restaurant/location/provider/date
-    //     plus the row's own stable content, so a retry produces the same id.
-    //  3. Never invent a random id. If identity is ambiguous (no date, no content, or
-    //     two distinct rows hash to the same identity) the row is rejected and logged.
-    const rejectedRows: Array<Record<string, unknown>> = [];
-    const seenContentIds = new Map<string, string>(); // contentId -> canonical json of first row
-    const identityFor = (
-      saleRecord: Record<string, unknown>,
-      mappedSaleDate: string | null,
-      items: Array<Record<string, unknown>>,
-    ): { id: string | null; reason?: string; canonical?: string } => {
-      const stable =
-        saleRecord.receipt_id ?? saleRecord.ReceiptNumber ?? saleRecord.TransactionID ??
-        saleRecord.id ?? saleRecord.ID ?? saleRecord.sale_id ?? null;
-      if (stable !== null && stable !== undefined && String(stable).trim() !== "") {
-        return { id: String(stable).trim() };
-      }
-      if (!mappedSaleDate) {
-        return { id: null, reason: "No Captiva receipt/transaction id and no usable sale date — identity is ambiguous." };
-      }
-      // Stable content signature: sorted item lines + totals + operator/table when present.
-      const itemSignature = items
-        .map((i) => `${i.product_id ?? i.name ?? ""}|${i.quantity ?? 0}|${i.gross_sales ?? 0}|${i.unit_price ?? 0}`)
-        .sort()
-        .join(";");
-      const totalPart = String(
-        saleRecord.total ?? saleRecord.GrossTotal ?? saleRecord.NetTotal ?? saleRecord.Amount ?? "",
-      );
-      const contextPart = [
-        saleRecord.operator ?? saleRecord.Operator ?? saleRecord.OperatorCode ?? "",
-        saleRecord.table ?? saleRecord.Table ?? saleRecord.TableNumber ?? "",
-        saleRecord.time ?? saleRecord.Time ?? saleRecord.DateTime ?? "",
-      ].map((v) => String(v ?? "")).join("|");
-      if (!itemSignature && !totalPart && !contextPart.replace(/\|/g, "")) {
-        return { id: null, reason: "Row carries no stable content to derive an identity from." };
-      }
-      const canonical = [
-        integration.restaurant_id ?? "",
-        location_id,
-        "captiva",
-        mappedSaleDate,
-        totalPart,
-        contextPart,
-        itemSignature,
-      ].join("~");
-      // FNV-1a (32-bit) x2 with a salt for a compact, stable, collision-resistant-enough digest.
-      const fnv = (input: string, seed: number) => {
-        let h = seed >>> 0;
-        for (let i = 0; i < input.length; i++) {
-          h ^= input.charCodeAt(i);
-          h = Math.imul(h, 0x01000193) >>> 0;
-        }
-        return h.toString(16).padStart(8, "0");
-      };
-      const digest = `${fnv(canonical, 0x811c9dc5)}${fnv(canonical, 0x9e3779b9)}`;
-      return { id: `derived:${mappedSaleDate}:${digest}`, canonical };
-    };
-
-    // Process and insert sales with idempotency via upsert
-    for (const sale of salesData) {
-      const saleRecord = sale as Record<string, unknown>;
-      const rawDate = saleRecord.sale_date ?? saleRecord.TransactionDate ?? saleRecord.DateTime ?? saleRecord.Date ?? null;
-      const mappedSaleDate = rawDate ? String(rawDate).split("T")[0] : null;
-      const rawTotal = saleRecord.total ?? saleRecord.GrossTotal ?? saleRecord.NetTotal ?? saleRecord.Amount ?? 0;
-      const mappedTotalPrice = typeof rawTotal === "number" ? rawTotal : parseFloat(String(rawTotal || 0));
-      // Enrich the stored payload with normalized item lines so downstream apply/mapping can use them.
-      const enrichedRecord = { ...saleRecord, _normalized_items: normalizeItems(saleRecord) };
-
-      const identity = identityFor(saleRecord, mappedSaleDate, enrichedRecord._normalized_items);
-      if (!identity.id) {
-        result.failed_rows++;
-        const msg = `Row rejected — ${identity.reason}`;
-        if (result.errors.length < 10) result.errors.push(msg);
-        rejectedRows.push({ reason: identity.reason, sale_date: mappedSaleDate, total: mappedTotalPrice, raw: saleRecord });
+    const results: AnyRecord[]=[];
+    const prepared: Array<{date:string;products:ReturnType<typeof toCaptivaProductTotals>; gross:number;net:number;vat:number;orders:number;visitors:number;batch:string;mapping:Map<string,string|null>}>=[];
+    for(const date of dates) {
+      const dash=store.dashboards.map(rec).find(d=>normalizeReturnedDate(d.dashdate)===date);
+      if(!dash||String(dash.status).toLowerCase()!=="data"||!rec(dash.report).kpis){
+        results.push({date,status:"no_data",message:"No completed dashboard data for this date"});
         continue;
       }
-      const externalSaleId = identity.id;
-      if (identity.canonical) {
-        const previous = seenContentIds.get(externalSaleId);
-        if (previous !== undefined) {
-          if (previous !== identity.canonical) {
-            result.failed_rows++;
-            const msg = "Row rejected — two different rows produced the same derived identity.";
-            if (result.errors.length < 10) result.errors.push(msg);
-            rejectedRows.push({ reason: msg, sale_date: mappedSaleDate, total: mappedTotalPrice, raw: saleRecord });
-          } else {
-            // Byte-identical repeat inside the same response: cannot be told apart,
-            // so it is counted once rather than silently overwriting itself.
-            result.skipped_duplicates++;
-          }
-          continue;
-        }
-        seenContentIds.set(externalSaleId, identity.canonical);
-      }
-
-
-
-      // Upsert the sale record (insert or update on conflict)
-      // This ensures idempotency - reimporting the same date range updates existing records
-      const { data: upserted, error: upsertError } = await adminClient
-        .from("pos_sales_import")
-        .upsert(
-          {
-            location_id,
-            restaurant_id: integration.restaurant_id,
-            pos_provider: "captiva",
-            external_sale_id: externalSaleId,
-            data: enrichedRecord,
-            mapped_sale_date: mappedSaleDate,
-            mapped_total_price: mappedTotalPrice,
-            sync_status: "pending",
-          },
-          {
-            onConflict: "restaurant_id,location_id,pos_provider,external_sale_id",
-            ignoreDuplicates: false,
-          }
-        )
-        .select("id")
-        .single();
-
-      if (upsertError) {
-        // Check if it's a conflict/update (which means it was already there)
-        if (upsertError.code === "23505" || upsertError.message?.includes("duplicate")) {
-          result.skipped_duplicates++;
-        } else {
-          result.failed_rows++;
-          const msg = `${upsertError.code || "err"}: ${upsertError.message || "unknown"}${upsertError.details ? ` (${upsertError.details})` : ""}${upsertError.hint ? ` hint=${upsertError.hint}` : ""}`;
-          if (result.errors.length < 10) result.errors.push(msg);
-          console.error("Failed to upsert sale:", upsertError);
-        }
-      } else {
-        result.sales_imported++;
-        // Count normalized line items
-        result.line_items_imported += enrichedRecord._normalized_items.length;
-      }
-    }
-
-    // Surface rejected rows explicitly — they are never silently dropped or given an invented id.
-    if (rejectedRows.length) {
-      await adminClient.from("pos_sync_logs").insert({
-        location_id,
-        restaurant_id: integration.restaurant_id,
-        pos_provider: "captiva",
-        event_type: "row_validation_rejected",
-        status: "fail",
-        message: `${rejectedRows.length} row(s) rejected: no stable Captiva identifier and no unambiguous derived identity.`,
-        details: { integration_id, date_from, date_to, rejected: rejectedRows.slice(0, 25) },
+      if(normalizeReturnedDate(dash.journal_date)!==date) throw Error(`Dashboard journal date mismatch for ${date}`);
+      const kpis=rec(rec(dash.report).kpis);
+      const gross=cents(kpis.gross_all_sales), net=cents(kpis.total_all_net_sales),vat=cents(kpis.total_all_vat);
+      const orders=nonnegativeCount(kpis.total_all_std_orders),visitors=nonnegativeCount(kpis.total_all_visitors);
+      if(Math.abs(gross-(net+vat))>1) throw Error(`Dashboard VAT totals inconsistent for ${date}`);
+      const journalResponse=await callCaptiva(apiUserId,password,"get_api_store_journal",[storeId],{
+        start_date:captivaDate(date),
       });
-    }
-
-
-
-    // Determine overall status: fail if every row errored, partial if some, success otherwise
-    // Special case: zero fetched + zero failed = success (nothing to import for that range)
-    const overallStatus =
-      result.failed_rows > 0 && result.sales_imported === 0
-        ? "fail"
-        : result.failed_rows > 0
-        ? "partial"
-        : "success";
-
-    if (overallStatus !== "success") {
-      result.success = result.sales_imported > 0; // partial is still "success-ish" but flagged
-      if (overallStatus === "fail") {
-        result.error = `All ${result.failed_rows} rows failed to import. First error: ${result.errors[0] ?? "unknown"}`;
+      const journal=parseCaptivaJournalResponse(journalResponse,storeId,date);
+      if(journal.gross_cents!==gross || Math.abs(journal.net_cents-net)>1 ||
+          Math.abs(journal.vat_cents-vat)>1 || journal.receipts!==orders){
+        throw Error(`Journal does not reconcile to dashboard for ${date}; nothing staged`);
       }
-    }
-
-    // Status-aware checkpoint update:
-    //  - Always record the attempt status + error text.
-    //  - Only advance last_successful_sync_at (and legacy last_sync_time) on a fully successful sync.
-    //    Partial/failed syncs intentionally leave the "good" checkpoint untouched so a retry can
-    //    cover the same range again.
-    const integrationUpdate: Record<string, unknown> = {
-      last_sync_status: overallStatus,
-      last_sync_error: overallStatus === "success" ? null : (result.errors[0] ?? result.error ?? null),
-    };
-    if (overallStatus === "success") {
-      const nowIso = new Date().toISOString();
-      integrationUpdate.last_successful_sync_at = nowIso;
-      integrationUpdate.last_sync_time = nowIso;
-    }
-    await adminClient
-      .from("pos_integrations")
-      .update(integrationUpdate)
-      .eq("id", integration_id);
-
-    // Auto-apply staged imports into the sales table (default ON)
-    // Skipped when the caller explicitly opts out (auto_apply === false) or when nothing was staged.
-    const shouldAutoApply = auto_apply !== false && result.sales_imported > 0;
-    if (shouldAutoApply) {
-      try {
-        const applyRes = await fetch(`${supabaseUrl}/functions/v1/pos-apply-import`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${serviceRoleKey}`,
-          },
-          body: JSON.stringify({
-            integration_id,
-            date_from,
-            date_to,
-            preview_only: false,
-          }),
-        });
-        const applyJson = await applyRes.json();
-        if (applyJson?.success) {
-          result.applied = {
-            applied_count: applyJson.applied_count ?? 0,
-            total_revenue: applyJson.total_revenue ?? 0,
-            line_items_unmapped: applyJson.line_items_unmapped ?? applyJson.skipped_unmapped ?? 0,
-          };
-        } else {
-          if (result.errors.length < 10) {
-            result.errors.push(`Auto-apply failed: ${applyJson?.error ?? "unknown"}`);
-          }
-        }
-      } catch (applyErr) {
-        const msg = applyErr instanceof Error ? applyErr.message : "Unknown auto-apply error";
-        if (result.errors.length < 10) result.errors.push(`Auto-apply exception: ${msg}`);
-        console.error("Auto-apply call failed:", applyErr);
+      const products=toCaptivaProductTotals(journal);
+      // The sales.quantity column is integral. Do not silently round fractional
+      // quantities or negative voids into misleading product-sales figures.
+      if (products.some(p => !Number.isSafeInteger(p.quantity) || p.quantity < 0)) {
+        throw Error(`Unsupported fractional/negative Captiva product quantities on ${date}`);
       }
+      const mapping=new Map<string,string|null>();
+      for(const product of products){
+        const found=current.get(product.external_item_id);
+        const dish=found?.mapped_dish_id??old.get(`${product.plu}\u0000${product.name}`)??null;
+        mapping.set(product.external_item_id,dish);
+      }
+      const collision=await sourceCollision(client,restaurant,locationId,date);
+      const needsReview=products.filter(p=>!mapping.get(p.external_item_id)).length;
+      const batch=await hashBatch({date,storeId,gross,net,vat,orders,visitors,products});
+      results.push({
+        date,status:collision?"blocked":"ready",reason:collision,
+        gross:gross/100,net:net/100,vat:vat/100,orders,visitors,
+        product_count:products.length,quantity:journal.main_line_quantity,
+        products_requiring_mapping:needsReview,ambiguous_plu_count:journal.ambiguous_product_ids.length,
+        // No raw journals, customer names, payment information or credentials returned.
+      });
+      if(!collision)prepared.push({date,products,gross,net,vat,orders,visitors,batch,mapping});
     }
-
-    // Log the sync result with real visibility
-    await adminClient.from("pos_sync_logs").insert({
-      location_id,
-      restaurant_id: integration.restaurant_id,
-      pos_provider: "captiva",
-      event_type: "sync_completed",
-      status: overallStatus,
-      message:
-        `Fetched ${salesData.length} sales, staged ${result.sales_imported}` +
-        (result.applied ? `, applied ${result.applied.applied_count} to dashboard` : "") +
-        (result.skipped_duplicates ? `, ${result.skipped_duplicates} duplicates` : "") +
-        (result.failed_rows ? `, ${result.failed_rows} failed` : ""),
-      details: {
-        integration_id,
-        date_from,
-        date_to,
-        fetched: salesData.length,
-        sales_imported: result.sales_imported,
-        line_items_imported: result.line_items_imported,
-        skipped_duplicates: result.skipped_duplicates,
-        failed_rows: result.failed_rows,
-        errors: result.errors,
-        applied: result.applied ?? null,
-        simulation_mode: simulateMode,
-      },
+    if(!stage) return reply({
+      success:true,preview_only:true,store_id:storeId,results,
+      sales_imported:0,line_items_imported:0,fetched:prepared.length,
+    });
+    // A month can contain already-imported XLS days or days with no trading.
+    // Skipping them avoids double counting while allowing other verified days
+    // in the same range to be staged.
+    if(!prepared.length) return reply({
+      success:true,preview_only:false,staged:false,results,
+      sales_imported:0,line_items_imported:0,fetched:0,
+      skipped_days:results.map(r=>r.date),
+      message:"No new verified days to stage; existing sales remain unchanged",
     });
 
-    return new Response(
-      JSON.stringify({ ...result, fetched: salesData.length }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("pos-sync-captiva error:", error);
-    return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    let stagedCount=0;
+    for(const day of prepared){
+      // Check again immediately before staging; another operator may have
+      // imported an XLS workbook after the preview was generated.
+      const conflict=await sourceCollision(client,restaurant,locationId,day.date);
+      if(conflict) throw Error(`Cannot stage ${day.date}: ${conflict}`);
+      // Prior, not-yet-applied API staging may contain old product keys. Clear
+      // only this provider/date after the collision guard, so the current batch
+      // is complete. No financial ledger/sales row is deleted here.
+      const {error:clearError}=await client.from("pos_sales_import").delete()
+        .eq("restaurant_id",restaurant).eq("location_id",locationId)
+        .eq("pos_provider","captiva").eq("mapped_sale_date",day.date);
+      if(clearError) throw Error("Could not replace superseded staged Captiva products");
+      // Store new POS items, but do not auto-create dishes or overwrite manual mappings.
+      const missing=day.products.filter(p=>!current.has(p.external_item_id));
+      if(missing.length){
+        const rows=missing.map(p=>({
+          restaurant_id:restaurant,location_id:locationId,pos_provider:"captiva",
+          external_item_id:p.external_item_id,external_item_name:p.name,
+          needs_review:!day.mapping.get(p.external_item_id),
+          source:"captiva_journal_api",
+          mapped_dish_id:day.mapping.get(p.external_item_id)??null,
+          last_seen_at:new Date().toISOString(),last_gross:p.gross_cents/100,last_qty:p.quantity,
+        }));
+        const {error}=await client.from("external_pos_items").upsert(rows,{
+          onConflict:"restaurant_id,location_id,pos_provider,external_item_id",ignoreDuplicates:true,
+        });
+        if(error) throw Error("Could not stage Captiva product catalogue");
+        rows.forEach(row=>current.set(row.external_item_id,{mapped_dish_id:row.mapped_dish_id}));
+      }
+      const imports=day.products.map(p=>({
+        restaurant_id:restaurant,location_id:locationId,pos_provider:"captiva",
+        external_sale_id:`api:${day.date}:${p.external_item_id}`,
+        mapped_sale_date:day.date,external_item_id:p.external_item_id,item_name:p.name,
+        mapped_dish_id:day.mapping.get(p.external_item_id)??null,
+        mapped_quantity:p.quantity,mapped_total_price:p.gross_cents/100,
+        gross_sales:p.gross_cents/100,net_sales:null,vat_amount:null,discount_amount:null,
+        sync_status:"pending",
+        data:{
+          source:"captiva_journal_api_v1",batch_id:day.batch,
+          plu:p.plu,product_label:p.name,receipts:p.receipt_count,
+          nested_options_count:p.modifier_count,
+          expected_product_count:day.products.length,expected_gross_cents:day.gross,
+          expected_net_cents:day.net,expected_vat_cents:day.vat,
+          expected_orders:day.orders,expected_visitors:day.visitors,
+        },
+      }));
+      const {error:stageError}=await client.from("pos_sales_import").upsert(imports,{
+        onConflict:"restaurant_id,location_id,pos_provider,external_sale_id",
+      });
+      if(stageError) throw Error("Could not stage Captiva journal products");
+
+      // Publish the completed batch checkpoint only AFTER every product is staged.
+      // Application RPC checks all rows, counts, and totals in a DB transaction.
+      const {error:checkpointError}=await client.from("captiva_api_staged_days").upsert({
+        restaurant_id:restaurant,location_id:locationId,report_date:day.date,
+        batch_id:day.batch,product_count:day.products.length,
+        gross_cents:day.gross,net_cents:day.net,vat_cents:day.vat,
+        order_count:day.orders,visitor_count:day.visitors,
+        status:"ready",staged_at:new Date().toISOString(),applied_at:null,
+      },{onConflict:"restaurant_id,location_id,report_date"});
+      if(checkpointError) throw Error("Captiva staging checkpoint not available. Database migration may be missing.");
+      stagedCount+=imports.length;
+    }
+    await client.from("pos_sync_logs").insert({
+      restaurant_id:restaurant,location_id:locationId,pos_provider:"captiva",
+      event_type:"captiva_api_staged",status:"success",
+      message:`Staged ${stagedCount} product totals across ${prepared.length} verified trading dates. No sales applied.`,
+      details:{integration_id:integrationId,date_from:start,date_to:end,days:prepared.length,products:stagedCount},
+    });
+    return reply({
+      success:true,preview_only:false,staged:true,results,
+      sales_imported:stagedCount,line_items_imported:stagedCount,
+      fetched:prepared.length,skipped_duplicates:0,failed_rows:0,
+    });
+  }catch(e){
+    const reason=e instanceof Error?e.message:"Unexpected Captiva failure";
+    // No raw journal / response contents or secret request payloads are logged.
+    return reply({success:false,error:reason,sales_imported:0,line_items_imported:0},422);
   }
 });

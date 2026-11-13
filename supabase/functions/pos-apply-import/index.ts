@@ -109,6 +109,78 @@ serve(async (req) => {
     }
 
 
+
+    // Real Captiva Journal API uses one STAGED ROW PER PRODUCT, not a receipt.
+    // Route it exclusively to the atomic, source-aware SQL function. The legacy
+    // receipt applier below is not safe for product totals.
+    if (integration.pos_provider === "captiva") {
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+      if (!datePattern.test(date_from) || !datePattern.test(date_to) || date_to < date_from) {
+        return new Response(JSON.stringify({success:false,error:"Invalid Captiva date range"}),{
+          status:400,headers:{...corsHeaders,"Content-Type":"application/json"},
+        });
+      }
+      const from = Date.parse(date_from + "T00:00:00Z");
+      const to = Date.parse(date_to + "T00:00:00Z");
+      if ((to-from)/86400000 > 30) {
+        return new Response(JSON.stringify({success:false,error:"Apply at most 31 trading days at once"}),{
+          status:400,headers:{...corsHeaders,"Content-Type":"application/json"},
+        });
+      }
+      const dateList: string[] = [];
+      for (let ts=from; ts<=to; ts+=86400000) dateList.push(new Date(ts).toISOString().slice(0,10));
+      const {data: batches,error:batchError} = await adminClient.from("captiva_api_staged_days")
+        .select("report_date,product_count,gross_cents,status")
+        .eq("restaurant_id",restaurantId)
+        .eq("location_id",integration.location_id)
+        .gte("report_date",date_from).lte("report_date",date_to);
+      if (batchError || !batches) {
+        return new Response(JSON.stringify({success:false,error:"Captiva staging table unavailable. Database migration may not be installed."}),{
+          status:503,headers:{...corsHeaders,"Content-Type":"application/json"},
+        });
+      }
+      const byDate = new Map(batches.map(b => [b.report_date,b]));
+      const readyDates = dateList.filter(day=>byDate.get(day)?.status==="ready");
+      const skippedDates = dateList.filter(day=>!readyDates.includes(day));
+      const readyBatches = readyDates.map(day=>byDate.get(day)!);
+      if(!readyDates.length) {
+        return new Response(JSON.stringify({
+          success:false,error:"No new Captiva journal days are ready to apply",
+          skipped_dates:skippedDates,
+        }),{status:409,headers:{...corsHeaders,"Content-Type":"application/json"}});
+      }
+      const summary = {
+        success:true, sales_to_apply:readyBatches.reduce((n,b)=>n+b.product_count,0),
+        applied_count:0, line_items_mapped:0, line_items_unmapped:0,
+        skipped_existing:0,total_revenue:Number((readyBatches.reduce((n,b)=>n+Number(b.gross_cents),0)/100).toFixed(2)),
+        skipped_unmapped:0,staged_dates:readyDates,skipped_dates:skippedDates,
+      };
+      if (preview_only !== false) {
+        return new Response(JSON.stringify(summary),{
+          headers:{...corsHeaders,"Content-Type":"application/json"},
+        });
+      }
+      // Every day applies in one SQL transaction. A multi-day range may partially
+      // apply if a later day fails; report individual completions honestly.
+      const appliedDates: string[] = [];
+      for (const day of readyDates) {
+        const {data: applied,error:applyError} = await adminClient.rpc("apply_captiva_journal_day",{
+          p_integration_id:integration_id,p_report_date:day,
+        });
+        if (applyError || !applied || applied.success !== true) {
+          return new Response(JSON.stringify({
+            success:false,error:applyError?.message??"Captiva apply transaction rejected",
+            applied_dates:appliedDates,failed_date:day,
+          }),{status:409,headers:{...corsHeaders,"Content-Type":"application/json"}});
+        }
+        appliedDates.push(day);
+        summary.applied_count += Number(applied.applied_count??0);
+      }
+      return new Response(JSON.stringify({...summary,applied_dates:appliedDates}),{
+        headers:{...corsHeaders,"Content-Type":"application/json"},
+      });
+    }
+
     // C5 CLOSED-DAY PRE-CHECK — runs before any read/write of sales.
     // Service-role calls bypass the DB triggers, so the check is explicit here.
     // Single operating date  -> reject the whole run with a 409, nothing written.
