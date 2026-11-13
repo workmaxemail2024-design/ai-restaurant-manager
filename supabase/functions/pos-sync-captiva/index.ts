@@ -118,8 +118,8 @@ async function sourceCollision(client: Client, restaurant: string, location: str
     .eq("restaurant_id",restaurant).eq("entry_date",date)
     .or(`location_id.eq.${location},location_id.is.null`);
   if (ledger.error) throw Error("Could not verify manual revenue or closed-day status");
-  if ((ledger.data??[]).some(l=>l.is_closed)) return "Trading day is closed";
-  if ((ledger.data??[]).some(l=>l.manual_revenue!=null && Number(l.manual_revenue)!==0)) {
+  if ((ledger.data??[]).some((l:AnyRecord)=>l.is_closed)) return "Trading day is closed";
+  if ((ledger.data??[]).some((l:AnyRecord)=>l.manual_revenue!=null && Number(l.manual_revenue)!==0)) {
     return "Manual daily revenue already exists and requires reconciliation";
   }
   return null;
@@ -134,7 +134,7 @@ async function mappedCatalogue(client: Client, restaurant: string, location: str
       .eq("restaurant_id",restaurant).eq("location_id",location).not("captiva_external_id","is",null),
   ]);
   if (native.error||legacy.error||legacyDishes.error) throw Error("Could not read product mapping catalogue");
-  const current=new Map((native.data??[]).map(x=>[x.external_item_id,x]));
+  const current=new Map<string,{mapped_dish_id:string|null}>((native.data??[]).map((x:AnyRecord)=>[String(x.external_item_id),{mapped_dish_id:typeof x.mapped_dish_id === "string" ? x.mapped_dish_id : null}]));
   const old=new Map<string,string|null>();
   for (const row of legacy.data??[]) {
     if (row.mapped_dish_id) old.set(`${row.external_item_id}\u0000${row.external_item_name}`,row.mapped_dish_id);
@@ -278,7 +278,7 @@ serve(async(req)=>{
           onConflict:"restaurant_id,location_id,pos_provider,external_item_id",ignoreDuplicates:true,
         });
         if(error) throw Error("Could not stage Captiva product catalogue");
-        rows.forEach(row=>current.set(row.external_item_id,{external_item_id:row.external_item_id,external_item_name:row.external_item_name,mapped_dish_id:row.mapped_dish_id}));
+        rows.forEach(row=>current.set(row.external_item_id,{mapped_dish_id:row.mapped_dish_id}));
       }
       const imports=day.products.map(p=>({
         restaurant_id:restaurant,location_id:locationId,pos_provider:"captiva",
