@@ -95,8 +95,18 @@ BEGIN
     SELECT 1 FROM public.pos_daily_summaries
     WHERE restaurant_id = v_restaurant AND location_id = v_location
       AND report_date = p_report_date AND pos_provider = 'captiva_xls'
+  ) OR EXISTS (
+    SELECT 1 FROM public.pos_daily_summaries
+    WHERE restaurant_id = v_restaurant AND location_id = v_location
+      AND report_date = p_report_date AND pos_provider <> 'captiva'
+  ) OR EXISTS (
+    SELECT 1 FROM public.daily_ledger_entries
+    WHERE restaurant_id = v_restaurant
+      AND (location_id = v_location OR location_id IS NULL)
+      AND entry_date = p_report_date
+      AND manual_revenue IS NOT NULL AND manual_revenue <> 0
   ) THEN
-    RAISE EXCEPTION 'This day already has sales or an XLS import; no automatic replacement is permitted.';
+    RAISE EXCEPTION 'This day already has financial data requiring reconciliation; no automatic replacement is permitted.';
   END IF;
 
   SELECT * INTO v_stage FROM public.captiva_api_staged_days
