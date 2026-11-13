@@ -13,7 +13,11 @@ const MS_PER_DAY = 86400000;
 const MAX_DAYS_PER_REQUEST = 5;
 const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 type AnyRecord = Record<string, unknown>;
-type Client = ReturnType<typeof createClient>;
+// Supabase Edge functions do not use a generated database type here; the
+// runtime client is scoped by authenticated integration and explicit filters.
+// Use a permissive client boundary so later supabase-js generic changes do
+// not incorrectly infer every table as `never`.
+type Client = any;
 
 function reply(value: AnyRecord, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -84,7 +88,7 @@ async function callCaptiva(userId: string, password: string, request: string, st
     return body;
   } finally { clearTimeout(timer); }
 }
-async function exists(query: PromiseLike<{data:unknown;error:unknown}>): Promise<boolean> {
+async function exists(query: {data:unknown;error:unknown}): Promise<boolean> {
   const {data,error}=await query;
   if (error) throw Error("Could not verify existing sales/import coverage");
   return Array.isArray(data) && data.length>0;
