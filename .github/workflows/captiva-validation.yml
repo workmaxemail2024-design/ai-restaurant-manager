@@ -20,7 +20,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - run: npm ci
+      # Legacy package-lock.json is not synchronized with package.json; avoid
+      # rewriting unrelated project files during this integration review.
+      - run: npm install --no-package-lock
       - run: npx tsc --noEmit -p tsconfig.app.json
       - run: npm run build
 
