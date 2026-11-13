@@ -140,17 +140,20 @@ serve(async (req) => {
         });
       }
       const byDate = new Map(batches.map(b => [b.report_date,b]));
-      const missingDates = dateList.filter(day=>!byDate.has(day));
-      if (missingDates.length) {
-        return new Response(JSON.stringify({success:false,error:"No complete staged journal for: "+missingDates.join(", "),missing_dates:missingDates}),{
-          status:409,headers:{...corsHeaders,"Content-Type":"application/json"},
-        });
+      const readyDates = dateList.filter(day=>byDate.get(day)?.status==="ready");
+      const skippedDates = dateList.filter(day=>!readyDates.includes(day));
+      const readyBatches = readyDates.map(day=>byDate.get(day)!);
+      if(!readyDates.length) {
+        return new Response(JSON.stringify({
+          success:false,error:"No new Captiva journal days are ready to apply",
+          skipped_dates:skippedDates,
+        }),{status:409,headers:{...corsHeaders,"Content-Type":"application/json"}});
       }
       const summary = {
-        success:true, sales_to_apply:batches.reduce((n,b)=>n+b.product_count,0),
+        success:true, sales_to_apply:readyBatches.reduce((n,b)=>n+b.product_count,0),
         applied_count:0, line_items_mapped:0, line_items_unmapped:0,
-        skipped_existing:0,total_revenue:Number((batches.reduce((n,b)=>n+Number(b.gross_cents),0)/100).toFixed(2)),
-        skipped_unmapped:0,staged_dates:dateList,
+        skipped_existing:0,total_revenue:Number((readyBatches.reduce((n,b)=>n+Number(b.gross_cents),0)/100).toFixed(2)),
+        skipped_unmapped:0,staged_dates:readyDates,skipped_dates:skippedDates,
       };
       if (preview_only !== false) {
         return new Response(JSON.stringify(summary),{
@@ -160,7 +163,7 @@ serve(async (req) => {
       // Every day applies in one SQL transaction. A multi-day range may partially
       // apply if a later day fails; report individual completions honestly.
       const appliedDates: string[] = [];
-      for (const day of dateList) {
+      for (const day of readyDates) {
         const {data: applied,error:applyError} = await adminClient.rpc("apply_captiva_journal_day",{
           p_integration_id:integration_id,p_report_date:day,
         });
