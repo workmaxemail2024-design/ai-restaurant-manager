@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createCaptivaHttpClient } from "../_shared/captivaTransport.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,9 +82,11 @@ serve(async (req) => {
             // empty store array and returns all stores allowed for the API account.
             stores: [],
           };
+          const proxyClient = createCaptivaHttpClient();
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 20000);
           let response: Response;
+          let responseText: string;
           try {
             response = await fetch(captivaEndpoint, {
               method: "POST",
@@ -93,13 +96,16 @@ serve(async (req) => {
               },
               body: JSON.stringify(requestPayload),
               signal: controller.signal,
+              ...(proxyClient ? { client: proxyClient } : {}),
             });
+            // Consume response before closing the proxy client.
+            responseText = await response.text();
           } finally {
             clearTimeout(timeout);
+            proxyClient?.close();
           }
 
           // Do not log request secrets or the raw response.
-          const responseText = await response.text();
           let responseData: Record<string, unknown> | null = null;
           try {
             const parsed: unknown = JSON.parse(responseText);
