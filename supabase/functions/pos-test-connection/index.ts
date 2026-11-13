@@ -180,7 +180,6 @@ serve(async (req) => {
                       const code = fields.resultcode ?? fields.errorcode ?? fields.code ?? fields.status ?? "";
                       const description = fields.info ?? fields.resultdesc ?? fields.errordesc ??
                         fields.error_message ?? fields.message ?? fields.error ?? fields.description ?? "";
-                      const keys = Object.keys(fields).filter(k => !/pass|key|user|token|secret|data/i.test(k)).slice(0, 8);
                       if (Object.keys(fields).length === 0 && typeof entry === "string") return safe(entry);
                       const store = safe(fields.storeid ?? fields.id ?? "");
                       return `outlet: ${store || "unknown"}, code: ${safe(code) || "unknown"}, info: ${safe(description) || "not provided"}`;
