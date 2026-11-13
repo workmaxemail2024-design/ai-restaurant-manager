@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveCaller, userHasPermission, userCanAccessLocation, unauthorized } from "../_shared/posAuth.ts";
 import { parseCaptivaJournalResponse } from "../_shared/captivaJournal.ts";
 import { toCaptivaProductTotals } from "../_shared/captivaProductTotals.ts";
+import { createCaptivaHttpClient } from "../_shared/captivaTransport.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,6 +67,7 @@ function nonnegativeCount(v: unknown): number {
   return count;
 }
 async function callCaptiva(userId: string, password: string, request: string, stores: string[], params: AnyRecord = {}): Promise<AnyRecord> {
+  const proxyClient = createCaptivaHttpClient();
   const controller = new AbortController();
   const timer = setTimeout(()=>controller.abort(), 25000);
   try {
@@ -77,6 +79,7 @@ async function callCaptiva(userId: string, password: string, request: string, st
         stores:stores.map(id=>({id})),...params,
       }),
       signal:controller.signal,
+      ...(proxyClient ? { client: proxyClient } : {}),
     });
     if (!response.ok) throw Error(`Captiva HTTP ${response.status}`);
     const body=rec(await response.json());
@@ -86,7 +89,10 @@ async function callCaptiva(userId: string, password: string, request: string, st
       throw Error(`Captiva request ${request} rejected (code ${code})`);
     }
     return body;
-  } finally { clearTimeout(timer); }
+  } finally {
+    clearTimeout(timer);
+    proxyClient?.close();
+  }
 }
 async function exists(query: {data:unknown;error:unknown}): Promise<boolean> {
   const {data,error}=await query;
