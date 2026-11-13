@@ -5,7 +5,7 @@
  * dishes, or expose raw journal XML in logs. Do not use journal line totals as
  * additional revenue when a matching XLS day has already been imported.
  */
-import { XMLParser } from "npm:fast-xml-parser@4.5.3";
+import { XMLParser } from "https://esm.sh/fast-xml-parser@4.5.3";
 
 export interface CaptivaJournalLine {
   receipt_id: string;
