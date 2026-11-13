@@ -20,7 +20,7 @@ import { CaptivaSyncStatus } from "@/components/pos/CaptivaSyncStatus";
 import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useCreatePOSIntegration, useUpdatePOSIntegration, useDeletePOSIntegration,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
-  useApplyPOSImport, useToggleAutoSync, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
+  useApplyPOSImport, useToggleAutoSync, POSIntegration, ApplyImportResult, CaptivaSyncResult } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
 import { usePermissions } from "@/hooks/usePermissions";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
@@ -107,6 +107,9 @@ export default function POSIntegrationsPage() {
   const [syncDatePreset, setSyncDatePreset] = useState<"today" | "yesterday" | "last7" | "custom">("yesterday");
   const [syncCustomStart, setSyncCustomStart] = useState<Date | undefined>(subDays(new Date(), 7));
   const [syncCustomEnd, setSyncCustomEnd] = useState<Date | undefined>(new Date());
+  const [syncPreview, setSyncPreview] = useState<CaptivaSyncResult | null>(null);
+  const [syncPreviewRange, setSyncPreviewRange] = useState<{from: string; to: string} | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
   
   // Apply to Dashboard modal state
   const [applyModalOpen, setApplyModalOpen] = useState(false);
@@ -206,49 +209,88 @@ export default function POSIntegrationsPage() {
     }
     setSyncModalIntegration(integration);
     setSyncDatePreset("yesterday");
+    setSyncPreview(null);
+    setSyncPreviewRange(null);
     setSyncModalOpen(true);
   }, [hasValidCredentials, toast]);
 
-  const handleExecuteSync = useCallback(async () => {
-    if (!syncModalIntegration) return;
-    
-    let dateFrom: string;
-    let dateTo: string;
+  const runCaptivaSync = useCallback(async (stage: boolean) => {
+    if (!syncModalIntegration || syncBusy) return;
+    let dateFrom: string, dateTo: string;
     const today = new Date();
-    
     if (syncDatePreset === "today") {
-      dateFrom = format(today, "yyyy-MM-dd");
-      dateTo = format(today, "yyyy-MM-dd");
+      dateFrom = dateTo = format(today, "yyyy-MM-dd");
     } else if (syncDatePreset === "yesterday") {
-      const yesterday = subDays(today, 1);
-      dateFrom = format(startOfDay(yesterday), "yyyy-MM-dd");
-      dateTo = format(endOfDay(yesterday), "yyyy-MM-dd");
+      dateFrom = dateTo = format(subDays(today, 1), "yyyy-MM-dd");
     } else if (syncDatePreset === "last7") {
-      dateFrom = format(startOfDay(subDays(today, 7)), "yyyy-MM-dd");
-      dateTo = format(endOfDay(subDays(today, 1)), "yyyy-MM-dd");
+      dateFrom = format(subDays(today, 7), "yyyy-MM-dd");
+      dateTo = format(subDays(today, 1), "yyyy-MM-dd");
     } else {
       if (!syncCustomStart || !syncCustomEnd) {
-        toast({ title: "Select Dates", description: "Please select a date range", variant: "destructive" });
+        toast({ title: "Select dates", description: "Choose both dates.", variant: "destructive" });
         return;
       }
       dateFrom = format(syncCustomStart, "yyyy-MM-dd");
       dateTo = format(syncCustomEnd, "yyyy-MM-dd");
     }
 
-    setSyncModalOpen(false);
+    const first = Date.parse(dateFrom + "T00:00:00Z");
+    const last = Date.parse(dateTo + "T00:00:00Z");
+    const days = Math.round((last - first) / 86400000) + 1;
+    if (days <= 0 || days > 31) {
+      toast({title:"Select up to 31 days",description:"Fetch a single month at a time.",variant:"destructive"});
+      return;
+    }
+    if (stage && (!syncPreview || !syncPreviewRange
+       || syncPreviewRange.from !== dateFrom || syncPreviewRange.to !== dateTo
+       || syncPreview.results?.some(d=>d.status!=="ready"))) {
+      toast({title:"Preview required",description:"Preview every day and resolve any blocked dates before staging.",variant:"destructive"});
+      return;
+    }
+
+    setSyncBusy(true);
     setSyncingIntegrationId(syncModalIntegration.id);
-    
+    if (!stage) {setSyncPreview(null);setSyncPreviewRange(null);}
     try {
-      await captivaSyncNow.mutateAsync({
-        integration_id: syncModalIntegration.id,
-        location_id: syncModalIntegration.location_id,
-        date_from: dateFrom,
-        date_to: dateTo,
-      });
+      const results: NonNullable<CaptivaSyncResult["results"]> = [];
+      let totalStaged = 0;
+      // Captiva recommends small requests; each backend invocation fetches <=5 days.
+      for (let i=0; i<days; i+=5) {
+        const start = new Date(first + i*86400000).toISOString().slice(0,10);
+        const finish = new Date(Math.min(first+(i+4)*86400000,last)).toISOString().slice(0,10);
+        const chunk = await captivaSyncNow.mutateAsync({
+          integration_id:syncModalIntegration.id,
+          location_id:syncModalIntegration.location_id,
+          date_from:start,date_to:finish,
+          preview_only:!stage,stage_confirmed:stage,
+        });
+        if (!chunk.success) throw new Error(chunk.error || "Captiva returned an error");
+        results.push(...(chunk.results || []));
+        totalStaged+=chunk.sales_imported ?? 0;
+      }
+      if (!stage) {
+        const complete: CaptivaSyncResult = {
+          success:true,preview_only:true,results,sales_imported:0,
+          line_items_imported:0,skipped_duplicates:0,
+        };
+        setSyncPreview(complete);
+        setSyncPreviewRange({from:dateFrom,to:dateTo});
+        toast({title:"Captiva preview ready",description:`${results.filter(d=>d.status==="ready").length} days verified; no financial data changed.`});
+      } else {
+        setSyncModalOpen(false);
+        setSyncPreview(null);
+        setSyncPreviewRange(null);
+        toast({title:"Captiva staged",description:`${totalStaged} product totals staged, not applied. Review mappings then use Apply to Dashboard.`});
+      }
+    } catch (error) {
+      // A multi-batch stage can partially stage days; all staged days are still
+      // outside the live financial ledger until explicit application.
+      toast({title:stage?"Staging interrupted":"Preview failed",description:error instanceof Error?error.message:"Unknown Captiva error",variant:"destructive"});
     } finally {
+      setSyncBusy(false);
       setSyncingIntegrationId(null);
     }
-  }, [syncModalIntegration, syncDatePreset, syncCustomStart, syncCustomEnd, captivaSyncNow, toast]);
+  }, [syncModalIntegration,syncBusy,syncDatePreset,syncCustomStart,syncCustomEnd,syncPreview,syncPreviewRange,captivaSyncNow,toast]);
 
   // Calculate sync date range for coverage check
   const getSyncDateRange = useMemo(() => {
@@ -858,7 +900,7 @@ export default function POSIntegrationsPage() {
                                 ) : (
                                   <Download className="h-4 w-4 mr-1" />
                                 )}
-                                {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
+                                {syncingIntegrationId === integration.id ? "Fetching..." : "Fetch Captiva"}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -1017,7 +1059,7 @@ export default function POSIntegrationsPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <RadioGroup value={syncDatePreset} onValueChange={(v) => setSyncDatePreset(v as typeof syncDatePreset)}>
+              <RadioGroup value={syncDatePreset} onValueChange={(v) => {setSyncDatePreset(v as typeof syncDatePreset);setSyncPreview(null);setSyncPreviewRange(null);}}>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="today" id="today" />
                   <Label htmlFor="today">Today</Label>
@@ -1032,7 +1074,7 @@ export default function POSIntegrationsPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="custom" id="custom" />
-                  <Label htmlFor="custom">Custom range (resync any date range — idempotent)</Label>
+                  <Label htmlFor="custom">Custom range (up to 31 days; existing XLS days are protected)</Label>
                 </div>
               </RadioGroup>
 
@@ -1040,13 +1082,35 @@ export default function POSIntegrationsPage() {
                 <DualCalendarPicker
                   startDate={syncCustomStart}
                   endDate={syncCustomEnd}
-                  onStartDateChange={setSyncCustomStart}
-                  onEndDateChange={setSyncCustomEnd}
+                  onStartDateChange={(d) => {setSyncCustomStart(d);setSyncPreview(null);setSyncPreviewRange(null);}}
+                  onEndDateChange={(d) => {setSyncCustomEnd(d);setSyncPreview(null);setSyncPreviewRange(null);}}
                   disabled={(date) => date > new Date()}
                   locationId={syncModalIntegration?.location_id}
                   posProvider={syncModalIntegration?.pos_provider}
                   showCoverageMarkers={true}
                 />
+              )}
+
+              {syncPreview?.results && (
+                <div className="space-y-2 rounded-md border p-3 max-h-64 overflow-auto">
+                  <p className="font-medium text-sm">Captiva reconciliation preview — nothing applied</p>
+                  <div className="space-y-1">
+                    {syncPreview.results.map(day => (
+                      <div key={day.date} className="flex justify-between gap-3 text-xs border-b py-1">
+                        <span>{day.date}</span>
+                        <span className={day.status === "ready" ? "text-green-600" : "text-amber-600"}>
+                          {day.status === "ready"
+                            ? `€${(day.gross??0).toFixed(2)} · ${day.product_count??0} products · ${day.products_requiring_mapping??0} need mapping`
+                            : `${day.status}: ${day.reason??"Journal unavailable"}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    API prices are gross. No dish cost, net item VAT or profit is invented.
+                    Dates already present in XLS/manual sources cannot be staged or applied.
+                  </p>
+                </div>
               )}
 
               {/* Coverage Warning */}
@@ -1062,7 +1126,7 @@ export default function POSIntegrationsPage() {
                       <span>
                         All {syncCoverage.data.totalDays} days in this range already have imported data.
                         <span className="block text-xs opacity-80 mt-0.5">
-                          Import will refresh/update existing records — no duplicates will be created.
+                          Existing XLS/manual days will be blocked until reviewed; importing cannot add duplicate revenue.
                         </span>
                       </span>
                     ) : (
@@ -1079,18 +1143,12 @@ export default function POSIntegrationsPage() {
               <Button variant="outline" onClick={() => setSyncModalOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleExecuteSync} disabled={captivaSyncNow.isPending}>
-                {captivaSyncNow.isPending ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4 mr-2" />
-                    Import Sales
-                  </>
-                )}
+              <Button onClick={() => runCaptivaSync(false)} disabled={syncBusy}>
+                {syncBusy ? "Checking Captiva..." : "Fetch & Preview"}
+              </Button>
+              <Button onClick={() => runCaptivaSync(true)}
+                disabled={syncBusy || !syncPreview?.results?.length || syncPreview.results.some(d => d.status!=="ready")}>
+                Stage Verified Products
               </Button>
             </DialogFooter>
           </DialogContent>
