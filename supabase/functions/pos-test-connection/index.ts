@@ -77,9 +77,9 @@ serve(async (req) => {
             api_userid: String(api_key),
             api_pass: String(password),
             api_request: "get_api_stores",
-            // Captiva developer Tools sends the selected store, not an empty
-            // array. Without it Captiva may return no authorised stores.
-            stores: [{ id: String(store_id) }],
+            // Captiva Cloud Journal API v1.2 "get_api_stores" sample requests an
+            // empty store array and returns all stores allowed for the API account.
+            stores: [],
           };
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 20000);
@@ -159,7 +159,38 @@ serve(async (req) => {
               } else {
                 testResult = {
                   success: false,
-                  error: `Captiva HTTP ${response.status}; result ${String(responseData.result ?? "unspecified").slice(0,24)}; code ${resultCode || "none"}; returned stores: ${storeIds.length ? storeIds.slice(0,10).join(", ") : "none"}; top-level fields: ${Object.keys(responseData).filter(k => !/pass|key|user|token|secret|data/i.test(k)).slice(0,12).join(", ") || "none"}. Outlet ${store_id} not confirmed.`,
+                  error: (() => {
+                    // Captiva returns per-store failures in "storeerrors", even
+                    // when the top-level API result is "success" (000000).
+                    // Do not expose raw response/debug fields or credentials.
+                    const field = responseData.storeerrors;
+                    const records = Array.isArray(field)
+                      ? field.slice(0, 4)
+                      : field == null ? [] : [field];
+                    const safe = (value: unknown): string => {
+                      const raw = String(value ?? "");
+                      return raw.replace(/[a-f0-9]{8}-[a-f0-9-]{27,}/ig, "[redacted-id]")
+                        .replace(/[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}/ig,"[redacted-email]")
+                        .replace(/(api_?pass|password|secret|api_?key|api_?userid)[^,;\\s]*/ig,"[redacted]")
+                        .slice(0, 140);
+                    };
+                    const details = records.map((entry) => {
+                      const fields = entry && typeof entry === "object" && !Array.isArray(entry)
+                        ? entry as Record<string, unknown> : {};
+                      const code = fields.resultcode ?? fields.errorcode ?? fields.code ?? fields.status ?? "";
+                      const description = fields.resultdesc ?? fields.errordesc ?? fields.error_message ??
+                        fields.message ?? fields.error ?? fields.description ?? "";
+                      const keys = Object.keys(fields).filter(k => !/pass|key|user|token|secret|data/i.test(k)).slice(0, 8);
+                      if (Object.keys(fields).length === 0 && typeof entry === "string") return safe(entry);
+                      return `code: ${safe(code) || "unknown"}, reason: ${safe(description) || "not provided"}, fields: ${keys.join(", ") || "none"}`;
+                    });
+                    const topDescription = safe(responseData.resultdesc);
+                    const hints = /ip|whitelist|registered host|host not/i.test(JSON.stringify(field ?? ""))
+                      ? " Possible IP access restriction."
+                      : /access|authori[sz]|integrat|not enabled|permission/i.test(JSON.stringify(field ?? ""))
+                        ? " Possible store permission restriction." : "";
+                    return `Captiva reached (HTTP ${response.status}; ${String(responseData.result ?? "unspecified")}; code ${resultCode || "none"}), but outlet ${store_id} not returned. Stores: ${storeIds.length ? storeIds.slice(0,10).join(", ") : "none"}. Store errors: ${details.length ? details.join(" | ") : "empty"}. Top message: ${topDescription || "none"}.${hints}`;
+                  })(),
                 };
               }
             }
