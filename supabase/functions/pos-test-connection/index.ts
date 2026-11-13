@@ -170,8 +170,8 @@ serve(async (req) => {
                     const safe = (value: unknown): string => {
                       const raw = String(value ?? "");
                       return raw.replace(/[a-f0-9]{8}-[a-f0-9-]{27,}/ig, "[redacted-id]")
-                        .replace(/[\\w.+-]+@[\\w.-]+\\.[a-z]{2,}/ig,"[redacted-email]")
-                        .replace(/(api_?pass|password|secret|api_?key|api_?userid)[^,;\\s]*/ig,"[redacted]")
+                        .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/ig,"[redacted-email]")
+                        .replace(/(api_?pass|password|secret|api_?key|api_?userid)[^,;\s]*/ig,"[redacted]")
                         .slice(0, 140);
                     };
                     const details = records.map((entry) => {
