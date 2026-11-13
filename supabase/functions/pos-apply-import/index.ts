@@ -114,7 +114,7 @@ serve(async (req) => {
     // Route it exclusively to the atomic, source-aware SQL function. The legacy
     // receipt applier below is not safe for product totals.
     if (integration.pos_provider === "captiva") {
-      const datePattern = /^\\d{4}-\\d{2}-\\d{2}$/;
+      const datePattern = /^\d{4}-\d{2}-\d{2}$/;
       if (!datePattern.test(date_from) || !datePattern.test(date_to) || date_to < date_from) {
         return new Response(JSON.stringify({success:false,error:"Invalid Captiva date range"}),{
           status:400,headers:{...corsHeaders,"Content-Type":"application/json"},
