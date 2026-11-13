@@ -39,3 +39,36 @@ jobs:
           deno-version: v2.x
       - run: deno test supabase/functions/_shared/captivaJournal_test.ts
       - run: deno check supabase/functions/_shared/captivaJournal.ts supabase/functions/_shared/captivaProductTotals.ts supabase/functions/pos-sync-captiva/index.ts supabase/functions/pos-apply-import/index.ts
+
+  postgres-migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only
+          POSTGRES_DB: captiva_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: test_only
+      PGDATABASE: captiva_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create disposable schema
+        run: psql -v ON_ERROR_STOP=1 -f tests/sql/captiva_postgres_fixture.sql
+      - name: Validate migration against PostgreSQL 17
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261113150000_apply_captiva_journal_day.sql
+      - name: Verify staged table and protected RPC
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "SELECT 'public.captiva_api_staged_days'::regclass;"
+          psql -v ON_ERROR_STOP=1 -c "SELECT 'public.apply_captiva_journal_day(uuid,date)'::regprocedure;"
