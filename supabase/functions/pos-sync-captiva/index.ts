@@ -245,10 +245,15 @@ serve(async(req)=>{
       success:true,preview_only:true,store_id:storeId,results,
       sales_imported:0,line_items_imported:0,fetched:prepared.length,
     });
-    if(results.some(r=>r.status!=="ready")) {
-      return reply({success:false,error:"Some dates have missing data or overlapping sales. Nothing staged.",results},409);
-    }
-    if(!prepared.length) return reply({success:false,error:"No completed trading journals available"},422);
+    // A month can contain already-imported XLS days or days with no trading.
+    // Skipping them avoids double counting while allowing other verified days
+    // in the same range to be staged.
+    if(!prepared.length) return reply({
+      success:true,preview_only:false,staged:false,results,
+      sales_imported:0,line_items_imported:0,fetched:0,
+      skipped_days:results.map(r=>r.date),
+      message:"No new verified days to stage; existing sales remain unchanged",
+    });
 
     let stagedCount=0;
     for(const day of prepared){
