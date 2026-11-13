@@ -4,6 +4,9 @@ on:
     branches:
       - fix/captiva-sync-safety-2026-11-08
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
