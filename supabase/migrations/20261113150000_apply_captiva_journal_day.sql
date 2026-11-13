@@ -1,4 +1,27 @@
 -- Draft only: DO NOT run until reviewed on an isolated Supabase staging copy.
+-- One staging checkpoint per outlet/date. Created only AFTER all item rows were staged.
+-- The live financial ledger reads none of these rows until explicit confirmation.
+CREATE TABLE IF NOT EXISTS public.captiva_api_staged_days (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  restaurant_id uuid NOT NULL REFERENCES public.restaurants(id),
+  location_id uuid NOT NULL REFERENCES public.locations(id),
+  report_date date NOT NULL,
+  batch_id text NOT NULL,
+  product_count integer NOT NULL CHECK (product_count > 0),
+  gross_cents bigint NOT NULL,
+  net_cents bigint NOT NULL,
+  vat_cents bigint NOT NULL,
+  order_count integer NOT NULL,
+  visitor_count integer NOT NULL,
+  status text NOT NULL DEFAULT 'ready' CHECK (status IN ('ready','applied')),
+  staged_at timestamptz NOT NULL DEFAULT now(),
+  applied_at timestamptz,
+  UNIQUE (restaurant_id, location_id, report_date)
+);
+ALTER TABLE public.captiva_api_staged_days ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.captiva_api_staged_days FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.captiva_api_staged_days TO service_role;
+
 -- Atomic journal-product application, intentionally separate from legacy receipt-based apply.
 -- Service-role only; the invoking edge function authenticates caller and tenant.
 CREATE OR REPLACE FUNCTION public.apply_captiva_journal_day(
@@ -28,6 +51,7 @@ DECLARE
   v_visitors integer;
   v_unmapped integer;
   v_summary_id uuid;
+  v_stage public.captiva_api_staged_days%ROWTYPE;
   v_affected integer;
 BEGIN
   IF p_report_date IS NULL THEN
@@ -76,6 +100,13 @@ BEGIN
     RAISE EXCEPTION 'Another sales source already owns this date. Manual review required.';
   END IF;
 
+  SELECT * INTO v_stage FROM public.captiva_api_staged_days
+  WHERE restaurant_id = v_restaurant AND location_id = v_location
+    AND report_date = p_report_date FOR UPDATE;
+  IF NOT FOUND OR v_stage.status NOT IN ('ready','applied') THEN
+    RAISE EXCEPTION 'Captiva day is not fully staged';
+  END IF;
+
   -- The staged payloads carry only aggregate controls, never customer records.
   -- Require one complete batch with identical controls on every product row.
   SELECT count(*)::integer,
@@ -94,9 +125,15 @@ BEGIN
   FROM public.pos_sales_import
   WHERE restaurant_id = v_restaurant AND location_id = v_location
     AND mapped_sale_date = p_report_date AND pos_provider = 'captiva'
-    AND data->>'source' = 'captiva_journal_api_v1';
+    AND data->>'source' = 'captiva_journal_api_v1'
+    AND data->>'batch_id' = v_stage.batch_id;
 
   IF v_total IS NULL OR v_total = 0 OR v_batch_count <> 1 OR v_batch_id IS NULL
+     OR v_batch_id <> v_stage.batch_id
+     OR v_total <> v_stage.product_count
+     OR v_expected_gross <> v_stage.gross_cents
+     OR v_expected_net <> v_stage.net_cents OR v_expected_vat <> v_stage.vat_cents
+     OR v_orders <> v_stage.order_count OR v_visitors <> v_stage.visitor_count
      OR v_total <> v_expected_count OR v_gross <> v_expected_gross THEN
     RAISE EXCEPTION 'Incomplete or inconsistent staged Captiva journal; refresh before applying';
   END IF;
@@ -105,6 +142,7 @@ BEGIN
     SELECT 1 FROM public.pos_sales_import
     WHERE restaurant_id = v_restaurant AND location_id = v_location
       AND mapped_sale_date = p_report_date AND pos_provider = 'captiva'
+      AND data->>'batch_id' = v_stage.batch_id
       AND (data->>'source' IS DISTINCT FROM 'captiva_journal_api_v1'
            OR data->>'batch_id' IS DISTINCT FROM v_batch_id
            OR (data->>'expected_product_count')::integer IS DISTINCT FROM v_expected_count
@@ -137,6 +175,7 @@ BEGIN
    AND (d.location_id IS NULL OR d.location_id = v_location)
   WHERE i.restaurant_id = v_restaurant AND i.location_id = v_location
     AND i.pos_provider = 'captiva' AND i.mapped_sale_date = p_report_date
+    AND i.data->>'batch_id' = v_stage.batch_id
     AND d.id IS NULL;
   IF v_unmapped > 0 THEN
     RAISE EXCEPTION '% products still require dish mapping; nothing has been applied', v_unmapped;
@@ -157,6 +196,7 @@ BEGIN
    AND x.pos_provider = 'captiva' AND x.external_item_id = i.external_item_id
   WHERE i.restaurant_id = v_restaurant AND i.location_id = v_location
     AND i.pos_provider = 'captiva' AND i.mapped_sale_date = p_report_date
+    AND i.data->>'batch_id' = v_stage.batch_id
   ON CONFLICT (pos_import_id) WHERE pos_import_id IS NOT NULL
   DO UPDATE SET dish_id = EXCLUDED.dish_id, quantity = EXCLUDED.quantity,
     total_price = EXCLUDED.total_price, sale_date = EXCLUDED.sale_date,
@@ -225,6 +265,9 @@ BEGIN
     AND mapped_sale_date = p_report_date AND pos_provider = 'captiva'
     AND data->>'batch_id' = v_batch_id;
   GET DIAGNOSTICS v_affected = ROW_COUNT;
+
+  UPDATE public.captiva_api_staged_days SET status = 'applied', applied_at = now()
+  WHERE id = v_stage.id;
 
   RETURN jsonb_build_object(
     'success', true, 'report_date', p_report_date, 'applied_count', v_affected,
