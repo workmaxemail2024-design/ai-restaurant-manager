@@ -178,11 +178,12 @@ serve(async (req) => {
                       const fields = entry && typeof entry === "object" && !Array.isArray(entry)
                         ? entry as Record<string, unknown> : {};
                       const code = fields.resultcode ?? fields.errorcode ?? fields.code ?? fields.status ?? "";
-                      const description = fields.resultdesc ?? fields.errordesc ?? fields.error_message ??
-                        fields.message ?? fields.error ?? fields.description ?? "";
+                      const description = fields.info ?? fields.resultdesc ?? fields.errordesc ??
+                        fields.error_message ?? fields.message ?? fields.error ?? fields.description ?? "";
                       const keys = Object.keys(fields).filter(k => !/pass|key|user|token|secret|data/i.test(k)).slice(0, 8);
                       if (Object.keys(fields).length === 0 && typeof entry === "string") return safe(entry);
-                      return `code: ${safe(code) || "unknown"}, reason: ${safe(description) || "not provided"}, fields: ${keys.join(", ") || "none"}`;
+                      const store = safe(fields.storeid ?? fields.id ?? "");
+                      return `outlet: ${store || "unknown"}, code: ${safe(code) || "unknown"}, info: ${safe(description) || "not provided"}`;
                     });
                     const topDescription = safe(responseData.resultdesc);
                     const hints = /ip|whitelist|registered host|host not/i.test(JSON.stringify(field ?? ""))
