@@ -68,36 +68,36 @@ serve(async (req) => {
           const captivaEndpoint = `${cleanBaseUrl}/CaptivaCloudAPIRequest.ashx`;
           console.log("Testing Captiva Cloud connection to:", captivaEndpoint);
 
-          // Use the lightest possible request - GetOutletDetails or similar
-          // Per Captiva Cloud Journals API v1.2, we use a minimal request to validate credentials
+          // Captiva Cloud Journal API (JSON) v1.2, pp. 3-6:
+          // POST a JSON body with api_userid, api_pass, api_request.
+          // The API account ID supplied as the UI's "API Key" is the api_userid
+          // candidate; confirm this field in the Captiva developer Tools.
+          // "get_api_stores" is read-only and returns the stores granted to the account.
           const requestPayload = {
-            APIKey: api_key,
-            UserName: username,
-            Password: password,
-            OutletCode: store_id,
-            // Request outlet validation - lightest operation
-            RequestType: "GetOutletDetails"
+            api_userid: String(api_key),
+            api_pass: String(password),
+            api_request: "get_api_stores",
+            stores: [],
           };
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 20000);
+          let response: Response;
+          try {
+            response = await fetch(captivaEndpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+              },
+              body: JSON.stringify(requestPayload),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeout);
+          }
 
-          console.log("Captiva request payload (sanitized):", {
-            ...requestPayload,
-            APIKey: "***",
-            Password: "***"
-          });
-
-          const response = await fetch(captivaEndpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Accept": "application/json",
-            },
-            body: JSON.stringify(requestPayload),
-          });
-
+          // Do not log request secrets or the raw response.
           const responseText = await response.text();
-          console.log("Captiva response status:", response.status);
-          // Do not log raw API responses: they may contain credentials or sales data.
-          // Captiva can return HTTP 200 with result: "Error", resultcode and resultdesc.
           let responseData: Record<string, unknown> | null = null;
           try {
             const parsed: unknown = JSON.parse(responseText);
@@ -105,7 +105,7 @@ serve(async (req) => {
               responseData = parsed as Record<string, unknown>;
             }
           } catch {
-            // Non-JSON responses cannot be treated as evidence of successful authentication.
+            // Unexpected non-JSON response is not proof of working API access.
           }
 
           if (!response.ok) {
@@ -116,44 +116,43 @@ serve(async (req) => {
           } else if (!responseData) {
             testResult = {
               success: false,
-              error: "Captiva response was not recognized. Authentication has not been verified.",
+              error: "Captiva did not return valid Journal API JSON.",
             };
           } else {
             const resultType = String(responseData.result ?? "").toLowerCase();
-            const resultCode = responseData.resultcode ? String(responseData.resultcode) : null;
-            const explicitError =
-              responseData.ErrorMessage ??
-              responseData.errorMessage ??
-              responseData.Error ??
-              responseData.error ??
-              (responseData.Success === false || responseData.success === false ||
-               resultType === "error" || resultType === "failed"
-                ? responseData.resultdesc ?? responseData.message ?? "Captiva rejected the request"
-                : null);
-            const explicitSuccess =
-              responseData.Success === true ||
-              responseData.success === true ||
-              responseData.Status === "OK" ||
-              responseData.status === "OK" ||
-              resultType === "success" ||
-              resultType === "ok";
-
-            // An error takes precedence over any success-shaped field in the response.
-            if (explicitError !== null && explicitError !== undefined) {
+            const apiError = resultType === "error" || resultType === "fail" ||
+              responseData.success === false || responseData.Success === false ||
+              responseData.Error != null || responseData.ErrorMessage != null ||
+              responseData.error != null || responseData.errorMessage != null;
+            const resultCode = responseData.resultcode
+              ? String(responseData.resultcode)
+              : "";
+            if (apiError) {
+              const detail = responseData.resultdesc ?? responseData.ErrorMessage ??
+                responseData.errorMessage ?? responseData.Error ?? responseData.error ??
+                "Request rejected";
               testResult = {
                 success: false,
-                error: `Captiva error${resultCode ? ` ${resultCode}` : ""}: ${String(explicitError)}`,
-              };
-            } else if (explicitSuccess) {
-              testResult = {
-                success: true,
-                message: `Captiva request acknowledged for outlet ${store_id} (sales access not yet verified)`,
+                error: `Captiva API error${resultCode ? ` ${resultCode}` : ""}: ${String(detail)}`,
               };
             } else {
-              testResult = {
-                success: false,
-                error: "Captiva response did not explicitly confirm success. Authentication is unverified.",
-              };
+              const stores = Array.isArray(responseData.stores) ? responseData.stores : [];
+              const matched = stores.find((entry: unknown) => {
+                if (!entry || typeof entry !== "object") return false;
+                const item = entry as Record<string, unknown>;
+                return String(item.storeid ?? item.id ?? "") === String(store_id);
+              });
+              if (matched) {
+                testResult = {
+                  success: true,
+                  message: `Captiva Journals API authenticated; outlet ${store_id} is authorised. Sales retrieval has not yet been tested.`,
+                };
+              } else {
+                testResult = {
+                  success: false,
+                  error: `Captiva did not list outlet ${store_id} in this API account. Check store access, api_userid and IP whitelist.`,
+                };
+              }
             }
           }
         } catch (err) {
