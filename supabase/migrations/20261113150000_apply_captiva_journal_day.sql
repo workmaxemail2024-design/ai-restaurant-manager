@@ -87,7 +87,6 @@ BEGIN
     WHERE restaurant_id = v_restaurant
       AND location_id = v_location
       AND sale_date = p_report_date
-      AND source <> 'captiva'
   ) OR EXISTS (
     SELECT 1 FROM public.pos_sales_import
     WHERE restaurant_id = v_restaurant AND location_id = v_location
@@ -97,13 +96,13 @@ BEGIN
     WHERE restaurant_id = v_restaurant AND location_id = v_location
       AND report_date = p_report_date AND pos_provider = 'captiva_xls'
   ) THEN
-    RAISE EXCEPTION 'Another sales source already owns this date. Manual review required.';
+    RAISE EXCEPTION 'This day already has sales or an XLS import; no automatic replacement is permitted.';
   END IF;
 
   SELECT * INTO v_stage FROM public.captiva_api_staged_days
   WHERE restaurant_id = v_restaurant AND location_id = v_location
     AND report_date = p_report_date FOR UPDATE;
-  IF NOT FOUND OR v_stage.status NOT IN ('ready','applied') THEN
+  IF NOT FOUND OR v_stage.status <> 'ready' THEN
     RAISE EXCEPTION 'Captiva day is not fully staged';
   END IF;
 
@@ -127,6 +126,17 @@ BEGIN
     AND mapped_sale_date = p_report_date AND pos_provider = 'captiva'
     AND data->>'source' = 'captiva_journal_api_v1'
     AND data->>'batch_id' = v_stage.batch_id;
+
+  -- Previously staged records with different batch IDs must never be ignored:
+  -- the daily total must represent exactly the staged set we are applying.
+  IF EXISTS (
+    SELECT 1 FROM public.pos_sales_import
+    WHERE restaurant_id=v_restaurant AND location_id=v_location
+      AND pos_provider='captiva' AND mapped_sale_date=p_report_date
+      AND data->>'batch_id' IS DISTINCT FROM v_stage.batch_id
+  ) THEN
+    RAISE EXCEPTION 'Stale or unverified Captiva staged rows exist for this date';
+  END IF;
 
   IF v_total IS NULL OR v_total = 0 OR v_batch_count <> 1 OR v_batch_id IS NULL
      OR v_batch_id <> v_stage.batch_id
@@ -202,16 +212,8 @@ BEGIN
     total_price = EXCLUDED.total_price, sale_date = EXCLUDED.sale_date,
     source = EXCLUDED.source;
 
-  -- Remove superseded rows from earlier Captiva API versions, never XLS/manual rows.
-  DELETE FROM public.sales s
-  WHERE s.restaurant_id = v_restaurant AND s.location_id = v_location
-    AND s.sale_date = p_report_date AND s.source = 'captiva'
-    AND NOT EXISTS (
-      SELECT 1 FROM public.pos_sales_import i
-      WHERE i.id = s.pos_import_id AND i.restaurant_id = v_restaurant
-        AND i.location_id = v_location AND i.mapped_sale_date = p_report_date
-        AND i.pos_provider = 'captiva' AND i.data->>'batch_id' = v_batch_id
-    );
+  -- Never delete existing sales. Any pre-existing day is refused above,
+  -- including older API rows that require a separately approved migration.
 
   -- Maintain one canonical provider+day summary. The net/VAT figures are from
   -- Captiva's dashboard, not fabricated per-product tax allocations.
