@@ -192,6 +192,7 @@ serve(async (req) => {
     }
 
     let salesData: unknown[] = [];
+    let lastCaptivaError: string | null = null;
 
     if (simulateMode) {
       // Generate mock data for testing
@@ -494,6 +495,8 @@ serve(async (req) => {
         }
       }
 
+      lastCaptivaError = attemptDebug.map((attempt) => String(attempt.error ?? "")).filter(Boolean).at(-1) ?? null;
+
       // Always emit a visible sync_debug entry showing sanitized request/response metadata,
       // for every Captiva attempt (success or failure). Credentials are excluded.
       await adminClient.from("pos_sync_logs").insert({
@@ -527,12 +530,8 @@ serve(async (req) => {
     // Empty or rejected API responses are NOT successful syncs. Do not advance
     // the success checkpoint or call the apply function on these responses.
     if (salesData.length === 0) {
-      const lastError = attemptDebug
-        .map((attempt) => String(attempt.error ?? ""))
-        .filter(Boolean)
-        .at(-1);
-      const errorMessage = lastError
-        ? `Captiva returned no usable sales. Last error: ${lastError}`
+      const errorMessage = lastCaptivaError
+        ? `Captiva returned no usable sales. Last error: ${lastCaptivaError}`
         : "Captiva returned no usable sales. Verify the API response schema before syncing.";
       await adminClient.from("pos_integrations").update({
         last_sync_status: "failed",
