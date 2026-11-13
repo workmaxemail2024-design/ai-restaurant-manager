@@ -77,7 +77,9 @@ serve(async (req) => {
             api_userid: String(api_key),
             api_pass: String(password),
             api_request: "get_api_stores",
-            stores: [],
+            // Captiva developer Tools sends the selected store, not an empty
+            // array. Without it Captiva may return no authorised stores.
+            stores: [{ id: String(store_id) }],
           };
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 20000);
@@ -150,7 +152,7 @@ serve(async (req) => {
               } else {
                 testResult = {
                   success: false,
-                  error: `Captiva did not list outlet ${store_id} in this API account. Check store access, api_userid and IP whitelist.`,
+                  error: `Captiva responded, but did not return outlet ${store_id}. Verify this outlet is selected and authorised in the Captiva developer account.`,
                 };
               }
             }
