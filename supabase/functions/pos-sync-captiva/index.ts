@@ -90,10 +90,12 @@ async function exists(query: PromiseLike<{data:unknown;error:unknown}>): Promise
   return Array.isArray(data) && data.length>0;
 }
 async function sourceCollision(client: Client, restaurant: string, location: string, date: string): Promise<string|null> {
+  // Never restage a date that already has any applied sale (even Captiva API).
+  // Replacements must be handled through an explicitly reviewed reconciliation flow.
   const existingSales=await client.from("sales").select("id,source")
     .eq("restaurant_id",restaurant).eq("location_id",location)
-    .eq("sale_date",date).neq("source","captiva").limit(1);
-  if (await exists(existingSales)) return "Existing manual/XLS/other sales already cover this date";
+    .eq("sale_date",date).limit(1);
+  if (await exists(existingSales)) return "Sales already recorded for this date (XLS/API/manual); no duplicate import permitted";
   const xlsStage=await client.from("pos_sales_import").select("id")
     .eq("restaurant_id",restaurant).eq("location_id",location)
     .eq("mapped_sale_date",date).eq("pos_provider","captiva_xls").limit(1);
@@ -202,6 +204,11 @@ serve(async(req)=>{
         throw Error(`Journal does not reconcile to dashboard for ${date}; nothing staged`);
       }
       const products=toCaptivaProductTotals(journal);
+      // The sales.quantity column is integral. Do not silently round fractional
+      // quantities or negative voids into misleading product-sales figures.
+      if (products.some(p => !Number.isSafeInteger(p.quantity) || p.quantity < 0)) {
+        throw Error(`Unsupported fractional/negative Captiva product quantities on ${date}`);
+      }
       const mapping=new Map<string,string|null>();
       for(const product of products){
         const found=current.get(product.external_item_id);
@@ -231,6 +238,17 @@ serve(async(req)=>{
 
     let stagedCount=0;
     for(const day of prepared){
+      // Check again immediately before staging; another operator may have
+      // imported an XLS workbook after the preview was generated.
+      const conflict=await sourceCollision(client,restaurant,locationId,day.date);
+      if(conflict) throw Error(`Cannot stage ${day.date}: ${conflict}`);
+      // Prior, not-yet-applied API staging may contain old product keys. Clear
+      // only this provider/date after the collision guard, so the current batch
+      // is complete. No financial ledger/sales row is deleted here.
+      const {error:clearError}=await client.from("pos_sales_import").delete()
+        .eq("restaurant_id",restaurant).eq("location_id",locationId)
+        .eq("pos_provider","captiva").eq("mapped_sale_date",day.date);
+      if(clearError) throw Error("Could not replace superseded staged Captiva products");
       // Store new POS items, but do not auto-create dishes or overwrite manual mappings.
       const missing=day.products.filter(p=>!current.has(p.external_item_id));
       if(missing.length){
