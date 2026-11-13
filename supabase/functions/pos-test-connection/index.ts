@@ -139,11 +139,18 @@ serve(async (req) => {
               };
             } else {
               const stores = Array.isArray(responseData.stores) ? responseData.stores : [];
-              const matched = stores.find((entry: unknown) => {
-                if (!entry || typeof entry !== "object") return false;
+              // Normalize leading zeros (some Captiva installations use
+              // numeric store IDs, e.g. 2137 instead of "02137").
+              const normalizeStore = (id: unknown) =>
+                String(id ?? "").replace(/[^0-9]/g, "").replace(/^0+/, "") || "0";
+              const storeIds = stores.map((entry: unknown) => {
+                if (!entry || typeof entry !== "object") return "";
                 const item = entry as Record<string, unknown>;
-                return String(item.storeid ?? item.id ?? "") === String(store_id);
-              });
+                return String(item.storeid ?? item.id ?? "");
+              }).filter(Boolean);
+              const matched = storeIds.some(id =>
+                normalizeStore(id) === normalizeStore(store_id)
+              );
               if (matched) {
                 testResult = {
                   success: true,
@@ -152,7 +159,7 @@ serve(async (req) => {
               } else {
                 testResult = {
                   success: false,
-                  error: `Captiva responded, but did not return outlet ${store_id}. Verify this outlet is selected and authorised in the Captiva developer account.`,
+                  error: `Captiva HTTP ${response.status}; result ${String(responseData.result ?? "unspecified").slice(0,24)}; code ${resultCode || "none"}; returned stores: ${storeIds.length ? storeIds.slice(0,10).join(", ") : "none"}; top-level fields: ${Object.keys(responseData).filter(k => !/pass|key|user|token|secret|data/i.test(k)).slice(0,12).join(", ") || "none"}. Outlet ${store_id} not confirmed.`,
                 };
               }
             }
