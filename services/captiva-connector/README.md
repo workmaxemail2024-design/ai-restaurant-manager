@@ -33,6 +33,21 @@ journals, or a neighbouring-date record. It does not reveal customer data.
     python3 connector.py diagnose --date 2026-09-01 --store 02136
 
 Do not guess a new date or force an import until the diagnosis is understood.
+
+For missing journal days, preview now displays Captiva's authoritative dashboard
+totals **without fabricating product/void/refund detail**:
+
+    python3 connector.py preview --date 2026-09-01 --all
+
+To inspect historical journal coverage and determine which months can be used for
+a product-level backfill, run:
+
+    python3 connector.py coverage --all --month 2026-09
+
+The coverage command requests only **journal metadata**, prints each store's
+earliest/latest available journal date and monthly availability, and does not
+retrieve sensitive journal XML.
+
 For future updates to this feature branch:
 
     cd ~/ai-restaurant-manager
