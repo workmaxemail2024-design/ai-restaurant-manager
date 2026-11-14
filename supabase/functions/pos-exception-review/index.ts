@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.86.0";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.86.0";
 import { resolveCaller, unauthorized } from "../_shared/posAuth.ts";
 
 // This function handles only human manager reviews and unverified recovery
@@ -43,26 +43,28 @@ const normalizeAmount = (amount: unknown): string | null => {
 
 /** Check CURRENT user's active role for the TARGET restaurant, not default role. */
 async function authorizeManager(
-  client: ReturnType<typeof createClient>,
+  client: SupabaseClient<any, "public">,
   userId: string,
   restaurantId: string,
   locationId: string,
 ): Promise<boolean> {
-  const { data: memberships, error: memberError } = await client
+  const { data: membershipRows, error: memberError } = await client
     .from("user_restaurants")
     .select("role_id, is_active")
     .eq("restaurant_id", restaurantId)
     .eq("user_id", userId)
     .eq("is_active", true)
     .limit(1);
+  const memberships = membershipRows as unknown as Array<{ role_id: string | null }> | null;
   if (memberError || !memberships?.length || !memberships[0]?.role_id) return false;
 
-  const { data: role, error: roleError } = await client
+  const { data: roleRow, error: roleError } = await client
     .from("roles")
     .select("restaurant_id, permissions")
     .eq("id", memberships[0].role_id)
     .eq("restaurant_id", restaurantId)
     .maybeSingle();
+  const role = roleRow as unknown as { permissions?: unknown } | null;
   if (roleError || !role) return false;
   const permissions = isObject(role.permissions) ? role.permissions : {};
   const posPerms = isObject(permissions.pos) ? permissions.pos : {};
