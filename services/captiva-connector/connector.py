@@ -244,8 +244,25 @@ def read_day(credentials, store_id, day):
         raise RuntimeError("Could not identify a single matching Captiva dashboard date")
     daily = days[0]
     report_kpis = (daily.get("report") or {}).get("kpis") or {}
-    journal = captiva_request(credentials, "get_api_store_journal", store_id, start_date=api_date)
-    details = summarize_journal(decode_journal(journal))
+    # Prefer the documented date API. Fallback to the known working filename
+    # lookup if that daily journal is unavailable, so no manual ID test is needed.
+    method = "get_api_store_journal"
+    try:
+        journal = captiva_request(credentials, method, store_id, start_date=api_date)
+        details = summarize_journal(decode_journal(journal))
+    except RuntimeError:
+        listing = captiva_request(credentials, "get_api_stored_journal_list", store_id)
+        expected = datetime.strptime(day, "%Y-%m-%d").strftime("%d %b %Y").lower()
+        matches = [
+            j for j in listing.get("journals", [])
+            if str(j.get("journal_date") or "").lower() == expected
+            and not j.get("istemp", False)
+        ]
+        if len(matches) != 1 or not matches[0].get("journal_name"):
+            raise RuntimeError("Could not identify one finalised journal for %s" % day)
+        method = "get_api_store_journal_byid"
+        journal = captiva_request(credentials, method, store_id, journal_id=matches[0]["journal_name"])
+        details = summarize_journal(decode_journal(journal))
     original_gross = report_kpis.get("gross_all_sales")
     standard = money(details["payment_summary"].get("standard", {}).get("value"))
     return {
@@ -266,6 +283,7 @@ def read_day(credentials, store_id, day):
         "standard_payment_minus_reported_gross_DIAGNOSTIC":
         euros(standard - money(original_gross)) if original_gross is not None else None,
         "journal": details,
+        "journal_fetch_method": method,
         "reconciled": False,
         "warning": (
             "Not approved for revenue posting: refunds/combos/voids "
