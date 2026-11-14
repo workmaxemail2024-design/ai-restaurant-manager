@@ -34,3 +34,7 @@ create table public.user_location_access(
     restaurant_id uuid not null references public.restaurants(id),
     location_id uuid not null references public.locations(id)
 );
+
+-- Supabase grants service_role SELECT on existing core tables.
+-- The ephemeral stub must mirror this grant for SECURITY INVOKER triggers.
+grant select on public.locations to service_role;
