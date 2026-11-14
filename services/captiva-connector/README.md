@@ -25,6 +25,21 @@ Then verify all three locations on an available trading date:
 
     python3 connector.py preview --date 2026-09-01 --all
 
+If a restaurant says "Could not identify one finalised journal", run the
+new **read-only** metadata diagnostic for that store/date. It will show whether
+there is no uploaded journal, only temporary journals, multiple finalised
+journals, or a neighbouring-date record. It does not reveal customer data.
+
+    python3 connector.py diagnose --date 2026-09-01 --store 02136
+
+Do not guess a new date or force an import until the diagnosis is understood.
+For future updates to this feature branch:
+
+    cd ~/ai-restaurant-manager
+    git pull --ff-only
+    cd services/captiva-connector
+    python3 -m unittest discover -s tests -v
+
 To save a restricted-access JSON export for offline review:
 
     python3 connector.py preview --date 2026-09-01 --store 01584 --json-out ~/captiva-preview-2026-09-01.json
