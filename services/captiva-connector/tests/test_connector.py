@@ -1,10 +1,13 @@
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+from contextlib import redirect_stdout
+import io
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from connector import classify_event, summarize_journal, euros
+from connector import classify_event, summarize_journal, euros, diagnose_day
 
 SAMPLE = '''<report><orders>
   <order><products>
@@ -37,6 +40,42 @@ class TestJournal(unittest.TestCase):
         self.assertEqual(summary['exception_events_preview'][0]['removed_item_count'], 2)
         self.assertEqual(len(summary['exception_events_preview']), 3)
         self.assertNotIn('desc', summary['exception_events_preview'][0])
+
+    def test_diagnosis_shows_missing_journal_without_importing(self):
+        calls = []
+        def fake_request(credentials, method, store_id, **params):
+            calls.append(method)
+            if method == "get_api_stores_dashboard":
+                return {"dashboards": [{"dashdate": "01 Sep 2026",
+                    "status": "data", "report": {"kpis": {
+                        "gross_all_sales": 999.25, "total_all_std_orders": 15}}}]}
+            if method == "get_api_store_journal":
+                return {"journalready": False, "journalcode": "714229",
+                        "journalnote": "Journal Not Found", "journaldata": ""}
+            if method == "get_api_stored_journal_list":
+                return {"journals": [
+                    {"journal_date": "02 Sep 2026",
+                     "journal_name": "journal-next-day.xml",
+                     "istemp": False},
+                    {"journal_date": "01 Sep 2026",
+                     "journal_name": "journal-temp.xml",
+                     "istemp": True}
+                ]}
+            raise AssertionError("unexpected request")
+        buffer = io.StringIO()
+        with patch("connector.captiva_request", side_effect=fake_request):
+            with redirect_stdout(buffer):
+                diagnose_day({"api_userid": "synthetic", "api_pass": "synthetic"},
+                             "02136", "2026-09-01")
+        output = buffer.getvalue()
+        self.assertIn("Exact date finalised journals: 0", output)
+        self.assertIn("journal-next-day.xml", output)
+        self.assertIn("No financial imports were performed.", output)
+        self.assertEqual(calls, [
+            "get_api_stores_dashboard",
+            "get_api_store_journal",
+            "get_api_stored_journal_list"
+        ])
 
     def test_money_decimal(self):
         self.assertEqual(euros('0.1'), '0.10')
