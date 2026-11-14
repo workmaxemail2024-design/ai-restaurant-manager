@@ -496,7 +496,9 @@ def main():
     if args.command == "setup":
         setup()
         return
-    date.fromisoformat(args.date)
+    # Only preview/diagnose accept --date. Coverage has --month instead.
+    if args.command in ("preview", "diagnose"):
+        date.fromisoformat(args.date)
     credentials = load_credentials()
     if args.command == "diagnose":
         diagnose_day(credentials, args.store, args.date)
