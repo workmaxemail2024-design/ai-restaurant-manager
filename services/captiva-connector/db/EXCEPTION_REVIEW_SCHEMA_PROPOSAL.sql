@@ -247,8 +247,9 @@ $$;
 -- the user's specific authorised restaurant/location. Service role is used
 -- only by the authenticated server endpoint after checking the real user.
 do $
-declare t text;
-declare required_permission text;
+declare
+  t text;
+  required_permission text;
 begin
   foreach t in array array[
     'pos_captiva_daily_sources','pos_exception_events','pos_exception_reviews',
