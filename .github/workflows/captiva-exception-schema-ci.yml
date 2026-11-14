@@ -1,0 +1,48 @@
+name: Captiva exception-review schema checks
+
+on:
+  push:
+    branches:
+      - feature/captiva-exception-reviews
+    paths:
+      - "services/captiva-connector/db/**"
+      - "services/captiva-connector/tests/*schema*.sql"
+      - ".github/workflows/captiva-exception-schema-ci.yml"
+  pull_request:
+    paths:
+      - "services/captiva-connector/db/**"
+      - "services/captiva-connector/tests/*schema*.sql"
+      - ".github/workflows/captiva-exception-schema-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  schema-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: synthetic-password-ci-only
+          POSTGRES_DB: scratch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scratch"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: synthetic-password-ci-only
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Load synthetic identity schema
+        run: psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d scratch -f services/captiva-connector/tests/schema_stub.sql
+      - name: Apply proposal to ephemeral database only
+        run: psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d scratch -f services/captiva-connector/db/EXCEPTION_REVIEW_SCHEMA_PROPOSAL.sql
+      - name: Check tenant isolation, immutability and idempotency
+        run: psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d scratch -f services/captiva-connector/tests/exception_schema_smoke.sql
