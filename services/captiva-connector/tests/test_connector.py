@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from connector import (
     classify_event, summarize_journal, euros, diagnose_day,
-    read_day, coverage_summary
+    read_day, coverage_summary, main
 )
 
 SAMPLE = '''<report><orders>
@@ -137,6 +137,17 @@ class TestJournal(unittest.TestCase):
         self.assertEqual(c["selected_month_count"], 2)
         self.assertEqual(c["selected_month_finalised"], 1)
         self.assertEqual(c["selected_month_temporary"], 1)
+
+    def test_coverage_cli_does_not_require_date(self):
+        argv = ["connector.py", "coverage", "--all", "--month", "2026-09"]
+        fake_credentials = {"api_userid": "synthetic", "api_pass": "synthetic"}
+        with patch.object(sys, "argv", argv):
+            with patch("connector.load_credentials", return_value=fake_credentials):
+                with patch("connector.show_coverage") as coverage:
+                    main()
+        coverage.assert_called_once_with(
+            fake_credentials, ["01584", "02137", "02136"], "2026-09"
+        )
 
     def test_money_decimal(self):
         self.assertEqual(euros('0.1'), '0.10')
