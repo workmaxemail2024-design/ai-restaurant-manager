@@ -246,23 +246,28 @@ $$;
 -- No browser writes. Browser reads require matching membership/role AND
 -- the user's specific authorised restaurant/location. Service role is used
 -- only by the authenticated server endpoint after checking the real user.
-do $$
+do $
 declare t text;
+declare required_permission text;
 begin
   foreach t in array array[
     'pos_captiva_daily_sources','pos_exception_events','pos_exception_reviews',
     'pos_exception_review_audit','pos_recovery_claims','pos_exception_daily_signoffs'
   ] loop
+    required_permission := case
+      when t in ('pos_captiva_daily_sources','pos_exception_events') then 'view'
+      else 'edit'
+    end;
     execute format('alter table public.%I enable row level security',t);
     execute format('revoke all on public.%I from public,anon,authenticated',t);
     execute format('grant select on public.%I to authenticated',t);
     execute format('grant all on public.%I to service_role',t);
     execute format('drop policy if exists %I on public.%I','pos_manager_read',t);
-    execute format('create policy %I on public.%I for select to authenticated using (restaurantai_private.can_review_pos(restaurant_id,location_id,''view''))',
-      'pos_manager_read',t);
+    execute format('create policy %I on public.%I for select to authenticated using (restaurantai_private.can_review_pos(restaurant_id,location_id,%L))',
+      'pos_manager_read',t,required_permission);
   end loop;
 end;
-$$;
+$;
 
 -- Atomic authenticated-manager review mutation, callable ONLY from the
 -- server-side edge function using the service-role token. SECURITY INVOKER:
@@ -282,11 +287,12 @@ declare
     v_event public.pos_exception_events%rowtype;
     v_review_id uuid;
     v_existing_event uuid;
+    v_existing_action text;
 begin
     if p_actor_id is null or p_event_id is null or p_request_id is null
        or p_status not in ('reviewing','resolved','reopened')
        or p_resolution not in ('pending','paid_in_pos','paid_outside_pos_pending',
-          'recovery_verified','confirmed_unpaid','legitimate_cancellation','invalid_event')
+          'confirmed_unpaid','legitimate_cancellation','invalid_event')
        or length(coalesce(p_note,'')) > 4000
        or (p_status='resolved' and
            (p_resolution='pending' or length(trim(coalesce(p_note,''))) < 5))
@@ -298,11 +304,12 @@ begin
     perform pg_catalog.pg_advisory_xact_lock(
       pg_catalog.hashtextextended(p_event_id::text,0)
     );
-    select a.event_id into v_existing_event
+    select a.event_id,a.action into v_existing_event,v_existing_action
       from public.pos_exception_review_audit a where a.request_id=p_request_id;
     if found then
-        if v_existing_event <> p_event_id then
-            raise exception 'Review request ID reused for another event';
+        if v_existing_event <> p_event_id
+           or v_existing_action not in ('review','reopen') then
+            raise exception 'Review request ID reused for another action or event';
         end if;
         select id into v_review_id
           from public.pos_exception_reviews where event_id = p_event_id;
@@ -360,15 +367,21 @@ as $$
 declare
     v_event public.pos_exception_events%rowtype;
     v_id uuid;
+    v_existing_event uuid;
 begin
     if p_actor_id is null or p_request_id is null or p_event_id is null
       or p_amount is null or p_amount <= 0 or p_amount > 9999999
       or p_method not in ('cash','card','bank','other')
       or length(trim(coalesce(p_reference,''))) not between 4 and 160
     then raise exception 'Invalid recovered-payment claim'; end if;
-    select id into v_id from public.pos_recovery_claims
+    select id,event_id into v_id,v_existing_event from public.pos_recovery_claims
       where request_id=p_request_id;
-    if found then return v_id; end if;
+    if found then
+      if v_existing_event <> p_event_id then
+        raise exception 'Recovery request ID reused for another event';
+      end if;
+      return v_id;
+    end if;
 
     select * into v_event from public.pos_exception_events where id=p_event_id;
     if not found then raise exception 'Exception event not found'; end if;
