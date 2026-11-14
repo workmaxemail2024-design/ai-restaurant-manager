@@ -1,0 +1,33 @@
+name: Captiva connector - synthetic tests
+
+on:
+  pull_request:
+    paths:
+      - "services/captiva-connector/**"
+      - ".github/workflows/captiva-connector-tests.yml"
+  push:
+    branches:
+      - feature/captiva-oracle-readonly
+    paths:
+      - "services/captiva-connector/**"
+      - ".github/workflows/captiva-connector-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Compile and run local-only synthetic tests
+        working-directory: services/captiva-connector
+        run: |
+          python -m py_compile connector.py
+          python -m unittest discover -s tests -v
