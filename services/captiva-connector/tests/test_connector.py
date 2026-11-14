@@ -7,7 +7,10 @@ import io
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from connector import classify_event, summarize_journal, euros, diagnose_day
+from connector import (
+    classify_event, summarize_journal, euros, diagnose_day,
+    read_day, coverage_summary
+)
 
 SAMPLE = '''<report><orders>
   <order><products>
@@ -76,6 +79,64 @@ class TestJournal(unittest.TestCase):
             "get_api_store_journal",
             "get_api_stored_journal_list"
         ])
+
+    def test_dashboard_only_preview_when_journal_not_uploaded(self):
+        calls = []
+        def fake_request(credentials, method, store_id, **params):
+            calls.append(method)
+            if method == "get_api_stores_dashboard":
+                return {"dashboards": [{
+                    "dashdate": "01 Sep 2026",
+                    "status": "data",
+                    "report": {"kpis": {
+                        "gross_all_sales": 2396.81,
+                        "total_all_net_sales": 2130.44,
+                        "total_all_vat": 266.37,
+                        "total_all_std_orders": 53,
+                        "total_all_visitors": 0,
+                    }}
+                }]}
+            if method == "get_api_store_journal":
+                return {"journalready": False, "journalcode": "128393",
+                        "journalnote": "No Journal Data found.",
+                        "journaldata": ""}
+            if method == "get_api_stored_journal_list":
+                return {"journals": [
+                    {"journal_date": "31 Aug 2025", "istemp": False,
+                     "journal_name": "old-journal.xml"}
+                ]}
+            raise AssertionError("Unexpected method %s" % method)
+
+        with patch("connector.captiva_request", side_effect=fake_request):
+            result = read_day(
+                {"api_userid": "synthetic", "api_pass": "synthetic"},
+                "02136", "2026-09-01"
+            )
+        self.assertEqual(result["captiva_dashboard"]["gross_sales"], "2396.81")
+        self.assertEqual(result["captiva_dashboard"]["orders"], 53)
+        self.assertIsNone(result["journal"])
+        self.assertEqual(result["journal_status"], "no_journal_uploaded_for_date")
+        self.assertIsNone(result["standard_payment_minus_reported_gross_DIAGNOSTIC"])
+        self.assertFalse(result["reconciled"])
+        self.assertEqual(calls, [
+            "get_api_stores_dashboard", "get_api_store_journal",
+            "get_api_stored_journal_list",
+        ])
+
+    def test_coverage_summary(self):
+        journals = [
+            {"journal_date": "30 Aug 2026", "istemp": False},
+            {"journal_date": "01 Sep 2026", "istemp": False},
+            {"journal_date": "02 Sep 2026", "istemp": True},
+            {"journal_date": "05 Nov 2026", "istemp": False},
+        ]
+        c = coverage_summary(journals, "2026-09")
+        self.assertEqual(c["total_listed"], 4)
+        self.assertEqual(c["earliest"], "2026-08-30")
+        self.assertEqual(c["latest"], "2026-11-05")
+        self.assertEqual(c["selected_month_count"], 2)
+        self.assertEqual(c["selected_month_finalised"], 1)
+        self.assertEqual(c["selected_month_temporary"], 1)
 
     def test_money_decimal(self):
         self.assertEqual(euros('0.1'), '0.10')
