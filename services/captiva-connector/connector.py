@@ -292,6 +292,83 @@ def read_day(credentials, store_id, day):
     }
 
 
+def diagnose_day(credentials, store_id, day):
+    """Read-only journal availability diagnostics: metadata only, no customer data."""
+    target = datetime.strptime(day, "%Y-%m-%d")
+    api_date = target.strftime("%d/%b/%Y").lower()
+    label = target.strftime("%d %b %Y")
+    print("\nJournal diagnosis:", STORES[store_id], "|", label)
+
+    try:
+        dashboard = captiva_request(
+            credentials, "get_api_stores_dashboard", store_id,
+            start_date=api_date, end_date=api_date
+        )
+        dates = dashboard.get("dashboards") or []
+        matches = [d for d in dates
+                   if str(d.get("dashdate") or "").lower() == label.lower()]
+        if matches:
+            day_data = matches[0]
+            kpis = (day_data.get("report") or {}).get("kpis") or {}
+            print("Dashboard status:", day_data.get("status"))
+            print("Dashboard gross:", kpis.get("gross_all_sales"))
+            print("Dashboard orders:", kpis.get("total_all_std_orders"))
+        else:
+            print("Dashboard has no matching date record")
+    except RuntimeError as error:
+        print("Dashboard check error:", error)
+
+    try:
+        journal = captiva_request(
+            credentials, "get_api_store_journal", store_id,
+            start_date=api_date
+        )
+        print("Date-based journal ready:", journal.get("journalready"))
+        print("Date-based journal code:", journal.get("journalcode"))
+        print("Date-based journal note:", journal.get("journalnote"))
+        print("Date-based encoded length:", len(journal.get("journaldata") or ""))
+    except RuntimeError as error:
+        print("Date-based journal request error:", error)
+
+    listing = captiva_request(credentials, "get_api_stored_journal_list", store_id)
+    entries = listing.get("journals") or []
+    exact = [
+        j for j in entries
+        if str(j.get("journal_date") or "").strip().lower() == label.lower()
+    ]
+    print("Total journals listed:", len(entries))
+    print("Exact date journal records:", len(exact))
+    print("Exact date finalised journals:", sum(j.get("istemp") is False for j in exact))
+    for item in exact[:20]:
+        print("  date:", item.get("journal_date"),
+              "| filename:", item.get("journal_name"),
+              "| temporary:", item.get("istemp"),
+              "| shared:", item.get("isshared"),
+              "| size:", item.get("journal_size"))
+    if len(exact) > 20:
+        print("  (more matching entries omitted)")
+
+    nearby = []
+    for item in entries:
+        try:
+            journal_date = datetime.strptime(str(item.get("journal_date") or "").strip(), "%d %b %Y")
+        except ValueError:
+            continue
+        distance = abs((journal_date - target).days)
+        if 0 < distance <= 7:
+            nearby.append((distance, journal_date, item))
+    nearby.sort(key=lambda rec: (rec[0], rec[1]))
+    print("Nearby journals within 7 days (up to 10):")
+    for _, _, item in nearby[:10]:
+        print("  date:", item.get("journal_date"),
+              "| filename:", item.get("journal_name"),
+              "| temporary:", item.get("istemp"))
+    if not nearby:
+        print("  none")
+
+    print("No financial imports were performed.")
+
+
 def print_report(result):
     print("\n%s | %s" % (result["store_name"], result["date"]))
     d = result["captiva_dashboard"]
@@ -327,6 +404,11 @@ def main():
     store.add_argument("--store", choices=list(STORES))
     store.add_argument("--all", action="store_true")
     preview.add_argument("--json-out", help="Save privacy-minimised JSON preview")
+    diagnose = commands.add_parser(
+        "diagnose", help="Inspect journal availability (read-only; no customer data)"
+    )
+    diagnose.add_argument("--date", required=True, help="YYYY-MM-DD, Irish local trading date")
+    diagnose.add_argument("--store", choices=list(STORES), required=True)
     args = parser.parse_args()
 
     if args.command == "setup":
@@ -334,6 +416,9 @@ def main():
         return
     date.fromisoformat(args.date)
     credentials = load_credentials()
+    if args.command == "diagnose":
+        diagnose_day(credentials, args.store, args.date)
+        return
     store_ids = list(STORES) if args.all else [args.store]
     all_results = []
     for store_id in store_ids:
