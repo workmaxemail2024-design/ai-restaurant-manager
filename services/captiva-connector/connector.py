@@ -244,9 +244,12 @@ def read_day(credentials, store_id, day):
         raise RuntimeError("Could not identify a single matching Captiva dashboard date")
     daily = days[0]
     report_kpis = (daily.get("report") or {}).get("kpis") or {}
-    # Prefer the documented date API. Fallback to the known working filename
-    # lookup if that daily journal is unavailable, so no manual ID test is needed.
+    # Prefer the documented date API; fallback to the finalised journal filename.
+    # Missing journal coverage is distinct from a failed dashboard/API connection.
+    # Never synthesize products, payment totals, refunds or voids for a missing journal.
     method = "get_api_store_journal"
+    journal_status = "available"
+    details = None
     try:
         journal = captiva_request(credentials, method, store_id, start_date=api_date)
         details = summarize_journal(decode_journal(journal))
@@ -255,16 +258,26 @@ def read_day(credentials, store_id, day):
         expected = datetime.strptime(day, "%Y-%m-%d").strftime("%d %b %Y").lower()
         matches = [
             j for j in listing.get("journals", [])
-            if str(j.get("journal_date") or "").lower() == expected
-            and not j.get("istemp", False)
+            if str(j.get("journal_date") or "").strip().lower() == expected
         ]
-        if len(matches) != 1 or not matches[0].get("journal_name"):
-            raise RuntimeError("Could not identify one finalised journal for %s" % day)
-        method = "get_api_store_journal_byid"
-        journal = captiva_request(credentials, method, store_id, journal_id=matches[0]["journal_name"])
-        details = summarize_journal(decode_journal(journal))
+        finalized = [j for j in matches if j.get("istemp") is False]
+        if len(finalized) == 1 and finalized[0].get("journal_name"):
+            method = "get_api_store_journal_byid"
+            journal = captiva_request(
+                credentials, method, store_id, journal_id=finalized[0]["journal_name"]
+            )
+            details = summarize_journal(decode_journal(journal))
+        elif len(finalized) > 1:
+            method = None
+            journal_status = "multiple_finalised_journals_requires_review"
+        elif matches:
+            method = None
+            journal_status = "only_temporary_journals_found"
+        else:
+            method = None
+            journal_status = "no_journal_uploaded_for_date"
     original_gross = report_kpis.get("gross_all_sales")
-    standard = money(details["payment_summary"].get("standard", {}).get("value"))
+    standard = money(details["payment_summary"].get("standard", {}).get("value")) if details else None
     return {
         "status": "preview_only_NOT_imported",
         "store_id": store_id,
@@ -281,13 +294,18 @@ def read_day(credentials, store_id, day):
             "visitors": report_kpis.get("total_all_visitors"),
         },
         "standard_payment_minus_reported_gross_DIAGNOSTIC":
-        euros(standard - money(original_gross)) if original_gross is not None else None,
+        euros(standard - money(original_gross))
+        if standard is not None and original_gross is not None else None,
         "journal": details,
+        "journal_status": journal_status,
         "journal_fetch_method": method,
         "reconciled": False,
         "warning": (
-            "Not approved for revenue posting: refunds/combos/voids "
-            "and journal payment rules still require reconciliation."
+            "Dashboard-only: no finalised journal for this date; no product, payment, "
+            "refund or void detail is available. No financial imports performed."
+            if details is None else
+            "Not approved for revenue posting: refunds/combos/voids and "
+            "journal payment rules still require reconciliation."
         ),
     }
 
@@ -369,6 +387,58 @@ def diagnose_day(credentials, store_id, day):
     print("No financial imports were performed.")
 
 
+def coverage_summary(entries, month=None):
+    """Aggregate journal metadata only: no customer or payment information."""
+    valid = []
+    for journal in entries:
+        try:
+            d = datetime.strptime(str(journal.get("journal_date") or "").strip(), "%d %b %Y").date()
+        except ValueError:
+            continue
+        valid.append((d, journal))
+    valid.sort(key=lambda pair: pair[0])
+    selected = [
+        (d, j) for d, j in valid
+        if month is None or d.strftime("%Y-%m") == month
+    ]
+    return {
+        "total_listed": len(entries),
+        "parsed_dates": len(valid),
+        "earliest": valid[0][0].isoformat() if valid else None,
+        "latest": valid[-1][0].isoformat() if valid else None,
+        "selected_month": month,
+        "selected_month_count": len(selected),
+        "selected_month_finalised": sum(j.get("istemp") is False for _, j in selected),
+        "selected_month_temporary": sum(j.get("istemp") is True for _, j in selected),
+        "latest_five_dates": list(dict.fromkeys(
+            d.isoformat() for d, _ in reversed(valid)
+        ))[:5],
+    }
+
+
+def show_coverage(credentials, stores, month=None):
+    """Inspect date coverage for selected stores. No journal XML is downloaded."""
+    for store_id in stores:
+        try:
+            listing = captiva_request(
+                credentials, "get_api_stored_journal_list", store_id
+            )
+            info = coverage_summary(listing.get("journals") or [], month)
+            print("\n", STORES[store_id], "|", store_id)
+            print("Listed journals:", info["total_listed"])
+            print("Dated journals:", info["parsed_dates"])
+            print("Earliest date:", info["earliest"])
+            print("Latest date:", info["latest"])
+            if month:
+                print("%s journals:" % month, info["selected_month_count"])
+                print("  finalised:", info["selected_month_finalised"])
+                print("  temporary:", info["selected_month_temporary"])
+            print("Five latest journal dates:", ", ".join(info["latest_five_dates"]) or "none")
+        except RuntimeError as error:
+            print("Coverage error:", STORES[store_id], "-", error)
+    print("\nCoverage report only. No financial imports were performed.")
+
+
 def print_report(result):
     print("\n%s | %s" % (result["store_name"], result["date"]))
     d = result["captiva_dashboard"]
@@ -376,6 +446,11 @@ def print_report(result):
         d["gross_sales"], d["net_sales"], d["orders"]
     ))
     j = result["journal"]
+    if j is None:
+        print("Journal: UNAVAILABLE (%s)" % result["journal_status"])
+        print("DASHBOARD-ONLY PREVIEW: no product, refund, void or payment details for this date.")
+        print("Reconciled: NO; production import remains disabled")
+        return
     print("Journal orders: %s | product lines: %s | distinct products: %s" % (
         j["orders_in_xml"], j["product_lines"], j["distinct_product_ids"]
     ))
@@ -409,6 +484,13 @@ def main():
     )
     diagnose.add_argument("--date", required=True, help="YYYY-MM-DD, Irish local trading date")
     diagnose.add_argument("--store", choices=list(STORES), required=True)
+    coverage = commands.add_parser(
+        "coverage", help="Summarize historical cloud journal availability (read-only)"
+    )
+    choice = coverage.add_mutually_exclusive_group(required=True)
+    choice.add_argument("--store", choices=list(STORES))
+    choice.add_argument("--all", action="store_true")
+    coverage.add_argument("--month", help="Optional YYYY-MM to count monthly journals")
     args = parser.parse_args()
 
     if args.command == "setup":
@@ -418,6 +500,11 @@ def main():
     credentials = load_credentials()
     if args.command == "diagnose":
         diagnose_day(credentials, args.store, args.date)
+        return
+    if args.command == "coverage":
+        if args.month:
+            datetime.strptime(args.month, "%Y-%m")
+        show_coverage(credentials, list(STORES) if args.all else [args.store], args.month)
         return
     store_ids = list(STORES) if args.all else [args.store]
     all_results = []
