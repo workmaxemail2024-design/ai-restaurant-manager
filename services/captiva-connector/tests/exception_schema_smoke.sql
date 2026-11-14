@@ -170,4 +170,38 @@ begin
 end;
 $$;
 
+-- A user with only POS VIEW rights can see the source event but NOT
+-- sensitive manager notes, review audit history or recovered payment claims.
+insert into public.roles(id,restaurant_id,permissions)
+values ('30000000-0000-4000-8000-000000000003',
+        '10000000-0000-4000-8000-000000000001',
+        '{"pos":{"view":true}}');
+
+insert into public.user_restaurants(user_id,restaurant_id,role_id,is_active)
+values ('40000000-0000-4000-8000-000000000003',
+        '10000000-0000-4000-8000-000000000001',
+        '30000000-0000-4000-8000-000000000003',true);
+
+insert into public.user_location_access(user_id,restaurant_id,location_id)
+values ('40000000-0000-4000-8000-000000000003',
+        '10000000-0000-4000-8000-000000000001',
+        '20000000-0000-4000-8000-000000000001');
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','40000000-0000-4000-8000-000000000003',false);
+do $
+declare cnt int;
+begin
+  select count(*) into cnt from public.pos_exception_events;
+  if cnt <> 1 then raise exception 'POS viewer cannot see their permitted event'; end if;
+  select count(*) into cnt from public.pos_exception_reviews;
+  if cnt <> 0 then raise exception 'POS viewer can access private manager notes'; end if;
+  select count(*) into cnt from public.pos_exception_review_audit;
+  if cnt <> 0 then raise exception 'POS viewer can access review audit'; end if;
+  select count(*) into cnt from public.pos_recovery_claims;
+  if cnt <> 0 then raise exception 'POS viewer can access private recovery details'; end if;
+end;
+$;
+reset role;
+
 select 'PASS: POS exception RLS, transactional audit, recovery and immutability' as result;
