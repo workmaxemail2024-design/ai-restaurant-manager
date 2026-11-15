@@ -102,3 +102,6 @@ verify_jwt = true
 
 [functions.pos-recovery-verify]
 verify_jwt = true
+
+[functions.pos-captiva-finance]
+verify_jwt = true
