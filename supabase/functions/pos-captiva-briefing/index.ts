@@ -15,6 +15,20 @@ const dateRe = /^\d{4}-\d{2}-\d{2}$/;
 const answer = (value: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: cors });
 
+// Work in integer cents for management reports; do not add floating-point
+// journal payments or double-count POS-recorded recoveries.
+function eurosToCents(value: unknown): number | null {
+  const match = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(String(value));
+  if (!match) return null;
+  const cents = Number(match[1]) * 100
+    + Number((match[2] ?? "").padEnd(2, "0"));
+  return Number.isSafeInteger(cents) ? cents : null;
+}
+
+function centsToEuros(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
 async function managerCanRead(
   admin: SupabaseClient<any, "public">,
   userId: string,
@@ -198,6 +212,23 @@ serve(async (req) => {
       .filter((x) => x.status === "pending_verification")
       .map((x) => ({ event_id: x.event_id, amount: x.claimed_amount,
         status: "pending_verification", revenue_added: false }));
+    const verifiedExternalClaims = recoveryStates
+      .filter((x) => x.status === "verified" && x.already_in_pos === false);
+    const verifiedCents = verifiedExternalClaims.reduce((total, claim) => {
+      const amount = eurosToCents(claim.claimed_amount);
+      if (amount === null) throw new Error("Invalid verified recovery amount");
+      return total + amount;
+    }, 0);
+    const officialGrossCents = eurosToCents(source.official_gross);
+    if (officialGrossCents === null || !Number.isSafeInteger(verifiedCents)) {
+      return answer({ success: false, error: "Financial amount out of range" }, 409);
+    }
+    const provisionalAdjustedGrossCents = officialGrossCents + verifiedCents;
+    if (!Number.isSafeInteger(provisionalAdjustedGrossCents)) {
+      return answer({ success: false, error: "Adjusted amount out of range" }, 409);
+    }
+    const recoveriesAlreadyInPos = recoveryStates
+      .filter((x) => x.status === "verified" && x.already_in_pos === true).length;
     const { data: signoffs, error: signoffErr } = await admin
       .from("pos_exception_daily_signoffs")
       .select("signed_at,signed_by")
@@ -220,9 +251,17 @@ serve(async (req) => {
       exceptions: details,
       unresolved_count: details.filter((x) => x.review_status !== "resolved").length,
       pending_recoveries: pendingRecoveries,
+      verified_external_recoveries: {
+        amount: centsToEuros(verifiedCents),
+        claim_count: verifiedExternalClaims.length,
+        excluded_already_in_pos_claim_count: recoveriesAlreadyInPos,
+        revenue_ledger_modified: false,
+      },
+      provisional_gross_plus_verified_external_recoveries:
+        centsToEuros(provisionalAdjustedGrossCents),
       signed_off: !!signoffs?.length,
       signed_at: signoffs?.[0]?.signed_at ?? null,
-      caveat: "Reported POS gross is not adjusted for manager notes or unverified recoveries.",
+      caveat: "Official Captiva gross is unchanged. Provisional adjusted gross adds only independently verified claims expressly marked NOT in the POS; no accounting ledger entry has been posted.",
     });
   } catch (err) {
     console.error("Captiva briefing failure:", err instanceof Error ? err.name : "unknown");
