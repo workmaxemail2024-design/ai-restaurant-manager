@@ -134,7 +134,9 @@ serve(async (req) => {
     if (!validBody(doc)) return response({ success: false, error: "Invalid staging payload" }, 422);
     const envelope = doc as Record<string, unknown>;
     const snapshot = envelope.snapshot as Record<string, unknown>;
-    const encoded = JSON.stringify(stable(snapshot));
+    // Fingerprint covers full sanitised source evidence. Updated product or
+    // event observations must not silently reuse the prior source version.
+    const encoded = JSON.stringify(stable({ snapshot, events: envelope.events, products: envelope.products }));
     const computed = await sha256Hex(utf8.encode(encoded));
     if (computed !== envelope.source_fingerprint) {
       return response({ success: false, error: "Dashboard snapshot hash mismatch" }, 422);
