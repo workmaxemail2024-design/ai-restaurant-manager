@@ -157,19 +157,36 @@ serve(async (req) => {
       });
     }
 
-    const { data: events, error: eventError } = await admin
-      .from("pos_exception_events")
-      .select("id,event_type,event_code,original_amount,removed_item_count,source_operator,source_date_text,source_time_text,created_at")
+    // Only display events belonging to the selected latest source version.
+    // Keep older source versions append-only for forensic audit without
+    // displaying a removed refund as though it remains in the latest journal.
+    const { data: sourceLinks, error: linksError } = await admin
+      .from("pos_captiva_event_sources")
+      .select("event_id")
+      .eq("source_id", source.id)
       .eq("restaurant_id", loc.restaurant_id)
       .eq("location_id", loc.id)
-      .eq("trading_date", args.date)
-      .order("created_at", { ascending: true })
       .limit(2001);
-    if (eventError || (events?.length ?? 0) > 2000) {
-      return answer({ success: false, error: "Audit event count requires paginated review" }, 409);
+    if (linksError || (sourceLinks?.length ?? 0) > 2000) {
+      return answer({ success: false, error: "Journal event links require review" }, 409);
     }
-
-    const eventIds = (events ?? []).map((item) => item.id);
+    const eventIds = (sourceLinks ?? []).map((item) => item.event_id);
+    let events: Array<Record<string, unknown>> = [];
+    if (eventIds.length) {
+      const { data: rows, error: eventError } = await admin
+        .from("pos_exception_events")
+        .select("id,event_type,event_code,original_amount,removed_item_count,source_operator,source_date_text,source_time_text,created_at")
+        .eq("restaurant_id", loc.restaurant_id)
+        .eq("location_id", loc.id)
+        .eq("trading_date", args.date)
+        .in("id", eventIds)
+        .order("created_at", { ascending: true })
+        .limit(2001);
+      if (eventError || (rows?.length ?? 0) !== eventIds.length) {
+        return answer({ success: false, error: "Journal audit event lookup incomplete" }, 409);
+      }
+      events = rows ?? [];
+    }
     let reviewStates: Array<Record<string, unknown>> = [];
     let recoveryStates: Array<Record<string, unknown>> = [];
     if (eventIds.length) {
