@@ -250,6 +250,7 @@ declare
   v_coverage text;
   v_state text;
   v_unresolved bigint;
+  v_pending_recoveries bigint;
 begin
   select d.journal_coverage, d.reconciliation_state
     into v_coverage,v_state
@@ -270,6 +271,16 @@ begin
     and coalesce(r.review_status,'open') <> 'resolved';
   if v_unresolved <> 0 then
     raise exception 'Day not eligible for sign-off: unresolved exceptions';
+  end if;
+  select count(*) into v_pending_recoveries
+  from public.pos_recovery_claims c
+  join public.pos_exception_events e on e.id=c.event_id
+  where c.restaurant_id=new.restaurant_id
+    and c.location_id=new.location_id
+    and e.trading_date=new.trading_date
+    and c.status='pending_verification';
+  if v_pending_recoveries <> 0 then
+    raise exception 'Day not eligible for sign-off: recovered payment claims pending verification';
   end if;
   return new;
 end;
