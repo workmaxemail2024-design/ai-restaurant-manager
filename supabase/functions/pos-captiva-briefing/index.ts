@@ -117,6 +117,7 @@ serve(async (req) => {
       .eq("location_id", loc.id)
       .eq("trading_date", args.date)
       .order("observed_at", { ascending: false })
+      .order("id", { ascending: false })
       .limit(1);
     if (snapshotErr) return answer({ success: false, error: "Daily source unavailable" }, 503);
 
