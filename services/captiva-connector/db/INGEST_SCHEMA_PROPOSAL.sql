@@ -53,6 +53,38 @@ create policy pos_captiva_product_view
   on public.pos_captiva_product_observations for select to authenticated
   using (restaurantai_private.can_review_pos(restaurant_id,location_id,'view'));
 
+-- Link each native event to the exact immutable journal version that
+-- contained it. A corrected journal can remove an old event from the latest
+-- report without destroying its original audit history or manager notes.
+create table if not exists public.pos_captiva_event_sources (
+    source_id uuid not null,
+    event_id uuid not null,
+    restaurant_id uuid not null references public.restaurants(id),
+    location_id uuid not null references public.locations(id),
+    trading_date date not null,
+    created_at timestamptz not null default now(),
+    primary key (source_id,event_id),
+    foreign key (source_id,restaurant_id,location_id,trading_date)
+      references public.pos_captiva_daily_sources(id,restaurant_id,location_id,trading_date),
+    foreign key (event_id,restaurant_id,location_id)
+      references public.pos_exception_events(id,restaurant_id,location_id)
+);
+create index if not exists pos_captiva_event_sources_event_idx
+  on public.pos_captiva_event_sources(event_id);
+create trigger pos_captiva_event_source_tenant
+  before insert or update on public.pos_captiva_event_sources
+  for each row execute function restaurantai_private.check_pos_location();
+create trigger pos_captiva_event_source_immutable
+  before update or delete on public.pos_captiva_event_sources
+  for each row execute function restaurantai_private.deny_source_edit();
+alter table public.pos_captiva_event_sources enable row level security;
+revoke all on public.pos_captiva_event_sources from public,anon,authenticated;
+grant select on public.pos_captiva_event_sources to authenticated;
+grant all on public.pos_captiva_event_sources to service_role;
+create policy pos_captiva_event_source_view
+  on public.pos_captiva_event_sources for select to authenticated
+  using (restaurantai_private.can_review_pos(restaurant_id,location_id,'view'));
+
 -- Idempotent submission log (contains hashes but never credentials or XML).
 create table if not exists public.pos_captiva_ingest_receipts (
     request_id uuid primary key,
@@ -249,9 +281,19 @@ begin
           or v_existing_event.event_type is distinct from v_type
           or v_existing_event.original_amount is distinct from v_amount
           or v_existing_event.journal_filename is distinct from v_filename
-          or v_existing_event.trading_date is distinct from p_trade_date then
+          or v_existing_event.trading_date is distinct from p_trade_date
+          or v_existing_event.source_operator is distinct from left(nullif(v_event->>'source_operator',''),80)
+          or v_existing_event.source_date_text is distinct from left(nullif(v_event->>'source_date_text',''),50)
+          or v_existing_event.source_time_text is distinct from left(nullif(v_event->>'source_time_text',''),50)
+          or v_existing_event.removed_item_count is distinct from (v_event->>'removed_item_count')::integer then
         raise exception 'POS event fingerprint collision with different contents';
       end if;
+      insert into public.pos_captiva_event_sources (
+        source_id,event_id,restaurant_id,location_id,trading_date
+      ) values (
+        v_source_id,v_existing_event.id,
+        v_binding.restaurant_id,v_binding.location_id,p_trade_date
+      ) on conflict (source_id,event_id) do nothing;
       v_count := v_count+1;
     end loop;
 
