@@ -16,7 +16,9 @@ select public.pos_stage_captiva_envelope(
     "journal_filename":"jnl_02sep2026_01584_example.xml",
     "journal_coverage":"complete",
     "official_gross":"50.00","official_net":"45.00",
-    "official_vat":"5.00","official_orders":1}'::jsonb,
+    "official_vat":"5.00","official_orders":1,
+    "journal_standard_payments":"50.00","journal_refund_payments":"10.00",
+    "journal_other_payments":"0.00","journal_payment_records":2}'::jsonb,
   '[{"source_event_key":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "event_code":"REFUND","event_type":"refund","original_amount":"10.00",
     "removed_item_count":null,"source_operator":"operator12"}]'::jsonb,
@@ -32,7 +34,9 @@ select public.pos_stage_captiva_envelope(
     "journal_filename":"jnl_02sep2026_01584_example.xml",
     "journal_coverage":"complete",
     "official_gross":"50.00","official_net":"45.00",
-    "official_vat":"5.00","official_orders":1}'::jsonb,
+    "official_vat":"5.00","official_orders":1,
+    "journal_standard_payments":"50.00","journal_refund_payments":"10.00",
+    "journal_other_payments":"0.00","journal_payment_records":2}'::jsonb,
   '[{"source_event_key":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "event_code":"REFUND","event_type":"refund","original_amount":"10.00",
     "removed_item_count":null,"source_operator":"operator12"}]'::jsonb,
@@ -48,7 +52,9 @@ select public.pos_stage_captiva_envelope(
   '{"store_id":"02137","trading_date":"2026-09-02",
     "journal_filename":null,"journal_coverage":"dashboard_only",
     "official_gross":"0.00","official_net":"0.00",
-    "official_vat":"0.00","official_orders":0}'::jsonb,
+    "official_vat":"0.00","official_orders":0,
+    "journal_standard_payments":null,"journal_refund_payments":null,
+    "journal_other_payments":null,"journal_payment_records":null}'::jsonb,
   '[]'::jsonb,'[]'::jsonb,
   '80000000-0000-4000-8000-000000000002', repeat('e',64)
 );
@@ -78,7 +84,9 @@ begin
       '01584','2026-09-02',repeat('a',64),
       '{"store_id":"01584","trading_date":"2026-09-02","journal_coverage":"dashboard_only",
         "official_gross":"0.00","official_net":"0.00",
-        "official_vat":"0.00","official_orders":0}'::jsonb,
+        "official_vat":"0.00","official_orders":0,
+    "journal_standard_payments":null,"journal_refund_payments":null,
+    "journal_other_payments":null,"journal_payment_records":null}'::jsonb,
       '[]'::jsonb,'[]'::jsonb,
       '80000000-0000-4000-8000-000000000001',repeat('f',64));
     raise exception 'Expected duplicate request ID to fail';
@@ -96,7 +104,9 @@ begin
       '{"store_id":"02136","trading_date":"2026-09-02",
        "journal_coverage":"dashboard_only","journal_filename":null,
        "official_gross":"0.00","official_net":"0.00",
-       "official_vat":"0.00","official_orders":0}'::jsonb,
+       "official_vat":"0.00","official_orders":0,
+    "journal_standard_payments":null,"journal_refund_payments":null,
+    "journal_other_payments":null,"journal_payment_records":null}'::jsonb,
       '[]'::jsonb,'[]'::jsonb,
       '80000000-0000-4000-8000-000000000003',repeat('f',64));
     raise exception 'Unbound Gourmet Pizza Factory should have been rejected';
