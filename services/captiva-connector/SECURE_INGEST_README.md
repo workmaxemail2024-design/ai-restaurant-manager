@@ -36,6 +36,16 @@ Branch: feature/captiva-secure-ingest. Based on manager exception-review draft P
 - Oracle sender.py configure generates a separate signing secret and stores private config in ~/.config/restaurantai-captiva/ingest.json. Copy the secret to Supabase Edge Function Secrets; NEVER paste it into chat or commit it to GitHub.
 - The ingest Edge Function has verify_jwt=false solely because a separate HMAC signature is required. Never disable the HMAC verification.
 
+## Updating the Oracle shallow, single-branch clone
+
+The original Oracle clone tracks only `feature/captiva-oracle-readonly`. Running `git fetch origin` alone does **not** create `origin/feature/captiva-secure-ingest`. Fetch the new ref explicitly:
+
+    cd ~/ai-restaurant-manager
+    git fetch origin refs/heads/feature/captiva-secure-ingest:refs/remotes/origin/feature/captiva-secure-ingest
+    git switch -c feature/captiva-secure-ingest --track origin/feature/captiva-secure-ingest
+
+Then run the local-only tests and staging preview documented below. The GitHub branch exists in draft PR #7; an `invalid reference` on Oracle is only a local fetch-ref issue, not a missing remote branch.
+
 ## Zero-write Oracle check, after pulling this branch
     cd ~/ai-restaurant-manager/services/captiva-connector
     python3 -m unittest discover -s tests -q
