@@ -36,6 +36,7 @@ export async function validSignature(
   secret: string,
   timestamp: string,
   requestId: string,
+  mode: "preview" | "stage",
   raw: string,
   signature: string,
 ): Promise<boolean> {
