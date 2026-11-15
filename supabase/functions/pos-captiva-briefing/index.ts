@@ -157,6 +157,18 @@ serve(async (req) => {
       });
     }
 
+    const { data: approvals, error: approvalsError } = await admin
+      .from("pos_captiva_daily_approvals")
+      .select("approved_at,approved_by,payment_variance,evidence_reference")
+      .eq("source_id", source.id)
+      .eq("restaurant_id", loc.restaurant_id)
+      .eq("location_id", loc.id)
+      .limit(1);
+    if (approvalsError) {
+      return answer({ success: false, error: "Finance approval state unavailable" }, 503);
+    }
+    const approval = approvals?.[0] ?? null;
+
     // Only display events belonging to the selected latest source version.
     // Keep older source versions append-only for forensic audit without
     // displaying a removed refund as though it remains in the latest journal.
@@ -262,7 +274,14 @@ serve(async (req) => {
       location_name: loc.name,
       trading_date: args.date,
       coverage: source.journal_coverage,
-      reconciliation_state: source.reconciliation_state,
+      reconciliation_state: approval ? "finance_approved" : "pending_finance_review",
+      finance_approval: approval ? {
+        approved_at: approval.approved_at,
+        approved_by: approval.approved_by,
+        payment_variance: approval.payment_variance,
+        evidence_reference: approval.evidence_reference,
+        reported_sales_modified: false,
+      } : null,
       official_financials: sourceData,
       payment_diagnostics: paymentDiagnostics,
       exception_counts: counts,
