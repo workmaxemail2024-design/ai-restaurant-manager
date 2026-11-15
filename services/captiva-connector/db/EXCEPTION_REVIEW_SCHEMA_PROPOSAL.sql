@@ -495,7 +495,7 @@ create or replace function public.pos_verify_recovery_claim(
 ) returns jsonb
 language plpgsql security invoker
 set search_path = ''
-as $
+as $verify_recovery$
 declare
   v_claim public.pos_recovery_claims%rowtype;
   v_status text;
@@ -549,7 +549,7 @@ begin
       'revenue_changed',false,'already_processed',false
   );
 end;
-$;
+$verify_recovery$;
 revoke all on function public.pos_verify_recovery_claim(uuid,uuid,uuid,text,boolean,text)
   from public,anon,authenticated;
 grant execute on function public.pos_verify_recovery_claim(uuid,uuid,uuid,text,boolean,text)
