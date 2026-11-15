@@ -96,3 +96,6 @@ verify_jwt = true
 
 [functions.pos-captiva-ingest]
 verify_jwt = false # Custom HMAC required; never accept anonymous payloads.
+
+[functions.pos-captiva-briefing]
+verify_jwt = true
