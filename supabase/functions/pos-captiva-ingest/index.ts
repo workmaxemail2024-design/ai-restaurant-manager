@@ -78,6 +78,10 @@ serve(async (req) => {
     const timestamp = req.headers.get("x-captiva-timestamp") ?? "";
     const requestId = req.headers.get("x-captiva-request-id") ?? "";
     const signature = req.headers.get("x-captiva-signature") ?? "";
+    const mode = req.headers.get("x-captiva-mode");
+    if (mode !== "preview" && mode !== "stage") {
+      return response({ success: false, error: "Invalid signed operation" }, 401);
+    }
     const now = Math.floor(Date.now() / 1000);
     if (!/^[0-9]{10}$/.test(timestamp) || !uuid.test(requestId)
       || Math.abs(now - Number(timestamp)) > 300) {
@@ -89,7 +93,7 @@ serve(async (req) => {
     if (utf8.encode(raw).length > 1024 * 1024) {
       return response({ success: false, error: "Payload too large" }, 413);
     }
-    if (!await validSignature(secret, timestamp, requestId, raw, signature)) {
+    if (!await validSignature(secret, timestamp, requestId, mode, raw, signature)) {
       return response({ success: false, error: "Invalid signature" }, 401);
     }
 
@@ -110,7 +114,7 @@ serve(async (req) => {
 
     // Signed preview never touches the database. The production stage gate
     // defaults to disabled and must be enabled separately after reconciliation.
-    if (req.headers.get("x-captiva-mode") !== "stage") {
+    if (mode === "preview") {
       return response({
         success: true,
         status: "validated_no_database_writes",
