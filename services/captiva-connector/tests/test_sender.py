@@ -32,7 +32,7 @@ class TestSender(unittest.TestCase):
             "snapshot": snapshot,
             "events": [],
             "products": [],
-            "source_fingerprint": sha256(snapshot),
+            "source_fingerprint": sha256({"snapshot": snapshot, "events": [], "products": []}),
             "issues": [],
             "safe_to_stage": True,
             "reconciled": False,
