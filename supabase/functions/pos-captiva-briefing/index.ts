@@ -137,7 +137,7 @@ serve(async (req) => {
 
     const { data: events, error: eventError } = await admin
       .from("pos_exception_events")
-      .select("id,event_type,event_code,original_amount,removed_item_count,source_operator,created_at")
+      .select("id,event_type,event_code,original_amount,removed_item_count,source_operator,source_date_text,source_time_text,created_at")
       .eq("restaurant_id", loc.restaurant_id)
       .eq("location_id", loc.id)
       .eq("trading_date", args.date)
@@ -178,6 +178,8 @@ serve(async (req) => {
         original_amount: e.original_amount,
         removed_item_count: e.removed_item_count,
         source_operator: e.source_operator,
+        source_date_text: e.source_date_text,
+        source_time_text: e.source_time_text,
         review_status: review?.review_status ?? "open",
         resolution: review?.resolution ?? "pending",
         manager_note: review?.last_note ?? null,
