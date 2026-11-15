@@ -137,9 +137,48 @@ begin
 end;
 $$;
 
+-- A corrected journal version deliberately excludes an earlier refund.
+-- The original immutable event remains in audit history, but the latest
+-- source's event links exclude that now-stale event.
+select public.pos_stage_captiva_envelope(
+  '01584','2026-09-02',repeat('f',64),
+  '{"store_id":"01584","trading_date":"2026-09-02",
+    "journal_filename":"jnl_02sep2026_01584_example.xml",
+    "journal_coverage":"complete",
+    "official_gross":"50.00","official_net":"45.00",
+    "official_vat":"5.00","official_orders":1,
+    "journal_standard_payments":"50.00","journal_refund_payments":"0.00",
+    "journal_other_payments":"0.00","journal_payment_records":1}'::jsonb,
+  '[]'::jsonb,'[]'::jsonb,
+  '80000000-0000-4000-8000-000000000004',repeat('1',64)
+);
+do $source_version_test$
+declare
+  v_original_id uuid;
+  v_new_id uuid;
+  v_count integer;
+begin
+  select id into v_original_id from public.pos_captiva_daily_sources
+  where store_id='01584' and trading_date='2026-09-02'
+    and source_fingerprint=repeat('a',64);
+  select id into v_new_id from public.pos_captiva_daily_sources
+  where store_id='01584' and trading_date='2026-09-02'
+    and source_fingerprint=repeat('f',64);
+  select count(*) into v_count from public.pos_captiva_event_sources
+    where source_id=v_original_id;
+  if v_count<>1 then raise exception 'Missing original immutable event-to-source link'; end if;
+  select count(*) into v_count from public.pos_captiva_event_sources
+    where source_id=v_new_id;
+  if v_count<>0 then raise exception 'Corrected journal incorrectly contains historical refund'; end if;
+  select count(*) into v_count from public.pos_exception_events
+    where trading_date='2026-09-02';
+  if v_count<>1 then raise exception 'Old audit event unexpectedly removed'; end if;
+end;
+$source_version_test$;
+
 reset role;
 
-do $$
+do $
 begin
   if has_function_privilege('authenticated',
      'public.pos_stage_captiva_envelope(text,date,text,jsonb,jsonb,jsonb,uuid,text)',
