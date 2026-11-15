@@ -28,19 +28,20 @@ INGEST_CONFIG = CONFIG_FILE.parent / "ingest.json"
 
 
 def configure():
-    print("Create a dedicated webhook key. It is not your Captiva key or Supabase service-role key.")
-    print("The key must also be configured as CAPTIVA_INGEST_HMAC_KEY on the Supabase Edge Function.")
-    secret = secrets.token_urlsafe(64)
+    print("Use a dedicated random HMAC key (48+ characters).")
+    print("Create it in a password manager and save it in Supabase Edge Function Secrets")
+    print("as CAPTIVA_INGEST_HMAC_KEY, then paste the SAME value below.")
+    print("This is not your Captiva password or Supabase service-role key.")
+    secret = getpass.getpass("Paste your Supabase CAPTIVA_INGEST_HMAC_KEY (hidden): ").strip()
+    if len(secret) < 48:
+        raise ValueError("Signing key must contain at least 48 characters")
     write_json_private(INGEST_CONFIG, {
         "endpoint": PROJECT_FUNCTION_URL,
         "hmac_secret": secret,
     })
-    print("Private sender settings saved on Oracle at:", INGEST_CONFIG)
-    print("Configure this new value in the Supabase project's Edge Function Secrets.")
-    print("Copy into the dashboard's secret field, NOT GitHub or ChatGPT:")
-    print("CAPTIVA_INGEST_HMAC_KEY =", secret)
-    print("Set CAPTIVA_INGEST_ENABLED = false until staging is authorised.")
-    print("To replace the secret, rerun this command and change it in both places.")
+    print("Private Oracle sender settings securely saved at:", INGEST_CONFIG)
+    print("Signing key was NOT printed. Keep CAPTIVA_INGEST_ENABLED disabled")
+    print("until a signed preview is validated and staging is approved.")
 
 
 def load_sender_config():
