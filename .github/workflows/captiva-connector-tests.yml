@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - feature/captiva-oracle-readonly
+      - feature/captiva-secure-ingest
     paths:
       - "services/captiva-connector/**"
       - ".github/workflows/captiva-connector-tests.yml"
@@ -29,5 +30,5 @@ jobs:
       - name: Compile and run local-only synthetic tests
         working-directory: services/captiva-connector
         run: |
-          python -m py_compile connector.py
+          python -m py_compile connector.py staging.py sender.py
           python -m unittest discover -s tests -v
