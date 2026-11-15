@@ -26,7 +26,7 @@ Branch: feature/captiva-secure-ingest. Based on manager exception-review draft P
 ## Production setup blockers (GitHub issue #6)
 - Only Maximilian's has a configured active Captiva integration row in the current Supabase project.
 - Confirm the canonical Rudy's location because there is another similarly named location without restaurant ownership.
-- Gourmet Pizza Factory location has null restaurant_id; link only after verifying account ownership.
+- Gourmet Pizza Factory is intentionally not yet onboarded in RestaurantAI. Leave the pending location unbound/inactive; allow activation later only after the user adds it and confirms ownership.
 - Existing location records are set to Europe/Madrid, but the stores are in Ireland; adjust to Europe/Dublin after approval.
 - No store mappings or live location data were modified by this branch.
 
@@ -51,14 +51,21 @@ Do not use sender.py stage until production schema, store mappings, identity tes
 
 ## Automated tests
 - Python 3.9 synthetic tests: metadata/identity, refund/remove/operator extraction, product raw observations and HMAC delivery.
-- Deno typecheck of manager review, HMAC ingest and daily briefing Edge Functions.
+- Deno typecheck of manager review, HMAC ingest, daily briefing, independent recovery verification, and finance day-approval Edge Functions.
 - Ephemeral PostgreSQL 16: RLS/tenant isolation, immutability, no direct browser ingestion, idempotency, confirmed sign-off safeguards and no refund deductions.
+
+## Additional completed draft backend components
+- Original Captiva journal exceptions are linked to a specific immutable source version. A later corrected journal cannot accidentally continue displaying a superseded refund in the current management view.
+- A claimant cannot independently approve their recovered-payment claim. Finance-admin JWT permissions, payment evidence and already-in-POS checks are enforced.
+- Separate append-only day source finance approval, referencing a cashsheet/evidence record, can unlock a replay-safe daily signoff only after all current-version exceptions and outstanding recoveries are resolved.
+- Manager-only daily briefing returns the original official Captiva figures, journal payment diagnostics, finance approval status and explicitly labelled provisional external recovery amount; the existing sales ledger remains unmodified.
+- Frontend contract: services/captiva-connector/LOVABLE_FRONTEND_CONTRACT.md.
 
 ## Not yet delivered
 - Production SQL migrations and store bindings (proposals remain undeployed).
 - Live Oracle native-ID identity verification on real journals.
 - Sales allocation and menu item revenue reconciliation; existing raw sums do not equal official gross.
-- Two-person verified recovery approval and associated separate approved adjustments.
+- Live deployment and accounting-ledger integration of the already prepared two-person recovery verification and separate provisional adjusted figures. The code exists and passes isolated tests; it is not active.
 - Automatic daily scheduling and next-morning notification delivery.
 - Lovable frontend.
 
