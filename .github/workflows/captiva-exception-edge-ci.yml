@@ -29,3 +29,5 @@ jobs:
           deno-version: v2.x
       - name: Type-check reviewed endpoint (no deployment)
         run: deno check supabase/functions/pos-exception-review/index.ts supabase/functions/pos-captiva-ingest/index.ts supabase/functions/pos-captiva-briefing/index.ts
+      - name: Verify Python/Deno evidence fingerprint and HMAC vectors
+        run: deno test --no-check supabase/functions/pos-captiva-ingest/hash_test.ts
