@@ -241,7 +241,9 @@ def build_envelope(credentials, store_id, day):
         "snapshot": snapshot,
         "events": events,
         "products": products,
-        "source_fingerprint": sha256(snapshot),
+        # Includes all sanitized evidence, not just the daily dashboard.
+        # A correction to products or events must produce a distinct source version.
+        "source_fingerprint": sha256({"snapshot": snapshot, "events": events, "products": products}),
         "issues": issues,
         "diagnostic_identity": event_identity,
         "safe_to_stage": coverage in ("complete", "dashboard_only"),
