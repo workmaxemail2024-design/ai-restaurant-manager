@@ -148,6 +148,7 @@ serve(async (req) => {
       return answer({
         success: true, location_id: loc.id, location_name: loc.name,
         trading_date: args.date, coverage: source.journal_coverage,
+        source_id: source.id,
         reconciliation_state: source.reconciliation_state,
         official_financials: sourceData,
         payment_diagnostics: null,
@@ -274,6 +275,7 @@ serve(async (req) => {
       location_name: loc.name,
       trading_date: args.date,
       coverage: source.journal_coverage,
+      source_id: source.id,
       reconciliation_state: approval ? "finance_approved" : "pending_finance_review",
       finance_approval: approval ? {
         approved_at: approval.approved_at,
