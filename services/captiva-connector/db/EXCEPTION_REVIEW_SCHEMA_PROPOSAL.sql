@@ -97,6 +97,10 @@ create table if not exists public.pos_captiva_daily_sources (
     official_net numeric(14,2),
     official_vat numeric(14,2),
     official_orders integer check (official_orders is null or official_orders >= 0),
+    journal_standard_payments numeric(14,2),
+    journal_refund_payments numeric(14,2),
+    journal_other_payments numeric(14,2),
+    journal_payment_records integer check (journal_payment_records is null or journal_payment_records >= 0),
     journal_coverage text not null check (journal_coverage in
         ('complete','dashboard_only','pending','error')),
     reconciliation_state text not null default 'unverified' check (
