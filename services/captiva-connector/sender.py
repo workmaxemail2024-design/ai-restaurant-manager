@@ -58,8 +58,10 @@ def load_sender_config():
     return settings
 
 
-def sign_payload(secret, unix_time, request_id, encoded):
-    prefix = ("%s.%s." % (unix_time, request_id)).encode("ascii")
+def sign_payload(secret, unix_time, request_id, mode, encoded):
+    if mode not in ("preview", "stage"):
+        raise ValueError("Unknown Captiva ingestion operation")
+    prefix = ("%s.%s.%s." % (unix_time, request_id, mode)).encode("ascii")
     return hmac.new(secret.encode("utf-8"), prefix + encoded,
                     hashlib.sha256).hexdigest()
 
