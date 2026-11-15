@@ -207,12 +207,15 @@ begin
       insert into public.pos_exception_events(
         restaurant_id,location_id,store_id,trading_date,
         journal_filename,source_event_key,event_code,event_type,
-        original_amount,removed_item_count,source_operator
+        original_amount,removed_item_count,source_operator,
+        source_date_text,source_time_text
       ) values (
         v_binding.restaurant_id,v_binding.location_id,p_store_id,p_trade_date,
         v_filename,v_source_event_key,v_code,v_type,
         v_amount,(v_event->>'removed_item_count')::integer,
-        left(nullif(v_event->>'source_operator',''),80)
+        left(nullif(v_event->>'source_operator',''),80),
+        left(nullif(v_event->>'source_date_text',''),50),
+        left(nullif(v_event->>'source_time_text',''),50)
       ) on conflict (restaurant_id,location_id,source_event_key) do nothing;
       select * into v_existing_event
         from public.pos_exception_events
