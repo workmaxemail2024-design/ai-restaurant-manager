@@ -74,6 +74,15 @@ begin
   if n <> 2 then raise exception 'Expected complete and dashboard-only snapshots'; end if;
   if (select raw_value_not_revenue from public.pos_captiva_product_observations) <> 75.00 then
     raise exception 'Raw product value changed while importing'; end if;
+  if (select journal_refund_payments from public.pos_captiva_daily_sources
+      where trading_date='2026-09-02' and store_id='01584') <> 10.00 then
+    raise exception 'Refund audit diagnostics missing'; end if;
+  if (select official_gross from public.pos_captiva_daily_sources
+      where trading_date='2026-09-02' and store_id='01584') <> 50.00 then
+    raise exception 'Refund was incorrectly deducted from official gross'; end if;
+  if (select journal_standard_payments from public.pos_captiva_daily_sources
+      where trading_date='2026-09-02' and store_id='02137') is not null then
+    raise exception 'Dashboard-only day should have unknown payment totals'; end if;
 end;
 $$;
 
