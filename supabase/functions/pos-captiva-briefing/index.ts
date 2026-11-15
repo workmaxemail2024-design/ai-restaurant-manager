@@ -98,7 +98,7 @@ serve(async (req) => {
 
     const { data: snapshots, error: snapshotErr } = await admin
       .from("pos_captiva_daily_sources")
-      .select("id,store_id,trading_date,official_gross,official_net,official_vat,official_orders,journal_coverage,reconciliation_state,observed_at")
+      .select("id,store_id,trading_date,official_gross,official_net,official_vat,official_orders,journal_standard_payments,journal_refund_payments,journal_other_payments,journal_payment_records,journal_coverage,reconciliation_state,observed_at")
       .eq("restaurant_id", loc.restaurant_id)
       .eq("location_id", loc.id)
       .eq("trading_date", args.date)
@@ -123,12 +123,20 @@ serve(async (req) => {
       orders: source.official_orders,
       note: "Captiva reported values. Not modified by manager review notes.",
     };
+    const paymentDiagnostics = source.journal_coverage === "complete" ? {
+      journal_standard_payments: source.journal_standard_payments,
+      journal_refund_payments: source.journal_refund_payments,
+      journal_other_payments: source.journal_other_payments,
+      journal_payment_records: source.journal_payment_records,
+      warning: "Journal payment status amounts are audit evidence, not extra revenue deductions.",
+    } : null;
     if (source.journal_coverage !== "complete") {
       return answer({
         success: true, location_id: loc.id, location_name: loc.name,
         trading_date: args.date, coverage: source.journal_coverage,
         reconciliation_state: source.reconciliation_state,
         official_financials: sourceData,
+        payment_diagnostics: null,
         exception_counts: null, exceptions: null,
         pending_recoveries: null, signed_off: false,
         warning: "Journal audit unavailable; zero refunds or voids cannot be assumed.",
@@ -207,6 +215,7 @@ serve(async (req) => {
       coverage: source.journal_coverage,
       reconciliation_state: source.reconciliation_state,
       official_financials: sourceData,
+      payment_diagnostics: paymentDiagnostics,
       exception_counts: counts,
       exceptions: details,
       unresolved_count: details.filter((x) => x.review_status !== "resolved").length,
