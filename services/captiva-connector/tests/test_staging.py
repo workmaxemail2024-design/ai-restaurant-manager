@@ -96,7 +96,7 @@ class TestStaging(unittest.TestCase):
         self.assertTrue(data["safe_to_stage"])
         self.assertEqual(len(data["events"]), 2)
         self.assertEqual(len(data["products"]), 2)
-        self.assertEqual(data["source_fingerprint"], sha256(data["snapshot"]))
+        self.assertEqual(data["source_fingerprint"], sha256({"snapshot": data["snapshot"], "events": data["events"], "products": data["products"]}))
         self.assertFalse(data["reconciled"])
 
 
