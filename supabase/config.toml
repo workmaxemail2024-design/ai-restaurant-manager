@@ -90,3 +90,6 @@ verify_jwt = true
 
 [functions.expense-sheet-extract]
 verify_jwt = true
+
+[functions.pos-exception-review]
+verify_jwt = true

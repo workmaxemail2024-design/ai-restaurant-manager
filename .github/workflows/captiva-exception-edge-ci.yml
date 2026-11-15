@@ -1,0 +1,28 @@
+name: Captiva manager review Edge Function typecheck
+
+on:
+  push:
+    branches:
+      - feature/captiva-exception-reviews
+    paths:
+      - "supabase/functions/pos-exception-review/**"
+      - ".github/workflows/captiva-exception-edge-ci.yml"
+  pull_request:
+    paths:
+      - "supabase/functions/pos-exception-review/**"
+      - ".github/workflows/captiva-exception-edge-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check reviewed endpoint (no deployment)
+        run: deno check supabase/functions/pos-exception-review/index.ts
