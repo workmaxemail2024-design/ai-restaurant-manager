@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.86.0";
+import { validSignature, sha256Hex, stable } from "./hash.ts";
 
 // Oracle -> Supabase staging only. No Captiva customer/card payload accepted.
 // This endpoint requires an HMAC key distinct from the Supabase service role.
@@ -13,51 +14,6 @@ const utf8 = new TextEncoder();
 
 const response = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), { status, headers });
-
-function hexToBytes(s: string): Uint8Array {
-  const out = new Uint8Array(s.length / 2);
-  for (let i = 0; i < out.length; i++) out[i] = parseInt(s.slice(i * 2, i * 2 + 2), 16);
-  return out;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return [...bytes].map((v) => v.toString(16).padStart(2, "0")).join("");
-}
-
-// Matches staging.py's json.dumps(sort_keys=True,separators=(",",":")).
-// Snapshot consists only of JSON strings, booleans, null and integer counts.
-function stable(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stable);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([a], [b]) => a.localeCompare(b, "en"))
-        .map(([k, v]) => [k, stable(v)]),
-    );
-  }
-  return value;
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const d = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
-  return bytesToHex(new Uint8Array(d));
-}
-
-async function validSignature(
-  secret: string,
-  timestamp: string,
-  requestId: string,
-  raw: string,
-  signature: string,
-): Promise<boolean> {
-  if (secret.length < 48 || !hex64.test(signature)) return false;
-  const key = await crypto.subtle.importKey(
-    "raw", utf8.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
-  );
-  const message = utf8.encode(timestamp + "." + requestId + "." + raw);
-  return crypto.subtle.verify("HMAC", key,
-    hexToBytes(signature) as BufferSource, message as BufferSource);
-}
 
 function validBody(v: unknown): v is Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v)) return false;
