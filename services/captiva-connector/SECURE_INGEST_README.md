@@ -1,4 +1,30 @@
-# Captiva → RestaurantAI secure staging — draft, NOT deployed
+## Live Supabase staging status — 15 Nov 2026
+
+The **additive database foundation is deployed** to RestaurantAI project `bjykbjpyodowzstfqoge`:
+- `20261115144233_captiva_exception_review_staging_foundation`
+- `20261115144246_captiva_versioned_hmac_ingest_staging_finance`
+
+All eleven new tables have RLS enabled. Five new Edge Functions have been deployed: `pos-captiva-ingest` (custom HMAC, `verify_jwt=false`), `pos-captiva-briefing`, `pos-exception-review`, `pos-recovery-verify`, `pos-captiva-finance` (JWT required). Their original migration SQL is checked into `supabase/migrations/` on this feature branch.
+
+Rudy's (01584) and Maximilian's (02137) have **inactive** store bindings only; **no staging data has been imported**. Gourmet Pizza Factory (02136) remains unbound because it has not yet been onboarded by the user. No existing sales or XLS imports were altered, no notification jobs have been scheduled, and Lovable has not been changed.
+
+**Activation still requires** private Oracle/Supabase HMAC secret configuration; live signed-preview test; finance accounting reconciliation; review of canonical Rudy's mapping and Europe/Dublin timezone; then explicit activation of each approved store. The ingestion code defaults to disabled, and it refuses to stage for an inactive binding.
+
+### Read-only multi-day diagnostic (Oracle)
+
+After updating `feature/captiva-secure-ingest` on Oracle:
+
+    cd ~/ai-restaurant-manager && git pull --ff-only
+    cd services/captiva-connector
+    python3 -m unittest discover -s tests -q
+    python3 backtest.py --end-date 2026-11-13 --days 7 --stores 01584,02137
+    python3 reconciliation.py --date 2026-09-01 --stores 01584,02137
+
+The commands above do **not** send data to Supabase, reveal API keys or store raw journal XML. Output can be shared for review. Do not paste the output of `sender.py configure` into any chat, because it prints a private HMAC signing key.
+
+---
+
+# Captiva → RestaurantAI secure staging — backend deployed, ingestion disabled
 
 Branch: feature/captiva-secure-ingest. Based on manager exception-review draft PR #5 and Oracle connector draft PR #2.
 
@@ -71,12 +97,12 @@ Do not use sender.py stage until production schema, store mappings, identity tes
 - Manager-only daily briefing returns the original official Captiva figures, journal payment diagnostics, finance approval status and explicitly labelled provisional external recovery amount; the existing sales ledger remains unmodified.
 - Frontend contract: services/captiva-connector/LOVABLE_FRONTEND_CONTRACT.md.
 
-## Not yet delivered
-- Production SQL migrations and store bindings (proposals remain undeployed).
-- Live Oracle native-ID identity verification on real journals.
+## Remaining before activation
+- Live HMAC secret handshake and explicit enabling of the existing *inactive* store bindings.
+- Real first-day journal identity validation **passed** on 2026-09-01 (Rudy's 4 exception events and Maximilian's 2; zero unidentified IDs). Multi-day backtest remains outstanding.
 - Sales allocation and menu item revenue reconciliation; existing raw sums do not equal official gross.
 - Live deployment and accounting-ledger integration of the already prepared two-person recovery verification and separate provisional adjusted figures. The code exists and passes isolated tests; it is not active.
 - Automatic daily scheduling and next-morning notification delivery.
 - Lovable frontend.
 
-Do not represent this integration as a live automatic data sync until the above go-live prerequisites are satisfied.
+Do not represent this integration as a live automatic data sync until the above go-live prerequisites are satisfied. Live tables and endpoints exist, but no imports, notifications or daily jobs are enabled.
