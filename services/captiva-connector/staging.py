@@ -123,6 +123,23 @@ def summarize_products(root):
     ]
 
 
+def summarize_payments(root):
+    totals = {"standard": Decimal("0"), "refund": Decimal("0"), "other": Decimal("0")}
+    count = 0
+    for order in root.findall("./orders/order"):
+        for payment in order.findall("./payments/payment"):
+            status = (payment.get("status") or "").lower().strip()
+            category = status if status in ("standard", "refund") else "other"
+            totals[category] += money(payment.get("value"))
+            count += 1
+    return {
+        "journal_standard_payments": euros(totals["standard"]),
+        "journal_refund_payments": euros(totals["refund"]),
+        "journal_other_payments": euros(totals["other"]),
+        "journal_payment_records": count,
+    }
+
+
 def classify_event(code, desc):
     uc = (code or "").upper().strip()
     text = (desc or "").lower()
@@ -213,6 +230,7 @@ def build_envelope(credentials, store_id, day):
     filename, root, coverage = get_final_journal(credentials, store_id, day)
     issues = []
     events, products = [], []
+    payments = None
     event_identity = {"unidentified_exception_count": 0}
     if coverage == "complete":
         orders = root.findall("./orders/order")
@@ -229,11 +247,12 @@ def build_envelope(credentials, store_id, day):
             issues.append("Native history identifiers missing for some exception events")
         events = extracted["events"]
         products = summarize_products(root)
+        payments = summarize_payments(root)
         if len(products) > 2000 or len(events) > 2000:
             issues.append("Exceeded conservative staging row limits")
         if issues:
             coverage = "requires_review"
-            events, products = [], []
+            events, products, payments = [], [], None
     elif coverage == "multiple_journals_requires_review":
         coverage = "requires_review"
         issues.append("Multiple finalised XML journals for a date")
@@ -244,6 +263,10 @@ def build_envelope(credentials, store_id, day):
         "journal_filename": filename if coverage == "complete" else None,
         "journal_coverage": coverage,
         **fin,
+        "journal_standard_payments": payments["journal_standard_payments"] if payments else None,
+        "journal_refund_payments": payments["journal_refund_payments"] if payments else None,
+        "journal_other_payments": payments["journal_other_payments"] if payments else None,
+        "journal_payment_records": payments["journal_payment_records"] if payments else None,
     }
     return {
         "version": 1,
@@ -267,6 +290,11 @@ def export_summary(envelope):
         "trading_date": doc["trading_date"],
         "official_gross": doc["official_gross"],
         "official_orders": doc["official_orders"],
+        "journal_standard_payments": doc["journal_standard_payments"],
+        "journal_refund_payments": doc["journal_refund_payments"],
+        "standard_payments_minus_official_gross_DIAGNOSTIC":
+            euros(money(doc["journal_standard_payments"]) - money(doc["official_gross"]))
+            if doc["journal_standard_payments"] is not None else None,
         "journal_coverage": doc["journal_coverage"],
         "exceptions": len(envelope["events"]) if doc["journal_coverage"] == "complete" else None,
         "products": len(envelope["products"]) if doc["journal_coverage"] == "complete" else None,
