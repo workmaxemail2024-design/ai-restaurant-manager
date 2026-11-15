@@ -26,6 +26,10 @@ class TestSender(unittest.TestCase):
             "official_net": "2145.77",
             "official_vat": "252.68",
             "official_orders": 28,
+            "journal_standard_payments": None,
+            "journal_refund_payments": None,
+            "journal_other_payments": None,
+            "journal_payment_records": None,
         }
         return {
             "version": 1,
