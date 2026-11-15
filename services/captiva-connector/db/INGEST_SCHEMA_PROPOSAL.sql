@@ -95,6 +95,10 @@ declare
     v_orders integer;
     v_coverage text;
     v_filename text;
+    v_standard_payments numeric;
+    v_refund_payments numeric;
+    v_other_payments numeric;
+    v_payment_records integer;
     v_event jsonb;
     v_product jsonb;
     v_source_event_key text;
@@ -160,6 +164,22 @@ begin
       then raise exception 'Missing journal cannot claim products or exception data'; end if;
     end if;
 
+    v_standard_payments := (p_snapshot->>'journal_standard_payments')::numeric;
+    v_refund_payments := (p_snapshot->>'journal_refund_payments')::numeric;
+    v_other_payments := (p_snapshot->>'journal_other_payments')::numeric;
+    v_payment_records := (p_snapshot->>'journal_payment_records')::integer;
+    if v_coverage='complete' and (
+      v_standard_payments is null or v_refund_payments is null
+      or v_other_payments is null or v_payment_records is null
+      or v_payment_records < 0 or v_payment_records > 100000
+      or greatest(abs(v_standard_payments),abs(v_refund_payments),
+                  abs(v_other_payments)) > 10000000
+    ) then raise exception 'Complete journal must include payment diagnostics'; end if;
+    if v_coverage='dashboard_only' and (
+      v_standard_payments is not null or v_refund_payments is not null
+      or v_other_payments is not null or v_payment_records is not null
+    ) then raise exception 'Missing journal must not fabricate payment totals'; end if;
+
     v_gross := (p_snapshot->>'official_gross')::numeric;
     v_net := (p_snapshot->>'official_net')::numeric;
     v_vat := (p_snapshot->>'official_vat')::numeric;
@@ -172,10 +192,13 @@ begin
     insert into public.pos_captiva_daily_sources (
       restaurant_id,location_id,store_id,trading_date,
       official_gross,official_net,official_vat,official_orders,
+      journal_standard_payments,journal_refund_payments,
+      journal_other_payments,journal_payment_records,
       journal_coverage,reconciliation_state,source_fingerprint
     ) values (
       v_binding.restaurant_id,v_binding.location_id,p_store_id,p_trade_date,
       v_gross,v_net,v_vat,v_orders,
+      v_standard_payments,v_refund_payments,v_other_payments,v_payment_records,
       v_coverage,'unverified',p_source_fingerprint
     )
     on conflict (restaurant_id,location_id,store_id,trading_date,source_fingerprint)
