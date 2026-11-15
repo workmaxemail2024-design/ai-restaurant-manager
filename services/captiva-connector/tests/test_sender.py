@@ -46,9 +46,9 @@ class TestSender(unittest.TestCase):
         import hashlib
         import hmac
         data = b'{"snapshot":{}}'
-        signature = sign_payload("a" * 64, 1700000000, "request-01", data)
+        signature = sign_payload("a" * 64, 1700000000, "request-01", "preview", data)
         expected = hmac.new(
-            ("a" * 64).encode(), b"1700000000.request-01." + data,
+            ("a" * 64).encode(), b"1700000000.request-01.preview." + data,
             hashlib.sha256
         ).hexdigest()
         self.assertEqual(signature, expected)
@@ -75,10 +75,25 @@ class TestSender(unittest.TestCase):
         self.assertEqual(req.get_header("X-captiva-signature"),
                          sign_payload(config["hmac_secret"], 1700000000,
                                       "550e8400-e29b-41d4-a716-446655440000",
-                                      req.data))
+                                      "preview", req.data))
         self.assertEqual(json.loads(req.data), sample)
         self.assertNotIn(b"api_pass", req.data)
         self.assertNotIn(b"cardholder", req.data)
+
+    def test_preview_signature_is_not_valid_for_stage(self):
+        import hashlib
+        import hmac
+        timestamp = 1700000000
+        req_id = "550e8400-e29b-41d4-a716-446655440000"
+        body = b'{"example":true}'
+        key = "a" * 64
+        preview = sign_payload(key, timestamp, req_id, "preview", body)
+        stage = sign_payload(key, timestamp, req_id, "stage", body)
+        self.assertEqual(preview, "ca91c00f9ed046912127d480371d5b7c7d088b42c0ff2bee1d95d542fc239ff4")
+        self.assertEqual(stage, "8a1604e0a44252ede5d345d4e615bc2bd8daf171fff15bfd82ef4618f448c7b7")
+        self.assertNotEqual(stage, preview)
+        with self.assertRaises(ValueError):
+            sign_payload(key, timestamp, req_id, "invalid", body)
 
     def test_reject_uncertain_event_identity(self):
         data = self.sample()
