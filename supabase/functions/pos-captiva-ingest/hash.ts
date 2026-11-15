@@ -44,7 +44,7 @@ export async function validSignature(
   const key = await crypto.subtle.importKey(
     "raw", utf8.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"],
   );
-  const message = utf8.encode(timestamp + "." + requestId + "." + raw);
+  const message = utf8.encode(timestamp + "." + requestId + "." + mode + "." + raw);
   return crypto.subtle.verify(
     "HMAC", key, hexToBytes(signature) as BufferSource, message as BufferSource,
   );
