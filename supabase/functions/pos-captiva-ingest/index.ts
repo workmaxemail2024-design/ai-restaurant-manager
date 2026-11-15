@@ -76,12 +76,22 @@ function validBody(v: unknown): v is Record<string, unknown> {
     || !["complete", "dashboard_only"].includes(String(s.journal_coverage))) {
     return false;
   }
+  const rawPaymentKeys = [
+    "journal_standard_payments", "journal_refund_payments",
+    "journal_other_payments",
+  ];
   if (s.journal_coverage === "dashboard_only") {
     if (obj.events.length !== 0 || obj.products.length !== 0
-      || s.journal_filename !== null) return false;
-  } else if (typeof s.journal_filename !== "string"
-             || !/^[A-Za-z0-9_.-]{8,255}[.]xml$/.test(s.journal_filename)) {
-    return false;
+      || s.journal_filename !== null
+      || rawPaymentKeys.some((k) => s[k] !== null)
+      || s.journal_payment_records !== null) return false;
+  } else {
+    if (typeof s.journal_filename !== "string"
+      || !/^[A-Za-z0-9_.-]{8,255}[.]xml$/.test(s.journal_filename)
+      || rawPaymentKeys.some((k) => typeof s[k] !== "string"
+        || !/^\d{1,12}[.]\d{2}$/.test(s[k] as string))
+      || !Number.isInteger(s.journal_payment_records)
+      || (s.journal_payment_records as number) < 0) return false;
   }
   const money = ["official_gross", "official_net", "official_vat"];
   if (money.some((k) => typeof s[k] !== "string"
