@@ -20,7 +20,7 @@ After updating `feature/captiva-secure-ingest` on Oracle:
     python3 backtest.py --end-date 2026-11-13 --days 7 --stores 01584,02137
     python3 reconciliation.py --date 2026-09-01 --stores 01584,02137
 
-The commands above do **not** send data to Supabase, reveal API keys or store raw journal XML. Output can be shared for review. Do not paste the output of `sender.py configure` into any chat, because it prints a private HMAC signing key.
+The commands above do **not** send data to Supabase, reveal API keys or store raw journal XML. Output can be shared for review. `sender.py configure` now requests the already-configured HMAC key through a hidden prompt and never prints it. Do not paste the signing key into any chat.
 
 ---
 
@@ -59,7 +59,7 @@ Branch: feature/captiva-secure-ingest. Based on manager exception-review draft P
 ## Secrets and activation
 - SUPABASE Edge Function: configure CAPTIVA_INGEST_HMAC_KEY (random 48+ character secret); CAPTIVA_INGEST_ENABLED defaults to false and must stay false until deployment approval.
 - Oracle: existing Captiva credentials stay in ~/.config/restaurantai-captiva/credentials.json, mode 0600.
-- Oracle sender.py configure generates a separate signing secret and stores private config in ~/.config/restaurantai-captiva/ingest.json. Copy the secret to Supabase Edge Function Secrets; NEVER paste it into chat or commit it to GitHub.
+- Create a dedicated random 48+ character HMAC key in a password manager, save it as CAPTIVA_INGEST_HMAC_KEY in Supabase Edge Function Secrets, and paste the same key at the hidden `python3 sender.py configure` prompt on Oracle. It stores private config in ~/.config/restaurantai-captiva/ingest.json and does not print the key.
 - The ingest Edge Function has verify_jwt=false solely because a separate HMAC signature is required. Never disable the HMAC verification.
 
 ## Updating the Oracle shallow, single-branch clone
