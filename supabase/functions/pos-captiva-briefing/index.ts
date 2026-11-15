@@ -208,7 +208,8 @@ serve(async (req) => {
     const reviewById = new Map(reviewStates.map((x) => [x.event_id, x]));
     const counts: Record<string, number> = {};
     const details = (events ?? []).map((e) => {
-      counts[e.event_type] = (counts[e.event_type] ?? 0) + 1;
+      const eventType = String(e.event_type ?? "unclassified");
+      counts[eventType] = (counts[eventType] ?? 0) + 1;
       const review = reviewById.get(e.id);
       return {
         event_id: e.id,
