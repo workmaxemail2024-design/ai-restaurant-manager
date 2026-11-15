@@ -48,9 +48,20 @@ Deno.test("HMAC signature matches Python and rejects tampering", async () => {
   const timestamp = "1700000000";
   const requestId = "550e8400-e29b-41d4-a716-446655440000";
   const payload = '{"example":true}';
-  const signature = "d687ac2899c8f0f653b9077959dbbcb7ede92ddbc69ae32c2070958da50da7aa";
-  assertEqual(await validSignature(key, timestamp, requestId, payload, signature), true);
-  assertEqual(await validSignature(key, timestamp, requestId, payload + " ", signature), false);
-  assertEqual(await validSignature(key, timestamp, requestId, payload, "0".repeat(64)), false);
-  assertEqual(await validSignature("too short", timestamp, requestId, payload, signature), false);
+  const signature = "ca91c00f9ed046912127d480371d5b7c7d088b42c0ff2bee1d95d542fc239ff4";
+  const stageSignature = "8a1604e0a44252ede5d345d4e615bc2bd8daf171fff15bfd82ef4618f448c7b7";
+  assertEqual(await validSignature(key, timestamp, requestId, "preview", payload, signature), true);
+  assertEqual(await validSignature(key, timestamp, requestId, "preview", payload + " ", signature), false);
+  assertEqual(await validSignature(key, timestamp, requestId, "preview", payload, "0".repeat(64)), false);
+  assertEqual(await validSignature("too short", timestamp, requestId, "preview", payload, signature), false);
+  assertEqual(await validSignature(key, timestamp, requestId, "stage", payload, signature), false);
+  assertEqual(await validSignature(key, timestamp, requestId, "stage", payload, stageSignature), true);
+});
+
+Deno.test("Canonical key ordering follows Python Unicode ordinal sort, not locale collation", async () => {
+  const tricky = {"a_1":2, "aa":4, "a1":3, "a-1":1};
+  const encoded = JSON.stringify(stable(tricky));
+  assertEqual(encoded, '{"a-1":1,"a1":3,"a_1":2,"aa":4}');
+  const digest = await sha256Hex(new TextEncoder().encode(encoded));
+  assertEqual(digest, "3b2f6008a45873257a5bbd5f64bc339146bedbaa0f50c7f34f0cef46cf8fc55a");
 });
