@@ -4,8 +4,10 @@ on:
   push:
     branches:
       - feature/captiva-exception-reviews
+      - feature/captiva-secure-ingest
     paths:
       - "supabase/functions/pos-exception-review/**"
+      - "supabase/functions/pos-captiva-ingest/**"
       - ".github/workflows/captiva-exception-edge-ci.yml"
   pull_request:
     paths:
@@ -25,4 +27,4 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check reviewed endpoint (no deployment)
-        run: deno check supabase/functions/pos-exception-review/index.ts
+        run: deno check supabase/functions/pos-exception-review/index.ts supabase/functions/pos-captiva-ingest/index.ts
