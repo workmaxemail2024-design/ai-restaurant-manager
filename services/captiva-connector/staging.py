@@ -181,6 +181,13 @@ def summarize_events(root, filename):
             removed = re.search(r"Removing\s+(\d+)\s+items",
                                 event.get("desc") or "", re.I)
             op_code = (event.get("vposuser") or "").strip()[:80]
+            if not op_code:
+                # Some service-charge deletions identify the POS operator in
+                # the event description rather than the vposuser attribute.
+                user_match = re.search(r"by user:\s*([^\r\n]{1,80})",
+                                       event.get("desc") or "", re.I)
+                if user_match:
+                    op_code = user_match.group(1).strip()[:80]
             events.append({
                 "source_event_key": fingerprint,
                 "event_code": code[:80],
@@ -188,6 +195,8 @@ def summarize_events(root, filename):
                 "original_amount": amount,
                 "removed_item_count": int(removed.group(1)) if removed else None,
                 "source_operator": op_code if op_code else None,
+                "source_date_text": (event.get("date") or "").strip()[:50] or None,
+                "source_time_text": (event.get("time") or "").strip()[:50] or None,
             })
     return {
         "events": events,
