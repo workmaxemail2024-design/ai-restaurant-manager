@@ -85,6 +85,210 @@ create policy pos_captiva_event_source_view
   on public.pos_captiva_event_sources for select to authenticated
   using (restaurantai_private.can_review_pos(restaurant_id,location_id,'view'));
 
+-- Finance approval is append-only and separate from Captiva's immutable
+-- source facts. An approval never changes sales, refunds, or XLS entries.
+create table if not exists public.pos_captiva_daily_approvals (
+    id uuid primary key default gen_random_uuid(),
+    source_id uuid not null unique,
+    restaurant_id uuid not null references public.restaurants(id),
+    location_id uuid not null references public.locations(id),
+    trading_date date not null,
+    request_id uuid not null unique,
+    approved_by uuid not null,
+    payment_variance numeric(14,2) not null,
+    evidence_reference text not null check (length(evidence_reference) between 5 and 160),
+    approval_note text not null check (length(approval_note) between 15 and 4000),
+    approved_at timestamptz not null default now(),
+    foreign key (source_id,restaurant_id,location_id,trading_date)
+      references public.pos_captiva_daily_sources(id,restaurant_id,location_id,trading_date)
+);
+create trigger pos_captiva_approval_tenant
+  before insert or update on public.pos_captiva_daily_approvals
+  for each row execute function restaurantai_private.check_pos_location();
+create trigger pos_captiva_approval_immutable
+  before update or delete on public.pos_captiva_daily_approvals
+  for each row execute function restaurantai_private.deny_source_edit();
+alter table public.pos_captiva_daily_approvals enable row level security;
+revoke all on public.pos_captiva_daily_approvals from public,anon,authenticated;
+grant select on public.pos_captiva_daily_approvals to authenticated;
+grant all on public.pos_captiva_daily_approvals to service_role;
+create policy pos_captiva_approval_manager_read
+  on public.pos_captiva_daily_approvals for select to authenticated
+  using (restaurantai_private.can_review_pos(restaurant_id,location_id,'edit'));
+
+create or replace function public.pos_approve_captiva_daily_source(
+    p_source_id uuid,
+    p_approver_id uuid,
+    p_request_id uuid,
+    p_note text,
+    p_evidence_reference text
+) returns uuid
+language plpgsql security invoker
+set search_path = ''
+as $source_approval$
+declare
+  v_source public.pos_captiva_daily_sources%rowtype;
+  v_existing public.pos_captiva_daily_approvals%rowtype;
+  v_id uuid;
+begin
+  if p_source_id is null or p_approver_id is null or p_request_id is null
+    or length(trim(coalesce(p_note,''))) not between 15 and 4000
+    or length(trim(coalesce(p_evidence_reference,''))) not between 5 and 160
+  then raise exception 'Invalid day reconciliation approval'; end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_source_id::text,0)
+  );
+  select * into v_existing from public.pos_captiva_daily_approvals
+    where source_id=p_source_id or request_id=p_request_id;
+  if found then
+    if v_existing.source_id=p_source_id
+       and v_existing.request_id=p_request_id
+       and v_existing.approved_by=p_approver_id
+    then return v_existing.id; end if;
+    raise exception 'Daily reconciliation already approved with another request';
+  end if;
+  select * into v_source from public.pos_captiva_daily_sources
+    where id=p_source_id;
+  if not found then raise exception 'Captiva source not found'; end if;
+  if v_source.journal_coverage <> 'complete'
+    or v_source.official_gross is null or v_source.official_net is null
+    or v_source.official_vat is null or v_source.journal_standard_payments is null
+    or abs(v_source.official_gross-v_source.official_net-v_source.official_vat)>0.02
+  then raise exception 'Incomplete daily financial source cannot be approved'; end if;
+  if exists (
+    select 1 from public.pos_captiva_daily_sources newer
+    where newer.restaurant_id=v_source.restaurant_id
+      and newer.location_id=v_source.location_id
+      and newer.trading_date=v_source.trading_date
+      and (newer.observed_at,newer.id)>(v_source.observed_at,v_source.id)
+  ) then raise exception 'Superseded daily source cannot be approved'; end if;
+
+  insert into public.pos_captiva_daily_approvals (
+    source_id,restaurant_id,location_id,trading_date,request_id,
+    approved_by,payment_variance,evidence_reference,approval_note
+  ) values (
+    v_source.id,v_source.restaurant_id,v_source.location_id,v_source.trading_date,
+    p_request_id,p_approver_id,
+    v_source.journal_standard_payments-v_source.official_gross,
+    trim(p_evidence_reference),trim(p_note)
+  ) returning id into v_id;
+  return v_id;
+end;
+$source_approval$;
+revoke all on function public.pos_approve_captiva_daily_source(uuid,uuid,uuid,text,text)
+  from public,anon,authenticated;
+grant execute on function public.pos_approve_captiva_daily_source(uuid,uuid,uuid,text,text)
+  to service_role;
+
+-- Override the draft sign-off guard: the source itself stays immutable, and
+-- independently verified cashsheet approval is a separate append-only row.
+-- Only current-version linked events block that day's sign-off.
+create or replace function restaurantai_private.guard_pos_daily_signoff()
+returns trigger
+language plpgsql security invoker
+set search_path = ''
+as $latest_day_guard$
+declare
+  v_coverage text;
+  v_unresolved bigint;
+  v_pending bigint;
+begin
+  select d.journal_coverage into v_coverage
+  from public.pos_captiva_daily_sources d
+  where d.id=new.daily_source_id
+    and d.restaurant_id=new.restaurant_id
+    and d.location_id=new.location_id
+    and d.trading_date=new.trading_date;
+  if not found or v_coverage <> 'complete' then
+    raise exception 'Day not eligible for sign-off: incomplete Captiva journal';
+  end if;
+  if not exists (
+    select 1 from public.pos_captiva_daily_approvals a
+    where a.source_id=new.daily_source_id
+      and a.restaurant_id=new.restaurant_id
+      and a.location_id=new.location_id
+      and a.trading_date=new.trading_date
+  ) then raise exception 'Day not eligible for sign-off: independent finance approval required';
+  end if;
+  if exists (
+    select 1 from public.pos_captiva_daily_sources current_day
+    join public.pos_captiva_daily_sources older on older.id=new.daily_source_id
+    where current_day.restaurant_id=new.restaurant_id
+      and current_day.location_id=new.location_id
+      and current_day.trading_date=new.trading_date
+      and (current_day.observed_at,current_day.id)>(older.observed_at,older.id)
+  ) then raise exception 'Day not eligible for sign-off: superseded journal'; end if;
+
+  select count(*) into v_unresolved
+  from public.pos_captiva_event_sources link
+  left join public.pos_exception_reviews r on r.event_id=link.event_id
+  where link.source_id=new.daily_source_id
+    and coalesce(r.review_status,'open')<>'resolved';
+  if v_unresolved<>0 then
+    raise exception 'Day not eligible for sign-off: unresolved exceptions';
+  end if;
+  select count(*) into v_pending
+  from public.pos_recovery_claims c
+  join public.pos_captiva_event_sources link on link.event_id=c.event_id
+  where link.source_id=new.daily_source_id
+    and c.status='pending_verification';
+  if v_pending<>0 then
+    raise exception 'Day not eligible for sign-off: unverified recovered payments';
+  end if;
+  return new;
+end;
+$latest_day_guard$;
+
+create or replace function public.pos_signoff_captiva_day(
+    p_source_id uuid,
+    p_signer_id uuid,
+    p_request_id uuid,
+    p_note text
+) returns uuid
+language plpgsql security invoker
+set search_path = ''
+as $captiva_signoff$
+declare
+  v_source public.pos_captiva_daily_sources%rowtype;
+  v_existing public.pos_exception_daily_signoffs%rowtype;
+  v_id uuid;
+begin
+  if p_source_id is null or p_signer_id is null or p_request_id is null
+    or length(trim(coalesce(p_note,''))) not between 10 and 4000
+  then raise exception 'Invalid daily sign-off'; end if;
+  select * into v_source from public.pos_captiva_daily_sources where id=p_source_id;
+  if not found then raise exception 'Daily source not found'; end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      v_source.location_id::text||v_source.trading_date::text,0)
+  );
+  select * into v_existing from public.pos_exception_daily_signoffs
+  where restaurant_id=v_source.restaurant_id
+    and location_id=v_source.location_id
+    and trading_date=v_source.trading_date;
+  if found then
+    if v_existing.daily_source_id=p_source_id
+      and v_existing.request_id=p_request_id
+      and v_existing.signed_by=p_signer_id
+    then return v_existing.id; end if;
+    raise exception 'Day is already signed off'; end if;
+
+  insert into public.pos_exception_daily_signoffs (
+    restaurant_id,location_id,trading_date,daily_source_id,
+    signed_by,request_id,manager_note
+  ) values (
+    v_source.restaurant_id,v_source.location_id,v_source.trading_date,
+    v_source.id,p_signer_id,p_request_id,trim(p_note)
+  ) returning id into v_id;
+  return v_id;
+end;
+$captiva_signoff$;
+revoke all on function public.pos_signoff_captiva_day(uuid,uuid,uuid,text)
+  from public,anon,authenticated;
+grant execute on function public.pos_signoff_captiva_day(uuid,uuid,uuid,text)
+  to service_role;
+
 -- Idempotent submission log (contains hashes but never credentials or XML).
 create table if not exists public.pos_captiva_ingest_receipts (
     request_id uuid primary key,
