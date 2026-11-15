@@ -246,7 +246,7 @@ $$;
 -- No browser writes. Browser reads require matching membership/role AND
 -- the user's specific authorised restaurant/location. Service role is used
 -- only by the authenticated server endpoint after checking the real user.
-do $
+do $$
 declare
   t text;
   required_permission text;
@@ -268,7 +268,7 @@ begin
       'pos_manager_read',t,required_permission);
   end loop;
 end;
-$;
+$$;
 
 -- Atomic authenticated-manager review mutation, callable ONLY from the
 -- server-side edge function using the service-role token. SECURITY INVOKER:
