@@ -126,6 +126,8 @@ create table if not exists public.pos_exception_events (
         'possible_cancellation','discount','unclassified')),
     event_occurred_at timestamptz,
     source_operator text,
+    source_date_text text,
+    source_time_text text,
     original_amount numeric(14,2),
     removed_item_count integer check (removed_item_count is null or removed_item_count >= 0),
     created_at timestamptz not null default now(),
