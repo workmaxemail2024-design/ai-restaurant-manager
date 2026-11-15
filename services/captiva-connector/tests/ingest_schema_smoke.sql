@@ -176,6 +176,89 @@ begin
 end;
 $source_version_test$;
 
+-- Daily finance approval is separate from immutable source facts.
+-- No sign-off is allowed until current source has an approval record.
+do $approval_smoke$
+declare
+  v_old_id uuid;
+  v_new_id uuid;
+  v_gourmet_source_id uuid;
+  v_first uuid;
+  v_repeat uuid;
+  v_signoff uuid;
+begin
+  select id into v_old_id from public.pos_captiva_daily_sources
+    where store_id='01584' and trading_date='2026-09-02'
+      and source_fingerprint=repeat('a',64);
+  select id into v_new_id from public.pos_captiva_daily_sources
+    where store_id='01584' and trading_date='2026-09-02'
+      and source_fingerprint=repeat('f',64);
+  select id into v_gourmet_source_id from public.pos_captiva_daily_sources
+    where store_id='02137' and trading_date='2026-09-02';
+
+  begin
+    perform public.pos_approve_captiva_daily_source(
+      v_old_id,'40000000-0000-4000-8000-000000000002',
+      '80000000-0000-4000-8000-000000000005',
+      'Signed sheet reconciles the older version','SHEET-OLDER');
+    raise exception 'Expected stale journal approval to fail';
+  exception when others then
+    if sqlerrm not like '%Superseded daily source%' then raise; end if;
+  end;
+  begin
+    perform public.pos_approve_captiva_daily_source(
+      v_gourmet_source_id,'40000000-0000-4000-8000-000000000002',
+      '80000000-0000-4000-8000-000000000006',
+      'Dashboard only records are not verified','SHEET-MISSING');
+    raise exception 'Expected dashboard-only approval to fail';
+  exception when others then
+    if sqlerrm not like '%Incomplete daily financial source%' then raise; end if;
+  end;
+
+  begin
+    perform public.pos_signoff_captiva_day(
+      v_new_id,'40000000-0000-4000-8000-000000000002',
+      '80000000-0000-4000-8000-000000000007',
+      'Closing shift after review');
+    raise exception 'Expected sign-off before finance approval to fail';
+  exception when others then
+    if sqlerrm not like '%independent finance approval required%' then raise; end if;
+  end;
+
+  v_first := public.pos_approve_captiva_daily_source(
+    v_new_id,'40000000-0000-4000-8000-000000000002',
+    '80000000-0000-4000-8000-000000000008',
+    'Crosschecked standard payments, gross, net, VAT and prior refund amendment',
+    'TILL-SHEET-2026-09-02');
+  v_repeat := public.pos_approve_captiva_daily_source(
+    v_new_id,'40000000-0000-4000-8000-000000000002',
+    '80000000-0000-4000-8000-000000000008',
+    'Crosschecked standard payments, gross, net, VAT and prior refund amendment',
+    'TILL-SHEET-2026-09-02');
+  if v_first is null or v_first<>v_repeat then
+    raise exception 'Finance approval request was not idempotent';
+  end if;
+  if (select reconciliation_state from public.pos_captiva_daily_sources
+      where id=v_new_id)<>'unverified' then
+    raise exception 'Original immutable source was modified by finance approval';
+  end if;
+  v_signoff := public.pos_signoff_captiva_day(
+    v_new_id,'40000000-0000-4000-8000-000000000002',
+    '80000000-0000-4000-8000-000000000009',
+    'Current journal version reviewed and closed');
+  if v_signoff is null or v_signoff<>public.pos_signoff_captiva_day(
+    v_new_id,'40000000-0000-4000-8000-000000000002',
+    '80000000-0000-4000-8000-000000000009',
+    'Current journal version reviewed and closed') then
+    raise exception 'Day close-out request was not idempotent';
+  end if;
+  if (select count(*) from public.pos_exception_events
+    where trading_date='2026-09-02')<>1 then
+    raise exception 'Original source event lost during corrected-journal signoff';
+  end if;
+end;
+$approval_smoke$;
+
 reset role;
 
 do $permissions_test$
@@ -190,6 +273,12 @@ begin
      'execute') then
     raise exception 'Anonymous users can run trusted ingestion RPC';
   end if;
+  if has_function_privilege('authenticated',
+    'public.pos_approve_captiva_daily_source(uuid,uuid,uuid,text,text)',
+    'execute') then raise exception 'End user can directly approve financial day'; end if;
+  if has_function_privilege('authenticated',
+    'public.pos_signoff_captiva_day(uuid,uuid,uuid,text)',
+    'execute') then raise exception 'End user can directly sign off financial day'; end if;
 end;
 $permissions_test$;
 
