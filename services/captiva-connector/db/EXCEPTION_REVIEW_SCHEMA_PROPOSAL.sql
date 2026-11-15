@@ -170,7 +170,7 @@ create table if not exists public.pos_exception_review_audit (
     location_id uuid not null references public.locations(id),
     request_id uuid not null unique,
     actor_id uuid not null,
-    action text not null check (action in ('review','reopen','recovery_claim')),
+    action text not null check (action in ('review','reopen','recovery_claim','verify_recovery','reject_recovery')),
     review_status text,
     resolution text,
     note text,
@@ -201,14 +201,21 @@ create table if not exists public.pos_recovery_claims (
     verified_by uuid,
     claimed_at timestamptz not null default now(),
     verified_at timestamptz,
+    verification_request_id uuid unique,
+    verification_note text,
     unique (event_id,payment_reference),
+    unique (restaurant_id,location_id,payment_reference),
     constraint pos_recovery_event_tenant_fk
        foreign key (event_id,restaurant_id,location_id)
        references public.pos_exception_events(id,restaurant_id,location_id)
        on delete restrict,
     constraint pos_recovery_verification_guard
-       check (status <> 'verified' or
-         (verified_at is not null and verified_by is not null and already_in_pos is not null))
+       check (status = 'pending_verification' or
+         (verified_at is not null and verified_by is not null
+          and verification_request_id is not null
+          and (status <> 'verified' or already_in_pos is not null))),
+    constraint pos_recovery_separate_approver
+       check (verified_by is null or verified_by <> claimed_by)
 );
 create index if not exists pos_recovery_claims_event_idx
   on public.pos_recovery_claims(event_id,claimed_at);
@@ -462,6 +469,79 @@ $$;
 revoke all on function public.pos_claim_recovered_payment(uuid,uuid,uuid,numeric,text,text)
   from public,anon,authenticated;
 grant execute on function public.pos_claim_recovered_payment(uuid,uuid,uuid,numeric,text,text)
+  to service_role;
+
+-- Finance verification approves the payment's existence and whether Captiva
+-- already counted it. The result NEVER updates official POS sales or the XLS ledger.
+-- A different user must review and approve a recovered payment.
+create or replace function public.pos_verify_recovery_claim(
+    p_claim_id uuid,
+    p_reviewer_id uuid,
+    p_request_id uuid,
+    p_decision text,
+    p_already_in_pos boolean,
+    p_note text
+) returns jsonb
+language plpgsql security invoker
+set search_path = ''
+as $
+declare
+  v_claim public.pos_recovery_claims%rowtype;
+  v_status text;
+begin
+  if p_claim_id is null or p_reviewer_id is null or p_request_id is null
+     or p_decision not in ('verified','rejected')
+     or length(trim(coalesce(p_note,''))) not between 10 and 4000
+     or (p_decision='verified' and p_already_in_pos is null)
+  then
+    raise exception 'Invalid recovery approval';
+  end if;
+  -- Lock claim so concurrent reviewers cannot both verify it.
+  select * into v_claim from public.pos_recovery_claims
+   where id=p_claim_id for update;
+  if not found then raise exception 'Recovery claim missing'; end if;
+  if p_reviewer_id=v_claim.claimed_by then
+     raise exception 'Recovered payments require an independent reviewer';
+  end if;
+  if v_claim.status <> 'pending_verification' then
+     if v_claim.verification_request_id=p_request_id
+        and v_claim.verified_by=p_reviewer_id
+        and v_claim.status=p_decision
+     then return pg_catalog.jsonb_build_object(
+        'status',v_claim.status,'recovery_claim_id',v_claim.id,
+        'already_in_pos',v_claim.already_in_pos,
+        'revenue_changed',false,'already_processed',true);
+     end if;
+     raise exception 'Recovery already decided and cannot be overwritten';
+  end if;
+
+  update public.pos_recovery_claims set
+     status=p_decision,
+     already_in_pos=case when p_decision='verified' then p_already_in_pos else null end,
+     verified_by=p_reviewer_id,
+     verified_at=now(),
+     verification_request_id=p_request_id,
+     verification_note=trim(p_note)
+   where id=p_claim_id;
+  insert into public.pos_exception_review_audit (
+     event_id,restaurant_id,location_id,
+     request_id,actor_id,action,note
+   ) values (
+     v_claim.event_id,v_claim.restaurant_id,v_claim.location_id,
+     p_request_id,p_reviewer_id,
+     case when p_decision='verified' then 'verify_recovery' else 'reject_recovery' end,
+     trim(p_note)
+   );
+  return pg_catalog.jsonb_build_object(
+      'status',p_decision,'recovery_claim_id',v_claim.id,
+      'already_in_pos',case when p_decision='verified' then p_already_in_pos else null end,
+      'revenue_changed',false,'already_processed',false
+  );
+end;
+$;
+revoke all on function public.pos_verify_recovery_claim(uuid,uuid,uuid,text,boolean,text)
+  from public,anon,authenticated;
+grant execute on function public.pos_verify_recovery_claim(uuid,uuid,uuid,text,boolean,text)
   to service_role;
 
 -- Important: the above is a review-only design, NOT permission to import.
