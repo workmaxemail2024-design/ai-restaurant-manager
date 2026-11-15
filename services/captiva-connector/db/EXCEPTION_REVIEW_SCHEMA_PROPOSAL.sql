@@ -230,6 +230,7 @@ create table if not exists public.pos_exception_daily_signoffs (
     daily_source_id uuid not null,
     signed_by uuid not null,
     signed_at timestamptz not null default now(),
+    request_id uuid unique,
     manager_note text,
     unique (restaurant_id,location_id,trading_date),
     constraint pos_signoff_matches_source_day_fk
