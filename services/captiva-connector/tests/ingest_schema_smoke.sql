@@ -178,7 +178,7 @@ $source_version_test$;
 
 reset role;
 
-do $
+do $permissions_test$
 begin
   if has_function_privilege('authenticated',
      'public.pos_stage_captiva_envelope(text,date,text,jsonb,jsonb,jsonb,uuid,text)',
@@ -191,6 +191,6 @@ begin
     raise exception 'Anonymous users can run trusted ingestion RPC';
   end if;
 end;
-$$;
+$permissions_test$;
 
 select 'PASS: Captiva staged ingestion, no revenue posting, replay-safe, store-bound' as result;
