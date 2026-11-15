@@ -103,6 +103,7 @@ create table if not exists public.pos_captiva_daily_sources (
         reconciliation_state in ('unverified','verified','discrepancy')),
     source_fingerprint text not null check (length(source_fingerprint) between 32 and 128),
     observed_at timestamptz not null default now(),
+    unique (id,restaurant_id,location_id,trading_date),
     unique (restaurant_id,location_id,store_id,trading_date,source_fingerprint)
 );
 create index if not exists pos_captiva_sources_day_idx
@@ -194,6 +195,7 @@ create table if not exists public.pos_recovery_claims (
     verified_by uuid,
     claimed_at timestamptz not null default now(),
     verified_at timestamptz,
+    unique (event_id,payment_reference),
     constraint pos_recovery_event_tenant_fk
        foreign key (event_id,restaurant_id,location_id)
        references public.pos_exception_events(id,restaurant_id,location_id)
@@ -212,11 +214,15 @@ create table if not exists public.pos_exception_daily_signoffs (
     restaurant_id uuid not null references public.restaurants(id),
     location_id uuid not null references public.locations(id),
     trading_date date not null,
-    daily_source_id uuid not null references public.pos_captiva_daily_sources(id),
+    daily_source_id uuid not null,
     signed_by uuid not null,
     signed_at timestamptz not null default now(),
     manager_note text,
-    unique (restaurant_id,location_id,trading_date)
+    unique (restaurant_id,location_id,trading_date),
+    constraint pos_signoff_matches_source_day_fk
+      foreign key (daily_source_id,restaurant_id,location_id,trading_date)
+      references public.pos_captiva_daily_sources(id,restaurant_id,location_id,trading_date)
+      on delete restrict
 );
 
 -- Tenant checks are enforced even on service-role writes.
