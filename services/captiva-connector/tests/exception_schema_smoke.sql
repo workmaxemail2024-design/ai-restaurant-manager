@@ -189,7 +189,7 @@ values ('40000000-0000-4000-8000-000000000003',
 
 set role authenticated;
 select set_config('request.jwt.claim.sub','40000000-0000-4000-8000-000000000003',false);
-do $
+do $$
 declare cnt int;
 begin
   select count(*) into cnt from public.pos_exception_events;
@@ -201,7 +201,7 @@ begin
   select count(*) into cnt from public.pos_recovery_claims;
   if cnt <> 0 then raise exception 'POS viewer can access private recovery details'; end if;
 end;
-$;
+$$;
 reset role;
 
 select 'PASS: POS exception RLS, transactional audit, recovery and immutability' as result;
