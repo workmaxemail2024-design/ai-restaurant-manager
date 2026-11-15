@@ -11,6 +11,7 @@ JOURNAL = """<report><orders>
   <product prodid="1001" description="Chicken" type="combo" qty="1" sellprice="25.50"/>
   <product prodid="1002" description="Drink" qty="2" sellprice="5.00"/>
 </products>
+<payments><payment status="standard" value="35.50"/><payment status="refund" value="25.50"/></payments>
 <history>
   <histdata code="REFUND" id="101" systemid="a" date="01 Sep 2026"
     time="12:30" desc="Payment Refunded" val="25.50" vposuser="8"/>
@@ -110,6 +111,9 @@ class TestStaging(unittest.TestCase):
         self.assertTrue(data["safe_to_stage"])
         self.assertEqual(len(data["events"]), 2)
         self.assertEqual(len(data["products"]), 2)
+        self.assertEqual(data["snapshot"]["journal_standard_payments"], "35.50")
+        self.assertEqual(data["snapshot"]["journal_refund_payments"], "25.50")
+        self.assertEqual(data["snapshot"]["journal_payment_records"], 2)
         self.assertEqual(data["source_fingerprint"], sha256({"snapshot": data["snapshot"], "events": data["events"], "products": data["products"]}))
         self.assertFalse(data["reconciled"])
 
