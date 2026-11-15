@@ -79,7 +79,7 @@ def deliver(envelope, mode="preview", sender=None, request_id=None, unix_time=No
     body = canonical_json(envelope)
     if len(body) > 1024 * 1024:
         raise ValueError("Payload exceeds safe maximum length")
-    signature = sign_payload(settings["hmac_secret"], unix_time, request_id, body)
+    signature = sign_payload(settings["hmac_secret"], unix_time, request_id, mode, body)
     req = urllib.request.Request(
         settings["endpoint"], body, {
             "Content-Type": "application/json",
