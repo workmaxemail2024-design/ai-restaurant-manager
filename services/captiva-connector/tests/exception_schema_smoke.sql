@@ -204,4 +204,82 @@ end;
 $$;
 reset role;
 
+-- Safeguard: daily sign-off cannot be created on a dashboard-only or
+-- unreconciled source. A fully complete and verified source is still blocked
+-- while there are unresolved POS exceptions.
+set role service_role;
+do $$
+begin
+  begin
+    insert into public.pos_exception_daily_signoffs (
+      restaurant_id,location_id,trading_date,daily_source_id,signed_by
+    ) values (
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+      '2026-09-01',
+      '50000000-0000-4000-8000-000000000001',
+      '40000000-0000-4000-8000-000000000001'
+    );
+    raise exception 'Unverified source sign-off should have failed';
+  exception when others then
+    if sqlerrm not like '%source incomplete or unverified%' then raise; end if;
+  end;
+end;
+$$;
+reset role;
+
+insert into public.pos_captiva_daily_sources (
+  id,restaurant_id,location_id,store_id,trading_date,official_gross,
+  official_orders,journal_coverage,reconciliation_state,source_fingerprint
+) values (
+  '50000000-0000-4000-8000-000000000002',
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '01584','2026-09-01',2398.45,28,'complete','verified',
+  'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+);
+
+set role service_role;
+do $$
+begin
+  begin
+    insert into public.pos_exception_daily_signoffs (
+      restaurant_id,location_id,trading_date,daily_source_id,signed_by
+    ) values (
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+      '2026-09-01',
+      '50000000-0000-4000-8000-000000000002',
+      '40000000-0000-4000-8000-000000000001'
+    );
+    raise exception 'Unresolved-event sign-off should have failed';
+  exception when others then
+    if sqlerrm not like '%unresolved exceptions%' then raise; end if;
+  end;
+end;
+$$;
+select public.pos_record_exception_review(
+ '60000000-0000-4000-8000-000000000001',
+ '40000000-0000-4000-8000-000000000001',
+ '70000000-0000-4000-8000-000000000003',
+ 'resolved','confirmed_unpaid','Reviewed and confirmed unpaid with duty manager'
+);
+insert into public.pos_exception_daily_signoffs (
+  restaurant_id,location_id,trading_date,daily_source_id,signed_by
+) values (
+  '10000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '2026-09-01',
+  '50000000-0000-4000-8000-000000000002',
+  '40000000-0000-4000-8000-000000000001'
+);
+reset role;
+do $$
+begin
+  if (select count(*) from public.pos_exception_daily_signoffs) <> 1 then
+    raise exception 'Expected exactly one verified signed-off day';
+  end if;
+end;
+$$;
+
 select 'PASS: POS exception RLS, transactional audit, recovery and immutability' as result;
