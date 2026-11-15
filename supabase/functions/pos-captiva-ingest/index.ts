@@ -90,7 +90,7 @@ function validBody(v: unknown): v is Record<string, unknown> {
   // Strict allowlist prevents any raw XML/card/customer keys from reaching RPC.
   const eventFields = new Set([
     "source_event_key","event_code","event_type","original_amount",
-    "removed_item_count","source_operator",
+    "removed_item_count","source_operator","source_date_text","source_time_text",
   ]);
   const productFields = new Set([
     "product_id","product_type","description","quantity",
