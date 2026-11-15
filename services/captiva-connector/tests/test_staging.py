@@ -34,6 +34,20 @@ class TestStaging(unittest.TestCase):
         self.assertNotIn("desc", p1["events"][0])
         self.assertEqual(len(p1["events"][0]["source_event_key"]), 64)
 
+    def test_service_charge_operator_name_and_local_time(self):
+        xml = """<report><orders><order><history>
+          <histdata code="SERCHG" id="99" systemid="a"
+            date="01 Sep 2026" time="21:15"
+            desc="service charge Delete by user: Monica" />
+          </history></order></orders></report>"""
+        events = summarize_events(ET.fromstring(xml), "jnl_01sep2026_01584_example.xml")["events"]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "service_charge_deleted")
+        self.assertEqual(events[0]["source_operator"], "Monica")
+        self.assertEqual(events[0]["source_date_text"], "01 Sep 2026")
+        self.assertEqual(events[0]["source_time_text"], "21:15")
+        self.assertNotIn("desc", events[0])
+
     def test_missing_native_id_fails_closed(self):
         xml = JOURNAL.replace('id="103"', "")
         v = summarize_events(ET.fromstring(xml), "jnl_01sep2026_01584_example.xml")
