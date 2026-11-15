@@ -30,5 +30,5 @@ jobs:
       - name: Compile and run local-only synthetic tests
         working-directory: services/captiva-connector
         run: |
-          python -m py_compile connector.py staging.py sender.py
+          python -m py_compile connector.py staging.py sender.py backtest.py reconciliation.py
           python -m unittest discover -s tests -v
