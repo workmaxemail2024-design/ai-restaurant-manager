@@ -225,6 +225,48 @@ create table if not exists public.pos_exception_daily_signoffs (
       on delete restrict
 );
 
+-- A manager cannot sign off a day until the original Captiva dashboard
+-- source is complete AND independently reconciled, and all source exceptions
+-- for the day have a resolved manager review. No signoff RPC is enabled yet.
+create or replace function restaurantai_private.guard_pos_daily_signoff()
+returns trigger
+language plpgsql security invoker
+set search_path = ''
+as $$
+declare
+  v_coverage text;
+  v_state text;
+  v_unresolved bigint;
+begin
+  select d.journal_coverage, d.reconciliation_state
+    into v_coverage,v_state
+  from public.pos_captiva_daily_sources d
+  where d.id=new.daily_source_id
+    and d.restaurant_id=new.restaurant_id
+    and d.location_id=new.location_id
+    and d.trading_date=new.trading_date;
+  if not found or v_coverage <> 'complete' or v_state <> 'verified' then
+    raise exception 'Day not eligible for sign-off: source incomplete or unverified';
+  end if;
+  select count(*) into v_unresolved
+  from public.pos_exception_events e
+  left join public.pos_exception_reviews r on r.event_id=e.id
+  where e.restaurant_id=new.restaurant_id
+    and e.location_id=new.location_id
+    and e.trading_date=new.trading_date
+    and coalesce(r.review_status,'open') <> 'resolved';
+  if v_unresolved <> 0 then
+    raise exception 'Day not eligible for sign-off: unresolved exceptions';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_pos_signoff_guard on public.pos_exception_daily_signoffs;
+create trigger trg_pos_signoff_guard
+before insert or update on public.pos_exception_daily_signoffs
+for each row execute function restaurantai_private.guard_pos_daily_signoff();
+
 -- Tenant checks are enforced even on service-role writes.
 do $$
 declare t text;
@@ -240,7 +282,7 @@ begin
 
   foreach t in array array[
     'pos_captiva_daily_sources','pos_exception_events',
-    'pos_exception_review_audit'
+    'pos_exception_review_audit','pos_exception_daily_signoffs'
   ] loop
     execute format('drop trigger if exists %I on public.%I','trg_pos_immutable',t);
     execute format('create trigger %I before update or delete on public.%I for each row execute function restaurantai_private.deny_source_edit()',
