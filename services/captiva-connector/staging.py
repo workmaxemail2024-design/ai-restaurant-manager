@@ -223,6 +223,97 @@ def summarize_events(root, filename):
     }
 
 
+
+def extract_void_orders(root, filename, store_id, day):
+    """Read-only, privacy-minimised VOID investigations.
+
+    Kept OUT of the v1 ingestion envelope until the receiving backend has
+    explicit schema, validation and tenant-bound authorization for these rows.
+    Amounts are audit observations, never assumed lost revenue.
+    """
+    records = []
+    seen = set()
+    for order in root.findall("./orders/order"):
+        header = order.find("./header")
+        if header is None or (header.get("orderstatus") or "").strip().upper() != "VOID":
+            continue
+        number = (header.get("ordnum") or "").strip()
+        system = (header.get("systemid") or "").strip()
+        order_cd = (header.get("ordercdid") or "").strip()
+        if not number or not system or not order_cd:
+            raise ValueError("VOID order missing native identity")
+        identity = {"store_id": store_id, "trading_date": day,
+                    "systemid": system, "ordercdid": order_cd, "ordnum": number}
+        key = sha256(identity)
+        if key in seen:
+            raise ValueError("Duplicate VOID order identity")
+        seen.add(key)
+        items = []
+        for p in order.findall("./products/product"):
+            pid = (p.get("prodid") or "").strip()
+            if not SAFE_PRODUCT_ID.fullmatch(pid):
+                raise ValueError("VOID item missing safe native product ID")
+            qty = money(p.get("qty"))
+            price = money(p.get("sellprice"))
+            if abs(qty) > 10000 or abs(price * qty) > Decimal("10000000"):
+                raise ValueError("VOID product exceeds safe limits")
+            items.append({"product_id": pid, "description": (p.get("description") or "")[:150],
+                          "quantity": str(qty), "unit_price": euros(price),
+                          "line_value_not_loss": euros(qty * price)})
+        history = []
+        event_ids = set()
+        for event in order.findall("./history/histdata"):
+            code = (event.get("code") or "").strip()[:80]
+            native_id = (event.get("id") or "").strip()
+            event_system = (event.get("systemid") or "").strip()
+            event_date = (event.get("date") or "").strip()
+            event_time = (event.get("time") or "").strip()
+            event_timex = (event.get("timex") or "").strip()
+            # Keep a timeline even when Captiva omits event IDs, but never
+            # invent a durable event key from a list position.
+            event_key = None
+            if native_id and event_system and (event_date or event_time or event_timex):
+                event_key = sha256({"journal_filename": filename, "native": {
+                    "id": native_id, "systemid": event_system,
+                    "date": event_date, "time": event_time, "timex": event_timex,
+                    "dvid": (event.get("dvid") or "").strip(),
+                    "svrid": (event.get("svrid") or "").strip(),
+                    "code": code}})
+                if event_key in event_ids:
+                    raise ValueError("Duplicate native VOID history event identity")
+                event_ids.add(event_key)
+            raw_value = event.get("val")
+            history.append({
+                "source_event_key": event_key, "code": code,
+                "date_text": event_date[:50] or None,
+                "time_text": event_time[:50] or None,
+                "operator": (event.get("vposuser") or "").strip()[:80] or None,
+                "recorded_value": euros(raw_value) if raw_value not in (None, "") else None,
+            })
+        void_events = [h for h in history if h["code"].upper() == "VOID"]
+        if not void_events:
+            raise ValueError("VOID status without explicit VOID history event")
+        last_void = void_events[-1]
+        reason = (header.get("voidreason") or "").strip()
+        category = (header.get("voidcategory") or "").strip()
+        records.append({
+            "source_order_key": key, "store_id": store_id, "trading_date": day,
+            "order_number": number,
+            "sale_date_text": (header.get("saledate") or "").strip()[:50] or None,
+            "sale_time_text": (header.get("saletime") or "").strip()[:50] or None,
+            "order_operator": (header.get("vposuser") or "").strip()[:80] or None,
+            "void_operator": last_void["operator"],
+            "void_date_text": last_void["date_text"],
+            "void_time_text": last_void["time_text"],
+            "recorded_void_value_not_loss": last_void["recorded_value"],
+            "void_reason": reason[:150] if reason else None,
+            "void_category": category[:80] if category and category.lower() != "no category" else None,
+            "products": items, "history": history,
+            "requires_manager_review": True, "financial_loss_verified": False,
+        })
+    return records
+
+
 def build_envelope(credentials, store_id, day):
     if store_id not in STORES:
         raise ValueError("Unknown store")
