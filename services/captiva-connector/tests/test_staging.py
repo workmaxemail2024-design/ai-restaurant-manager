@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
-from staging import summarize_events, summarize_products, build_envelope, sha256, export_summary
+from staging import summarize_events, summarize_products, build_envelope, sha256, export_summary, extract_void_orders
 
 JOURNAL = """<report><orders>
 <order>
@@ -116,6 +116,42 @@ class TestStaging(unittest.TestCase):
             data = build_envelope({}, "01584", "2026-11-07")
         self.assertFalse(data["safe_to_stage"])
         self.assertIn("Unknown Captiva journal order statuses require review", data["issues"])
+
+    def test_void_investigation_tracks_actual_void_operator_and_refunds(self):
+        xml = """<report><orders><order>
+        <header orderstatus="VOID" ordnum="036" systemid="1" ordercdid="1"
+          vposuser="Florina Floor" saledate="07/Nov/2026" saletime="18:52:04"
+          voidcategory="No Category"/>
+        <products><product prodid="10000033" description="Sticky Toffee"
+          qty="1" sellprice="10.50"/></products>
+        <history>
+          <histdata code="ORDER" id="1" systemid="1" date="07 Nov 2026" time="18:52:04" vposuser="Florina Floor"/>
+          <histdata code="DISCOUNT" id="2" systemid="1" date="07 Nov 2026" time="18:52:16" val="3.15" vposuser="Florina Floor"/>
+          <histdata code="REFUND" id="3" systemid="1" date="07 Nov 2026" time="18:54:13" val="7.35" vposuser="Florina Floor"/>
+          <histdata code="VOID" id="4" systemid="1" date="07 Nov 2026" time="18:56:16" val="7.35" vposuser="Michaella Floor"/>
+          <histdata code="REFUND" id="5" systemid="1" date="07 Nov 2026" time="18:56:58" val="7.35" vposuser="Florina Floor"/>
+        </history></order></orders></report>"""
+        root = ET.fromstring(xml)
+        first = extract_void_orders(root, "jnl_07nov2026_01584_example.xml", "01584", "2026-11-07")
+        second = extract_void_orders(root, "jnl_07nov2026_01584_example.xml", "01584", "2026-11-07")
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 1)
+        v = first[0]
+        self.assertEqual(v["order_number"], "036")
+        self.assertEqual(v["void_operator"], "Michaella Floor")
+        self.assertEqual(v["recorded_void_value_not_loss"], "7.35")
+        self.assertEqual(v["products"][0]["description"], "Sticky Toffee")
+        self.assertEqual(len([h for h in v["history"] if h["code"] == "REFUND"]), 2)
+        self.assertIsNone(v["void_category"])
+        self.assertFalse(v["financial_loss_verified"])
+        self.assertNotIn("desc", str(v["history"]))
+
+    def test_void_order_missing_identity_fails_closed(self):
+        xml = """<report><orders><order><header orderstatus="VOID" ordnum="005"/>
+          <history><histdata code="VOID" val="40.90"/></history>
+          </order></orders></report>"""
+        with self.assertRaisesRegex(ValueError, "missing native identity"):
+            extract_void_orders(ET.fromstring(xml), "journal.xml", "01584", "2026-11-07")
 
     def test_missing_journal_keeps_financial_snapshot_no_exception_zero(self):
         with patch("staging.dashboard", return_value={
