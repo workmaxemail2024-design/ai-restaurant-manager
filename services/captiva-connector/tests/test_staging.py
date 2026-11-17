@@ -84,6 +84,39 @@ class TestStaging(unittest.TestCase):
         self.assertEqual(data["events"], [])
         self.assertEqual(data["products"], [])
 
+    def test_void_orders_do_not_inflate_official_order_count(self):
+        xml = """<report><orders>
+          <order><header orderid="1" orderstatus="std"/></order>
+          <order><header orderid="2" orderstatus="VOID"/></order>
+          <order><header orderid="3" orderstatus="std"/></order>
+          <order><header orderid="4" orderstatus="VOID"/></order>
+          </orders></report>"""
+        with patch("staging.dashboard", return_value={
+            "official_gross": "50.00", "official_net": "45.00",
+            "official_vat": "5.00", "official_orders": 2,
+        }), patch("staging.get_final_journal", return_value=(
+            "jnl_07nov2026_01584_example.xml", ET.fromstring(xml), "complete"
+        )):
+            data = build_envelope({}, "01584", "2026-11-07")
+        self.assertTrue(data["safe_to_stage"])
+        self.assertEqual(data["snapshot"]["official_orders"], 2)
+        self.assertEqual(data["snapshot"]["journal_coverage"], "complete")
+
+    def test_unknown_order_status_fails_closed(self):
+        xml = """<report><orders>
+          <order><header orderid="1" orderstatus="std"/></order>
+          <order><header orderid="2" orderstatus="PENDING"/></order>
+          </orders></report>"""
+        with patch("staging.dashboard", return_value={
+            "official_gross": "25.00", "official_net": "20.00",
+            "official_vat": "5.00", "official_orders": 1,
+        }), patch("staging.get_final_journal", return_value=(
+            "jnl_07nov2026_01584_example.xml", ET.fromstring(xml), "complete"
+        )):
+            data = build_envelope({}, "01584", "2026-11-07")
+        self.assertFalse(data["safe_to_stage"])
+        self.assertIn("Unknown Captiva journal order statuses require review", data["issues"])
+
     def test_missing_journal_keeps_financial_snapshot_no_exception_zero(self):
         with patch("staging.dashboard", return_value={
             "official_gross": "2396.81", "official_net": "2178.09",
