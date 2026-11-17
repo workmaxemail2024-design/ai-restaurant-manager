@@ -234,9 +234,19 @@ def build_envelope(credentials, store_id, day):
     event_identity = {"unidentified_exception_count": 0}
     if coverage == "complete":
         orders = root.findall("./orders/order")
-        if fin["official_orders"] != len(orders):
+        # Captiva's dashboard reports STANDARD orders, while its journal can
+        # also contain fully VOID orders. Do not discard voids or accept
+        # unknown statuses as completed orders.
+        statuses = [(o.find("./header").get("orderstatus") or "").strip().lower()
+                    if o.find("./header") is not None else "" for o in orders]
+        standard_orders = sum(status in ("std", "") for status in statuses)
+        void_orders = sum(status == "void" for status in statuses)
+        unknown_statuses = sorted(set(statuses) - {"std", "", "void"})
+        if unknown_statuses:
+            issues.append("Unknown Captiva journal order statuses require review")
+        if fin["official_orders"] != standard_orders:
             # Journal mismatches are not evidence of zero events.
-            issues.append("Dashboard and journal order counts differ")
+            issues.append("Dashboard and journal standard-order counts differ")
         extracted = summarize_events(root, filename)
         event_identity = {
             "unidentified_exception_count": extracted["unidentified_exception_count"],
