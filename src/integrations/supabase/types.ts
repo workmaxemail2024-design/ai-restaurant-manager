@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.18"
   }
   public: {
     Tables: {
@@ -1551,6 +1551,375 @@ export type Database = {
           },
         ]
       }
+      pos_captiva_daily_approvals: {
+        Row: {
+          approval_note: string
+          approved_at: string
+          approved_by: string
+          evidence_reference: string
+          id: string
+          location_id: string
+          payment_variance: number
+          request_id: string
+          restaurant_id: string
+          source_id: string
+          trading_date: string
+        }
+        Insert: {
+          approval_note: string
+          approved_at?: string
+          approved_by: string
+          evidence_reference: string
+          id?: string
+          location_id: string
+          payment_variance: number
+          request_id: string
+          restaurant_id: string
+          source_id: string
+          trading_date: string
+        }
+        Update: {
+          approval_note?: string
+          approved_at?: string
+          approved_by?: string
+          evidence_reference?: string
+          id?: string
+          location_id?: string
+          payment_variance?: number
+          request_id?: string
+          restaurant_id?: string
+          source_id?: string
+          trading_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_captiva_daily_approvals_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_daily_approvals_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_daily_approvals_source_id_restaurant_id_locati_fkey"
+            columns: [
+              "source_id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+            isOneToOne: false
+            referencedRelation: "pos_captiva_daily_sources"
+            referencedColumns: [
+              "id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+          },
+        ]
+      }
+      pos_captiva_daily_sources: {
+        Row: {
+          id: string
+          journal_coverage: string
+          journal_other_payments: number | null
+          journal_payment_records: number | null
+          journal_refund_payments: number | null
+          journal_standard_payments: number | null
+          location_id: string
+          observed_at: string
+          official_gross: number | null
+          official_net: number | null
+          official_orders: number | null
+          official_vat: number | null
+          reconciliation_state: string
+          restaurant_id: string
+          source_fingerprint: string
+          store_id: string
+          trading_date: string
+        }
+        Insert: {
+          id?: string
+          journal_coverage: string
+          journal_other_payments?: number | null
+          journal_payment_records?: number | null
+          journal_refund_payments?: number | null
+          journal_standard_payments?: number | null
+          location_id: string
+          observed_at?: string
+          official_gross?: number | null
+          official_net?: number | null
+          official_orders?: number | null
+          official_vat?: number | null
+          reconciliation_state?: string
+          restaurant_id: string
+          source_fingerprint: string
+          store_id: string
+          trading_date: string
+        }
+        Update: {
+          id?: string
+          journal_coverage?: string
+          journal_other_payments?: number | null
+          journal_payment_records?: number | null
+          journal_refund_payments?: number | null
+          journal_standard_payments?: number | null
+          location_id?: string
+          observed_at?: string
+          official_gross?: number | null
+          official_net?: number | null
+          official_orders?: number | null
+          official_vat?: number | null
+          reconciliation_state?: string
+          restaurant_id?: string
+          source_fingerprint?: string
+          store_id?: string
+          trading_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_captiva_daily_sources_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_daily_sources_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_captiva_event_sources: {
+        Row: {
+          created_at: string
+          event_id: string
+          location_id: string
+          restaurant_id: string
+          source_id: string
+          trading_date: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          location_id: string
+          restaurant_id: string
+          source_id: string
+          trading_date: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          location_id?: string
+          restaurant_id?: string
+          source_id?: string
+          trading_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_captiva_event_sources_event_id_restaurant_id_location__fkey"
+            columns: ["event_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_exception_events"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_event_sources_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_event_sources_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_event_sources_source_id_restaurant_id_location_fkey"
+            columns: [
+              "source_id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+            isOneToOne: false
+            referencedRelation: "pos_captiva_daily_sources"
+            referencedColumns: [
+              "id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+          },
+        ]
+      }
+      pos_captiva_ingest_receipts: {
+        Row: {
+          accepted_at: string
+          payload_hash: string
+          request_id: string
+          source_id: string
+          store_id: string
+          trading_date: string
+        }
+        Insert: {
+          accepted_at?: string
+          payload_hash: string
+          request_id: string
+          source_id: string
+          store_id: string
+          trading_date: string
+        }
+        Update: {
+          accepted_at?: string
+          payload_hash?: string
+          request_id?: string
+          source_id?: string
+          store_id?: string
+          trading_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_captiva_ingest_receipts_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "pos_captiva_daily_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_captiva_product_observations: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          lines: number
+          location_id: string
+          product_id: string
+          product_type: string
+          quantity: number
+          raw_value_not_revenue: number
+          restaurant_id: string
+          source_id: string
+          trading_date: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          lines: number
+          location_id: string
+          product_id: string
+          product_type: string
+          quantity: number
+          raw_value_not_revenue: number
+          restaurant_id: string
+          source_id: string
+          trading_date: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          lines?: number
+          location_id?: string
+          product_id?: string
+          product_type?: string
+          quantity?: number
+          raw_value_not_revenue?: number
+          restaurant_id?: string
+          source_id?: string
+          trading_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_captiva_product_observati_source_id_restaurant_id_loca_fkey"
+            columns: [
+              "source_id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+            isOneToOne: false
+            referencedRelation: "pos_captiva_daily_sources"
+            referencedColumns: [
+              "id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+          },
+          {
+            foreignKeyName: "pos_captiva_product_observations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_product_observations_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_captiva_store_bindings: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          location_id: string
+          restaurant_id: string
+          store_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          location_id: string
+          restaurant_id: string
+          store_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          location_id?: string
+          restaurant_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_captiva_store_bindings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_store_bindings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_daily_summaries: {
         Row: {
           average_order_value: number | null
@@ -1649,6 +2018,271 @@ export type Database = {
           },
           {
             foreignKeyName: "pos_daily_summaries_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_exception_daily_signoffs: {
+        Row: {
+          daily_source_id: string
+          id: string
+          location_id: string
+          manager_note: string | null
+          request_id: string | null
+          restaurant_id: string
+          signed_at: string
+          signed_by: string
+          trading_date: string
+        }
+        Insert: {
+          daily_source_id: string
+          id?: string
+          location_id: string
+          manager_note?: string | null
+          request_id?: string | null
+          restaurant_id: string
+          signed_at?: string
+          signed_by: string
+          trading_date: string
+        }
+        Update: {
+          daily_source_id?: string
+          id?: string
+          location_id?: string
+          manager_note?: string | null
+          request_id?: string | null
+          restaurant_id?: string
+          signed_at?: string
+          signed_by?: string
+          trading_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_exception_daily_signoffs_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exception_daily_signoffs_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_signoff_matches_source_day_fk"
+            columns: [
+              "daily_source_id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+            isOneToOne: false
+            referencedRelation: "pos_captiva_daily_sources"
+            referencedColumns: [
+              "id",
+              "restaurant_id",
+              "location_id",
+              "trading_date",
+            ]
+          },
+        ]
+      }
+      pos_exception_events: {
+        Row: {
+          created_at: string
+          event_code: string
+          event_occurred_at: string | null
+          event_type: string
+          id: string
+          journal_filename: string
+          location_id: string
+          original_amount: number | null
+          removed_item_count: number | null
+          restaurant_id: string
+          source_date_text: string | null
+          source_event_key: string
+          source_operator: string | null
+          source_time_text: string | null
+          store_id: string
+          trading_date: string
+        }
+        Insert: {
+          created_at?: string
+          event_code: string
+          event_occurred_at?: string | null
+          event_type?: string
+          id?: string
+          journal_filename: string
+          location_id: string
+          original_amount?: number | null
+          removed_item_count?: number | null
+          restaurant_id: string
+          source_date_text?: string | null
+          source_event_key: string
+          source_operator?: string | null
+          source_time_text?: string | null
+          store_id: string
+          trading_date: string
+        }
+        Update: {
+          created_at?: string
+          event_code?: string
+          event_occurred_at?: string | null
+          event_type?: string
+          id?: string
+          journal_filename?: string
+          location_id?: string
+          original_amount?: number | null
+          removed_item_count?: number | null
+          restaurant_id?: string
+          source_date_text?: string | null
+          source_event_key?: string
+          source_operator?: string | null
+          source_time_text?: string | null
+          store_id?: string
+          trading_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_exception_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exception_events_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_exception_review_audit: {
+        Row: {
+          action: string
+          actor_id: string
+          created_at: string
+          event_id: string
+          id: string
+          location_id: string
+          note: string | null
+          request_id: string
+          resolution: string | null
+          restaurant_id: string
+          review_status: string | null
+        }
+        Insert: {
+          action: string
+          actor_id: string
+          created_at?: string
+          event_id: string
+          id?: string
+          location_id: string
+          note?: string | null
+          request_id: string
+          resolution?: string | null
+          restaurant_id: string
+          review_status?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          location_id?: string
+          note?: string | null
+          request_id?: string
+          resolution?: string | null
+          restaurant_id?: string
+          review_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_exception_audit_event_tenant_fk"
+            columns: ["event_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_exception_events"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
+          },
+          {
+            foreignKeyName: "pos_exception_review_audit_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exception_review_audit_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_exception_reviews: {
+        Row: {
+          event_id: string
+          id: string
+          last_note: string | null
+          location_id: string
+          resolution: string
+          restaurant_id: string
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          event_id: string
+          id?: string
+          last_note?: string | null
+          location_id: string
+          resolution?: string
+          restaurant_id: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          event_id?: string
+          id?: string
+          last_note?: string | null
+          location_id?: string
+          resolution?: string
+          restaurant_id?: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_exception_reviews_event_tenant_fk"
+            columns: ["event_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_exception_events"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
+          },
+          {
+            foreignKeyName: "pos_exception_reviews_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_exception_reviews_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
@@ -1794,6 +2428,85 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "restaurants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_recovery_claims: {
+        Row: {
+          already_in_pos: boolean | null
+          claimed_amount: number
+          claimed_at: string
+          claimed_by: string
+          event_id: string
+          id: string
+          location_id: string
+          payment_method: string
+          payment_reference: string
+          request_id: string
+          restaurant_id: string
+          status: string
+          verification_note: string | null
+          verification_request_id: string | null
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          already_in_pos?: boolean | null
+          claimed_amount: number
+          claimed_at?: string
+          claimed_by: string
+          event_id: string
+          id?: string
+          location_id: string
+          payment_method: string
+          payment_reference: string
+          request_id: string
+          restaurant_id: string
+          status?: string
+          verification_note?: string | null
+          verification_request_id?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          already_in_pos?: boolean | null
+          claimed_amount?: number
+          claimed_at?: string
+          claimed_by?: string
+          event_id?: string
+          id?: string
+          location_id?: string
+          payment_method?: string
+          payment_reference?: string
+          request_id?: string
+          restaurant_id?: string
+          status?: string
+          verification_note?: string | null
+          verification_request_id?: string | null
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_recovery_claims_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_recovery_claims_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_recovery_event_tenant_fk"
+            columns: ["event_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_exception_events"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
           },
         ]
       }
@@ -2004,6 +2717,309 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "restaurants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_void_ingest_requests: {
+        Row: {
+          created_at: string
+          payload_hash: string
+          request_id: string
+          store_id: string
+          trading_date: string
+        }
+        Insert: {
+          created_at?: string
+          payload_hash: string
+          request_id: string
+          store_id: string
+          trading_date: string
+        }
+        Update: {
+          created_at?: string
+          payload_hash?: string
+          request_id?: string
+          store_id?: string
+          trading_date?: string
+        }
+        Relationships: []
+      }
+      pos_void_order_history: {
+        Row: {
+          code: string
+          date_text: string | null
+          event_index: number
+          id: string
+          location_id: string
+          operator: string | null
+          recorded_value: number | null
+          restaurant_id: string
+          source_event_key: string | null
+          time_text: string | null
+          void_order_id: string
+        }
+        Insert: {
+          code: string
+          date_text?: string | null
+          event_index: number
+          id?: string
+          location_id: string
+          operator?: string | null
+          recorded_value?: number | null
+          restaurant_id: string
+          source_event_key?: string | null
+          time_text?: string | null
+          void_order_id: string
+        }
+        Update: {
+          code?: string
+          date_text?: string | null
+          event_index?: number
+          id?: string
+          location_id?: string
+          operator?: string | null
+          recorded_value?: number | null
+          restaurant_id?: string
+          source_event_key?: string | null
+          time_text?: string | null
+          void_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_void_order_history_void_order_id_restaurant_id_locatio_fkey"
+            columns: ["void_order_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_void_orders"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
+          },
+        ]
+      }
+      pos_void_order_items: {
+        Row: {
+          description: string | null
+          id: string
+          line_index: number
+          line_value_not_loss: number | null
+          location_id: string
+          product_id: string
+          quantity: number | null
+          restaurant_id: string
+          unit_price: number | null
+          void_order_id: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          line_index: number
+          line_value_not_loss?: number | null
+          location_id: string
+          product_id: string
+          quantity?: number | null
+          restaurant_id: string
+          unit_price?: number | null
+          void_order_id: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          line_index?: number
+          line_value_not_loss?: number | null
+          location_id?: string
+          product_id?: string
+          quantity?: number | null
+          restaurant_id?: string
+          unit_price?: number | null
+          void_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_void_order_items_void_order_id_restaurant_id_location__fkey"
+            columns: ["void_order_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_void_orders"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
+          },
+        ]
+      }
+      pos_void_order_reviews: {
+        Row: {
+          id: string
+          location_id: string
+          manager_note: string | null
+          resolution: string | null
+          restaurant_id: string
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          void_order_id: string
+        }
+        Insert: {
+          id?: string
+          location_id: string
+          manager_note?: string | null
+          resolution?: string | null
+          restaurant_id: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          void_order_id: string
+        }
+        Update: {
+          id?: string
+          location_id?: string
+          manager_note?: string | null
+          resolution?: string | null
+          restaurant_id?: string
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          void_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_void_order_reviews_void_order_id_restaurant_id_locatio_fkey"
+            columns: ["void_order_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_void_orders"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
+          },
+        ]
+      }
+      pos_void_orders: {
+        Row: {
+          id: string
+          journal_filename: string
+          location_id: string
+          observed_at: string
+          order_number: string
+          order_operator: string | null
+          recorded_void_value_not_loss: number | null
+          restaurant_id: string
+          sale_date_text: string | null
+          sale_time_text: string | null
+          source_fingerprint: string
+          source_order_key: string
+          store_id: string
+          trading_date: string
+          void_category: string | null
+          void_date_text: string | null
+          void_operator: string | null
+          void_reason: string | null
+          void_time_text: string | null
+        }
+        Insert: {
+          id?: string
+          journal_filename: string
+          location_id: string
+          observed_at?: string
+          order_number: string
+          order_operator?: string | null
+          recorded_void_value_not_loss?: number | null
+          restaurant_id: string
+          sale_date_text?: string | null
+          sale_time_text?: string | null
+          source_fingerprint: string
+          source_order_key: string
+          store_id: string
+          trading_date: string
+          void_category?: string | null
+          void_date_text?: string | null
+          void_operator?: string | null
+          void_reason?: string | null
+          void_time_text?: string | null
+        }
+        Update: {
+          id?: string
+          journal_filename?: string
+          location_id?: string
+          observed_at?: string
+          order_number?: string
+          order_operator?: string | null
+          recorded_void_value_not_loss?: number | null
+          restaurant_id?: string
+          sale_date_text?: string | null
+          sale_time_text?: string | null
+          source_fingerprint?: string
+          source_order_key?: string
+          store_id?: string
+          trading_date?: string
+          void_category?: string | null
+          void_date_text?: string | null
+          void_operator?: string | null
+          void_reason?: string | null
+          void_time_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_void_orders_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_void_orders_location_id_restaurant_id_fkey"
+            columns: ["location_id", "restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id", "restaurant_id"]
+          },
+          {
+            foreignKeyName: "pos_void_orders_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_void_review_actions: {
+        Row: {
+          actor_id: string
+          created_at: string
+          id: string
+          location_id: string
+          note: string
+          request_id: string
+          resolution: string | null
+          restaurant_id: string
+          review_status: string
+          void_order_id: string
+        }
+        Insert: {
+          actor_id: string
+          created_at?: string
+          id?: string
+          location_id: string
+          note: string
+          request_id: string
+          resolution?: string | null
+          restaurant_id: string
+          review_status: string
+          void_order_id: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          id?: string
+          location_id?: string
+          note?: string
+          request_id?: string
+          resolution?: string | null
+          restaurant_id?: string
+          review_status?: string
+          void_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_void_review_actions_void_order_id_restaurant_id_locati_fkey"
+            columns: ["void_order_id", "restaurant_id", "location_id"]
+            isOneToOne: false
+            referencedRelation: "pos_void_orders"
+            referencedColumns: ["id", "restaurant_id", "location_id"]
           },
         ]
       }
@@ -4582,6 +5598,83 @@ export type Database = {
       operating_day: {
         Args: { _location_id: string; _ts: string }
         Returns: string
+      }
+      pos_approve_captiva_daily_source: {
+        Args: {
+          p_approver_id: string
+          p_evidence_reference: string
+          p_note: string
+          p_request_id: string
+          p_source_id: string
+        }
+        Returns: string
+      }
+      pos_claim_recovered_payment: {
+        Args: {
+          p_actor_id: string
+          p_amount: number
+          p_event_id: string
+          p_method: string
+          p_reference: string
+          p_request_id: string
+        }
+        Returns: string
+      }
+      pos_record_exception_review: {
+        Args: {
+          p_actor_id: string
+          p_event_id: string
+          p_note: string
+          p_request_id: string
+          p_resolution: string
+          p_status: string
+        }
+        Returns: string
+      }
+      pos_signoff_captiva_day: {
+        Args: {
+          p_note: string
+          p_request_id: string
+          p_signer_id: string
+          p_source_id: string
+        }
+        Returns: string
+      }
+      pos_stage_captiva_envelope: {
+        Args: {
+          p_events: Json
+          p_payload_hash: string
+          p_products: Json
+          p_request_id: string
+          p_snapshot: Json
+          p_source_fingerprint: string
+          p_store_id: string
+          p_trade_date: string
+        }
+        Returns: Json
+      }
+      pos_stage_void_investigations: {
+        Args: {
+          p_journal_filename: string
+          p_orders: Json
+          p_payload_hash: string
+          p_request_id: string
+          p_source_fingerprint: string
+          p_store_id: string
+          p_trade_date: string
+        }
+        Returns: Json
+      }
+      pos_verify_recovery_claim: {
+        Args: {
+          p_already_in_pos: boolean
+          p_claim_id: string
+          p_decision: string
+          p_note: string
+          p_request_id: string
+          p_reviewer_id: string
+        }
+        Returns: Json
       }
       preview_supplier_products: {
         Args: { p_rows: Json }
