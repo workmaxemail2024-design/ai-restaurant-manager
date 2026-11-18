@@ -206,12 +206,22 @@ export interface MonthExpenses {
   estimateTotal: number;
   total: number;
   replacedEstimateIds: string[];
+  /** Wage-type bills/estimates left out because confirmed payroll covers them. */
+  excludedAsPayrollIds: string[];
   vatUnknown: number;
   vatNotSeparated: number;
   recorded: boolean;
 }
 
+/** Wage/salary costs — replaced by confirmed payroll, never added on top of it. */
+export function isLabourCategory(category: string | null | undefined, label?: string | null): boolean {
+  const t = `${category ?? ""} ${label ?? ""}`.toLowerCase();
+  return /\b(wage|wages|payroll|salary|salaries|staff cost|staff costs|labour|labor|prsi)\b/.test(t);
+}
+
 export function monthExpenses(input: {
+  /** When confirmed payroll covers these locations, wage-type bills/estimates are excluded. */
+  payrollConfirmedLocationIds?: string[];
   monthKey: string;
   selectedLocationId: string | null;
   scopeLocationIds: string[];
@@ -224,10 +234,14 @@ export function monthExpenses(input: {
   const actuals = input.actuals.filter((e) => e.status === "active" && e.period_month === start && scope.has(e.location_id));
   const replaced = new Set(actuals.map((e) => e.replaces_overhead_id).filter((id): id is string => !!id));
 
+  const payrollCovered = new Set(input.payrollConfirmedLocationIds ?? []);
+  const payrollCoversAll = scope.size > 0 && [...scope].every((id) => payrollCovered.has(id));
+  const excludedAsPayroll: string[] = [];
   const lines: ExpenseLine[] = [];
   let vatUnknown = 0;
   let vatNotSeparated = 0;
   for (const e of actuals) {
+    if (payrollCovered.has(e.location_id) && isLabourCategory(e.category, e.description)) { excludedAsPayroll.push(e.id); continue; }
     const { cost, vatFlag } = actualExpenseCost(e);
     if (vatFlag === "unknown") vatUnknown += 1;
     if (vatFlag === "not_separated") vatNotSeparated += 1;
@@ -236,6 +250,7 @@ export function monthExpenses(input: {
   for (const o of input.overheads) {
     if (replaced.has(o.id)) continue; // the actual bill stands in for this estimate this month
     if (o.location_id && !scope.has(o.location_id)) continue;
+    if (isLabourCategory(o.category, o.name) && (o.location_id ? payrollCovered.has(o.location_id) : payrollCoversAll)) { excludedAsPayroll.push(o.id); continue; }
     const amount = overheadCostForMonth(o, input.monthKey, input.selectedLocationId, input.locationCount);
     if (amount <= 0) continue;
     const vatFlag = (o.vat_treatment ?? "unknown") === "unknown" ? "unknown" : null;
@@ -250,6 +265,7 @@ export function monthExpenses(input: {
     estimateTotal,
     total: actualTotal + estimateTotal,
     replacedEstimateIds: [...replaced],
+    excludedAsPayrollIds: excludedAsPayroll,
     vatUnknown,
     vatNotSeparated,
     recorded: lines.length > 0,
@@ -291,7 +307,10 @@ export function buildMonthFinancials(input: {
     hasEstimatedLabour: input.hasEstimatedLabour,
     revenue: input.revenue,
   });
-  const expenses = monthExpenses(input);
+  const expenses = monthExpenses({
+    ...input,
+    payrollConfirmedLocationIds: labour.source === "confirmed" ? labour.payroll.map((p) => p.location_id) : [],
+  });
   const profitBeforeOverheads = input.revenue - input.foodCost - (labour.amount ?? 0) - input.additionalExpenses;
   const operatingProfit = expenses.recorded ? profitBeforeOverheads - expenses.total : null;
 

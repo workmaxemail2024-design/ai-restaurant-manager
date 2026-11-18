@@ -13,6 +13,12 @@ import type { ReportsPeriodSummary } from "@/lib/reportsMonthly";
 import { ActualVsTheoreticalBlock } from "@/components/reports/ActualVsTheoreticalBlock";
 import { MonthlyFinancialsBlock } from "@/components/reports/MonthlyFinancialsBlock";
 import type { MonthFinancials } from "@/lib/monthlyFinancials";
+import { MonthEndChecklist } from "@/components/reports/MonthEndChecklist";
+import { useMonthEndCloses } from "@/hooks/useMonthEndClose";
+import { deriveCloseState, profitStatus } from "@/lib/monthEndClose";
+import { useLocations } from "@/hooks/useLocations";
+import { useLocation as useSelectedLocation } from "@/contexts/LocationContext";
+import { useRestaurant } from "@/contexts/RestaurantContext";
 
 interface MonthlyReportsViewProps {
   year: number;
@@ -58,6 +64,15 @@ export function MonthlyReportsView({
   financials,
 }: MonthlyReportsViewProps) {
   const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null);
+  const { currentRestaurant } = useRestaurant();
+  const { selectedLocationId } = useSelectedLocation();
+  const { data: allLocations = [] } = useLocations();
+  const scopeLocations = allLocations
+    .filter((l: any) => l.restaurant_id === currentRestaurant?.id)
+    .filter((l) => !selectedLocationId || l.id === selectedLocationId)
+    .map((l) => ({ id: l.id, name: l.name }));
+  const closePeriodMonth = selectedMonthKey ? `${selectedMonthKey.slice(0, 7)}-01` : "";
+  const { data: closes = [] } = useMonthEndCloses(closePeriodMonth);
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const selectedMonth = months.find((month) => month.key === selectedMonthKey) ?? null;
@@ -153,7 +168,12 @@ export function MonthlyReportsView({
   const profitEstimated = selectedMonth.costing.isEstimated || (!selConfirmed && selectedMonth.labourMissingDays > 0) || !!(selFin && (!selConfirmed || selFin.expenses.estimateTotal > 0));
   const selLabour = selFin ? selFin.labour.amount : (selectedMonth.hasAnyLabour ? selectedMonth.totalLabourCost : null);
   const selProfit = selFin ? (selFin.operatingProfit ?? selFin.profitBeforeOverheads) : selectedMonth.profit;
-  const selProfitLabel = selFin?.operatingProfit != null ? "Operating profit" : "Profit before overheads";
+  const selProfitLabelBase = selFin?.operatingProfit != null ? "Operating profit" : "Profit before overheads";
+  // Confirmed only when every location in view has a confirmed month AND confirmed payroll.
+  const allMonthsConfirmed = scopeLocations.length > 0 && scopeLocations.every((l) =>
+    deriveCloseState(closes.find((c) => c.location_id === l.id) ?? null) === "confirmed");
+  const profitConfirmed = profitStatus(allMonthsConfirmed ? "confirmed" : "in_progress", selFin?.labour.source ?? "none") === "confirmed";
+  const selProfitLabel = profitConfirmed ? `${selProfitLabelBase} (confirmed)` : `${selProfitLabelBase} (provisional)`;
   const trend = selectedMonth.dailyRevenue.map((day) => ({
     date: format(new Date(`${day.date}T00:00:00`), "d MMM"),
     revenue: day.revenue,
@@ -184,6 +204,18 @@ export function MonthlyReportsView({
       </div>
 
       {selFin && <MonthlyFinancialsBlock month={selectedMonth} fin={selFin} />}
+
+      <MonthEndChecklist
+        periodMonth={closePeriodMonth}
+        locations={scopeLocations}
+        payroll={selFin?.labour.payroll ?? []}
+        factsFor={(locId) => ({
+          salesDays: 0,
+          tradingDaysExpected: 0,
+          payrollConfirmed: !!selFin?.labour.payroll.some((p) => p.location_id === locId),
+          expensesRecorded: false,
+        })}
+      />
 
       <ActualVsTheoreticalBlock month={selectedMonth} weeks={weeks} />
 

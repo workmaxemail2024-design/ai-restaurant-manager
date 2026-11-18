@@ -49,8 +49,9 @@ export type PurchaseOrderInsert = {
 };
 
 export function usePurchaseOrders(locationId?: string | null) {
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["purchase-orders", locationId],
+    queryKey: ["purchase-orders", currentRestaurant?.id, locationId ?? "all"],
     queryFn: async () => {
       let query = supabase
         .from("purchase_orders")
@@ -83,8 +84,9 @@ export function usePurchaseOrders(locationId?: string | null) {
 }
 
 export function usePurchaseOrderItems(orderId: string | null) {
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["purchase-order-items", orderId],
+    queryKey: ["purchase-order-items", currentRestaurant?.id, orderId],
     queryFn: async () => {
       if (!orderId) return [];
       const { data, error } = await supabase
@@ -184,7 +186,7 @@ export function useAddPurchaseOrderItem() {
       }
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-order-items", variables.purchase_order_id] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-order-items"] });
       queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
       toast({ title: "Item added to order" });
     },
@@ -209,7 +211,7 @@ export function useAddPurchaseOrderItems() {
       if (error) throw error;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-order-items", variables.purchaseOrderId] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-order-items"] });
       queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
     },
     onError: (error) => {
@@ -288,7 +290,7 @@ function usePORefresh() {
   const queryClient = useQueryClient();
   return (orderId?: string) => {
     queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-    queryClient.invalidateQueries({ queryKey: ["purchase-order-items", orderId] });
+    queryClient.invalidateQueries({ queryKey: ["purchase-order-items"] });
     queryClient.invalidateQueries({ queryKey: ["purchase-order-items"] });
     queryClient.invalidateQueries({ queryKey: ["supplier-analytics"] });
   };

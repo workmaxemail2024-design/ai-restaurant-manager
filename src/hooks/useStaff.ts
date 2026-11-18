@@ -229,8 +229,9 @@ export function useDeleteStaff() {
 
 // Shifts
 export function useStaffShifts(startDate?: string, endDate?: string) {
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["staff-shifts", startDate, endDate],
+    queryKey: ["staff-shifts", currentRestaurant?.id, "all", startDate, endDate],
     queryFn: async () => {
       let query = supabase
         .from("staff_shifts")

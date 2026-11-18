@@ -1,3 +1,4 @@
+import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -40,8 +41,9 @@ export interface ShiftInsert {
 
 // Fetch shifts for a date range with draft filter option
 export function useStaffShifts(startDate?: string, endDate?: string, includeDrafts = true) {
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["staff-shifts", startDate, endDate, includeDrafts],
+    queryKey: ["staff-shifts", currentRestaurant?.id, "all", startDate, endDate, includeDrafts],
     queryFn: async () => {
       let query = supabase
         .from("staff_shifts")
