@@ -1,152 +1,76 @@
-# Combined Plan — Stock Ledger, Supplier Invoices, Actual Food Cost, Reports Reconciliation
+# Read-only architecture and cleanup audit: findings and fix plan
 
-The four phases below are built in order (1 → 4), each reusing the one before it. Once you approve this, everything is built without further approvals unless a genuine security or data-integrity blocker comes up.
+I traced this audit through the code only. I changed nothing, ran no live database queries and made no requests while signed in. "Verified" means the code path is confirmed. "Suspected" means it still needs a check against the data or the database.
 
-## What exists today (checked live)
+## Findings by priority
 
-- Stock: `stock_levels` has 1 row. `stock_adjustments`, `stock_counts`, `purchase_orders`, `purchase_order_items` and `documents` are all empty, so no history has to be backfilled and none will be invented.
-- Receiving a delivery updates stock from the browser in several separate steps. A database trigger (`update_stock_on_purchase`, which fires on status `completed`) could also add the same stock. Nothing uses `completed` today, so stock is not added twice yet, but nothing prevents it either.
-- Adjustments are dated only by when they were typed in, so late waste always lands on today.
-- `supplier_products` (24) and append-only `supplier_product_prices` (24) exist, and the price table already links to documents and purchase orders.
-- `documents` already stores OCR output (`extracted_data`) and has a `purchase_order_id` link. Uploading a document never changes stock.
-- Reports food cost today is theoretical: recipe cost × POS sales, using dated price history, with unknown kept as unknown.
+### P1: Money and counts (verified)
+1. **Manual order/cover corrections are grouped by date, not by date and location.** In `src/hooks/useDashboardOverview.ts:122-154`, a correction for one location replaces the combined POS total for every location on that date when "All locations" is selected. The same code also ignores manual covers of 0 (`:124`) and never reads `covers_unknown` (`:134`).
+2. **Reports and the dashboard apply corrections differently.** In "All locations" view, Reports reads only ledger rows with no location (`src/hooks/useDailyLedger.ts:129-140`). Period totals never apply manual order corrections to days that have POS data (`ReportsPage.tsx:1424-1449`).
+3. **Hourly charts bucket by `created_at` (import time).** See `useDashboardOverview.ts:168-190` and `SalesDashboardPage.tsx:79-88`. The `sales` table has no time-of-sale column (`types.ts:2581-2593`), so imported days pile into the import hour. Sales before 06:00 are also folded into 06:00.
+4. **The same KPIs have four competing definitions.** These are `useDashboardOverview`, `useDailyFinancialSummary`, `useLocationRevenue` and `useDailyBreakdown`. One reads canonical POS gross, the others sum `sales.total_price`, and manual corrections are treated differently. As a result, a day imported as a summary only can show revenue in Reports and none on the Dashboard.
+5. **Monthly P&L undercosts food.** It uses `dishSales.length` as the quantity (`useFinancialReports.ts:80-85`), so any product row with a quantity above 1 is undercosted.
+6. **"Orders" means three different things.** It is receipts (dashboard headline), sales rows (hourly chart) and summed quantity (location performance in `useDailyBreakdown.ts:314-316`).
 
----
+### P1: Unknown values shown as zero (verified)
+- Dashboard revenue: `|| 0` in `useDashboardOverview.ts:101-103`.
+- Daily financial summary revenue and covers: `useDailyFinancialSummary.ts:80,108`. Missing hourly rates count as €0 labour (`:140-146`). Recipe cost: `Number(x)||0` (`:191-197`).
+- Ledger covers, labour and expenses default to 0 (`useDailyLedger.ts:144-146`).
+- Reports shows unknown food-cost % and labour % as 0 (`ReportsPage.tsx:589,599`).
+- Monthly P&L treats missing recipe cost and missing pay rate as 0 (`useFinancialReports.ts:82-85,103-107`).
 
-## Phase 1 — Immutable stock movement ledger
+### P1: Possible double-counted revenue (suspected, code path confirmed)
+- The Captiva API (`captiva`) and XLS (`captiva_xls`) paths dedupe by provider-specific IDs. XLS cleanup deletes only its own source (`CaptivaXLSImportDialog.tsx:1080-1089`). Importing the same day both ways would leave two copies in `sales`.
+- Dashboard sales queries do not filter by source.
+- Report readers do pick one canonical row, so the risk is on the Dashboard and in sales-based screens.
+- To confirm, compare `sales` grouped by location, date and source against the live data (read-only).
 
-### Ledger
-- New append-only `stock_movements` table. Each row holds: restaurant, location, item, signed quantity in the stock unit, `effective_at` and `effective_date`, type, source (type, id and line), unit cost (NULL = unknown) with its cost source, who recorded it and when.
-- Types: `opening_balance`, `receipt`, `waste`, `spoilage`, `damage`, `staff_meal`, `count_correction`, `count_rebase`, `manual_correction`, `reversal`.
-- Movements can never be updated or deleted. Corrections are made by reversal only: an opposite movement linked to the original, with a required reason, logged to `audit_logs`. A movement can be reversed once.
-- `stock_levels` changes only through one internal function, in the same transaction as the movement. The browser no longer writes stock directly, and the dormant purchase trigger is removed.
+### P2: Navigation and dead code (verified by import tracing)
+- The app renders `PermissionFilteredSidebar`. The legacy `src/components/dashboard/Sidebar.tsx` has no importers, plus an inert Sign Out button and a `#` link for Notifications.
+- `src/pages/SalesDashboardPage.tsx`, `src/pages/POSSyncLogsPage.tsx` and `src/components/NavLink.tsx` have no importers.
+- **Broken links:**
+  - AI Insights links to `/ai/menu-engineering` (should be `/menu/engineering`, `AIInsightsPage.tsx:354`).
+  - Two AI Insights links go to `/cost-analysis` (should be `/menu/cost-analysis`, `:371,388`).
+  - Data-coverage warnings link to `/attendance` (should be `/staff/attendance`, `useDataCoverage.ts:224-230,275-281`).
+- `/settings/system-qa` and `/settings/demo` have routes but no sidebar entry. This is probably intentional.
+- **Overlapping screens (suspected; product decision):** Menu Engineering vs Chain Menu Performance.
 
-### Negative stock policy (resolved)
-- `stock_levels.quantity` = the exact sum of that item's movements at that location. Nothing is clamped at zero.
-- A negative balance is allowed and stored as it is. The UI shows it with a "Negative stock — check counts/receipts" warning, and Phase 3 treats it as a data-quality flag.
-- A nightly-free reconciliation check (`stock_ledger_drift()`) lists any item and location where the ledger total ≠ `stock_levels`. The tests require this list to be empty.
+### P2: Location scoping
+- `ChainMenuPerformancePage.tsx:87-92` calls `useSales` without a location. The route is wrapped in `RequireAllLocations`, so the impact depends on that guard (suspected).
+- `LocationContext.tsx:35-54` restores or saves any location ID without checking it against the user's allowed locations. RLS still guards the data (suspected stale or foreign selection).
+- The query keys in `useStock.ts:18` and `useStaff.ts:98` leave out the restaurant ID, so the cache could show the previous restaurant's data after switching (suspected).
 
-### Late entries after a count (resolved)
-- A count states a fact: on-hand at the count time = the counted quantity. The count writes a `count_correction` = counted − (ledger balance at the count time).
-- When a delivery, waste or correction is entered with an `effective_at` before an existing later count for the same item and location, the same transaction also writes a `count_rebase` movement at that count's time, equal to minus the late quantity. This happens once per affected later count; only the most recent later count matters, because earlier ones are already anchored by it.
-- Result: the late movement shows up in its own period (its receipts, waste and value), the balance after the count still equals the counted quantity, and today's stock is unchanged. The count's variance moves to the right period. Every rebase is labelled "auto-adjusted due to late entry X" and audited.
-- Reversals of late entries follow the same rule.
+### P3: Tenant, inventory, staff, reservations
+- **Tenant/RLS:** Old `USING (true)` policies were dropped later. Current unrestricted policies are for `service_role` only. The service-role edge functions I inspected all check membership. No cross-tenant exploit found.
+- Inserts without `restaurant_id`: `useStaff.ts:144-152` and `useDishes.ts:197-212`. These depend on database defaults or triggers (verify live).
+- `staff_safe` and `pos_integrations_safe` check the restaurant only, not the location (suspected; confirm this is intended).
+- **Inventory:** Only the demo-data function writes `stock_levels` directly (`demo-data/index.ts:349-357`). It is limited to admins and behind a flag. Normal edits go through the stock ledger.
+- **Menus:** One hard-coded drinks list remains (`DishCategorySection.tsx:26-27`). Category pickers otherwise use `dish_categories`.
+- **Staff:** Salary is allocated correctly (annual / 365). Reports and Dashboard read pay directly from the base `staff` table. RLS restricts this to admins, so non-admins may get blank values rather than masked ones (suspected functional issue).
+- **Reservations:** All nine statuses exist. `inquiry` has no next actions (`useReservations.ts:483-508`; product decision). Conflicts correctly exclude cancelled, declined and no-show bookings.
 
-### Receiving (physical event only)
-- `receive_purchase_order` and `receive_direct_delivery` take a required physical `delivery_date` (can be backdated) and per-line received quantity and cost. Everything is written in one transaction.
-- Duplicate protection:
-  - a purchase order can be received once;
-  - a receipt line can be applied once;
-  - a receipt can be linked to at most one invoice, and an invoice to at most one receipt (Phase 2).
-- Linking an invoice to an existing receipt adds no stock.
+## Suggested fix packages (each needs separate approval)
 
-### Waste, counts, manual set
-- `record_stock_adjustment` gets an `effective_date`. The cost is the item's dated cost, or Unknown, never €0.
-- `submit_stock_count` writes the header, lines and corrections atomically.
-- The direct "set stock" action becomes a `manual_correction` for the difference.
+1. **Dashboard corrections by location (P1, frontend only).** Group manual overrides by location and date. Replace only that location's POS contribution. Respect explicit 0 and `covers_unknown`. Align with Reports' daily logic.
+2. **One KPI source (P1).** Route `useDailyFinancialSummary` and `useLocationRevenue` through the same canonical POS resolver Reports uses, with the same manual-correction rule.
+3. **Unknown ≠ 0 (P1).** Return `null` and show "Unknown" with reasons for the coercions listed above. Keep the guards against dividing by zero.
+4. **Fix P&L quantity (P1).** Sum `quantity` instead of counting rows.
+5. **Hourly chart (P1).** Hide or label it "Not available" for imported days until real sale times exist. Adding a sale-time column would be a schema change, proposed separately.
+6. **Dedupe across POS sources (P1, after read-only confirmation).** Choose one source per location and day for sales-based screens. This ties in with the earlier package for one shared server-side POS apply.
+7. **Navigation cleanup (P2).** Fix the four broken links. Remove the legacy Sidebar, `SalesDashboardPage`, `POSSyncLogsPage` and `NavLink` after one more import check.
+8. **Scoping hardening (P2).** Pass the location in Chain Menu Performance or confirm the guard. Validate the saved location against the user's allowed locations. Add the restaurant ID to the stock and staff query keys.
+9. **Product decisions (P3).** Next actions for inquiry bookings, the hard-coded drinks list, and overlapping menu screens.
 
-### Opening balance
-- One `opening_balance` movement for each existing `stock_levels` row: dated at migration time, cost marked "pre-ledger, unknown". The fingerprint of `stock_levels` must stay unchanged.
+## Tests to add (next to existing tests)
+- Override by location: A has a manual correction of 10 and B has POS 7, so "All locations" shows 17, not 10.
+- An explicit manual 0 covers overrides the POS figure. `covers_unknown` shows Unknown.
+- Missing recipe cost or pay rate gives `null` or Unknown, never €0.
+- P&L food cost uses the summed quantity (one row with quantity 3 costs 3x).
+- API and XLS rows for the same location and day count revenue once.
+- All four corrected links resolve to registered routes.
 
-All Phase 1 write functions check `can_edit_inventory()`, location access, the closed-day lock (`assert_day_open`) for the effective date, and that restaurant, location and item all match.
-
----
-
-## Phase 2 — Supplier invoices, verification, payments (three separate events)
-
-- **Invoice** (a financial document): new `supplier_invoices` table.
-  - Columns: supplier, `doc_type` (invoice or credit note), invoice number, invoice date, due date, net, VAT, gross, status (`draft` → `verified` → `void`), `document_id`, `receipt_id` (nullable), `credits_invoice_id` for credit notes.
-  - Unique on (restaurant, supplier, lower(invoice_number), doc_type) excluding void, so the same invoice cannot be entered twice.
-- **Invoice lines**: new `supplier_invoice_lines` table with description, code, quantity, pack size and unit, unit price, line total, VAT rate, `supplier_product_id`, `ingredient_id`, and a match status (`exact` / `confirmed` / `new` / `non_stock` / `unresolved`).
-- **OCR**:
-  - Reuse the existing upload and `document-extract` storage path.
-  - Add an `invoice-extract` mode that only reads, with the same compact schema as `stock-list-extract`: unclear values are marked `?` and never guessed.
-  - Line matching reuses `preview_supplier_products` (pack-aware, conflicts confirmed explicitly).
-- **Verification screen**:
-  - The original document sits beside editable lines.
-  - Line totals and the invoice total are checked; a mismatch blocks verification.
-  - Verifying writes `supplier_product_prices` with source `invoice` (append-only, using the existing function) and never changes the master recipe cost unless you explicitly tick that option, as in the importer.
-- **Receipt link**: from a verified invoice the user can either:
-  - link it to an existing receipt (quantities compared and differences shown), or
-  - "Receive goods" with its own physical delivery date (pre-filled, editable), using the Phase 1 functions.
-
-  An invoice on its own never moves stock.
-- **Payments**: new `supplier_payments` table (payment date, amount, method, reference) and `supplier_payment_allocations` (payment → invoice or credit note, amount). The payment date lives only here.
-- Permissions: invoices and payments need Inventory Edit or Owner, and a new Role Builder permission key `suppliers.finance` for payments. Everything is restaurant-scoped through RLS plus same-restaurant triggers.
-
----
-
-## Phase 3 — Actual vs theoretical food cost
-
-Read-only SQL functions, calculated on demand with no snapshots:
-
-- `stock_valuation_at(restaurant, location, at)` — sum of quantity × dated cost per item. Items with unknown cost are counted and listed, never valued at €0.
-- `get_period_actual_food_cost(restaurant, location, start, end)` returns:
-  - opening and closing value (from the counts at or nearest the period boundaries, otherwise the ledger balance);
-  - receipts value;
-  - waste value by type;
-  - **actual COGS** = opening + receipts − closing;
-  - theoretical COGS (the existing `get_period_food_cost`, unchanged);
-  - **unexplained variance** = actual − theoretical − waste;
-  - completeness: a count at both boundaries, every receipt costed, no unknown-cost items, no unverified or unlinked invoices, no negative balances.
-  - Status: `complete` when every check passes, otherwise `estimate` with the list of reasons.
-
----
-
-## Phase 4 — Reports integration and reconciliation
-
-- **Reports**:
-  - The existing daily and monthly figures stay unchanged.
-  - A new "Actual vs Theoretical" section is added to the monthly view, plus a weekly period option. It shows actual COGS, theoretical, waste, variance, stock value and a Complete / Estimate badge with reasons.
-  - Missing data shows as Unknown, never €0.
-- **Retrospective recalculation**: automatic, because every figure is calculated live from dated, immutable records. A late delivery or waste entry changes the period it belongs to the next time Reports loads. There are no stored snapshots to go stale.
-- **Supplier statements**: new `supplier_statements` table (supplier, statement date, period, closing balance, document) and `supplier_statement_lines` (reference, date, amount, type).
-  - Lines are automatically matched to invoices, credit notes and payments by number and amount; you confirm any uncertain match.
-  - The screen shows matched, missing from our records, missing from the statement, and amount differences, plus the computed vs the stated balance.
-- **Cash Flow**: verified invoices and payments show as a separate "Supplier invoices / payments" line. They do not replace existing expense logic.
-
----
-
-## Technical details
-
-### Database (one migration per phase, applied in order; each in a transaction)
-- **P1**:
-  - `stock_movements` with grants (SELECT for authenticated, ALL for service_role), RLS, block-update/delete trigger, tenant trigger, and unique indexes on (source_type, source_line_id) and on reverses_movement_id;
-  - new columns on `purchase_orders` (delivery_date, received_by) and `purchase_order_items` (received_quantity, received_unit_cost), and `effective_date` / `movement_id` on `stock_adjustments`;
-  - functions: `apply_movement_internal`, `receive_purchase_order`, `receive_direct_delivery`, `record_stock_adjustment`, `submit_stock_count`, `reverse_stock_movement`, `stock_ledger_drift`;
-  - drop trigger `trigger_update_stock_on_purchase` (keep its function);
-  - opening-balance backfill.
-- **P2**: `supplier_invoices`, `supplier_invoice_lines`, `supplier_payments`, `supplier_payment_allocations` (grants, RLS, tenant and duplicate constraints, verified invoices are immutable apart from voiding); `verify_supplier_invoice`, `link_invoice_receipt`, `record_supplier_payment`; add `invoice` to the allowed sources for supplier prices; `suppliers.finance` permission.
-- **P3**: `stock_valuation_at`, `get_period_actual_food_cost` (security invoker, so RLS applies).
-- **P4**: `supplier_statements`, `supplier_statement_lines`, `reconcile_supplier_statement`.
-- Every SECURITY DEFINER function pins search_path, revokes access from public and anon, and validates its JSON input.
-
-### Frontend
-- **P1**:
-  - `usePurchaseOrders.ts` and `ReceiveDeliveryModal.tsx` (delivery date, per-line quantity and cost, duplicate errors);
-  - `useStockAdjustments.ts`, `useDayStock.ts`, `StockWastageDialog.tsx` ("Occurred on");
-  - `useStockCounts.ts`, `StockCountDialog.tsx`, `useStock.ts`;
-  - `StockAdjustmentLog.tsx` becomes the movement history with Reverse, rebase labels and negative-stock badges.
-- **P2**: `supplier-invoice-extract` edge function (read-only); new `SupplierInvoiceReview` dialog launched from the Documents page and `QuickSupplierDocDialog`; an invoice tab and payments on the Suppliers page; invoice link on purchase orders.
-- **P3/P4**: `useActualFoodCost` hook; `ActualVsTheoreticalBlock` in `MonthlyReportsView` with a weekly option; `SupplierStatementReconciliation` on the Suppliers page; a line in `CashFlowReport`.
-- `AGENTS.md` rules: stock changes only through ledger functions; invoices, receipts and payments are separate records; actual cost is computed live, without snapshots.
-- `roadmap.md`: the four phases are added as tasks when the Build starts.
-
-### Dependencies
-P1 ledger → P2 receipt linking → P3 valuation and COGS → P4 Reports and statements. The Lovable AI Gateway is used for invoice OCR (already in use).
-
-### End-to-end acceptance tests (inside rolled-back transactions; production fingerprints compared before and after)
-1. **Migrations**: existing stock, prices, recipes, sales, POS, supplier products and documents are unchanged; one opening balance per stock row; re-running the migration creates nothing new.
-2. **Receiving**: a backdated receipt adds stock once; receiving again or a duplicate line is refused; a half-failed receipt leaves nothing behind.
-3. **Late entries**: count on day 10 = 20 kg; waste of 2 kg entered for day 8 → day-8 waste is recorded, a rebase is written, stock after the count stays 20, today's stock is unchanged, and the drift check is empty.
-4. **Negative stock**: waste larger than on-hand → the balance goes negative, the ledger sum equals `stock_levels`, and a warning flag is shown.
-5. **Reversal**: nets to zero; a second reversal is refused; an update or delete of a movement is refused.
-6. **Invoices**: a duplicate invoice number is refused; verifying does not change stock; "Receive goods" posts a receipt on its delivery date; an invoice cannot be linked to two receipts; a credit note reduces the supplier balance; the payment date stays separate.
-7. **OCR**: an unclear line blocks verification until fixed; a total mismatch blocks verification.
-8. **Food cost**: a seeded period gives the expected actual, theoretical, waste and variance; an unknown-cost item gives an Estimate with a reason; a late receipt changes only its own period.
-9. **Statement**: missing invoice, unmatched payment and amount differences are each detected.
-10. **Security**: read-only users are refused on every write; a Manager with Inventory Edit is allowed; payments need `suppliers.finance`; another restaurant cannot read or write; direct table inserts are refused.
-11. **Existing figures**: Reports' existing daily and monthly figures are identical before and after; typecheck and build pass.
-
-### Rollback
-Each phase only adds things, apart from dropping the dormant trigger, which can be re-created verbatim. A phase rolls back by dropping its new functions, tables and columns. Existing data is never rewritten.
+## Read-only checks still needed before building
+- Live data: whether both `captiva` and `captiva_xls` rows exist in `sales` for the same location and day.
+- The live `sales.created_at` default.
+- Live defaults or triggers that fill in `restaurant_id` for `staff` and `dish_ingredients`.
+- How `RequireAllLocations` behaves.
