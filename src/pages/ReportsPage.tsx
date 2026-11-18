@@ -1,3 +1,4 @@
+import { getManualLabourRate, setManualLabourRate, manualLabourCost, parseLabourRate } from "@/lib/labourRate";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -529,7 +530,7 @@ function DayCard({
   ledger?: LedgerEntry;
   onSaveLedger: (entry: LedgerEntry) => void;
   isSaving: boolean;
-  avgHourlyRate: number;
+  avgHourlyRate: number | null;
   isFocused: boolean;
   cardRef?: React.Ref<HTMLDivElement>;
   hasBookings: boolean;
@@ -594,12 +595,13 @@ function DayCard({
   const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
   const hasManualLabour = labourHours > 0;
   const effectiveLabourHours = hasActualAttendance ? actualAttendance.hours : hasManualLabour ? labourHours : 0;
-  const labourCost = hasActualAttendance ? actualAttendance.cost : effectiveLabourHours * avgHourlyRate;
+  // Manual hours without a valid rate → labour cost Unknown (null), never an assumed rate.
+  const labourCost: number | null = hasActualAttendance ? actualAttendance.cost : manualLabourCost(effectiveLabourHours, avgHourlyRate);
   const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   // Unknown (no revenue or no labour source) stays null — never a verified 0%.
-  const labourPct: number | null = effectiveRevenue > 0 && labourSource !== "none" ? (labourCost / effectiveRevenue) * 100 : null;
-  const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
-  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || costing.missingCostDishes > 0;
+  const labourPct: number | null = effectiveRevenue > 0 && labourSource !== "none" ? (labourCost != null ? (labourCost / effectiveRevenue) * 100 : null) : null;
+  const adjustedProfit = effectiveRevenue - effectiveFoodCost - (labourCost ?? 0) - additionalExpenses;
+  const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || labourCost == null || costing.missingCostDishes > 0;
 
   // Variance between actual and planned
   const labourVariance = (plannedShiftHours != null && effectiveLabourHours > 0)
@@ -1145,7 +1147,7 @@ function DayCard({
                       <div className="flex flex-wrap gap-4 text-xs pt-1">
                         <span>
                           <span className="text-muted-foreground">Labour ({labourSource === "attendance" ? "Actual" : labourSource === "manual" ? "Manual" : "—"}):</span>{" "}
-                          <span className="font-medium">{effectiveLabourHours.toFixed(1)}h · {formatCurrency(labourCost)}</span>
+                          <span className="font-medium">{effectiveLabourHours.toFixed(1)}h · {labourCost != null ? formatCurrency(labourCost) : "cost unknown (no rate set)"}</span>
                         </span>
                         {plannedShiftHours != null && plannedShiftHours > 0 && (
                           <span>
@@ -1393,7 +1395,10 @@ export default function ReportsPage() {
 
   const bookingDaysSet = bookingDays ?? new Set<string>();
 
-  const avgHourlyRate = 12.5;
+  // No assumed default rate: manual hours are priced only with a user-set rate.
+  const [avgHourlyRate, setAvgHourlyRateState] = useState<number | null>(() => getManualLabourRate(restaurantId));
+  useEffect(() => { setAvgHourlyRateState(getManualLabourRate(restaurantId)); }, [restaurantId]);
+  const setAvgHourlyRate = (r: number | null) => { if (restaurantId) setManualLabourRate(restaurantId, r); setAvgHourlyRateState(r); };
   const [focusedDate, setFocusedDate] = useState<string | undefined>();
   const dayCardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -1403,7 +1408,7 @@ export default function ReportsPage() {
       revenue: 0, orders: null as number | null, qtySold: 0, visitors: null as number | null,
       aov: null as number | null, foodCostPct: null as number | null, profit: 0,
       totalLabourCost: 0, labourPct: null as number | null,
-      foodCostIsEstimated: true, itemsMissingCost: 0, hasAnyLabour: false,
+      foodCostIsEstimated: true, itemsMissingCost: 0, hasAnyLabour: false, labourRateMissingDays: 0,
       costing: buildFoodCostView(null, 0),
     };
     if (!dailyData || dailyData.length === 0) return empty;
@@ -1417,6 +1422,7 @@ export default function ReportsPage() {
     let visitorTotal: number | null = null;
     let itemsMissingCost = 0;
     let hasAnyLabour = false;
+    let labourRateMissingDays = 0;
     for (const day of dailyData) {
       const ledger = ledgerEntries.get(day.date);
       const actual = attendanceMap.get(day.date);
@@ -1432,8 +1438,9 @@ export default function ReportsPage() {
         totalLabourCost += actual.cost;
         hasAnyLabour = true;
       } else if (ledger && ledger.labour_hours > 0) {
-        totalLabourCost += ledger.labour_hours * avgHourlyRate;
-        hasAnyLabour = true;
+        const c = manualLabourCost(ledger.labour_hours, avgHourlyRate);
+        if (c != null) { totalLabourCost += c; hasAnyLabour = true; }
+        else labourRateMissingDays += 1;
       }
 
       if (ledger) {
@@ -1459,10 +1466,10 @@ export default function ReportsPage() {
     return {
       revenue, orders: orderTotal, qtySold, visitors: visitorTotal, aov,
       foodCostPct, profit: adjustedProfit, totalLabourCost, labourPct,
-      foodCostIsEstimated, itemsMissingCost, hasAnyLabour, costing,
+      foodCostIsEstimated, itemsMissingCost, hasAnyLabour, costing, labourRateMissingDays,
     };
   }, [dailyData, ledgerEntries, avgHourlyRate, attendanceMap, periodCostRow]);
-  const profitIsEstimated = periodSummary.foodCostIsEstimated || !periodSummary.hasAnyLabour;
+  const profitIsEstimated = periodSummary.foodCostIsEstimated || !periodSummary.hasAnyLabour || periodSummary.labourRateMissingDays > 0;
 
   // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {
@@ -1695,6 +1702,21 @@ export default function ReportsPage() {
                   <CardContent className="px-3 pb-3">
                     <div className="text-xl font-bold">{periodSummary.labourPct != null ? `${periodSummary.labourPct.toFixed(1)}%` : "Unknown"}</div>
                     <div className="text-[10px] text-muted-foreground">{formatCurrency(periodSummary.totalLabourCost)}</div>
+                    {periodSummary.labourRateMissingDays > 0 && (
+                      <div className="text-[10px] text-warning">{periodSummary.labourRateMissingDays} day{periodSummary.labourRateMissingDays === 1 ? "" : "s"} of manual hours not costed — set a rate</div>
+                    )}
+                    <label className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                      Manual-hours rate €/h
+                      <input
+                        type="number" inputMode="decimal" min="0" step="0.01"
+                        aria-label="Hourly rate for manually entered labour hours"
+                        className="h-7 w-16 rounded border border-input bg-background px-1 text-xs text-foreground"
+                        defaultValue={avgHourlyRate ?? ""}
+                        key={restaurantId ?? "none"}
+                        placeholder="Not set"
+                        onBlur={(e) => setAvgHourlyRate(parseLabourRate(e.target.value))}
+                      />
+                    </label>
                   </CardContent>
                 </Card>
                 <Card>

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ChevronRight, Check, Package, Pencil, Trash2, Save, X } from "lucide-react";
+import { Plus, ChevronRight, Package, Pencil, Trash2, Save, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrderStatus, useDeletePurchaseOrder, usePurchaseOrderItems, useAddPurchaseOrderItem, useAddPurchaseOrderItems, useReceiveDelivery, useUpdatePurchaseOrder, useUpdatePurchaseOrderItem, useDeletePurchaseOrderItem, canEditPurchaseOrder, canEditPurchaseOrderHeader, PurchaseOrder, PurchaseOrderItem, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
@@ -28,7 +28,6 @@ export default function PurchaseOrdersPage() {
   const { data: locations = [] } = useLocations();
   const { data: ingredients = [] } = useIngredients();
   const createOrder = useCreatePurchaseOrder();
-  const updateStatus = useUpdatePurchaseOrderStatus();
   const deleteOrder = useDeletePurchaseOrder();
   const addItem = useAddPurchaseOrderItem();
   const addItems = useAddPurchaseOrderItems();
@@ -125,18 +124,10 @@ export default function PurchaseOrdersPage() {
               </Button>
             )}
 
-            {!item.received_at && item.status === "pending" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-11 px-4"
-                onClick={() => updateStatus.mutate({ id: item.id, status: "completed" })}
-              >
-                <Check className="h-4 w-4 mr-1" /> Complete
-              </Button>
-            )}
-
-            {!item.received_at && item.status === "completed" && (
+            {/* The old "Complete" step set status directly, which the server
+                correctly refuses (goods are received only via Receive delivery),
+                so it always failed and hid Receive. Receive is offered directly. */}
+            {!item.received_at && (item.status === "pending" || item.status === "completed") && (
               <Button
                 variant="default"
                 size="sm"

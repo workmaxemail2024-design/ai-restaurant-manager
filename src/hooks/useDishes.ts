@@ -197,6 +197,7 @@ export function useDeleteDish() {
 
 export function useAddDishIngredient() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async (data: {
       dish_id: string;
@@ -208,9 +209,12 @@ export function useAddDishIngredient() {
       manual_line_cost?: number | null;
       manual_cost_effective_from?: string | null;
     }) => {
+      // Assign the active restaurant explicitly; the server guard still checks
+      // that dish and ingredient belong to it.
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
       const { error } = await supabase
         .from("dish_ingredients")
-        .insert({ ...data, needs_unit_review: false } as any);
+        .insert({ ...data, restaurant_id: currentRestaurant.id, needs_unit_review: false } as any);
       if (error) throw error;
     },
     onSuccess: (_, variables) => {

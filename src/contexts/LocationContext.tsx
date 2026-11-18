@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useRestaurant } from './RestaurantContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { resolveAuthorisedLocation } from '@/lib/locationScope';
 
 interface LocationContextType {
   selectedLocationId: string | null;
@@ -54,6 +57,29 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [currentRestaurant?.id]);
+
+  // Authorised locations for this restaurant (RLS returns only locations the
+  // user may see). A stale or foreign remembered location is cleared.
+  const { data: authorisedIds } = useQuery({
+    queryKey: ['authorised-location-ids', currentRestaurant?.id],
+    enabled: !!currentRestaurant?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('restaurant_id', currentRestaurant!.id);
+      if (error) throw error;
+      return (data ?? []).map((r) => r.id as string);
+    },
+  });
+
+  useEffect(() => {
+    if (!selectedLocationId || !authorisedIds) return;
+    if (resolveAuthorisedLocation(selectedLocationId, authorisedIds) == null) {
+      setSelectedLocationIdState(null);
+      if (currentRestaurant) localStorage.removeItem(`${LOCATION_STORAGE_PREFIX}${currentRestaurant.id}`);
+    }
+  }, [selectedLocationId, authorisedIds, currentRestaurant?.id]);
 
   return (
     <LocationContext.Provider value={{ selectedLocationId, setSelectedLocationId }}>

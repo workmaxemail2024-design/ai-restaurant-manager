@@ -58,7 +58,8 @@ interface BuildReportsPeriodInput {
   attendanceMap: Map<string, ReportAttendanceDay>;
   bookingDays: Set<string>;
   costMap: Map<string, FoodCostResolverRow>;
-  avgHourlyRate: number;
+  /** User-set rate for manual hours; null = Unknown (no assumed default). */
+  avgHourlyRate: number | null;
 }
 
 export function sumCanonicalRevenue(days: DailyMetrics[], ledgerEntries: Map<string, LedgerEntry>): number {
@@ -115,10 +116,11 @@ export function buildReportsPeriod({
     if (attendance && (attendance.hours > 0 || attendance.cost > 0)) {
       totalLabourCost += attendance.cost;
       hasAnyLabour = true;
-    } else if (ledger && ledger.labour_hours > 0) {
+    } else if (ledger && ledger.labour_hours > 0 && avgHourlyRate != null && avgHourlyRate > 0) {
       totalLabourCost += ledger.labour_hours * avgHourlyRate;
       hasAnyLabour = true;
     } else if (isTrading) {
+      // Includes manual hours with no valid rate: cost Unknown, flagged as missing.
       labourMissingDays += 1;
     }
     if (ledger) additionalExpenses += ledger.additional_expenses;

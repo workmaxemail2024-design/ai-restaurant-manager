@@ -482,6 +482,12 @@ export function checkCoverConflicts(
 
 export function getNextActions(status: ReservationStatus): { label: string; status: ReservationStatus; variant?: string }[] {
   switch (status) {
+    case 'inquiry':
+      return [
+        { label: 'Confirm', status: 'confirmed' },
+        { label: 'Mark Pending', status: 'pending', variant: 'outline' },
+        { label: 'Decline', status: 'declined', variant: 'destructive' },
+      ];
     case 'pending':
       return [
         { label: 'Confirm', status: 'confirmed' },

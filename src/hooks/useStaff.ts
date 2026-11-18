@@ -145,11 +145,14 @@ export function useStaff(locationId?: string | null) {
 
 export function useCreateStaff() {
   const queryClient = useQueryClient();
+  const { currentRestaurant } = useRestaurant();
   return useMutation({
     mutationFn: async (staff: StaffInsert) => {
+      // Always assign the active restaurant explicitly (never rely on a DB default).
+      if (!currentRestaurant?.id) throw new Error("No restaurant selected");
       const { data, error } = await supabase
         .from("staff")
-        .insert(staff)
+        .insert({ ...staff, restaurant_id: currentRestaurant.id } as any)
         .select()
         .single();
       if (error) throw error;
@@ -191,13 +194,32 @@ export function useUpdateStaff() {
 export function useDeleteStaff() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: string): Promise<"deleted" | "deactivated"> => {
+      // Deleting a staff row cascades to their attendance/shift/performance
+      // history, which would silently rewrite past labour cost. Staff with any
+      // history are set inactive instead; only staff with no history are deleted.
+      const counts = await Promise.all(
+        (["staff_attendance", "staff_shifts", "staff_performance"] as const).map((t) =>
+          supabase.from(t).select("id", { count: "exact", head: true }).eq("staff_id", id)
+        )
+      );
+      const failed = counts.find((c) => c.error);
+      if (failed?.error) throw failed.error;
+      if (counts.some((c) => (c.count ?? 0) > 0)) {
+        const { error } = await supabase.from("staff").update({ status: "inactive" } as any).eq("id", id);
+        if (error) throw error;
+        return "deactivated";
+      }
       const { error } = await supabase.from("staff").delete().eq("id", id);
       if (error) throw error;
+      return "deleted";
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["staff"] });
-      toast({ title: "Staff member deleted successfully" });
+      toast({
+        title: result === "deactivated" ? "Staff member set to inactive" : "Staff member deleted successfully",
+        description: result === "deactivated" ? "They have work history, so their records were kept for past labour reports." : undefined,
+      });
     },
     onError: (error) => {
       toast({ title: "Error deleting staff member", description: error.message, variant: "destructive" });
