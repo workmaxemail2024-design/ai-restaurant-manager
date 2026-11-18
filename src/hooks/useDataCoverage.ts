@@ -227,7 +227,7 @@ export function useDataCoverage(locationId?: string | null) {
           message: `Labour data missing for ${labourMissing} day${labourMissing > 1 ? "s" : ""} — labour % may be inaccurate.`,
           severity: "warning",
           page: "Staff",
-          route: "/attendance",
+          route: "/staff/attendance",
         });
       }
 
@@ -278,7 +278,7 @@ export function useDataCoverage(locationId?: string | null) {
           message: "Labour is based on manual entries — consider using attendance tracking for accuracy.",
           severity: "info",
           page: "Attendance",
-          route: "/attendance",
+          route: "/staff/attendance",
         });
       }
 

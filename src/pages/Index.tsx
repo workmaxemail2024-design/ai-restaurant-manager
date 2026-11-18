@@ -172,7 +172,7 @@ const Index = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
                 <MetricCard
                   title={isSingleDay ? "Revenue" : "Revenue (period)"}
-                  value={overviewLoading ? "..." : formatCurrency(overview?.revenueToday || 0)}
+                  value={overviewLoading ? "..." : overview?.hasRevenueData ? formatCurrency(overview.revenueToday) : "—"}
                   change={
                     overview?.ordersToday != null
                       ? `${overview.ordersToday} orders`

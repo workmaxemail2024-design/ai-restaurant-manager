@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { dedupePosSales, recipeFoodCost } from "@/lib/revenueTruth";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { startOfMonth, endOfMonth, format, subMonths, differenceInHours } from "date-fns";
@@ -9,6 +10,8 @@ export interface ProfitLossData {
   month: string;
   revenue: number;
   foodCost: number;
+  /** Dishes sold this month whose recipe cost is unknown (excluded from foodCost). */
+  uncostedDishCount?: number;
   labourCost: number;
   overheads: number;
   grossProfit: number;
@@ -61,7 +64,7 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
         // Fetch sales for the month
         let salesQuery = supabase
           .from("sales")
-          .select("total_price, dish_id")
+          .select("total_price, dish_id, quantity, location_id, sale_date, source")
           .eq("restaurant_id", restaurantId)
           .gte("sale_date", format(monthStart, "yyyy-MM-dd"))
           .lte("sale_date", format(monthEnd, "yyyy-MM-dd"));
@@ -70,21 +73,20 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
           salesQuery = salesQuery.eq("location_id", selectedLocationId);
         }
 
-        const { data: sales } = await salesQuery;
+        const { data: rawSales } = await salesQuery;
+        const sales = dedupePosSales((rawSales as any[]) ?? []);
         const revenue = sales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
 
-        // Estimate food cost (using dish cost RPC if available, otherwise use 30% estimate)
-        let foodCost = 0;
-        if (sales && sales.length > 0) {
-          // Group sales by dish_id and get costs
-          const dishIds = [...new Set(sales.map((s) => s.dish_id))];
-          for (const dishId of dishIds) {
-            const { data: costData } = await supabase.rpc("calculate_dish_cost", { p_dish_id: dishId });
-            const dishSales = sales.filter((s) => s.dish_id === dishId);
-            const quantity = dishSales.length;
-            foodCost += (costData || 0) * quantity;
-          }
+        // Recipe food cost from summed quantities (not row counts). Dishes with
+        // unknown cost are counted as uncosted — never priced at €0.
+        const costByDish = new Map<string, number | null>();
+        for (const dishId of [...new Set(sales.map((s) => s.dish_id).filter(Boolean))] as string[]) {
+          const { data: costData } = await supabase.rpc("calculate_dish_cost", { p_dish_id: dishId });
+          costByDish.set(dishId, costData == null ? null : Number(costData));
         }
+        const fc = recipeFoodCost(sales, costByDish);
+        const foodCost = fc.cost ?? 0;
+        const uncostedDishCount = fc.uncostedDishIds.length;
 
         // Fetch labour cost from staff attendance
         let attendanceQuery = supabase
@@ -146,6 +148,7 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
           month: monthLabel,
           revenue,
           foodCost,
+          uncostedDishCount,
           labourCost,
           overheads,
           grossProfit,
@@ -192,7 +195,8 @@ export function useCashFlowSummary(monthsBack: number = 6) {
           salesQuery = salesQuery.eq("location_id", selectedLocationId);
         }
 
-        const { data: sales } = await salesQuery;
+        const { data: rawSales } = await salesQuery;
+        const sales = dedupePosSales((rawSales as any[]) ?? []);
         const cashIn = sales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
 
         // Cash Out: Payroll from attendance

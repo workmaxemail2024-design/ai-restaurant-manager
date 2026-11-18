@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
+import { dedupePosSales } from "@/lib/revenueTruth";
 
 /**
  * Per-location revenue for the currently selected date range.
@@ -18,13 +19,13 @@ export function useLocationRevenue(startDate: string, endDate: string) {
       if (!restaurantId) return {};
       const { data } = await supabase
         .from("sales")
-        .select("location_id, total_price")
+        .select("location_id, total_price, sale_date, source")
         .eq("restaurant_id", restaurantId)
         .gte("sale_date", startDate)
         .lte("sale_date", endDate);
 
       const totals: Record<string, number> = {};
-      for (const row of data ?? []) {
+      for (const row of dedupePosSales((data as any[]) ?? [])) {
         if (!row.location_id) continue;
         totals[row.location_id] =
           (totals[row.location_id] || 0) + Number(row.total_price || 0);

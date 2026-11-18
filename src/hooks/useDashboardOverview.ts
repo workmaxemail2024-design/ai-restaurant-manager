@@ -4,7 +4,8 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
-import { canonicalizePosSummaries, sumNullable } from "@/lib/posDailyCanonical";
+import { canonicalizePosSummaries } from "@/lib/posDailyCanonical";
+import { dedupePosSales, effectiveOrdersAndCovers, sumRevenue } from "@/lib/revenueTruth";
 
 interface HourlyRevenue {
   time: string;
@@ -14,6 +15,8 @@ interface HourlyRevenue {
 
 interface DashboardOverview {
   revenueToday: number;
+  /** False when no sales rows exist for the range (revenue is Unknown, not €0). */
+  hasRevenueData: boolean;
   ordersToday: number | null;
   aovToday: number | null;
   visitorsToday: number | null;
@@ -43,6 +46,7 @@ export function useDashboardOverview(locationId?: string | null) {
       if (!restaurantId) {
         return {
           revenueToday: 0,
+          hasRevenueData: false,
           ordersToday: null,
           aovToday: null,
           visitorsToday: null,
@@ -60,7 +64,7 @@ export function useDashboardOverview(locationId?: string | null) {
       // Fetch sales for selected date range
       let rangeQuery = supabase
         .from("sales")
-        .select("total_price, quantity, created_at, sale_date")
+        .select("total_price, quantity, created_at, sale_date, location_id, source")
         .eq("restaurant_id", restaurantId)
         .gte("sale_date", startDate)
         .lte("sale_date", endDate);
@@ -69,12 +73,14 @@ export function useDashboardOverview(locationId?: string | null) {
         rangeQuery = rangeQuery.eq("location_id", locationId);
       }
 
-      const { data: rangeSales } = await rangeQuery;
+      const { data: rawRangeSales } = await rangeQuery;
+      // One POS source per location/day — API + XLS imports of the same day are never added together.
+      const rangeSales = dedupePosSales((rawRangeSales as any[]) || []);
 
       // Fetch yesterday's sales (for comparison)
       let yesterdayQuery = supabase
         .from("sales")
-        .select("total_price")
+        .select("total_price, location_id, sale_date, source")
         .eq("restaurant_id", restaurantId)
         .eq("sale_date", yesterday);
 
@@ -87,7 +93,7 @@ export function useDashboardOverview(locationId?: string | null) {
       // Fetch same weekday last week sales
       let lastWeekQuery = supabase
         .from("sales")
-        .select("total_price")
+        .select("total_price, location_id, sale_date, source")
         .eq("restaurant_id", restaurantId)
         .eq("sale_date", sameWeekdayLastWeek);
 
@@ -98,9 +104,11 @@ export function useDashboardOverview(locationId?: string | null) {
       const { data: lastWeekSales } = await lastWeekQuery;
 
       // Calculate revenue totals for the selected range
-      const revenueToday = rangeSales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
-      const revenueYesterday = yesterdaySales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
-      const revenueSameWeekdayLastWeek = lastWeekSales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
+      const revenueKnown = sumRevenue(rangeSales);
+      const hasRevenueData = revenueKnown != null;
+      const revenueToday = revenueKnown ?? 0;
+      const revenueYesterday = sumRevenue(dedupePosSales((yesterdaySales as any[]) || [])) ?? 0;
+      const revenueSameWeekdayLastWeek = sumRevenue(dedupePosSales((lastWeekSales as any[]) || [])) ?? 0;
 
       // Prefer authoritative order/visitor/AOV counts from pos_daily_summaries.
       // Product-row counts (sales.length) are NOT receipts, so we don't fall back to them.
@@ -117,44 +125,19 @@ export function useDashboardOverview(locationId?: string | null) {
 
       const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
 
-      // Manual corrections made in Reports → Daily Performance become the effective
-      // values here too, per trading day. The POS figures themselves are never modified.
+      // Manual corrections (Reports → Daily Performance) replace only that
+      // location's POS figure for that day. Explicit 0 counts; covers_unknown → Unknown.
       let ledgerQuery = supabase
         .from("daily_ledger_entries")
-        .select("entry_date, manual_orders, covers")
+        .select("entry_date, location_id, manual_orders, covers, covers_unknown")
         .eq("restaurant_id", restaurantId)
         .gte("entry_date", startDate)
         .lte("entry_date", endDate);
       if (locationId) ledgerQuery = ledgerQuery.eq("location_id", locationId);
       const { data: ledgerRows } = await ledgerQuery;
-      const manualByDate = new Map<string, { orders: number | null; covers: number | null }>();
-      for (const r of (ledgerRows || []) as any[]) {
-        const prev = manualByDate.get(r.entry_date) || { orders: null, covers: null };
-        if (r.manual_orders != null) prev.orders = (prev.orders ?? 0) + Number(r.manual_orders);
-        if (r.covers != null && Number(r.covers) > 0) prev.covers = (prev.covers ?? 0) + Number(r.covers);
-        manualByDate.set(r.entry_date, prev);
-      }
-
-      const posByDate = new Map<string, { orders: number | null; visitors: number | null }>();
-      for (const d of canonicalDays) {
-        const prev = posByDate.get(d.reportDate) || { orders: null, visitors: null };
-        posByDate.set(d.reportDate, {
-          orders: sumNullable([prev.orders, d.orderCount]),
-          visitors: sumNullable([prev.visitors, d.visitorCount]),
-        });
-      }
-
-      const allDates = new Set<string>([...posByDate.keys(), ...manualByDate.keys()]);
-      const effOrders: (number | null)[] = [];
-      const effVisitors: (number | null)[] = [];
-      for (const d of allDates) {
-        const pos = posByDate.get(d) || { orders: null, visitors: null };
-        const man = manualByDate.get(d) || { orders: null, covers: null };
-        effOrders.push(man.orders != null ? man.orders : pos.orders);
-        effVisitors.push(man.covers != null ? man.covers : pos.visitors);
-      }
-      const ordersToday = sumNullable(effOrders);
-      const visitorsToday = sumNullable(effVisitors);
+      const eff = effectiveOrdersAndCovers(canonicalDays, (ledgerRows as any[]) || []);
+      const ordersToday = eff.orders;
+      const visitorsToday = eff.covers;
       const aovToday = ordersToday != null && ordersToday > 0 ? revenueToday / ordersToday : null;
 
 
@@ -238,6 +221,7 @@ export function useDashboardOverview(locationId?: string | null) {
 
       return {
         revenueToday,
+        hasRevenueData,
         ordersToday,
         aovToday,
         visitorsToday,

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { calculateOverheadForRange, type Overhead } from "./useOverheads";
 import { normalisePayType, allocateSalaryCost } from "@/lib/labour";
+import { dedupePosSales, effectiveOrdersAndCovers } from "@/lib/revenueTruth";
 import { canonicalizePosSummaries, sumNullable } from "@/lib/posDailyCanonical";
 
 /** Default assumption used ONLY when recipe coverage is too low to be trusted. */
@@ -70,12 +71,13 @@ export function useDailyFinancialSummary(
       // ---------- Revenue / orders / covers ----------
       let salesQ = supabase
         .from("sales")
-        .select("dish_id, quantity, total_price")
+        .select("dish_id, quantity, total_price, location_id, sale_date, source")
         .eq("restaurant_id", restaurantId)
         .gte("sale_date", startDate)
         .lte("sale_date", endDate);
       if (locationId) salesQ = salesQ.eq("location_id", locationId);
-      const { data: sales } = await salesQ;
+      const { data: rawSales } = await salesQ;
+      const sales = dedupePosSales((rawSales as any[]) ?? []);
 
       const revenue = (sales ?? []).reduce((s, r) => s + Number(r.total_price || 0), 0);
 
@@ -90,14 +92,12 @@ export function useDailyFinancialSummary(
 
       // Canonical per location+date: providers for the same day are never summed.
       const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
-      const orders = sumNullable(canonicalDays.map((d) => d.orderCount));
-      const posCovers = sumNullable(canonicalDays.map((d) => d.visitorCount));
 
       // ---------- Daily ledger (covers fallback + confirmation flags) ----------
       let ledgerQ = supabase
         .from("daily_ledger_entries")
         .select(
-          "entry_date, covers, covers_unknown, labour_hours, additional_expenses, labour_confirmed"
+          "entry_date, location_id, manual_orders, covers, covers_unknown, labour_hours, additional_expenses, labour_confirmed"
         )
         .eq("restaurant_id", restaurantId)
         .gte("entry_date", startDate)
@@ -105,9 +105,8 @@ export function useDailyFinancialSummary(
       if (locationId) ledgerQ = ledgerQ.eq("location_id", locationId);
       const { data: ledgers } = await ledgerQ;
 
-      const ledgerCovers = (ledgers ?? []).reduce((s, l) => s + Number(l.covers || 0), 0);
-      const covers =
-        posCovers != null && posCovers > 0 ? posCovers : ledgerCovers > 0 ? ledgerCovers : null;
+      // Same per-location manual-correction rule as the Dashboard and Reports.
+      const { orders, covers } = effectiveOrdersAndCovers(canonicalDays, (ledgers as any[]) ?? []);
       const aov = orders && orders > 0 ? revenue / orders : null;
       const labourConfirmed =
         (ledgers?.length ?? 0) > 0 && (ledgers ?? []).every((l) => l.labour_confirmed === true);

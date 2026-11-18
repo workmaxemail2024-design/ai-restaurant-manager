@@ -351,7 +351,7 @@ export default function AIInsightsPage() {
                 whyItMatters="Underpriced popular items silently erode margins. Small adjustments on high-volume dishes significantly boost profitability."
                 emptyReason="Requires dishes with ingredient costs and recent sales. Add dish recipes and record sales to see repricing opportunities."
               />
-              <InsightCTA to="/ai/menu-engineering" label="Open Menu Engineering" />
+              <InsightCTA to="/menu/engineering" label="Open Menu Engineering" />
             </div>
             <div className="space-y-0">
               <AIInsightCard
@@ -368,7 +368,7 @@ export default function AIInsightsPage() {
                 whyItMatters="Knowing your profit leaders lets you promote them strategically and train staff to upsell high-margin items."
                 emptyReason="Requires dishes with ingredient costs and sales history. Complete your menu setup to identify margin winners."
               />
-              <InsightCTA to="/cost-analysis" label="View Cost Analysis" />
+              <InsightCTA to="/menu/cost-analysis" label="View Cost Analysis" />
             </div>
             <div className="space-y-0">
               <AIInsightCard
@@ -385,7 +385,7 @@ export default function AIInsightsPage() {
                 whyItMatters="Undetected profit leaks—portion creep, waste, or mispricing—can drain thousands monthly. Early detection saves money."
                 emptyReason="Requires detailed cost data and sales records. Add ingredient costs and track expenses to detect leaks."
               />
-              <InsightCTA to="/cost-analysis" label="View Cost Analysis" />
+              <InsightCTA to="/menu/cost-analysis" label="View Cost Analysis" />
             </div>
           </AIInsightSection>
 

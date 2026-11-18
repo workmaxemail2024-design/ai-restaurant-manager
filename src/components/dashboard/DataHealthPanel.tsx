@@ -89,7 +89,7 @@ export function DataHealthPanel({ locationId }: DataHealthPanelProps) {
       </CardHeader>
       <CardContent className="px-4 pb-3 space-y-0.5">
         <CoverageRow label="Sales Data" icon={ShoppingBag} {...coverage.salesCoverage} route="/sales" />
-        <CoverageRow label="Labour Data" icon={Users} {...coverage.labourCoverage} route="/attendance" />
+        <CoverageRow label="Labour Data" icon={Users} {...coverage.labourCoverage} route="/staff/attendance" />
         <CoverageRow label="Inventory" icon={Package} {...coverage.inventoryCoverage} route="/stock" />
         <CoverageRow label="Reservations" icon={CalendarDays} {...coverage.reservationsCoverage} route="/reservations" />
         <CoverageRow label="Financial" icon={Wallet} {...coverage.financialCoverage} route="/settings/financial/overheads" />
