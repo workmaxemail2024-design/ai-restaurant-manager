@@ -154,6 +154,7 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
             sub={[
               data.labourHours > 0 ? `${data.labourHours.toFixed(1)}h` : null,
               data.labourPct != null ? `${data.labourPct.toFixed(1)}% of revenue` : null,
+              data.missingPayRateStaff > 0 ? `${data.missingPayRateStaff} staff missing pay rate — cost incomplete` : null,
               data.salariedLabourCost > 0
                 ? `${formatCurrency(data.hourlyLabourCost)} hourly + ${formatCurrency(data.salariedLabourCost)} salary`
                 : null,
@@ -181,6 +182,9 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
                 : data.recipeCoveragePct != null
                   ? `${data.recipeCoveragePct.toFixed(0)}% recipe coverage`
                   : null,
+              data.uncostedDishCount > 0
+                ? `${data.uncostedDishCount} uncosted dish${data.uncostedDishCount === 1 ? "" : "es"} (${formatCurrency(data.uncostedRevenue)} sales)`
+                : null,
             ]
               .filter(Boolean)
               .join(" • ")}

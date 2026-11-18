@@ -168,8 +168,10 @@ export function getBaseUnit(packUnit: PackUnit | null | undefined): string {
  */
 export function useIngredients(opts: { includeArchived?: boolean } = {}) {
   const includeArchived = !!opts.includeArchived;
+  const { currentRestaurant } = useRestaurant();
+  const restaurantId = currentRestaurant?.id;
   return useQuery({
-    queryKey: ["ingredients"],
+    queryKey: ["ingredients", restaurantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("ingredients")

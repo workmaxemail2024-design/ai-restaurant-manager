@@ -1,3 +1,4 @@
+import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -15,8 +16,9 @@ export interface Supplier {
 export type SupplierInsert = Omit<Supplier, "id" | "created_at" | "updated_at">;
 
 export function useSuppliers() {
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["suppliers"],
+    queryKey: ["suppliers", currentRestaurant?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("suppliers")

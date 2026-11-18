@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { dedupePosSales, recipeFoodCost } from "@/lib/revenueTruth";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
-import { startOfMonth, endOfMonth, format, subMonths, differenceInHours } from "date-fns";
+import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
 
 export interface ProfitLossData {
@@ -12,6 +12,8 @@ export interface ProfitLossData {
   foodCost: number;
   /** Dishes sold this month whose recipe cost is unknown (excluded from foodCost). */
   uncostedDishCount?: number;
+  /** Hourly staff with attendance but no pay rate (their labour is not included). */
+  missingPayRateStaff?: number;
   labourCost: number;
   overheads: number;
   grossProfit: number;
@@ -102,13 +104,17 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
 
         const { data: attendance } = await attendanceQuery;
         let labourCost = 0;
+        const missingRate = new Set<string>();
         attendance?.forEach((att) => {
           if (att.clock_in && att.clock_out && !isSalariedStaffRow(att.staff)) {
-            const hours = differenceInHours(new Date(att.clock_out), new Date(att.clock_in));
-            const rate = (att.staff as any)?.hourly_rate || 0;
-            labourCost += hours * rate;
+            // Exact hours (not truncated to whole hours).
+            const hours = (new Date(att.clock_out).getTime() - new Date(att.clock_in).getTime()) / 3_600_000;
+            const rate = Number((att.staff as any)?.hourly_rate);
+            if (!Number.isFinite(rate) || rate <= 0) { missingRate.add(att.staff_id); return; }
+            if (hours > 0) labourCost += hours * rate;
           }
         });
+        const missingPayRateStaff = missingRate.size;
         labourCost += (
           await fetchSalaryAllocation(
             restaurantId,
@@ -149,6 +155,7 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
           revenue,
           foodCost,
           uncostedDishCount,
+          missingPayRateStaff,
           labourCost,
           overheads,
           grossProfit,
@@ -215,7 +222,7 @@ export function useCashFlowSummary(monthsBack: number = 6) {
         let cashOutPayroll = 0;
         attendance?.forEach((att) => {
           if (att.clock_in && att.clock_out && !isSalariedStaffRow(att.staff)) {
-            const hours = differenceInHours(new Date(att.clock_out), new Date(att.clock_in));
+            const hours = (new Date(att.clock_out).getTime() - new Date(att.clock_in).getTime()) / 3_600_000;
             const rate = (att.staff as any)?.hourly_rate || 0;
             cashOutPayroll += hours * rate;
           }

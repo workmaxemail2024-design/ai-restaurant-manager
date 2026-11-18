@@ -1,3 +1,4 @@
+import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -94,8 +95,9 @@ export type StaffInsert = {
 };
 
 export function useStaff(locationId?: string | null) {
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["staff", locationId],
+    queryKey: ["staff", currentRestaurant?.id, locationId ?? "all"],
     queryFn: async () => {
       // Use the safe view that hides PII from non-managers
       let query = supabase

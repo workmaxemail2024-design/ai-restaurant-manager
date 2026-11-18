@@ -26,6 +26,8 @@ interface DashboardOverview {
   labourTodayPct: number | null;
   hasLabourToday: boolean;
   revenueSeries: HourlyRevenue[];
+  /** Always false until real transaction timestamps exist. */
+  hourlyAvailable: boolean;
   isLoadingRevenue: boolean;
 }
 
@@ -56,6 +58,7 @@ export function useDashboardOverview(locationId?: string | null) {
           labourTodayPct: null,
           hasLabourToday: false,
           revenueSeries: [],
+          hourlyAvailable: false,
           isLoadingRevenue: false,
         };
 
@@ -141,44 +144,11 @@ export function useDashboardOverview(locationId?: string | null) {
       const aovToday = ordersToday != null && ordersToday > 0 ? revenueToday / ordersToday : null;
 
 
-      // Build hourly revenue series for the end date (most recent day in range)
-      const hourlyMap: Record<string, { revenue: number; orders: number }> = {};
-      const hours = ["6AM", "7AM", "8AM", "9AM", "10AM", "11AM", "12PM", "1PM", "2PM", "3PM", "4PM", "5PM", "6PM", "7PM", "8PM", "9PM", "10PM", "11PM"];
-      hours.forEach((h) => {
-        hourlyMap[h] = { revenue: 0, orders: 0 };
-      });
-
-      // Filter sales for the end date only for hourly chart
-      const endDateSales = rangeSales?.filter(s => s.sale_date === endDate) || [];
-      
-      endDateSales.forEach((sale) => {
-        const saleDate = new Date(sale.created_at);
-        const hour = saleDate.getHours();
-        let label: string;
-
-        if (hour < 6) {
-          label = "6AM";
-        } else if (hour >= 23) {
-          label = "11PM";
-        } else if (hour === 12) {
-          label = "12PM";
-        } else if (hour > 12) {
-          label = `${hour - 12}PM`;
-        } else {
-          label = `${hour}AM`;
-        }
-
-        if (hourlyMap[label]) {
-          hourlyMap[label].revenue += Number(sale.total_price);
-          hourlyMap[label].orders += 1;
-        }
-      });
-
-      const revenueSeries: HourlyRevenue[] = hours.map((h) => ({
-        time: h,
-        revenue: hourlyMap[h].revenue,
-        orders: hourlyMap[h].orders,
-      }));
+      // Hourly revenue is NOT available: sales rows carry only a trading date and
+      // an import timestamp (created_at), not the real transaction time. Bucketing
+      // by import time would be misleading, so no hourly series is produced.
+      const revenueSeries: HourlyRevenue[] = [];
+      const hourlyAvailable = false;
 
       // Fetch labour data for the date range
       const rangeStartDateTime = `${startDate}T00:00:00`;
@@ -231,6 +201,7 @@ export function useDashboardOverview(locationId?: string | null) {
         labourTodayPct,
         hasLabourToday,
         revenueSeries,
+        hourlyAvailable,
         isLoadingRevenue: false,
       };
 

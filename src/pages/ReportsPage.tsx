@@ -586,7 +586,7 @@ function DayCard({
   // applied only to revenue that genuinely cannot be costed.
   const costing = buildFoodCostView(costRow, effectiveRevenue);
   const effectiveFoodCost = costing.blendedCost;
-  const effectiveFoodCostPct = costing.foodCostPct ?? 0;
+  const effectiveFoodCostPct: number | null = costing.foodCostPct ?? null;
   const foodCostIsEstimated = costing.isEstimated;
   const [missingOpen, setMissingOpen] = useState(false);
 
@@ -596,7 +596,8 @@ function DayCard({
   const effectiveLabourHours = hasActualAttendance ? actualAttendance.hours : hasManualLabour ? labourHours : 0;
   const labourCost = hasActualAttendance ? actualAttendance.cost : effectiveLabourHours * avgHourlyRate;
   const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
-  const labourPct = effectiveRevenue > 0 ? (labourCost / effectiveRevenue) * 100 : 0;
+  // Unknown (no revenue or no labour source) stays null — never a verified 0%.
+  const labourPct: number | null = effectiveRevenue > 0 && labourSource !== "none" ? (labourCost / effectiveRevenue) * 100 : null;
   const adjustedProfit = effectiveRevenue - effectiveFoodCost - labourCost - additionalExpenses;
   const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || costing.missingCostDishes > 0;
 
@@ -623,7 +624,7 @@ function DayCard({
   const liveMissing = evaluateMissing(day.hasData, localLedger, hasBookings, day.visitors, actualHours);
 
   const statusLabel = getStatusLabel(status, ledger);
-  const healthColor = getHealthColor(day, labourPct, ledger);
+  const healthColor = getHealthColor(day, labourPct ?? 0, ledger);
 
   const handleSave = () => {
     onSaveLedger({
@@ -763,11 +764,11 @@ function DayCard({
                         </div>
                         <div className="text-right hidden md:block">
                           <span className="text-muted-foreground mr-1">FC%{foodCostIsEstimated ? "*" : ""}</span>
-                          <span className="font-medium">{effectiveFoodCostPct.toFixed(1)}%</span>
+                          <span className="font-medium">{effectiveFoodCostPct != null ? `${effectiveFoodCostPct.toFixed(1)}%` : "Unknown"}</span>
                         </div>
                         <div className="text-right hidden md:block">
                           <span className="text-muted-foreground mr-1">Lab%</span>
-                          <span className="font-medium">{labourPct.toFixed(1)}%</span>
+                          <span className="font-medium">{labourPct != null ? `${labourPct.toFixed(1)}%` : "Unknown"}</span>
                         </div>
                       </div>
                     ) : isClosed ? (
@@ -1159,7 +1160,7 @@ function DayCard({
                         )}
                         <span>
                           <span className="text-muted-foreground">Labour %:</span>{" "}
-                          <span className="font-medium">{labourPct.toFixed(1)}%</span>
+                          <span className="font-medium">{labourPct != null ? `${labourPct.toFixed(1)}%` : "Unknown"}</span>
                         </span>
                         <span>
                           <span className="text-muted-foreground">Profit:</span>{" "}
@@ -1400,8 +1401,8 @@ export default function ReportsPage() {
   const periodSummary = useMemo(() => {
     const empty = {
       revenue: 0, orders: null as number | null, qtySold: 0, visitors: null as number | null,
-      aov: null as number | null, foodCostPct: 0, profit: 0,
-      totalLabourCost: 0, labourPct: 0,
+      aov: null as number | null, foodCostPct: null as number | null, profit: 0,
+      totalLabourCost: 0, labourPct: null as number | null,
       foodCostIsEstimated: true, itemsMissingCost: 0, hasAnyLabour: false,
       costing: buildFoodCostView(null, 0),
     };
@@ -1410,7 +1411,6 @@ export default function ReportsPage() {
     let totalLabourCost = 0;
     let totalAdditionalExpenses = 0;
     let manualRevenueTotal = 0;
-    let manualOrdersTotal = 0;
     let salesRevenue = 0;
     let qtySold = 0;
     let orderTotal: number | null = null;
@@ -1423,7 +1423,9 @@ export default function ReportsPage() {
 
       salesRevenue += day.revenue;
       qtySold += day.qtySold;
-      if (day.orders != null) orderTotal = (orderTotal ?? 0) + day.orders;
+      // A manual order correction (including 0) replaces that day's POS receipts.
+      const dayOrders = ledger?.manual_orders != null ? ledger.manual_orders : day.orders;
+      if (dayOrders != null) orderTotal = (orderTotal ?? 0) + dayOrders;
       if (day.visitors != null) visitorTotal = (visitorTotal ?? 0) + day.visitors;
 
       if (actual && (actual.hours > 0 || actual.cost > 0)) {
@@ -1438,23 +1440,19 @@ export default function ReportsPage() {
         totalAdditionalExpenses += ledger.additional_expenses;
         if (!day.hasData && ledger.manual_revenue != null) {
           manualRevenueTotal += ledger.manual_revenue;
-          if (ledger.manual_orders != null) {
-            manualOrdersTotal += ledger.manual_orders;
-          }
         }
       }
     }
 
     const revenue = salesRevenue + manualRevenueTotal;
-    if (manualOrdersTotal > 0) orderTotal = (orderTotal ?? 0) + manualOrdersTotal;
     // Period food cost comes from the period resolver against period totals —
     // daily percentages are never averaged.
     const costing = buildFoodCostView(periodCostRow ?? null, revenue);
     const totalFoodCost = costing.blendedCost;
     itemsMissingCost = costing.missingCostDishes;
     const adjustedProfit = revenue - totalFoodCost - totalLabourCost - totalAdditionalExpenses;
-    const labourPct = revenue > 0 ? (totalLabourCost / revenue) * 100 : 0;
-    const foodCostPct = costing.foodCostPct ?? 0;
+    const labourPct: number | null = revenue > 0 && hasAnyLabour ? (totalLabourCost / revenue) * 100 : null;
+    const foodCostPct: number | null = costing.foodCostPct ?? null;
     const aov = orderTotal && orderTotal > 0 ? revenue / orderTotal : null;
     const foodCostIsEstimated = costing.isEstimated;
 
@@ -1695,7 +1693,7 @@ export default function ReportsPage() {
                     <Users className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.labourPct.toFixed(1)}%</div>
+                    <div className="text-xl font-bold">{periodSummary.labourPct != null ? `${periodSummary.labourPct.toFixed(1)}%` : "Unknown"}</div>
                     <div className="text-[10px] text-muted-foreground">{formatCurrency(periodSummary.totalLabourCost)}</div>
                   </CardContent>
                 </Card>

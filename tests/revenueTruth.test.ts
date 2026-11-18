@@ -51,3 +51,53 @@ describe("food cost quantities", () => {
     expect(r.uncostedDishIds).toEqual(["d"]);
   });
 });
+
+import { canonicalizePosSummaries, sumNullable } from "../src/lib/posDailyCanonical";
+
+const row = (loc: string, provider: string, gross: number | null, extra: Record<string, unknown> = {}) => ({
+  report_date: "2026-11-01", location_id: loc, pos_provider: provider,
+  gross_sales: gross, net_sales: gross != null ? gross / 1.135 : null, vat_amount: gross != null ? gross - gross / 1.135 : null,
+  discounts: null, order_count: null, visitor_count: null, average_order_value: null, ...extra,
+});
+
+describe("canonical KPIs", () => {
+  it("mixed POS sources for one location/day are never added (gross, net, VAT)", () => {
+    const days = canonicalizePosSummaries([
+      row("A", "captiva_xls", 1135, { has_product_detail: true }),
+      row("A", "captiva", 1135, { has_summary_report: true, order_count: 40 }),
+    ] as any);
+    expect(days).toHaveLength(1);
+    expect(days[0].grossSales).toBe(1135);
+    expect(days[0].netSales).toBeCloseTo(1000, 6);
+    expect(days[0].vat).toBeCloseTo(135, 6);
+    expect(days[0].orderCount).toBe(40);
+  });
+  it("all-location totals sum each location once; AOV = gross / orders", () => {
+    const days = canonicalizePosSummaries([
+      row("A", "captiva_xls", 500, { order_count: 20 }),
+      row("B", "captiva_xls", 300, { order_count: 10 }),
+    ] as any);
+    const gross = sumNullable(days.map((d) => d.grossSales));
+    const orders = sumNullable(days.map((d) => d.orderCount));
+    expect(gross).toBe(800);
+    expect(orders).toBe(30);
+    expect(gross! / orders!).toBeCloseTo(26.667, 3);
+  });
+  it("a location with no gross is Unknown, not €0", () => {
+    const days = canonicalizePosSummaries([row("A", "captiva", null)] as any);
+    expect(days[0].grossSales).toBeNull();
+    expect(sumNullable(days.map((d) => d.grossSales))).toBeNull();
+  });
+  it("orders unknown at every location stays Unknown in All locations", () => {
+    expect(effectiveOrdersAndCovers([day("A", null), day("B", null)], []).orders).toBeNull();
+  });
+  it("gross profit uses known cost only and flags uncosted dishes", () => {
+    const fc = recipeFoodCost(
+      [{ dish_id: "a", quantity: 2 }, { dish_id: "b", quantity: 1 }],
+      new Map([["a", 4], ["b", null]]),
+    );
+    expect(fc.cost).toBe(8);
+    expect(fc.uncostedDishIds).toEqual(["b"]);
+    expect(100 - (fc.cost ?? 0)).toBe(92);
+  });
+});

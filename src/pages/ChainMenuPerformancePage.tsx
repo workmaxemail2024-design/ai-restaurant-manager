@@ -89,7 +89,7 @@ export default function ChainMenuPerformancePage() {
   const locationLabel = activeLocation?.name ?? 'All locations';
   const [reportDateOpen, setReportDateOpen] = useState(false);
   const { data: dishes } = useDishes();
-  const { data: sales } = useSales(startDate, endDate);
+  const { data: sales } = useSales(startDate, endDate, selectedLocationId);
   const { data: extItems } = useAllExternalPOSItems();
   const updateOne = useUpdateExternalPOSItem();
   const bulkUpdate = useBulkUpdateExternalPOSItems();

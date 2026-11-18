@@ -25,6 +25,12 @@ export interface DailyFinancialSummary {
   /** Salaried staff: annual salary / 365 x days in period. */
   salariedLabourCost: number;
   labourConfirmed: boolean;
+  /** Hourly staff with worked hours but no pay rate — their cost is unknown, not €0. */
+  missingPayRateStaff: number;
+  /** Dishes sold in the period with no recipe cost (excluded from recipe food cost). */
+  uncostedDishCount: number;
+  /** Revenue from those uncosted dishes. */
+  uncostedRevenue: number;
 
   foodCost: number;
   foodCostPct: number | null;
@@ -123,6 +129,8 @@ export function useDailyFinancialSummary(
 
       let labourCost = 0;
       let labourHours = 0;
+      const missingRateIds = new Set<string>();
+      const salariedIds = new Set<string>();
       if (attendance && attendance.length > 0) {
         const staffIds = Array.from(new Set(attendance.map((a) => a.staff_id)));
         const { data: staffRows } = await supabase
@@ -133,7 +141,7 @@ export function useDailyFinancialSummary(
         for (const s of staffRows ?? []) {
           const row = s as { id: string; hourly_rate: number | null; pay_type: string | null };
           // Salaried staff are allocated separately — never priced from attendance hours.
-          if (normalisePayType(row.pay_type) === "salary") continue;
+          if (normalisePayType(row.pay_type) === "salary") { salariedIds.add(row.id); continue; }
           if (row.hourly_rate != null) rates.set(row.id, Number(row.hourly_rate));
         }
         for (const a of attendance) {
@@ -142,7 +150,9 @@ export function useDailyFinancialSummary(
             (new Date(a.clock_out).getTime() - new Date(a.clock_in).getTime()) / 3_600_000;
           if (hours <= 0) continue;
           labourHours += hours;
-          labourCost += hours * (rates.get(a.staff_id) ?? 0);
+          const rate = rates.get(a.staff_id);
+          if (rate == null || rate <= 0) { if (!salariedIds.has(a.staff_id)) missingRateIds.add(a.staff_id); continue; }
+          labourCost += hours * rate;
         }
       }
 
@@ -185,6 +195,7 @@ export function useDailyFinancialSummary(
       const dishIds = Object.keys(dishQty);
       let recipeFoodCost = 0;
       let dishesWithCost = 0;
+      const uncostedIds = new Set<string>();
       for (const dishId of dishIds) {
         try {
           const { data: costData } = await supabase.rpc("calculate_dish_cost", {
@@ -194,9 +205,11 @@ export function useDailyFinancialSummary(
           if (cost > 0) {
             dishesWithCost++;
             recipeFoodCost += cost * dishQty[dishId];
+          } else {
+            uncostedIds.add(dishId);
           }
         } catch {
-          /* ignore */
+          uncostedIds.add(dishId);
         }
       }
       const recipeCoveragePct =
@@ -306,6 +319,8 @@ export function useDailyFinancialSummary(
       const missing: string[] = [];
       if (revenue <= 0) missing.push("Revenue");
       if (foodCostIsEstimated) missing.push("Food cost data");
+      if (missingRateIds.size > 0) missing.push(`Pay rate for ${missingRateIds.size} staff`);
+      if (uncostedIds.size > 0) missing.push(`Recipe cost for ${uncostedIds.size} dish${uncostedIds.size === 1 ? "" : "es"}`);
       if (labourCost <= 0) missing.push("Labour cost");
       else if (!labourConfirmed) missing.push("Labour review");
       if ((overheadsRaw?.length ?? 0) === 0) missing.push("Recurring overheads");
@@ -322,6 +337,9 @@ export function useDailyFinancialSummary(
         hourlyLabourCost,
         salariedLabourCost,
         labourConfirmed,
+        missingPayRateStaff: missingRateIds.size,
+        uncostedDishCount: uncostedIds.size,
+        uncostedRevenue: (sales ?? []).reduce((t, r) => (r.dish_id && uncostedIds.has(r.dish_id) ? t + Number(r.total_price || 0) : t), 0),
         foodCost,
         foodCostPct,
         foodCostIsEstimated,

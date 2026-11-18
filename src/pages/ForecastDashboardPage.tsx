@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLocations } from '@/hooks/useLocations';
 import { useSales } from '@/hooks/useSales';
+import { useLocation as useSelectedLocation } from '@/contexts/LocationContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area } from 'recharts';
 import { TrendingUp, Calendar, Users, Package } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
@@ -12,7 +13,10 @@ import { formatCurrency, currencySymbol } from '@/lib/currency';
 
 export default function ForecastDashboardPage() {
   const [forecastDays, setForecastDays] = useState('7');
-  const [selectedLocation, setSelectedLocation] = useState<string>('all');
+  // Uses the app-wide location selection so this page matches the header filter.
+  const { selectedLocationId, setSelectedLocationId } = useSelectedLocation();
+  const selectedLocation = selectedLocationId ?? 'all';
+  const setSelectedLocation = (v: string) => setSelectedLocationId(v === 'all' ? null : v);
   
   const { data: locations } = useLocations();
   const { data: sales } = useSales();

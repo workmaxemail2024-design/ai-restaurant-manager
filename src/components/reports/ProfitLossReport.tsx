@@ -109,8 +109,18 @@ export function ProfitLossReport() {
                   <TableRow key={row.month}>
                     <TableCell className="font-medium">{row.month}</TableCell>
                     <TableCell className="text-right">{formatCurrency(row.revenue)}</TableCell>
-                    <TableCell className="text-right text-destructive">{formatCurrency(row.foodCost)}</TableCell>
-                    <TableCell className="text-right text-destructive">{formatCurrency(row.labourCost)}</TableCell>
+                    <TableCell className="text-right text-destructive">
+                      {formatCurrency(row.foodCost)}
+                      {(row.uncostedDishCount ?? 0) > 0 && (
+                        <div className="text-[10px] text-muted-foreground">+ {row.uncostedDishCount} uncosted dish{row.uncostedDishCount === 1 ? "" : "es"} (unknown)</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-destructive">
+                      {formatCurrency(row.labourCost)}
+                      {(row.missingPayRateStaff ?? 0) > 0 && (
+                        <div className="text-[10px] text-muted-foreground">{row.missingPayRateStaff} staff missing pay rate</div>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right text-destructive">{formatCurrency(row.overheads)}</TableCell>
                     <TableCell className="text-right">{formatCurrency(row.grossProfit)}</TableCell>
                     <TableCell className={cn("text-right font-medium", row.netProfit >= 0 ? "text-success" : "text-destructive")}>

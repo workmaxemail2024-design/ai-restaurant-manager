@@ -14,8 +14,9 @@ export interface StockLevel {
 }
 
 export function useStockLevels(locationId?: string) {
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["stock-levels", locationId],
+    queryKey: ["stock-levels", currentRestaurant?.id, locationId ?? "all"],
     queryFn: async () => {
       let query = supabase
         .from("stock_levels")

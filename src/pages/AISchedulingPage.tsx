@@ -48,8 +48,13 @@ export default function AISchedulingPage() {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Hourly sales pattern
+  // Hourly sales pattern is NOT available: sales carry a trading date and an
+  // import timestamp only, not the real transaction time. Bucketing by import
+  // time would invent peaks, so no hourly demand is derived until real
+  // transaction times exist.
+  const HOURLY_SALES_AVAILABLE = false;
   const hourlySales = useMemo(() => {
+    if (!HOURLY_SALES_AVAILABLE) return [] as { hour: string; sales: number; count: number }[];
     const hourlyData = Array.from({ length: 24 }, (_, hour) => {
       const salesInHour = sales.filter((s) => {
         const saleHour = getHours(parseISO(s.created_at));
@@ -101,7 +106,8 @@ export default function AISchedulingPage() {
       const boh = Math.max(1, Math.ceil(avgBlockSales / 300));
       const bar = avgBlockSales > 150 ? 1 : 0;
 
-      const reason = avgBlockSales > avgSales * 1.5 ? "Peak demand"
+      const reason = !HOURLY_SALES_AVAILABLE ? "Baseline — hourly demand unavailable"
+        : avgBlockSales > avgSales * 1.5 ? "Peak demand"
         : avgBlockSales > avgSales ? "Above average" : "Standard coverage";
 
       return { time: block.time, foh, boh, bar, reason, totalRecommended: foh + boh + bar };
@@ -135,6 +141,7 @@ export default function AISchedulingPage() {
           staff: staffEfficiency,
           hourlySales,
           peakHours,
+          hourlyDemandAvailable: HOURLY_SALES_AVAILABLE,
           weekDays: weekDays.map((d) => format(d, "yyyy-MM-dd")),
         },
       });
@@ -221,7 +228,13 @@ export default function AISchedulingPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[280px]">
-              {sales.length > 0 ? (
+              {!HOURLY_SALES_AVAILABLE ? (
+                <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2 text-center px-6">
+                  <AlertTriangle className="h-6 w-6 text-muted-foreground/40" />
+                  <p>Hourly demand is not available yet.</p>
+                  <p className="text-xs">Imported sales record the trading day, not the time of each sale, so an hourly chart would only show when the import ran. It will appear once real transaction times are recorded.</p>
+                </div>
+              ) : sales.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={hourlySales}>
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />

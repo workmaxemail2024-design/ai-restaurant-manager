@@ -74,8 +74,9 @@ export interface UseDishesOptions {
 
 export function useDishes(locationId?: string | null, options: UseDishesOptions = {}) {
   const includeArchived = !!options.includeArchived;
+  const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["dishes", locationId, includeArchived ? "with-archived" : "active"],
+    queryKey: ["dishes", currentRestaurant?.id, locationId ?? "all", includeArchived ? "with-archived" : "active"],
     queryFn: async () => {
       let query = supabase
         .from("dishes")
