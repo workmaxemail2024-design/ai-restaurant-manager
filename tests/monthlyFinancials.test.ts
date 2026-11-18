@@ -89,10 +89,11 @@ describe("confirmed payroll replaces estimated labour", () => {
     const l = resolveMonthLabour({ monthKey: "2026-09", scopeLocationIds: [RUDY], payroll: [payroll({ status: "superseded" }), payroll({ id: "p2", amount: 37400.1 })], estimatedLabour: 0, hasEstimatedLabour: false, revenue: 1 });
     expect(l.amount).toBe(37400.1);
   });
-  it("all locations with payroll for only one keeps the estimate (no mixing)", () => {
-    const l = resolveMonthLabour({ monthKey: "2026-09", scopeLocationIds: [RUDY, MAX], payroll: [payroll({})], estimatedLabour: 50000, hasEstimatedLabour: true, revenue: 1 });
-    expect(l.source).toBe("partial");
-    expect(l.amount).toBe(50000);
+  it("all locations with payroll for one location keeps it and uses the other's own estimate (provisional)", () => {
+    const l = resolveMonthLabour({ monthKey: "2026-09", scopeLocationIds: [RUDY, MAX], payroll: [payroll({})], estimatedLabour: 50000, hasEstimatedLabour: true, estimatedLabourByLocation: { [RUDY]: 30000, [MAX]: 20000 }, revenue: 1 });
+    expect(l.source).toBe("mixed");
+    expect(l.provisional).toBe(true);
+    expect(l.amount).toBeCloseTo(37382.65 + 20000, 5);
   });
   it("other months keep the estimate", () => {
     const l = resolveMonthLabour({ monthKey: "2026-08", scopeLocationIds: [RUDY], payroll: [payroll({})], estimatedLabour: 28000, hasEstimatedLabour: true, revenue: 1 });

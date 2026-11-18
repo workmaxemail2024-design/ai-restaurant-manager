@@ -134,59 +134,108 @@ export function actualExpenseCost(e: ActualExpenseLike): { cost: number; vatFlag
   return { cost: e.amount, vatFlag: null };
 }
 
-export type LabourSource = "confirmed" | "partial" | "estimate" | "none";
+export type LabourSource = "confirmed" | "mixed" | "estimate" | "none";
+/** Per-location labour basis: confirmed payroll > wage-type actual bill > attendance estimate > unknown. */
+export type LocationLabourSource = "confirmed" | "bill" | "estimate" | "unknown" | "conflict";
+
+export interface LocationLabour {
+  locationId: string;
+  source: LocationLabourSource;
+  amount: number | null;
+  /** Wage-type actual bill ids standing in as this location's labour. */
+  billIds: string[];
+}
 
 export interface MonthLabour {
+  /** confirmed = every location has confirmed payroll; mixed = some confirmed, others estimated/unknown (provisional). */
   source: LabourSource;
-  /** Labour used in profit (confirmed payroll when it covers every location in view, else the estimate). */
+  /** Sum of each location's own labour; null when no location's labour is known. */
   amount: number | null;
   estimatedAmount: number | null;
   confirmedAmount: number | null;
   coveredLocations: number;
   totalLocations: number;
+  /** Locations whose labour is unknown — amount is then a lower bound, never a verified total. */
+  unknownLocations: number;
+  /** Locations with more than one active payroll figure (should be impossible; excluded until resolved). */
+  conflictLocations: string[];
+  locations: LocationLabour[];
   payroll: PayrollLike[];
+  provisional: boolean;
   pctOfSales: number | null;
 }
 
+/**
+ * Labour is resolved independently for each location + month. Confirmed payroll
+ * is never discarded because another location is incomplete; locations without
+ * it fall back to their own estimate (or Unknown). Any non-confirmed location
+ * makes the total provisional.
+ */
 export function resolveMonthLabour(input: {
   monthKey: string;
   scopeLocationIds: string[];
   payroll: PayrollLike[];
   estimatedLabour: number;
   hasEstimatedLabour: boolean;
+  /** Attendance/salary estimate per location (All Locations view). Missing key = unknown. */
+  estimatedLabourByLocation?: Record<string, number | null | undefined>;
+  /** Active actual bills, used only for wage-type bills at locations without confirmed payroll. */
+  actuals?: ActualExpenseLike[];
   revenue: number;
 }): MonthLabour {
   const { start } = monthBounds(input.monthKey);
-  const scope = new Set(input.scopeLocationIds);
+  const scopeIds = [...new Set(input.scopeLocationIds)];
+  const scope = new Set(scopeIds);
   const rows = input.payroll.filter((p) => p.status === "active" && p.period_month === start && scope.has(p.location_id));
-  const covered = new Set(rows.map((p) => p.location_id)).size;
-  const confirmedAmount = rows.length ? rows.reduce((s, p) => s + Number(p.amount), 0) : null;
+  const wageBills = (input.actuals ?? []).filter((e) => e.status === "active" && e.period_month === start && scope.has(e.location_id) && isLabourCategory(e.category, e.description));
   const estimatedAmount = input.hasEstimatedLabour ? input.estimatedLabour : null;
-  const total = scope.size;
+  const single = scopeIds.length === 1;
+
+  const locations: LocationLabour[] = scopeIds.map((loc) => {
+    const pr = rows.filter((p) => p.location_id === loc);
+    if (pr.length > 1) return { locationId: loc, source: "conflict", amount: null, billIds: [] };
+    if (pr.length === 1) return { locationId: loc, source: "confirmed", amount: Number(pr[0].amount), billIds: [] };
+    const bills = wageBills.filter((e) => e.location_id === loc);
+    if (bills.length) return { locationId: loc, source: "bill", amount: bills.reduce((s, e) => s + actualExpenseCost(e).cost, 0), billIds: bills.map((b) => b.id) };
+    const byLoc = input.estimatedLabourByLocation?.[loc];
+    const est = byLoc != null ? Number(byLoc) : single ? estimatedAmount : null;
+    return est != null ? { locationId: loc, source: "estimate", amount: est, billIds: [] } : { locationId: loc, source: "unknown", amount: null, billIds: [] };
+  });
+
+  const confirmedLocs = locations.filter((l) => l.source === "confirmed");
+  const nonEstimate = locations.filter((l) => l.source === "confirmed" || l.source === "bill").length;
+  const known = locations.filter((l) => l.amount != null);
+  const total = scopeIds.length;
+
+  let amount: number | null;
+  let unknownLocations: number;
+  if (nonEstimate === 0) {
+    // Nothing actual anywhere: keep the canonical aggregate estimate unchanged.
+    amount = estimatedAmount;
+    unknownLocations = estimatedAmount == null ? total : 0;
+  } else {
+    amount = known.length ? known.reduce((s, l) => s + (l.amount as number), 0) : null;
+    unknownLocations = locations.filter((l) => l.amount == null).length;
+  }
 
   let source: LabourSource;
-  let amount: number | null;
-  if (total > 0 && covered === total) {
-    source = "confirmed";
-    amount = confirmedAmount; // replaces the estimate — never added to it
-  } else if (covered > 0) {
-    source = "partial";
-    amount = estimatedAmount; // never mix confirmed for some locations with estimates for others
-  } else if (estimatedAmount != null) {
-    source = "estimate";
-    amount = estimatedAmount;
-  } else {
-    source = "none";
-    amount = null;
-  }
+  if (total > 0 && confirmedLocs.length === total) source = "confirmed";
+  else if (confirmedLocs.length > 0) source = "mixed";
+  else if (amount != null) source = "estimate";
+  else source = "none";
+
   return {
     source,
     amount,
     estimatedAmount,
-    confirmedAmount,
-    coveredLocations: covered,
+    confirmedAmount: confirmedLocs.length ? confirmedLocs.reduce((s, l) => s + (l.amount as number), 0) : null,
+    coveredLocations: confirmedLocs.length,
     totalLocations: total,
+    unknownLocations,
+    conflictLocations: locations.filter((l) => l.source === "conflict").map((l) => l.locationId),
+    locations,
     payroll: rows,
+    provisional: source !== "confirmed",
     pctOfSales: amount != null && input.revenue > 0 ? (amount / input.revenue) * 100 : null,
   };
 }
@@ -220,7 +269,7 @@ export function isLabourCategory(category: string | null | undefined, label?: st
 }
 
 export function monthExpenses(input: {
-  /** When confirmed payroll covers these locations, wage-type bills/estimates are excluded. */
+  /** Locations whose labour figure already represents wages: wage-type bills/estimates there are excluded. */
   payrollConfirmedLocationIds?: string[];
   monthKey: string;
   selectedLocationId: string | null;
@@ -298,6 +347,7 @@ export function buildMonthFinancials(input: {
   overheads: OverheadLike[];
   actuals: ActualExpenseLike[];
   payroll: PayrollLike[];
+  estimatedLabourByLocation?: Record<string, number | null | undefined>;
 }): MonthFinancials {
   const labour = resolveMonthLabour({
     monthKey: input.monthKey,
@@ -305,11 +355,15 @@ export function buildMonthFinancials(input: {
     payroll: input.payroll,
     estimatedLabour: input.estimatedLabour,
     hasEstimatedLabour: input.hasEstimatedLabour,
+    estimatedLabourByLocation: input.estimatedLabourByLocation,
+    actuals: input.actuals,
     revenue: input.revenue,
   });
   const expenses = monthExpenses({
     ...input,
-    payrollConfirmedLocationIds: labour.source === "confirmed" ? labour.payroll.map((p) => p.location_id) : [],
+    // Wage-type bills/estimates at a location are excluded whenever that location's labour is known
+    // (confirmed payroll, the wage bill itself, or its own estimate) — counted once, never twice.
+    payrollConfirmedLocationIds: labour.locations.filter((l) => l.amount != null).map((l) => l.locationId),
   });
   const profitBeforeOverheads = input.revenue - input.foodCost - (labour.amount ?? 0) - input.additionalExpenses;
   const operatingProfit = expenses.recorded ? profitBeforeOverheads - expenses.total : null;
@@ -317,7 +371,10 @@ export function buildMonthFinancials(input: {
   const flags: string[] = [];
   if (input.foodCostEstimated) flags.push("Food cost is estimated");
   if (labour.source === "estimate") flags.push("Labour is estimated from attendance");
-  if (labour.source === "partial") flags.push(`Confirmed payroll covers ${labour.coveredLocations} of ${labour.totalLocations} locations — estimate used`);
+  if (labour.source === "mixed") flags.push(`Provisional: confirmed payroll for ${labour.coveredLocations} of ${labour.totalLocations} locations, estimates for the rest`);
+  if (labour.locations.some((l) => l.source === "bill")) flags.push("Labour for some locations comes from wage bills, not confirmed payroll");
+  if (labour.unknownLocations > 0 && labour.amount != null) flags.push(`Labour unknown for ${labour.unknownLocations} location${labour.unknownLocations === 1 ? "" : "s"} — total is incomplete`);
+  if (labour.conflictLocations.length) flags.push(`${labour.conflictLocations.length} location${labour.conflictLocations.length === 1 ? " has" : "s have"} more than one active payroll figure — excluded until corrected`);
   if (labour.source === "none") flags.push("Labour unknown");
   if (!expenses.recorded) flags.push("No overheads or expenses recorded");
   if (expenses.estimateTotal > 0) flags.push("Includes recurring estimates");

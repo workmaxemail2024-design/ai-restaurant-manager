@@ -5,14 +5,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { format } from "date-fns";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/currency";
 import {
-  CLOSE_STATE_LABELS, MONTH_END_ITEMS, canConfirm, deriveCloseState, itemStatus, monthEndGuidance, validateItemChange,
+  CLOSE_STATE_LABELS, MONTH_END_ITEMS, confirmationReview, deriveCloseState, itemHint, itemStatus, monthEndGuidance, validateConfirmation, validateItemChange,
   type DetectedFacts, type ItemStatus,
 } from "@/lib/monthEndClose";
 import type { PayrollLike } from "@/lib/monthlyFinancials";
-import { useMonthEndCloses, useSaveMonthEndClose } from "@/hooks/useMonthEndClose";
+import { useMonthEndCloseEvents, useMonthEndCloses, useSaveMonthEndClose, type MonthEndCloseEvent } from "@/hooks/useMonthEndClose";
+
+const itemLabel = (k: string) => MONTH_END_ITEMS.find((d) => d.key === k)?.label ?? k;
+const when = (iso: string) => format(new Date(iso), "d MMM yyyy, HH:mm");
 import { useRecordPayroll } from "@/hooks/useExpenseImport";
 
 const STATUS_LABEL: Record<ItemStatus, string> = { todo: "To do", done: "Done", waiting: "Waiting for info", skipped: "Skipped (not available)" };
@@ -26,6 +33,9 @@ interface Props {
 
 export function MonthEndChecklist({ periodMonth, locations, payroll, factsFor }: Props) {
   const { data: closes = [], isLoading } = useMonthEndCloses(periodMonth);
+  const { data: events = [] } = useMonthEndCloseEvents(periodMonth);
+  const { hasPermission, hasFullAccess } = usePermissions();
+  const canEdit = hasFullAccess() || hasPermission("finance", "edit");
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -38,23 +48,29 @@ export function MonthEndChecklist({ periodMonth, locations, payroll, factsFor }:
           <LocationClose key={loc.id} periodMonth={periodMonth} location={loc}
             record={closes.find((c) => c.location_id === loc.id) ?? null}
             payroll={payroll.find((p) => p.location_id === loc.id && p.status === "active") ?? null}
-            facts={factsFor(loc.id)} />
+            facts={factsFor(loc.id)} canEdit={canEdit}
+            events={events.filter((e) => e.location_id === loc.id)} />
         ))}
       </CardContent>
     </Card>
   );
 }
 
-function LocationClose({ periodMonth, location, record, payroll, facts }: {
+function LocationClose({ periodMonth, location, record, payroll, facts, canEdit, events }: {
   periodMonth: string; location: { id: string; name: string };
   record: ReturnType<typeof useMonthEndCloses>["data"] extends (infer R)[] | undefined ? R | null : never;
-  payroll: PayrollLike | null; facts: DetectedFacts;
+  payroll: PayrollLike | null; facts: DetectedFacts; canEdit: boolean; events: MonthEndCloseEvent[];
 }) {
+  const [reviewing, setReviewing] = useState(false);
+  const [ack, setAck] = useState(false);
+  const [limitations, setLimitations] = useState("");
+  const review = confirmationReview(record);
+  const confirmError = validateConfirmation(record, { canEdit, acknowledged: ack, limitations });
   const save = useSaveMonthEndClose();
   const recordPayroll = useRecordPayroll();
   const [payrollInput, setPayrollInput] = useState("");
   const [reason, setReason] = useState("");
-  const state = deriveCloseState(record, facts);
+  const state = deriveCloseState(record);
   const confirmed = state === "confirmed";
   const guidance = monthEndGuidance(record, facts);
 
@@ -85,7 +101,7 @@ function LocationClose({ periodMonth, location, record, payroll, facts }: {
           <div className="text-muted-foreground">Monthly payroll total</div>
           <div className="font-medium">{payroll ? `${formatCurrency(payroll.amount)} (confirmed)` : "Not entered"}</div>
         </div>
-        {!confirmed && (
+        {!confirmed && canEdit && (
           <>
             <Input type="number" inputMode="decimal" min="0" step="0.01" className="h-11 w-36"
               placeholder={payroll ? "Correct total €" : "Total wages €"} value={payrollInput}
@@ -104,8 +120,10 @@ function LocationClose({ periodMonth, location, record, payroll, facts }: {
           return (
             <li key={def.key} className="flex flex-wrap items-center gap-2">
               {st === "done" ? <CheckCircle2 className="h-4 w-4 text-success" /> : <span className="h-4 w-4 rounded-full border" />}
-              <span className="min-w-[12rem] flex-1 text-sm">{def.label}</span>
-              <Select value={st} disabled={confirmed} onValueChange={(v) => setItem(def.key, v as ItemStatus)}>
+              <span className="min-w-[12rem] flex-1 text-sm">{def.label}
+                {itemHint(def.key, facts) && <span className="block text-xs text-muted-foreground">{itemHint(def.key, facts)}</span>}
+              </span>
+              <Select value={st} disabled={confirmed || !canEdit} onValueChange={(v) => setItem(def.key, v as ItemStatus)}>
                 <SelectTrigger className="h-11 w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(["todo", "done", "waiting", "skipped"] as ItemStatus[])
@@ -113,7 +131,7 @@ function LocationClose({ periodMonth, location, record, payroll, facts }: {
                     .map((s) => <SelectItem key={s} value={s}>{STATUS_LABEL[s]}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Input className="h-11 w-48" placeholder="Note (optional)" disabled={confirmed}
+              <Input className="h-11 w-48" placeholder="Note (optional)" disabled={confirmed || !canEdit}
                 defaultValue={record?.items[def.key]?.note ?? ""}
                 onBlur={(e) => { if ((e.target.value || "") !== (record?.items[def.key]?.note ?? "")) setItem(def.key, st, e.target.value); }} />
             </li>
@@ -135,12 +153,48 @@ function LocationClose({ periodMonth, location, record, payroll, facts }: {
         </div>
       )}
 
+      {confirmed && record?.confirmed_at && (
+        <div className="mt-3 rounded-md bg-muted/40 p-2 text-xs">
+          <div>Confirmed {when(record.confirmed_at)}{events.find((e) => e.action === "confirm")?.actor_name ? ` by ${events.find((e) => e.action === "confirm")?.actor_name}` : ""}</div>
+          {!!record.confirmation_skipped?.length && <div className="text-warning">Skipped: {record.confirmation_skipped.map(itemLabel).join(", ")}</div>}
+          {record.confirmation_limitations && <div>Limitations: {record.confirmation_limitations}</div>}
+        </div>
+      )}
+
+      {reviewing && !confirmed && (
+        <div className="mt-3 space-y-2 rounded-md border border-warning/50 p-3 text-sm">
+          <div className="font-medium">Review before confirming {location.name}</div>
+          {review.skipped.length === 0
+            ? <p className="text-muted-foreground">No items were skipped.</p>
+            : <p>Skipped: {review.skipped.map(itemLabel).join(", ")}</p>}
+          {review.needsAcknowledgement && (
+            <>
+              <p className="text-warning">Skipped financial information is missing from this month: {review.financialSkipped.map(itemLabel).join(", ")}. Profit may be overstated.</p>
+              <label className="flex min-h-11 items-center gap-3"><Checkbox checked={ack} onCheckedChange={(v) => setAck(v === true)} className="h-6 w-6" />I understand these figures are incomplete</label>
+              <Textarea placeholder="Limitations (e.g. stock count not done; supplier invoices from X missing)" value={limitations} onChange={(e) => setLimitations(e.target.value)} />
+            </>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" className="h-11" disabled={!!confirmError || save.isPending}
+              onClick={() => save.mutate({ locationId: location.id, periodMonth, action: "confirm", acknowledgeSkipped: ack, limitations },
+                { onSuccess: () => { setReviewing(false); setAck(false); setLimitations(""); } })}>
+              <Lock className="mr-1 h-4 w-4" /> Confirm month
+            </Button>
+            <Button type="button" variant="ghost" className="h-11" onClick={() => setReviewing(false)}>Cancel</Button>
+          </div>
+          {confirmError && <p className="text-xs text-muted-foreground">{confirmError}</p>}
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {!confirmed ? (
-          <Button type="button" className="h-11" disabled={!canConfirm(record, facts) || save.isPending}
-            onClick={() => save.mutate({ locationId: location.id, periodMonth, action: "confirm" })}>
-            <Lock className="mr-1 h-4 w-4" /> Confirm month
-          </Button>
+        {!canEdit ? (
+          <span className="text-xs text-muted-foreground">Only the Owner or someone with Finance Edit permission can change or confirm this month.</span>
+        ) : !confirmed ? (
+          !reviewing && (
+            <Button type="button" className="h-11" disabled={state !== "ready_for_review"} onClick={() => setReviewing(true)}>
+              <Lock className="mr-1 h-4 w-4" /> Review & confirm
+            </Button>
+          )
         ) : (
           <>
             <Input className="h-11 w-64" placeholder="Reason to reopen" value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -152,6 +206,22 @@ function LocationClose({ periodMonth, location, record, payroll, facts }: {
         )}
         {state === "ready_for_review" && <span className="text-xs text-muted-foreground">All items done or skipped — review the figures above, then confirm.</span>}
       </div>
+
+      {events.length > 0 && (
+        <details className="mt-3 text-xs">
+          <summary className="cursor-pointer py-2 text-muted-foreground">History ({events.length})</summary>
+          <ul className="space-y-1">
+            {events.map((e) => (
+              <li key={e.id}>
+                {when(e.created_at)} · {e.action === "confirm" ? "Confirmed" : "Reopened"}{e.actor_name ? ` by ${e.actor_name}` : ""}
+                {e.reason ? ` — ${e.reason}` : ""}
+                {e.skipped_items?.length ? ` · skipped: ${e.skipped_items.map(itemLabel).join(", ")}` : ""}
+                {e.limitations ? ` · limitations: ${e.limitations}` : ""}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

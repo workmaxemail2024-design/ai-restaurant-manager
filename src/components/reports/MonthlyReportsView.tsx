@@ -14,7 +14,7 @@ import { ActualVsTheoreticalBlock } from "@/components/reports/ActualVsTheoretic
 import { MonthlyFinancialsBlock } from "@/components/reports/MonthlyFinancialsBlock";
 import type { MonthFinancials } from "@/lib/monthlyFinancials";
 import { MonthEndChecklist } from "@/components/reports/MonthEndChecklist";
-import { useMonthEndCloses } from "@/hooks/useMonthEndClose";
+import { useMonthEndCloses, useMonthSalesCoverage } from "@/hooks/useMonthEndClose";
 import { deriveCloseState, profitStatus } from "@/lib/monthEndClose";
 import { useLocations } from "@/hooks/useLocations";
 import { useLocation as useSelectedLocation } from "@/contexts/LocationContext";
@@ -73,6 +73,7 @@ export function MonthlyReportsView({
     .map((l) => ({ id: l.id, name: l.name }));
   const closePeriodMonth = selectedMonthKey ? `${selectedMonthKey.slice(0, 7)}-01` : "";
   const { data: closes = [] } = useMonthEndCloses(closePeriodMonth);
+  const { data: salesCoverage } = useMonthSalesCoverage(closePeriodMonth);
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const selectedMonth = months.find((month) => month.key === selectedMonthKey) ?? null;
@@ -131,7 +132,7 @@ export function MonthlyReportsView({
                     <div><p className="text-xs text-muted-foreground">Revenue</p><p className="font-semibold">{future ? "—" : formatCurrency(month.revenue)}</p></div>
                     <div><p className="text-xs text-muted-foreground">Orders · Covers</p><p className="font-semibold">{future ? "—" : `${month.orders ?? "—"} · ${month.visitors ?? "—"}`}</p></div>
                     <div><p className="text-xs text-muted-foreground">Food cost</p><p className="font-semibold">{future ? "—" : `${formatCurrency(month.costing.blendedCost)} · ${month.costing.foodCostPct?.toFixed(1) ?? "—"}%`}</p></div>
-                    <div><p className="text-xs text-muted-foreground">{labourConfirmed ? "Labour (confirmed)" : "Labour"}</p><p className="font-semibold">{future || labourAmount == null ? "—" : `${formatCurrency(labourAmount)} · ${labourPct?.toFixed(1) ?? "—"}%`}</p></div>
+                    <div><p className="text-xs text-muted-foreground">{labourConfirmed ? "Labour (confirmed)" : fin?.labour.source === "mixed" ? "Labour (provisional)" : "Labour"}</p><p className="font-semibold">{future || labourAmount == null ? "—" : `${formatCurrency(labourAmount)} · ${labourPct?.toFixed(1) ?? "—"}%`}</p></div>
                     <div><p className="text-xs text-muted-foreground">{profitLabel}</p><p className={cn("font-semibold", !future && shownProfit < 0 && "text-destructive")}>{future ? "—" : formatCurrency(shownProfit)}</p></div>
                     <div><p className="text-xs text-muted-foreground">Completeness</p><p className="font-semibold">{future ? "—" : statusText(month)}</p></div>
                   </div>
@@ -164,7 +165,14 @@ export function MonthlyReportsView({
   }
 
   const selFin = financials?.get(selectedMonth.key);
+  const daysToCheck = (() => {
+    const last = new Date(`${closePeriodMonth}T00:00:00`); last.setMonth(last.getMonth() + 1); last.setDate(0);
+    const today = new Date();
+    if (today < new Date(`${closePeriodMonth}T00:00:00`)) return 0;
+    return today < last ? today.getDate() : last.getDate();
+  })();
   const selConfirmed = selFin?.labour.source === "confirmed";
+  const selMixed = selFin?.labour.source === "mixed";
   const profitEstimated = selectedMonth.costing.isEstimated || (!selConfirmed && selectedMonth.labourMissingDays > 0) || !!(selFin && (!selConfirmed || selFin.expenses.estimateTotal > 0));
   const selLabour = selFin ? selFin.labour.amount : (selectedMonth.hasAnyLabour ? selectedMonth.totalLabourCost : null);
   const selProfit = selFin ? (selFin.operatingProfit ?? selFin.profitBeforeOverheads) : selectedMonth.profit;
@@ -199,7 +207,7 @@ export function MonthlyReportsView({
         <Metric label="Orders" value={selectedMonth.orders?.toLocaleString() ?? "—"} note="receipts" />
         <Metric label="Covers" value={selectedMonth.visitors?.toLocaleString() ?? "—"} />
         <Metric label={selectedMonth.costing.isEstimated ? "Food Cost (est.)" : "Food Cost"} value={formatCurrency(selectedMonth.costing.blendedCost)} note={`${selectedMonth.costing.foodCostPct?.toFixed(1) ?? "—"}% · ${selectedMonth.costing.qualityLabel ?? "unknown"}`} />
-        <Metric label={selConfirmed ? "Labour (confirmed)" : "Labour (est.)"} value={selLabour == null ? "—" : formatCurrency(selLabour)} note={selConfirmed ? `${selFin?.labour.pctOfSales?.toFixed(1) ?? "—"}% of sales · payroll` : selectedMonth.labourMissingDays > 0 ? `${selectedMonth.labourMissingDays} trading day${selectedMonth.labourMissingDays === 1 ? "" : "s"} missing` : selLabour != null ? `${(selFin?.labour.pctOfSales ?? selectedMonth.labourPct)?.toFixed(1) ?? "—"}% of revenue` : "Labour unknown"} />
+        <Metric label={selConfirmed ? "Labour (confirmed)" : selMixed ? "Labour (provisional)" : "Labour (est.)"} value={selLabour == null ? "—" : formatCurrency(selLabour)} note={selConfirmed ? `${selFin?.labour.pctOfSales?.toFixed(1) ?? "—"}% of sales · payroll` : selectedMonth.labourMissingDays > 0 ? `${selectedMonth.labourMissingDays} trading day${selectedMonth.labourMissingDays === 1 ? "" : "s"} missing` : selLabour != null ? `${(selFin?.labour.pctOfSales ?? selectedMonth.labourPct)?.toFixed(1) ?? "—"}% of revenue` : "Labour unknown"} />
         <Metric label={profitEstimated ? `Est. ${selProfitLabel.toLowerCase()}` : selProfitLabel} value={formatCurrency(selProfit)} note={profitEstimated ? "Incomplete inputs" : selFin?.operatingMarginPct != null ? `${selFin.operatingMarginPct.toFixed(1)}% margin` : undefined} />
       </div>
 
@@ -210,10 +218,11 @@ export function MonthlyReportsView({
         locations={scopeLocations}
         payroll={selFin?.labour.payroll ?? []}
         factsFor={(locId) => ({
-          salesDays: 0,
-          tradingDaysExpected: 0,
+          salesDays: salesCoverage?.[locId]?.salesDays ?? 0,
+          tradingDaysExpected: daysToCheck,
+          fullDetailDays: salesCoverage?.[locId]?.fullDetailDays ?? 0,
           payrollConfirmed: !!selFin?.labour.payroll.some((p) => p.location_id === locId),
-          expensesRecorded: false,
+          expensesRecorded: !!selFin?.expenses.lines.some((l) => l.kind === "actual"),
         })}
       />
 

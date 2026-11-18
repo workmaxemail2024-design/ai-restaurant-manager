@@ -48,10 +48,11 @@ describe("restaurant/location isolation", () => {
     expect(m.labour.source).toBe("estimate");
     expect(m.labour.amount).toBe(4000);
   });
-  it("payroll for 2 of 3 locations is partial: estimate used, never mixed", () => {
-    const m = buildMonthFinancials({ ...base, estimatedLabour: 15000, hasEstimatedLabour: true, scopeLocationIds: [RUDYS, MAX, GPF], overheads: [], payroll: [pay(RUDYS, 8000), pay(MAX, 6000)] });
-    expect(m.labour.source).toBe("partial");
-    expect(m.labour.amount).toBe(15000);
+  it("payroll for 2 of 3 locations: confirmed kept, GPF uses its own estimate, total provisional", () => {
+    const m = buildMonthFinancials({ ...base, estimatedLabour: 15000, hasEstimatedLabour: true, scopeLocationIds: [RUDYS, MAX, GPF], overheads: [], payroll: [pay(RUDYS, 8000), pay(MAX, 6000)],
+      estimatedLabourByLocation: { [RUDYS]: 5000, [MAX]: 5000, [GPF]: 5000 } });
+    expect(m.labour.source).toBe("mixed");
+    expect(m.labour.amount).toBe(19000);
   });
 });
 

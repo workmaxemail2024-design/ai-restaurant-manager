@@ -6,12 +6,17 @@ import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { PAYROLL_SCOPE_LABELS, type MonthFinancials } from "@/lib/monthlyFinancials";
 import type { ReportsPeriodSummary } from "@/lib/reportsMonthly";
+import { useLocations } from "@/hooks/useLocations";
+
+const SOURCE_LABEL = { confirmed: "Confirmed payroll", bill: "Wage bill (not confirmed payroll)", estimate: "Estimated", unknown: "Unknown", conflict: "Two active payroll figures — fix in Overheads" } as const;
 
 const pct = (v: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
 
 /** Actual Labour Cost + overheads/expenses + operating profit for one month. */
 export function MonthlyFinancialsBlock({ month, fin }: { month: ReportsPeriodSummary; fin: MonthFinancials }) {
   const { labour, expenses } = fin;
+  const { data: locs = [] } = useLocations();
+  const locName = (id: string) => locs.find((l) => l.id === id)?.name ?? "Location";
   const monthName = format(parseISO(`${fin.monthKey}-01`), "MMMM yyyy");
   const byCategory = new Map<string, { actual: number; estimate: number }>();
   for (const l of expenses.lines) {
@@ -27,7 +32,9 @@ export function MonthlyFinancialsBlock({ month, fin }: { month: ReportsPeriodSum
           <CardTitle className="flex items-center gap-2 text-base"><Users className="h-4 w-4" />Actual Labour Cost</CardTitle>
           {labour.source === "confirmed"
             ? <Badge className="gap-1"><BadgeCheck className="h-3.5 w-3.5" />Accountant-confirmed</Badge>
-            : <Badge variant="outline">Estimated from attendance</Badge>}
+            : labour.source === "mixed"
+              ? <Badge variant="outline" className="border-warning text-warning">Provisional — mixed sources</Badge>
+              : <Badge variant="outline">Estimated from attendance</Badge>}
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-end gap-x-6 gap-y-1">
@@ -53,8 +60,21 @@ export function MonthlyFinancialsBlock({ month, fin }: { month: ReportsPeriodSum
               )}
             </ul>
           )}
-          {labour.source === "partial" && (
-            <p className="flex items-start gap-2 text-sm text-warning"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Confirmed payroll covers {labour.coveredLocations} of {labour.totalLocations} locations, so this view keeps the estimate. Select a single location to see its confirmed payroll.</p>
+          {labour.totalLocations > 1 && labour.source !== "estimate" && labour.source !== "none" && (
+            <ul className="space-y-1 text-sm">
+              {labour.locations.map((l) => (
+                <li key={l.locationId} className="flex flex-wrap justify-between gap-2">
+                  <span>{locName(l.locationId)} · <span className={cn(l.source !== "confirmed" && "text-warning")}>{SOURCE_LABEL[l.source]}</span></span>
+                  <span className="font-mono">{l.amount == null ? "Unknown" : formatCurrency(l.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {labour.source === "mixed" && (
+            <p className="flex items-start gap-2 text-sm text-warning"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />Confirmed payroll is used for {labour.coveredLocations} of {labour.totalLocations} locations; the others use their own estimate. This total is provisional.</p>
+          )}
+          {labour.unknownLocations > 0 && labour.amount != null && (
+            <p className="text-sm text-warning">Labour is unknown for {labour.unknownLocations} location{labour.unknownLocations === 1 ? "" : "s"}, so this total is incomplete.</p>
           )}
           {(labour.source === "estimate" || labour.source === "none") && (
             <p className="text-sm text-muted-foreground">No confirmed payroll for this month. Add it from Overheads → Import Expenses or Confirmed payroll.</p>
@@ -71,7 +91,7 @@ export function MonthlyFinancialsBlock({ month, fin }: { month: ReportsPeriodSum
           <div className="space-y-1.5">
             <Row label="Revenue" value={formatCurrency(month.revenue)} />
             <Row label={month.costing.isEstimated ? "Food cost (est.)" : "Food cost"} value={`− ${formatCurrency(month.costing.blendedCost)}`} />
-            <Row label={labour.source === "confirmed" ? "Labour (confirmed payroll)" : "Labour (estimated)"} value={labour.amount == null ? "Unknown" : `− ${formatCurrency(labour.amount)}`} />
+            <Row label={labour.source === "confirmed" ? "Labour (confirmed payroll)" : labour.source === "mixed" ? "Labour (provisional, mixed)" : "Labour (estimated)"} value={labour.amount == null ? "Unknown" : `− ${formatCurrency(labour.amount)}`} />
             {month.additionalExpenses > 0 && <Row label="Daily additional expenses" value={`− ${formatCurrency(month.additionalExpenses)}`} />}
             <Row label="Profit before overheads" value={formatCurrency(fin.profitBeforeOverheads)} strong />
             {expenses.recorded ? (

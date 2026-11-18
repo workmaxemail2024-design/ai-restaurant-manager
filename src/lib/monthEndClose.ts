@@ -50,42 +50,88 @@ export type SavedItems = Record<string, SavedItem | undefined>;
 export interface CloseRecord {
   items: SavedItems;
   confirmed_at: string | null;
+  confirmed_by?: string | null;
+  confirmation_skipped?: string[] | null;
+  confirmation_limitations?: string | null;
 }
 
-/** Facts detected from existing data — suggestions only, never auto-confirmation. */
+/**
+ * Facts detected from existing data — shown as hints only. Nothing is ever
+ * marked Done automatically: imported sales are evidence, not verification.
+ */
 export interface DetectedFacts {
+  /** Days in the month with any POS import for this location (deduplicated by date). */
   salesDays: number;
+  /** Calendar days in the month up to today (or the whole month once it has ended). */
   tradingDaysExpected: number;
+  /** Days with both the Sales Summary and the Products Sold report. */
+  fullDetailDays?: number;
   payrollConfirmed: boolean;
   expensesRecorded: boolean;
 }
 
-export function suggestedStatus(key: string, f: DetectedFacts): ItemStatus | null {
-  if (key === "sales") return f.tradingDaysExpected > 0 && f.salesDays >= f.tradingDaysExpected ? "done" : null;
-  if (key === "payroll") return f.payrollConfirmed ? "done" : null;
-  if (key === "expenses") return f.expensesRecorded ? "done" : null;
+/** Plain-language coverage line for the Sales item, e.g. "POS data for 28 of 31 days (25 with product detail)". */
+export function salesCoverageText(f: DetectedFacts): string {
+  if (f.tradingDaysExpected <= 0) return "No days to check yet";
+  const detail = f.fullDetailDays != null ? ` (${f.fullDetailDays} with both summary and product detail)` : "";
+  return `POS data for ${f.salesDays} of ${f.tradingDaysExpected} days${detail} — check closed days and totals before marking Done`;
+}
+
+/** Hint text per item; never changes the saved status. */
+export function itemHint(key: string, f?: DetectedFacts): string | null {
+  if (!f) return null;
+  if (key === "sales") return salesCoverageText(f);
+  if (key === "payroll") return f.payrollConfirmed ? "Confirmed payroll is recorded for this month" : "No confirmed payroll yet";
+  if (key === "expenses") return f.expensesRecorded ? "Bills are recorded for this month" : "No bills recorded yet";
   return null;
 }
 
-export function itemStatus(key: string, items: SavedItems, facts?: DetectedFacts): ItemStatus {
-  const saved = items[key]?.status;
-  if (saved) return saved;
-  return (facts && suggestedStatus(key, facts)) || "todo";
+/** Status is what the user saved — detected facts never tick items for them. */
+export function itemStatus(key: string, items: SavedItems, _facts?: DetectedFacts): ItemStatus {
+  return items[key]?.status ?? "todo";
 }
 
-export function deriveCloseState(record: CloseRecord | null, facts?: DetectedFacts): CloseState {
+export function deriveCloseState(record: CloseRecord | null, _facts?: DetectedFacts): CloseState {
   if (record?.confirmed_at) return "confirmed";
   const items = record?.items ?? {};
-  const statuses = MONTH_END_ITEMS.map((d) => itemStatus(d.key, items, facts));
-  const touched = Object.values(items).some((i) => i && i.status !== "todo");
+  const statuses = MONTH_END_ITEMS.map((d) => itemStatus(d.key, items));
   if (statuses.some((s) => s === "waiting")) return "waiting";
   if (statuses.every((s) => s === "done" || s === "skipped")) return "ready_for_review";
-  if (!touched && statuses.every((s) => s === "todo")) return "not_started";
+  if (statuses.every((s) => s === "todo")) return "not_started";
   return "in_progress";
 }
 
-export function canConfirm(record: CloseRecord | null, facts?: DetectedFacts): boolean {
-  return deriveCloseState(record, facts) === "ready_for_review";
+export function canConfirm(record: CloseRecord | null, _facts?: DetectedFacts): boolean {
+  return deriveCloseState(record) === "ready_for_review";
+}
+
+/** Skipping these leaves money out of the month's figures. */
+export const FINANCIAL_ITEM_KEYS = ["payroll", "supplier_invoices", "expenses", "overheads", "stock_count"] as const;
+
+export interface ConfirmationReview {
+  skipped: string[];
+  financialSkipped: string[];
+  /** True when the confirmer must acknowledge skipped financial information and describe limitations. */
+  needsAcknowledgement: boolean;
+}
+
+export function confirmationReview(record: CloseRecord | null): ConfirmationReview {
+  const items = record?.items ?? {};
+  const skipped = MONTH_END_ITEMS.filter((d) => items[d.key]?.status === "skipped").map((d) => d.key);
+  const financialSkipped = skipped.filter((k) => (FINANCIAL_ITEM_KEYS as readonly string[]).includes(k));
+  return { skipped, financialSkipped, needsAcknowledgement: financialSkipped.length > 0 };
+}
+
+/** Mirrors the server rule in save_month_end_close('confirm'). */
+export function validateConfirmation(record: CloseRecord | null, input: { canEdit: boolean; acknowledged: boolean; limitations: string }): string | null {
+  if (!input.canEdit) return "Only the Owner or someone with Finance Edit permission can confirm a month";
+  if (!canConfirm(record)) return "Every item must be Done or Skipped first";
+  const r = confirmationReview(record);
+  if (r.needsAcknowledgement) {
+    if (!input.acknowledged) return "Acknowledge that skipped financial information is missing from this month";
+    if (!input.limitations.trim()) return "Describe the limitations of this month's figures";
+  }
+  return null;
 }
 
 /** Skipping is allowed only for skippable items. */
@@ -108,7 +154,7 @@ export function monthEndGuidance(record: CloseRecord | null, facts?: DetectedFac
   if (record?.confirmed_at) return [];
   const items = record?.items ?? {};
   return MONTH_END_ITEMS
-    .map((d) => ({ d, s: itemStatus(d.key, items, facts) }))
+    .map((d) => ({ d, s: itemStatus(d.key, items) }))
     .filter(({ s }) => s === "todo" || s === "waiting")
     .map(({ d, s }) => ({ key: d.key, label: d.label, status: s, why: d.why, route: d.route, formLabel: d.formLabel, note: items[d.key]?.note ?? null }));
 }
