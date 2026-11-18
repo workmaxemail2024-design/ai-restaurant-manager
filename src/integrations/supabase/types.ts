@@ -1416,6 +1416,142 @@ export type Database = {
           },
         ]
       }
+      month_end_close_events: {
+        Row: {
+          action: string
+          actor: string | null
+          close_id: string
+          created_at: string
+          id: string
+          item_key: string | null
+          item_status: string | null
+          items_snapshot: Json
+          limitations: string | null
+          location_id: string
+          period_month: string
+          reason: string | null
+          restaurant_id: string
+          skipped_items: string[] | null
+        }
+        Insert: {
+          action: string
+          actor?: string | null
+          close_id: string
+          created_at?: string
+          id?: string
+          item_key?: string | null
+          item_status?: string | null
+          items_snapshot: Json
+          limitations?: string | null
+          location_id: string
+          period_month: string
+          reason?: string | null
+          restaurant_id: string
+          skipped_items?: string[] | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          close_id?: string
+          created_at?: string
+          id?: string
+          item_key?: string | null
+          item_status?: string | null
+          items_snapshot?: Json
+          limitations?: string | null
+          location_id?: string
+          period_month?: string
+          reason?: string | null
+          restaurant_id?: string
+          skipped_items?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "month_end_close_events_close_id_fkey"
+            columns: ["close_id"]
+            isOneToOne: false
+            referencedRelation: "month_end_closes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "month_end_close_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "month_end_close_events_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      month_end_closes: {
+        Row: {
+          confirmation_limitations: string | null
+          confirmation_skipped: string[] | null
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          id: string
+          items: Json
+          location_id: string
+          period_month: string
+          reopened_reason: string | null
+          restaurant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          confirmation_limitations?: string | null
+          confirmation_skipped?: string[] | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          location_id: string
+          period_month: string
+          reopened_reason?: string | null
+          restaurant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          confirmation_limitations?: string | null
+          confirmation_skipped?: string[] | null
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          id?: string
+          items?: Json
+          location_id?: string
+          period_month?: string
+          reopened_reason?: string | null
+          restaurant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "month_end_closes_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "month_end_closes_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           created_at: string
@@ -5782,6 +5918,21 @@ export type Database = {
       }
       reverse_stock_movement: {
         Args: { p_movement_id: string; p_reason: string }
+        Returns: string
+      }
+      save_month_end_close: {
+        Args: {
+          p_acknowledge_skipped?: boolean
+          p_action: string
+          p_item_key?: string
+          p_item_status?: string
+          p_limitations?: string
+          p_location_id: string
+          p_note?: string
+          p_period_month: string
+          p_reason?: string
+          p_restaurant_id: string
+        }
         Returns: string
       }
       save_supplier_invoice_draft: {

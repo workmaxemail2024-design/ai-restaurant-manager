@@ -59,10 +59,7 @@ CREATE POLICY "Finance and report viewers read month-end history" ON public.mont
          AND public.user_can_access_location(location_id)
          AND (public.user_is_owner() OR public.user_has_permission('finance','view')
               OR public.user_has_permission('reports','view')));
--- No INSERT/UPDATE/DELETE policies or grants: written only by save_month_end_close, never edited.
 
--- 2. Save / confirm / reopen (Owner or Finance Edit; tenant + location checked).
--- p_action: 'save' (merge one item), 'confirm', 'reopen'.
 CREATE OR REPLACE FUNCTION public.save_month_end_close(
   p_restaurant_id uuid, p_location_id uuid, p_period_month date,
   p_action text, p_item_key text DEFAULT NULL, p_item_status text DEFAULT NULL,
@@ -122,7 +119,6 @@ BEGIN
   ELSIF p_action = 'reopen' THEN
     IF NULLIF(btrim(p_reason), '') IS NULL THEN RAISE EXCEPTION 'Give a reason to reopen this month'; END IF;
     IF v_row.confirmed_at IS NULL THEN RAISE EXCEPTION 'This month is not confirmed'; END IF;
-    -- The previous confirmation (who, when, skipped, limitations) stays in month_end_close_events.
     UPDATE public.month_end_closes SET confirmed_at = NULL, confirmed_by = NULL, confirmation_skipped = NULL,
            confirmation_limitations = NULL, reopened_reason = p_reason,
            updated_at = now(), updated_by = auth.uid()
@@ -146,7 +142,6 @@ END $$;
 REVOKE ALL ON FUNCTION public.save_month_end_close(uuid, uuid, date, text, text, text, text, text, boolean, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.save_month_end_close(uuid, uuid, date, text, text, text, text, text, boolean, text) TO authenticated;
 
--- 3. Future-only restaurant_id fill (never overwrites a supplied value, never touches existing rows).
 CREATE OR REPLACE FUNCTION public.fill_staff_restaurant_id()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN

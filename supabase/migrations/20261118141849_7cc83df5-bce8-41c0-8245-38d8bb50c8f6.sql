@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS month_end_close_events_location_idx ON public.month_end_close_events (location_id);
+CREATE INDEX IF NOT EXISTS month_end_close_events_restaurant_idx ON public.month_end_close_events (restaurant_id);
