@@ -129,11 +129,8 @@ def main():
             print(json.dumps(export_summary(envelope), ensure_ascii=False))
             if args.command == "preview":
                 continue
-            if args.command == "stage" and store_id == "02136":
-                # Gourmet Pizza Factory currently has no restaurant ownership
-                # binding and no journals after October 2025.
-                print("Gourmet store staging blocked until tenant mapping is fixed")
-                continue
+            # The server validates active tenant bindings for every store.
+            # Dashboard-only snapshots contain no fabricated journal details.
             result = deliver(envelope, mode="stage" if args.command == "stage" else "preview")
             print("Server response:", json.dumps(result, ensure_ascii=False))
         except Exception as error:
