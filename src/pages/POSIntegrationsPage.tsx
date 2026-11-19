@@ -63,9 +63,7 @@ interface CaptivaSettings {
 }
 
 export default function POSIntegrationsPage() {
-  const { selectedLocationId: globalLocationId } = useGlobalLocation();
-  // Page filter starts from the header location; changing it here only filters this page.
-  const [selectedLocation, setSelectedLocation] = useState<string>(globalLocationId ?? "");
+  const { selectedLocationId: selectedLocation } = useGlobalLocation();
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingIntegration, setEditingIntegration] = useState<POSIntegration | null>(null);
   const [formData, setFormData] = useState({
@@ -87,41 +85,39 @@ export default function POSIntegrationsPage() {
   const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = usePOSIntegrations(selectedLocation || undefined);
   const { data: syncLogs, refetch: refetchLogs } = usePOSSyncLogs(selectedLocation || undefined);
 
-  // Captiva backend evidence per restaurant (read-only staging rows; never booked as revenue here).
+  const visibleLocations = (locations ?? []).filter(location => !selectedLocation || location.id === selectedLocation);
   const stagedQ = useQuery({
-    queryKey: ["captiva-backend-status", (locations ?? []).map((l) => l.id).join(",")],
-    enabled: (locations ?? []).length > 0,
+    queryKey: ["captiva-backend-status", visibleLocations.map(location => location.id)],
+    enabled: visibleLocations.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pos_captiva_daily_sources")
-        .select("id, location_id, store_id, trading_date, official_gross, official_net, journal_coverage, reconciliation_state, observed_at")
-        .order("trading_date", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      const rows = data ?? [];
-      const ids = rows.map((r) => r.id);
-      const approved = new Set<string>();
-      if (ids.length) {
-        const { data: ap, error: apErr } = await supabase.from("pos_captiva_daily_approvals").select("source_id").in("source_id", ids);
-        if (apErr) throw apErr;
-        (ap ?? []).forEach((a) => approved.add(a.source_id));
-      }
-      const byLoc = new Map<string, typeof rows>();
-      for (const r of rows) byLoc.set(r.location_id, [...(byLoc.get(r.location_id) ?? []), r]);
-      // "Applied" = an approved latest day that also has a booked POS daily summary.
-      const out = new Map<string, { latest: (typeof rows)[number]; view: ReturnType<typeof captivaConnectionView> }>();
-      for (const [loc, list] of byLoc) {
-        const latest = list[0];
-        let applied = false;
-        if (approved.has(latest.id)) {
-          const { count, error: sErr } = await supabase.from("pos_daily_summaries").select("id", { count: "exact", head: true })
-            .eq("location_id", loc).eq("report_date", latest.trading_date);
-          if (sErr) throw sErr;
-          applied = (count ?? 0) > 0;
-        }
-        out.set(loc, { latest, view: captivaConnectionView({ sources: list, approvedSourceIds: approved, latestSourceId: latest.id, latestApplied: applied }) });
-      }
-      return out;
+      const statuses = await Promise.all(visibleLocations.map(async ({ id }) => {
+        const { data: latest, error } = await supabase
+          .from("pos_captiva_daily_sources")
+          .select("id, location_id, store_id, trading_date, official_gross, official_net, journal_coverage, reconciliation_state, observed_at")
+          .eq("location_id", id)
+          .order("trading_date", { ascending: false })
+          .order("observed_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        if (!latest) return null;
+
+        const { count, error: approvalError } = await supabase
+          .from("pos_captiva_daily_approvals")
+          .select("source_id", { count: "exact", head: true })
+          .eq("source_id", latest.id);
+        if (approvalError) throw approvalError;
+
+        // Legacy XLS summaries can share this date and location. They do not prove this source was applied.
+        const view = captivaConnectionView({
+          sources: [latest],
+          latestSourceId: latest.id,
+          approvedSourceIds: new Set(count ? [latest.id] : []),
+        });
+        return [id, { latest, view }] as const;
+      }));
+      return new Map(statuses.filter(status => status !== null));
     },
   });
   const createIntegration = useCreatePOSIntegration();
@@ -694,23 +690,6 @@ export default function POSIntegrationsPage() {
       }
     >
       <div className="space-y-4">
-        {/* Location Filter */}
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedLocation} onValueChange={v => setSelectedLocation(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-56 h-10 text-sm" aria-label="Filter this page by location"><SelectValue placeholder="All locations" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Locations</SelectItem>
-                  {locations?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <span className="text-xs text-muted-foreground">Filters this page only</span>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* At-a-glance Captiva status per restaurant (from the Captiva backend, not per-location API settings) */}
         <Card>
           <CardHeader className="pb-3">
@@ -741,7 +720,7 @@ export default function POSIntegrationsPage() {
               <div className="grid gap-3 md:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-40" />)}</div>
             ) : (
             <div className="grid gap-3 md:grid-cols-3">
-              {(locations ?? []).filter(l => !selectedLocation || l.id === selectedLocation).map(l => {
+              {visibleLocations.map(l => {
                 const st = stagedQ.data?.get(l.id);
                 const v = st?.view ?? captivaConnectionView({ sources: [] });
                 return (
