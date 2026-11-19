@@ -80,7 +80,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
-import { buildAllLocationsReadLedger, buildMonthSummaries, buildWeekSummaries, sumCanonicalRevenue, type ReportsPeriodSummary } from "@/lib/reportsMonthly";
+import { ledgerDayRevenue, buildAllLocationsReadLedger, buildMonthSummaries, buildWeekSummaries, sumCanonicalRevenue, type ReportsPeriodSummary } from "@/lib/reportsMonthly";
 
 // ─── Missing field labels ───
 const MISSING_LABELS: Record<MissingField, string> = {
@@ -576,15 +576,24 @@ function DayCard({
     }
   }, [ledger]);
 
+  // "All locations": figures read the combined ledger (per-location corrections folded in);
+  // the form below still edits only the location-less row.
+  const rv = !locationId && readLedger ? readLedger : null;
+  const vManualRevenue = rv ? rv.manual_revenue : manualRevenue;
+  const vManualOrders = rv ? rv.manual_orders : manualOrders;
+  const vCovers = rv ? rv.covers : covers;
+  const vCoversUnknown = rv ? rv.covers_unknown : coversUnknown;
+  const vLabourHours = rv ? rv.labour_hours : labourHours;
+  const vAdditionalExpenses = rv ? rv.additional_expenses : additionalExpenses;
   // Effective revenue: use manual override if no actual sales data
-  const effectiveRevenue = day.hasData ? day.revenue : (manualRevenue ?? 0);
+  const effectiveRevenue = rv ? ledgerDayRevenue(day, rv) : day.hasData ? day.revenue : (manualRevenue ?? 0);
   // Orders = receipt count (from pos_daily_summaries), manual correction wins.
   // Qty sold is a separate product-line measure and is never used as orders.
-  const ordersMetric = computeEffectiveOrders(day.orders, { manual_orders: manualOrders });
-  const visitorsMetric = computeEffectiveVisitors(day.visitors, { covers, covers_unknown: coversUnknown });
+  const ordersMetric = computeEffectiveOrders(day.orders, { manual_orders: vManualOrders });
+  const visitorsMetric = computeEffectiveVisitors(day.visitors, { covers: vCovers, covers_unknown: vCoversUnknown });
   const effectiveOrders: number | null = ordersMetric.value;
   const grossForDisplay: number | null =
-    day.summary?.grossSales != null ? day.summary.grossSales : day.hasData ? day.revenue : manualRevenue;
+    day.summary?.grossSales != null ? day.summary.grossSales : day.hasData ? day.revenue : vManualRevenue;
   const aovForDisplay = effectiveAov(grossForDisplay, ordersMetric, day.summary?.aov ?? day.aov);
   // Food cost comes from the shared date-aware resolver; the 30% assumption is
   // applied only to revenue that genuinely cannot be costed.
@@ -596,14 +605,14 @@ function DayCard({
 
   // Labour hierarchy: 1. actual attendance, 2. manual ledger, 3. planned shifts
   const hasActualAttendance = actualAttendance && actualAttendance.hours > 0;
-  const hasManualLabour = labourHours > 0;
-  const effectiveLabourHours = hasActualAttendance ? actualAttendance.hours : hasManualLabour ? labourHours : 0;
+  const hasManualLabour = vLabourHours > 0;
+  const effectiveLabourHours = hasActualAttendance ? actualAttendance.hours : hasManualLabour ? vLabourHours : 0;
   // Manual hours without a valid rate → labour cost Unknown (null), never an assumed rate.
   const labourCost: number | null = hasActualAttendance ? actualAttendance.cost : manualLabourCost(effectiveLabourHours, avgHourlyRate);
   const labourSource = hasActualAttendance ? "attendance" : hasManualLabour ? "manual" : "none";
   // Unknown (no revenue or no labour source) stays null — never a verified 0%.
   const labourPct: number | null = effectiveRevenue > 0 && labourSource !== "none" ? (labourCost != null ? (labourCost / effectiveRevenue) * 100 : null) : null;
-  const adjustedProfit = effectiveRevenue - effectiveFoodCost - (labourCost ?? 0) - additionalExpenses;
+  const adjustedProfit = effectiveRevenue - effectiveFoodCost - (labourCost ?? 0) - vAdditionalExpenses;
   const profitIsEstimated = foodCostIsEstimated || labourSource === "none" || labourCost == null || costing.missingCostDishes > 0;
 
   // Variance between actual and planned
@@ -1740,7 +1749,9 @@ export default function ReportsPage() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">
-                      {profitIsEstimated ? "Est. Profit" : "Profit"}
+                      <span title="Sales − food cost − labour − daily expenses. Monthly bills and overhead estimates are not included here; they are in the Financial Summary and the monthly report.">
+                        {profitIsEstimated ? "Est. Profit" : "Profit"} (before overheads)
+                      </span>
                     </CardTitle>
                     <TrendingUp className="h-3.5 w-3.5 text-success" />
                   </CardHeader>

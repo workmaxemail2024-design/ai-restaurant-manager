@@ -227,10 +227,20 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
             }
           />
           <Stat
-            label="Allocated Overheads"
+            label="Bills (actual)"
+            value={data.actualExpenseCount > 0 ? formatCurrency(data.actualExpenses) : "None recorded"}
+            tone="cost"
+            sub={
+              data.actualExpenseCount > 0
+                ? `${Object.entries(data.actualExpenseByCategory).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, v]) => `${c} ${formatCurrency(v)}`).join(" · ")} — monthly bills, share for these dates${data.actualWageBillsExcluded > 0 ? "; wage bills counted under labour" : ""}${data.actualVatUnclear > 0 ? `; VAT unclear on ${data.actualVatUnclear}` : ""}`
+                : data.actualWageBillsExcluded > 0 ? "Wage bills counted under labour" : "No imported bills for these months"
+            }
+          />
+          <Stat
+            label="Allocated Overheads (estimates)"
             value={formatCurrency(data.overheads)}
             tone="cost"
-            sub={data.hasOverheads ? "From Overheads system" : "No overheads configured"}
+            sub={data.hasOverheads ? "Recurring estimates; any replaced by a real bill are left out" : "No overheads configured"}
           />
         </div>
 
@@ -245,7 +255,7 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
             sub={
               isIndicative
                 ? `Indicative — ${data.missing.length > 0 ? data.missing.slice(0, 3).join(", ") : "some inputs incomplete or estimated"}`
-                : `${data.marginBasis === "net" ? "Net sales" : "Gross sales"} − theoretical food cost − labour − expenses − overheads`
+                : `${data.marginBasis === "net" ? "Net sales" : "Gross sales"} − theoretical food cost − labour − daily expenses − bills − remaining estimates`
             }
           />
           <Stat

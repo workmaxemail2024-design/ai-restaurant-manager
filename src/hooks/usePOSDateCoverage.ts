@@ -23,6 +23,26 @@ interface UsePOSDateCoverageParams {
  * - imported = data exists in pos_sales_import for that date
  * - applied = data has sync_status = 'applied' (already on dashboard)
  */
+/** Reads every import row for a location/provider/date range, 1000 rows per page. Throws on failure. */
+export async function fetchImportDatesPaged(locationId: string, posProvider: string, from: string, to: string, pageSize = 1000) {
+  const rows: { mapped_sale_date: string; sync_status: string | null }[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from('pos_sales_import')
+      .select('id, mapped_sale_date, sync_status')
+      .eq('location_id', locationId)
+      .eq('pos_provider', posProvider)
+      .gte('mapped_sale_date', from)
+      .lte('mapped_sale_date', to)
+      .order('id')
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    rows.push(...((data ?? []) as any));
+    if (!data || data.length < pageSize) break;
+  }
+  return rows;
+}
+
 export function usePOSDateCoverage({
   locationId,
   posProvider,
@@ -44,18 +64,8 @@ export function usePOSDateCoverage({
       const coverageMap = new Map<string, DateCoverage>();
 
       // Fetch all imports for this location/provider in the date range
-      const { data: imports, error } = await supabase
-        .from('pos_sales_import')
-        .select('mapped_sale_date, sync_status')
-        .eq('location_id', locationId)
-        .eq('pos_provider', posProvider)
-        .gte('mapped_sale_date', fromDate)
-        .lte('mapped_sale_date', toDate);
-
-      if (error) {
-        console.error('Error fetching POS date coverage:', error);
-        return coverageMap;
-      }
+      // Failed reads throw (shown as an error) rather than reporting days as not yet imported.
+      const imports = await fetchImportDatesPaged(locationId, posProvider, fromDate, toDate);
 
       // Process results to build coverage map
       for (const imp of imports || []) {
@@ -128,25 +138,8 @@ export function useDateRangeCoverage({
       const totalDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
       // Fetch unique dates with imports
-      const { data: imports, error } = await supabase
-        .from('pos_sales_import')
-        .select('mapped_sale_date, sync_status')
-        .eq('location_id', locationId)
-        .eq('pos_provider', posProvider)
-        .gte('mapped_sale_date', dateFrom)
-        .lte('mapped_sale_date', dateTo);
-
-      if (error) {
-        console.error('Error fetching range coverage:', error);
-        return {
-          totalDays,
-          daysWithImports: 0,
-          daysWithApplied: 0,
-          newDays: totalDays,
-          allCovered: false,
-          partiallyCovered: false,
-        };
-      }
+      // Failed reads throw (shown as an error) rather than reporting days as not yet imported.
+      const imports = await fetchImportDatesPaged(locationId, posProvider, dateFrom, dateTo);
 
       // Count unique dates
       const importedDates = new Set<string>();

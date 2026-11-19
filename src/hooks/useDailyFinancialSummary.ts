@@ -1,3 +1,4 @@
+import { rangeActualExpenses } from "@/lib/rangeActualExpenses";
 import { unwrapQuery } from "@/lib/revenueTruth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,6 +60,12 @@ export interface DailyFinancialSummary {
   dailyExpenseCount: number;
 
   overheads: number;
+  /** Real monthly bills prorated to the range (wage bills excluded; replaced estimates removed). */
+  actualExpenses: number;
+  actualExpenseCount: number;
+  actualExpenseByCategory: Record<string, number>;
+  actualWageBillsExcluded: number;
+  actualVatUnclear: number;
   hasOverheads: boolean;
 
   operatingProfit: number;
@@ -290,30 +297,41 @@ export function useDailyFinancialSummary(
       if (locationId) ohQ = ohQ.or(`location_id.eq.${locationId},location_id.is.null`);
       const overheadsRaw = unwrapQuery(await ohQ, "overheadsRaw");
 
-      let locationCount = 1;
-      if (!locationId) {
-        const { count } = await supabase
-          .from("locations")
-          .select("id", { count: "exact", head: true })
-          .eq("restaurant_id", restaurantId);
-        locationCount = count || 1;
-      }
+      // Location ids in scope (count drives overhead allocation; ids scope real bills).
+      const locQ = await supabase.from("locations").select("id").eq("restaurant_id", restaurantId);
+      const allLocIds = (unwrapQuery(locQ, "locations") ?? []).map((l: any) => l.id as string);
+      const locationCount = locationId ? 1 : allLocIds.length || 1;
+      const scopeLocationIds = locationId ? [locationId] : allLocIds;
       const overheadRows = (overheadsRaw ?? []).map((o) => ({
         ...o,
         allocation_mode: o.allocation_mode || "equal",
         allocation_details: (o.allocation_details as Record<string, number>) || {},
       })) as Overhead[];
-      const overheads = calculateOverheadForRange(
-        overheadRows,
-        startDate,
-        endDate,
-        locationId,
-        locationCount
+
+      // ---------- Real bills (actual_expenses), prorated; replace their estimates ----------
+      const firstMonth = `${startDate.slice(0, 7)}-01`;
+      let aeQ = supabase
+        .from("actual_expenses")
+        .select("id, location_id, period_month, description, category, amount, vat_treatment, vat_amount, replaces_overhead_id, status")
+        .eq("restaurant_id", restaurantId)
+        .eq("status", "active")
+        .gte("period_month", firstMonth)
+        .lte("period_month", endDate);
+      if (locationId) aeQ = aeQ.eq("location_id", locationId);
+      const actualRows = unwrapQuery(await aeQ, "actualExpenses") ?? [];
+      const actuals = rangeActualExpenses({ startDate, endDate, scopeLocationIds, actuals: actualRows as any });
+      const overheads = actuals.months.reduce(
+        (t, mo) => t + calculateOverheadForRange(
+          overheadRows.filter((o) => !mo.replacedOverheadIds.has(o.id)),
+          mo.start, mo.end, locationId, locationCount,
+        ),
+        0,
       );
+      const actualExpenses = actuals.amount;
 
       // ---------- Operating profit ----------
       // On net sales when known; on gross (incl. VAT) it is overstated and labelled.
-      const operatingProfit = marginRevenue - foodCost - labourCost - dailyExpenses - overheads;
+      const operatingProfit = marginRevenue - foodCost - labourCost - dailyExpenses - actualExpenses - overheads;
       const operatingMarginPct = marginRevenue > 0 ? (operatingProfit / marginRevenue) * 100 : null;
 
       // Days whose revenue has no product lines: recipe food cost cannot cover them.
@@ -364,6 +382,11 @@ export function useDailyFinancialSummary(
         dailyExpenses,
         dailyExpenseCount,
         overheads,
+        actualExpenses,
+        actualExpenseCount: actuals.count,
+        actualExpenseByCategory: actuals.byCategory,
+        actualWageBillsExcluded: actuals.wageBillsExcluded,
+        actualVatUnclear: actuals.vatUnclear,
         hasOverheads: (overheadsRaw?.length ?? 0) > 0,
         operatingProfit,
         operatingMarginPct,

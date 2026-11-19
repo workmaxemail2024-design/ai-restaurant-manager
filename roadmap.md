@@ -116,8 +116,9 @@
 - [x] Phase 2: one revenue source (canonical POS gross + net/VAT) for Dashboard / summary / location cards
 - [ ] Phase 2: remaining unknown→0 (ledger covers/hours/expenses, Reports profit without labour, Cash Flow missing rates)
 - [x] Phase 2: Financial Summary prices manual hours with user rate, margins on net when known, labelled theoretical/indicative
-- [ ] Phase 3: daily summary to read actual_expenses; one profit definition shared with Reports (Reports Est. Profit omits overheads)
-- [ ] Phase 3: Reports day card figures in All locations still show only the location-less row (note shown); POS import coverage query not paged
+- [x] Phase 3: daily summary includes real bills (prorated, wage bills under labour, replaced estimates removed); Reports profit labelled "before overheads"
+- [x] Phase 3: All locations day cards show combined corrections (editing unchanged); POS import coverage paged, errors no longer read as 'not imported'
+- [x] Test runner: browser storage stand-in so all test files load
 
 ## POS Integration page tidy
 - [x] Status by location summary (method, what's live, last API fetch, next step), clearer tab names, connection details folded away, remove asks for confirmation
