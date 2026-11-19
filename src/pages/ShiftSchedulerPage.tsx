@@ -11,6 +11,8 @@ import {
   StaffShift,
 } from "@/hooks/useShifts";
 import { useLocations } from "@/hooks/useLocations";
+import { useLocation } from "@/contexts/LocationContext";
+import { scopeByLocation } from "@/lib/locationFilter";
 import { StaffWeeklyHoursSummary } from "@/components/shifts/StaffWeeklyHoursSummary";
 import { ShiftEditDialog, type ShiftFormValues } from "@/components/shifts/ShiftEditDialog";
 import { toast } from "@/hooks/use-toast";
@@ -32,9 +34,17 @@ export default function ShiftSchedulerPage() {
   const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  const { data: staff = [] } = useStaffWithContracts();
+  const { selectedLocationId } = useLocation();
+  const { data: allStaff = [] } = useStaffWithContracts();
   const { data: locations = [] } = useLocations();
-  const { data: shifts = [], isLoading } = useStaffShifts(weekStart.toISOString(), weekEnd.toISOString());
+  const { data: allShifts = [], isLoading } = useStaffShifts(weekStart.toISOString(), weekEnd.toISOString());
+  // Follow the header location: shifts at that location, and its staff plus anyone rostered there.
+  const shifts = useMemo(() => scopeByLocation(allShifts, selectedLocationId), [allShifts, selectedLocationId]);
+  const staff = useMemo(() => {
+    if (!selectedLocationId) return allStaff;
+    const rostered = new Set(shifts.map((s) => s.staff_id));
+    return allStaff.filter((m) => m.location_id === selectedLocationId || rostered.has(m.id));
+  }, [allStaff, shifts, selectedLocationId]);
 
   const createShift = useCreateShift();
   const deleteShift = useDeleteShift();
@@ -45,7 +55,9 @@ export default function ShiftSchedulerPage() {
 
   const [open, setOpen] = useState(false);
   const [editingShift, setEditingShift] = useState<StaffShift | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<string>("");
+  const [draftLocation, setSelectedLocation] = useState<string>("");
+  // Draft roster location defaults to the header location.
+  const selectedLocation = draftLocation || selectedLocationId || "";
   /** iPad-friendly alternative to drag & drop: tap a shift, then tap a day. */
   const [pendingMove, setPendingMove] = useState<{ shift: StaffShift; mode: "move" | "copy" } | null>(null);
 

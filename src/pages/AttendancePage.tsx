@@ -41,7 +41,9 @@ export default function AttendancePage() {
 
   const [open, setOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState("");
+  const [pickedLocation, setSelectedLocation] = useState("");
+  // Clock-in location defaults to the header location.
+  const selectedLocation = pickedLocation || selectedLocationId || "";
 
   const handleClockIn = async () => {
     if (!selectedStaff || !selectedLocation) return;

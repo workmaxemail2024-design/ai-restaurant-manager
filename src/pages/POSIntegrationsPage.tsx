@@ -35,6 +35,8 @@ import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
 import { useDateRangeCoverage } from "@/hooks/usePOSDateCoverage";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
 import { summarisePOSStatus } from "@/lib/posStatusSummary";
+import { captivaStagedLabel } from "@/lib/locationActivity";
+import { useQuery } from "@tanstack/react-query";
 import { HistoricalCaptivaImportDialog } from "@/components/pos/HistoricalCaptivaImportDialog";
 
 const POS_PROVIDERS = [
@@ -86,6 +88,32 @@ export default function POSIntegrationsPage() {
   const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = usePOSIntegrations(selectedLocation || undefined);
   const { data: syncLogs, refetch: refetchLogs } = usePOSSyncLogs(selectedLocation || undefined);
 
+  // Captiva official daily totals held in staging (read-only; never booked as revenue here).
+  const stagedQ = useQuery({
+    queryKey: ["captiva-staged-latest", (locations ?? []).map((l) => l.id).join(",")],
+    enabled: (locations ?? []).length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pos_captiva_daily_sources")
+        .select("id, location_id, trading_date, official_gross, official_net, reconciliation_state")
+        .order("trading_date", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      const ids = (data ?? []).map((r) => r.id);
+      const approved = new Set<string>();
+      if (ids.length) {
+        const { data: ap, error: apErr } = await supabase.from("pos_captiva_daily_approvals").select("source_id").in("source_id", ids);
+        if (apErr) throw apErr;
+        (ap ?? []).forEach((a) => approved.add(a.source_id));
+      }
+      const latest = new Map<string, { row: (typeof data)[number]; days: number; approved: boolean }>();
+      for (const r of data ?? []) {
+        const cur = latest.get(r.location_id);
+        if (cur) cur.days += 1; else latest.set(r.location_id, { row: r, days: 1, approved: approved.has(r.id) });
+      }
+      return latest;
+    },
+  });
   const createIntegration = useCreatePOSIntegration();
   const updateIntegration = useUpdatePOSIntegration();
   const deleteIntegration = useDeletePOSIntegration();
@@ -706,6 +734,17 @@ export default function POSIntegrationsPage() {
                     <p className="text-xs text-muted-foreground">
                       Last API fetch: {integ?.last_sync_time ? format(new Date(integ.last_sync_time), "MMM d, HH:mm") : "Never"}
                     </p>
+                    {(() => {
+                      if (stagedQ.isError) return <p className="text-xs text-destructive">Could not read staged Captiva totals.</p>;
+                      const st = stagedQ.data?.get(l.id);
+                      if (!st) return null;
+                      return (
+                        <div className="rounded border border-dashed p-2 text-xs space-y-0.5">
+                          <p className="font-medium">Captiva official total {st.row.trading_date}: {st.row.official_gross != null ? formatCurrency(Number(st.row.official_gross)) : "Unknown"} gross{st.row.official_net != null ? ` · ${formatCurrency(Number(st.row.official_net))} net` : ""}</p>
+                          <p className="text-muted-foreground">{captivaStagedLabel(st.row, st.approved)}{st.days > 1 ? ` (${st.days} days held)` : ""}</p>
+                        </div>
+                      );
+                    })()}
                     <p className="text-xs"><span className="font-medium">Next:</span> {sum.nextAction}</p>
                   </div>
                 );

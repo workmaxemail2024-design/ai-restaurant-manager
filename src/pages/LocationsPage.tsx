@@ -9,6 +9,9 @@ import { Plus, Settings } from "lucide-react";
 import { useLocations, useCreateLocation, useUpdateLocation, useDeleteLocation, useUpdateOperatingHours, Location, LocationInsert } from "@/hooks/useLocations";
 import { OperatingHoursEditor, OperatingHours } from "@/components/locations/OperatingHoursEditor";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import { useLocationActivity } from "@/hooks/useLocationActivity";
+import { LOCATION_ACTIVITY_LABEL } from "@/lib/locationActivity";
 import { LocationAccessPanel } from "@/components/locations/LocationAccessPanel";
 
 export default function LocationsPage() {
@@ -23,9 +26,35 @@ export default function LocationsPage() {
   const [formData, setFormData] = useState<LocationInsert>({ name: "", address: "" });
   const [hoursSheetLocation, setHoursSheetLocation] = useState<Location | null>(null);
 
+  const activityQ = useLocationActivity(locations.map((l) => l.id));
+  const activity = activityQ.data;
+  const quietCount = activity ? Object.values(activity).filter((a) => a.activity !== "trading").length : 0;
+
   const columns = [
     { key: "name", header: "Name" },
     { key: "address", header: "Address" },
+    {
+      key: "timezone",
+      header: "Time zone",
+      render: (item: Location) => (item as any).timezone ?? "—",
+    },
+    {
+      key: "activity",
+      header: "Data",
+      render: (item: Location) => {
+        if (activityQ.isError) return <span className="text-xs text-destructive">Could not check</span>;
+        const a = activity?.[item.id];
+        if (!a) return <span className="text-xs text-muted-foreground">Checking…</span>;
+        return (
+          <div className="space-y-0.5">
+            <Badge variant={a.activity === "trading" ? "default" : a.activity === "setup_only" ? "secondary" : "destructive"}>
+              {LOCATION_ACTIVITY_LABEL[a.activity]}
+            </Badge>
+            <p className="text-xs text-muted-foreground">{a.sales} sales · {a.summaries} POS days · {a.staged} staged · {a.integrations} POS link{a.integrations === 1 ? "" : "s"}</p>
+          </div>
+        );
+      },
+    },
     { 
       key: "created_at", 
       header: "Created",
@@ -81,6 +110,15 @@ export default function LocationsPage() {
 
   return (
     <PageLayout title="Locations" subtitle="Manage your restaurant locations and their operating hours.">
+      {quietCount > 0 && (
+        <div role="note" className="mb-4 rounded-md border border-border bg-muted/40 p-3 text-sm">
+          <p className="font-medium">{quietCount} location record{quietCount === 1 ? " has" : "s have"} no booked sales yet.</p>
+          <p className="text-muted-foreground mt-1">
+            Nothing is hidden or deleted. To confirm your real restaurants, compare each row's Captiva store code, sales and POS days.
+            Records you don't recognise still appear in "All locations" totals; decide what to do with them before removing anything.
+          </p>
+        </div>
+      )}
       <div className="flex justify-end mb-4">
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>
