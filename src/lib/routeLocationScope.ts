@@ -38,7 +38,7 @@ export const ROUTE_LOCATION_SCOPE: Record<string, RouteLocationScope> = {
   "/reservations/floor": "page",
   "/reservations/customers": "restaurant",
   "/reservations/settings": "location",
-  "/settings/pos": "page",
+  "/settings/pos": "location",
   "/settings/roles": "restaurant",
   "/settings/audit-log": "restaurant",
   "/settings/system-qa": "location",
