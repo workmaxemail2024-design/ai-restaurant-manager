@@ -1,0 +1,10 @@
+[Unit]
+Description=Fetch closed trading days from Captiva into RestaurantAI staging
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/ai-restaurant-manager/services/captiva-connector
+ExecStart=/usr/bin/python3 sender.py stage --latest-closed-day --all --confirm-staging-only
+TimeoutStartSec=25min
+NoNewPrivileges=yes
+UMask=0077

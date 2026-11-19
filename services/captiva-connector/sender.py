@@ -9,9 +9,8 @@ import getpass
 import hashlib
 import hmac
 import json
-import os
-from pathlib import Path
-import secrets
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import sys
 import time
 import urllib.error
@@ -103,6 +102,10 @@ def deliver(envelope, mode="preview", sender=None, request_id=None, unix_time=No
     return reply
 
 
+def previous_trading_date():
+    return (datetime.now(ZoneInfo("Europe/Dublin")).date() - timedelta(days=1)).isoformat()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Captiva signed staging sender")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -111,7 +114,9 @@ def main():
     remote = commands.add_parser("send-preview", help="Signed network check; zero DB writes")
     stage = commands.add_parser("stage", help="Staging write only, never post sales")
     for cmd in (preview, remote, stage):
-        cmd.add_argument("--date", required=True)
+        trading_day = cmd.add_mutually_exclusive_group(required=True)
+        trading_day.add_argument("--date")
+        trading_day.add_argument("--latest-closed-day", action="store_true")
         choice = cmd.add_mutually_exclusive_group(required=True)
         choice.add_argument("--store", choices=list(STORES))
         choice.add_argument("--all", action="store_true")
@@ -123,9 +128,11 @@ def main():
     if args.command == "stage" and not args.confirm_staging_only:
         raise ValueError("Staging requires explicit --confirm-staging-only flag")
     credentials = load_credentials()
+    trading_date = previous_trading_date() if args.latest_closed_day else args.date
+    failed = False
     for store_id in (list(STORES) if args.all else [args.store]):
         try:
-            envelope = build_envelope(credentials, store_id, args.date)
+            envelope = build_envelope(credentials, store_id, trading_date)
             print(json.dumps(export_summary(envelope), ensure_ascii=False))
             if args.command == "preview":
                 continue
@@ -134,13 +141,16 @@ def main():
             result = deliver(envelope, mode="stage" if args.command == "stage" else "preview")
             print("Server response:", json.dumps(result, ensure_ascii=False))
         except Exception as error:
-            print("%s: %s" % (store_id, str(error).split("\n")[0]), file=sys.stderr)
-            if not args.all:
-                raise
+            failed = True
+            print("%s: %s failed for %s (%s)" % (
+                store_id, args.command, trading_date, type(error).__name__,
+            ), file=sys.stderr)
+    return int(failed)
 
 
 if __name__ == "__main__":
     try:
-        main()
-    except (RuntimeError, ValueError):
+        sys.exit(main())
+    except (RuntimeError, ValueError, OSError) as error:
+        print("Captiva sender could not start (%s)" % type(error).__name__, file=sys.stderr)
         sys.exit(1)

@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from sender import sign_payload, deliver
+from sender import sign_payload, deliver, main
 from staging import canonical_json, sha256
 
 
@@ -101,6 +101,23 @@ class TestSender(unittest.TestCase):
         with self.assertRaises(ValueError):
             deliver(data, sender={"endpoint": "https://example.invalid",
                                   "hmac_secret": "a" * 64})
+
+    def test_all_stores_reports_failure_after_attempting_each_store(self):
+        sample = self.sample()
+        with patch("sys.argv", ["sender.py", "stage", "--latest-closed-day", "--all", "--confirm-staging-only"]), \
+             patch("sender.previous_trading_date", return_value="2026-09-01"), \
+             patch("sender.load_credentials", return_value={}), \
+             patch("sender.build_envelope", side_effect=[ValueError("private detail"), sample, sample]) as build, \
+             patch("sender.export_summary", return_value={}), \
+             patch("sender.deliver", return_value={"success": True}) as send, \
+             patch("builtins.print") as output:
+            self.assertEqual(main(), 1)
+        self.assertEqual([call.args[1:] for call in build.call_args_list], [
+            ("01584", "2026-09-01"), ("02137", "2026-09-01"), ("02136", "2026-09-01"),
+        ])
+        self.assertEqual(send.call_count, 2)
+        self.assertTrue(all(call.kwargs["mode"] == "stage" for call in send.call_args_list))
+        self.assertNotIn("private detail", str(output.call_args_list))
 
     def test_canonical_json_stable(self):
         self.assertEqual(canonical_json({"b": 2, "a": 1}), b'{"a":1,"b":2}')
