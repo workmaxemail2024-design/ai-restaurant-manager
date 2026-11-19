@@ -718,6 +718,21 @@ export default function POSIntegrationsPage() {
             <CardDescription>
               Daily totals sent by your Captiva backend for each store. They are held for review and count as sales only after they are approved and applied.
             </CardDescription>
+            <div className="flex flex-wrap items-center gap-2 pt-2">
+              <Button variant="outline" className="h-11" onClick={() => stagedQ.refetch()} disabled={stagedQ.isFetching} aria-label="Refresh connection status">
+                <RefreshCw className={`h-4 w-4 mr-2 ${stagedQ.isFetching ? "animate-spin" : ""}`} />
+                {stagedQ.isFetching ? "Checking…" : "Refresh connection status"}
+              </Button>
+              <Button variant="outline" className="h-11" disabled aria-describedby="captiva-fetch-hint">
+                Fetch from Captiva: awaiting secure connector trigger
+              </Button>
+              {stagedQ.dataUpdatedAt > 0 && (
+                <span className="text-xs text-muted-foreground">Status checked {new Date(stagedQ.dataUpdatedAt).toLocaleTimeString()}</span>
+              )}
+            </div>
+            <p id="captiva-fetch-hint" className="text-xs text-muted-foreground">
+              Refresh re-reads what your Captiva backend has already sent; it does not contact Captiva. On-demand fetching is not available yet. Manual XLS import below still works.
+            </p>
           </CardHeader>
           <CardContent>
             {stagedQ.isError ? (
