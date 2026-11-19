@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/captiva-exception-reviews
+      - feature/captiva-secure-ingest
     paths:
       - "services/captiva-connector/db/**"
       - "services/captiva-connector/tests/*schema*.sql"
@@ -46,3 +47,9 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d scratch -f services/captiva-connector/db/EXCEPTION_REVIEW_SCHEMA_PROPOSAL.sql
       - name: Check tenant isolation, immutability and idempotency
         run: psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d scratch -f services/captiva-connector/tests/exception_schema_smoke.sql
+      - name: Apply ingestion proposal to ephemeral database only
+        if: github.head_ref == 'feature/captiva-secure-ingest' || github.ref_name == 'feature/captiva-secure-ingest'
+        run: psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d scratch -f services/captiva-connector/db/INGEST_SCHEMA_PROPOSAL.sql
+      - name: Test signed-ingestion database staging without revenue writes
+        if: github.head_ref == 'feature/captiva-secure-ingest' || github.ref_name == 'feature/captiva-secure-ingest'
+        run: psql -v ON_ERROR_STOP=1 -h localhost -U postgres -d scratch -f services/captiva-connector/tests/ingest_schema_smoke.sql

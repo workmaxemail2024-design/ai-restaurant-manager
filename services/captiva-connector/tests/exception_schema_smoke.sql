@@ -127,6 +127,9 @@ begin
        'execute') then
     raise exception 'Anonymous role may directly run review RPC';
   end if;
+  if has_function_privilege('authenticated',
+       'public.pos_verify_recovery_claim(uuid,uuid,uuid,text,boolean,text)',
+       'execute') then raise exception 'User could directly approve recovery'; end if;
   if (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='public' and c.relname in (
         'pos_captiva_daily_sources','pos_exception_events','pos_exception_reviews',
@@ -264,6 +267,81 @@ select public.pos_record_exception_review(
  '70000000-0000-4000-8000-000000000003',
  'resolved','confirmed_unpaid','Reviewed and confirmed unpaid with duty manager'
 );
+-- Even if the manager resolved the event, the day's recovered payment
+-- claim must be independently verified before sign-off is allowed.
+do $$
+begin
+  begin
+    insert into public.pos_exception_daily_signoffs (
+      restaurant_id,location_id,trading_date,daily_source_id,signed_by
+    ) values (
+      '10000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000001',
+      '2026-09-01',
+      '50000000-0000-4000-8000-000000000002',
+      '40000000-0000-4000-8000-000000000001'
+    );
+    raise exception 'Pending payment recovery must block sign-off';
+  exception when others then
+    if sqlerrm not like '%claims pending verification%' then raise; end if;
+  end;
+end;
+$$;
+
+-- The claimant cannot verify their own payment.
+do $$
+declare v_claim_id uuid;
+begin
+  select id into v_claim_id from public.pos_recovery_claims limit 1;
+  begin
+    perform public.pos_verify_recovery_claim(
+       v_claim_id,
+       '40000000-0000-4000-8000-000000000001',
+       '70000000-0000-4000-8000-000000000004',
+       'verified',false,'Cash receipt independently checked'
+    );
+    raise exception 'Same-person verification unexpectedly succeeded';
+  exception when others then
+    if sqlerrm not like '%independent reviewer%' then raise; end if;
+  end;
+end;
+$$;
+
+-- Verify once, and idempotently replay the very same request.
+do $$
+declare v_claim_id uuid; v_count int; v_status text;
+begin
+  select id into v_claim_id from public.pos_recovery_claims limit 1;
+  perform public.pos_verify_recovery_claim(
+    v_claim_id,
+    '40000000-0000-4000-8000-000000000002',
+    '70000000-0000-4000-8000-000000000005',
+    'verified',false,'Independent till receipt verified'
+  );
+  perform public.pos_verify_recovery_claim(
+    v_claim_id,
+    '40000000-0000-4000-8000-000000000002',
+    '70000000-0000-4000-8000-000000000005',
+    'verified',false,'Independent till receipt verified'
+  );
+  select status into v_status from public.pos_recovery_claims where id=v_claim_id;
+  if v_status<>'verified' then raise exception 'Claim did not verify'; end if;
+  select count(*) into v_count from public.pos_exception_review_audit
+  where action='verify_recovery';
+  if v_count<>1 then raise exception 'Payment approval audit duplicated'; end if;
+  begin
+    perform public.pos_verify_recovery_claim(
+      v_claim_id,
+      '40000000-0000-4000-8000-000000000002',
+      '70000000-0000-4000-8000-000000000006',
+      'rejected',null,'Changing previous decision'
+    );
+    raise exception 'Re-verification should not overwrite decisions';
+  exception when others then
+    if sqlerrm not like '%already decided%' then raise; end if;
+  end;
+end;
+$$;
 insert into public.pos_exception_daily_signoffs (
   restaurant_id,location_id,trading_date,daily_source_id,signed_by
 ) values (
