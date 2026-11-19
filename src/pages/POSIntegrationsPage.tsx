@@ -22,6 +22,7 @@ import { usePOSIntegrations, usePOSSyncLogs, usePOSSalesImports,
   useTestPOSConnection, usePOSReconciliation, useUpdatePOSMapping, useCaptivaSyncNow, 
   useApplyPOSImport, useToggleAutoSync, POSIntegration, ApplyImportResult } from "@/hooks/usePOS";
 import { useLocations } from "@/hooks/useLocations";
+import { useLocation as useGlobalLocation } from "@/contexts/LocationContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -61,7 +62,9 @@ interface CaptivaSettings {
 }
 
 export default function POSIntegrationsPage() {
-  const [selectedLocation, setSelectedLocation] = useState<string>("");
+  const { selectedLocationId: globalLocationId } = useGlobalLocation();
+  // Page filter starts from the header location; changing it here only filters this page.
+  const [selectedLocation, setSelectedLocation] = useState<string>(globalLocationId ?? "");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingIntegration, setEditingIntegration] = useState<POSIntegration | null>(null);
   const [formData, setFormData] = useState({
@@ -659,12 +662,13 @@ export default function POSIntegrationsPage() {
             <div className="flex flex-wrap items-center gap-3">
               <MapPin className="h-4 w-4 text-muted-foreground" />
               <Select value={selectedLocation} onValueChange={v => setSelectedLocation(v === "all" ? "" : v)}>
-                <SelectTrigger className="w-56 h-8 text-sm"><SelectValue placeholder="All locations" /></SelectTrigger>
+                <SelectTrigger className="w-56 h-10 text-sm" aria-label="Filter this page by location"><SelectValue placeholder="All locations" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Locations</SelectItem>
                   {locations?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <span className="text-xs text-muted-foreground">Filters this page only</span>
             </div>
           </CardContent>
         </Card>

@@ -5,7 +5,8 @@ import { useLocationAccess } from '@/hooks/useLocationAccess';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MapPin } from 'lucide-react';
 
-export function LocationSelector() {
+export function LocationSelector({ compact = false }: { compact?: boolean } = {}) {
+  const triggerW = compact ? "h-9 w-auto max-w-[11rem] sm:max-w-[14rem] text-xs sm:text-sm" : "w-[180px]";
   const { selectedLocationId, setSelectedLocationId } = useLocation();
   const { data: locations = [], isLoading } = useLocations();
   const { canViewAllLocations, isLoading: accessLoading } = useLocationAccess();
@@ -44,7 +45,7 @@ export function LocationSelector() {
   // Non-owner with a single assigned location: no switcher, no "All locations".
   if (!canViewAllLocations && locations.length === 1) {
     return (
-      <div className="flex h-10 w-[180px] items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
+      <div aria-label={`Location: ${locations[0].name}`} className="flex h-9 max-w-[14rem] items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
         <MapPin className="h-4 w-4 text-muted-foreground" />
         <span className="truncate">{locations[0].name}</span>
       </div>
@@ -60,8 +61,8 @@ export function LocationSelector() {
       value={currentValue}
       onValueChange={(value) => setSelectedLocationId(value === "all" ? null : value)}
     >
-      <SelectTrigger className="w-[180px] gap-2">
-        <MapPin className="h-4 w-4 text-muted-foreground" />
+      <SelectTrigger className={`${triggerW} gap-2`} aria-label={`Selected location: ${currentValue === "all" ? "All locations" : locations.find(l => l.id === currentValue)?.name ?? ""}. Change location`}>
+        <MapPin className={`h-4 w-4 shrink-0 ${currentValue === "all" ? "text-muted-foreground" : "text-primary"}`} />
         <SelectValue placeholder="All locations" />
       </SelectTrigger>
       <SelectContent className="z-[100]">
