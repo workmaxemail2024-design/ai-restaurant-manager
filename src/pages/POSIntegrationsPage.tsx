@@ -34,8 +34,7 @@ import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
 import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
 import { useDateRangeCoverage } from "@/hooks/usePOSDateCoverage";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
-import { summarisePOSStatus } from "@/lib/posStatusSummary";
-import { captivaStagedLabel } from "@/lib/locationActivity";
+import { captivaConnectionView } from "@/lib/captivaConnection";
 import { useQuery } from "@tanstack/react-query";
 import { HistoricalCaptivaImportDialog } from "@/components/pos/HistoricalCaptivaImportDialog";
 
@@ -88,30 +87,41 @@ export default function POSIntegrationsPage() {
   const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = usePOSIntegrations(selectedLocation || undefined);
   const { data: syncLogs, refetch: refetchLogs } = usePOSSyncLogs(selectedLocation || undefined);
 
-  // Captiva official daily totals held in staging (read-only; never booked as revenue here).
+  // Captiva backend evidence per restaurant (read-only staging rows; never booked as revenue here).
   const stagedQ = useQuery({
-    queryKey: ["captiva-staged-latest", (locations ?? []).map((l) => l.id).join(",")],
+    queryKey: ["captiva-backend-status", (locations ?? []).map((l) => l.id).join(",")],
     enabled: (locations ?? []).length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("pos_captiva_daily_sources")
-        .select("id, location_id, trading_date, official_gross, official_net, reconciliation_state")
+        .select("id, location_id, store_id, trading_date, official_gross, official_net, journal_coverage, reconciliation_state, observed_at")
         .order("trading_date", { ascending: false })
-        .limit(200);
+        .limit(500);
       if (error) throw error;
-      const ids = (data ?? []).map((r) => r.id);
+      const rows = data ?? [];
+      const ids = rows.map((r) => r.id);
       const approved = new Set<string>();
       if (ids.length) {
         const { data: ap, error: apErr } = await supabase.from("pos_captiva_daily_approvals").select("source_id").in("source_id", ids);
         if (apErr) throw apErr;
         (ap ?? []).forEach((a) => approved.add(a.source_id));
       }
-      const latest = new Map<string, { row: (typeof data)[number]; days: number; approved: boolean }>();
-      for (const r of data ?? []) {
-        const cur = latest.get(r.location_id);
-        if (cur) cur.days += 1; else latest.set(r.location_id, { row: r, days: 1, approved: approved.has(r.id) });
+      const byLoc = new Map<string, typeof rows>();
+      for (const r of rows) byLoc.set(r.location_id, [...(byLoc.get(r.location_id) ?? []), r]);
+      // "Applied" = an approved latest day that also has a booked POS daily summary.
+      const out = new Map<string, { latest: (typeof rows)[number]; view: ReturnType<typeof captivaConnectionView> }>();
+      for (const [loc, list] of byLoc) {
+        const latest = list[0];
+        let applied = false;
+        if (approved.has(latest.id)) {
+          const { count, error: sErr } = await supabase.from("pos_daily_summaries").select("id", { count: "exact", head: true })
+            .eq("location_id", loc).eq("report_date", latest.trading_date);
+          if (sErr) throw sErr;
+          applied = (count ?? 0) > 0;
+        }
+        out.set(loc, { latest, view: captivaConnectionView({ sources: list, approvedSourceIds: approved, latestSourceId: latest.id, latestApplied: applied }) });
       }
-      return latest;
+      return out;
     },
   });
   const createIntegration = useCreatePOSIntegration();
@@ -701,61 +711,57 @@ export default function POSIntegrationsPage() {
           </CardContent>
         </Card>
 
-        {/* At-a-glance status per location */}
+        {/* At-a-glance Captiva status per restaurant (from the Captiva backend, not per-location API settings) */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Status by location</CardTitle>
+            <CardTitle className="text-base">Captiva by restaurant</CardTitle>
             <CardDescription>
-              How sales reach each restaurant. Data fetched from the API is held for review and only counts as sales after you Apply it.
+              Daily totals sent by your Captiva backend for each store. They are held for review and count as sales only after they are approved and applied.
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {stagedQ.isError ? (
+              <p className="text-sm text-destructive">Could not read Captiva status. Nothing has been changed — try refreshing.</p>
+            ) : stagedQ.isLoading ? (
+              <div className="grid gap-3 md:grid-cols-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-40" />)}</div>
+            ) : (
             <div className="grid gap-3 md:grid-cols-3">
               {(locations ?? []).filter(l => !selectedLocation || l.id === selectedLocation).map(l => {
-                const integ = integrations?.find(i => i.location_id === l.id && i.pos_provider === "captiva")
-                  ?? integrations?.find(i => i.location_id === l.id) ?? null;
-                const sum = summarisePOSStatus(integ ? {
-                  pos_provider: integ.pos_provider,
-                  status: integ.status,
-                  last_test_status: integ.last_test_status,
-                  last_sync_time: integ.last_sync_time,
-                  credentialsComplete: hasValidCredentials(integ),
-                } : null);
+                const st = stagedQ.data?.get(l.id);
+                const v = st?.view ?? captivaConnectionView({ sources: [] });
                 return (
                   <div key={l.id} className="rounded-md border p-3 space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium truncate">{l.name}</span>
-                      <Badge variant={sum.tone === "ok" ? "default" : sum.tone === "warn" ? "destructive" : "secondary"}>
-                        {sum.tone === "ok" ? "Connected" : sum.tone === "warn" ? "Needs attention" : "Manual"}
+                      <span className="font-medium truncate" title={l.name}>{l.name}</span>
+                      <Badge variant={v.link === "connected" ? "default" : v.link === "stale" ? "destructive" : "secondary"}>
+                        {v.link === "connected" ? "Connected" : v.link === "stale" ? "No recent data" : "Not linked"}
                       </Badge>
                     </div>
-                    <p className="text-muted-foreground">{sum.method}</p>
-                    <p>{sum.live}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Last API fetch: {integ?.last_sync_time ? format(new Date(integ.last_sync_time), "MMM d, HH:mm") : "Never"}
-                    </p>
-                    {(() => {
-                      if (stagedQ.isError) return <p className="text-xs text-destructive">Could not read staged Captiva totals.</p>;
-                      const st = stagedQ.data?.get(l.id);
-                      if (!st) return null;
-                      return (
-                        <div className="rounded border border-dashed p-2 text-xs space-y-0.5">
-                          <p className="font-medium">Captiva official total {st.row.trading_date}: {st.row.official_gross != null ? formatCurrency(Number(st.row.official_gross)) : "Unknown"} gross{st.row.official_net != null ? ` · ${formatCurrency(Number(st.row.official_net))} net` : ""}</p>
-                          <p className="text-muted-foreground">{captivaStagedLabel(st.row, st.approved)}{st.days > 1 ? ` (${st.days} days held)` : ""}</p>
-                        </div>
-                      );
-                    })()}
-                    <p className="text-xs"><span className="font-medium">Next:</span> {sum.nextAction}</p>
+                    <p className="font-medium">{v.headline}</p>
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                      <dt className="text-muted-foreground">Store code</dt><dd className="font-mono">{v.storeCode ?? "—"}</dd>
+                      <dt className="text-muted-foreground">Latest trading day</dt><dd>{v.latestTradingDate ?? "—"}</dd>
+                      <dt className="text-muted-foreground">Received</dt><dd>{v.lastReceivedAt ? format(new Date(v.lastReceivedAt), "MMM d, HH:mm") : "—"}</dd>
+                      {st && <><dt className="text-muted-foreground">Official total</dt><dd>{st.latest.official_gross != null ? `${formatCurrency(Number(st.latest.official_gross))} gross` : "Unknown"}{st.latest.official_net != null ? ` · ${formatCurrency(Number(st.latest.official_net))} net` : ""}</dd></>}
+                      <dt className="text-muted-foreground">Journal</dt><dd>{v.coverage}</dd>
+                    </dl>
+                    <p className="text-xs">{v.reconciliation}</p>
+                    <p className="text-xs font-medium">{v.sales}</p>
+                    <p className="text-xs text-muted-foreground">{v.autoSync}</p>
                   </div>
                 );
               })}
             </div>
+            )}
+            <p className="mt-3 text-xs text-muted-foreground">
+              The connection below is the older per-location API/XLS setup. It isn't needed for the Captiva backend; XLS import stays available as a fallback.
+            </p>
           </CardContent>
         </Card>
 
         <Tabs defaultValue="integrations">
           <TabsList className="flex-wrap h-auto">
-            <TabsTrigger value="integrations"><Plug className="h-4 w-4 mr-2" />Connection &amp; import</TabsTrigger>
+            <TabsTrigger value="integrations"><Plug className="h-4 w-4 mr-2" />Manual import &amp; legacy API</TabsTrigger>
             <TabsTrigger value="mappings"><Settings2 className="h-4 w-4 mr-2" />Product &amp; staff matching</TabsTrigger>
             <TabsTrigger value="logs"><List className="h-4 w-4 mr-2" />History</TabsTrigger>
             <TabsTrigger value="reconciliation"><BarChart3 className="h-4 w-4 mr-2" />Checks</TabsTrigger>
