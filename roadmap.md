@@ -118,3 +118,6 @@
 - [x] Phase 2: Financial Summary prices manual hours with user rate, margins on net when known, labelled theoretical/indicative
 - [ ] Phase 3: daily summary to read actual_expenses; one profit definition shared with Reports (Reports Est. Profit omits overheads)
 - [ ] Phase 3: Reports day card figures in All locations still show only the location-less row (note shown); POS import coverage query not paged
+
+## POS Integration page tidy
+- [x] Status by location summary (method, what's live, last API fetch, next step), clearer tab names, connection details folded away, remove asks for confirmation

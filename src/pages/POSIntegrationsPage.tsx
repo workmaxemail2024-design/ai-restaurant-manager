@@ -33,6 +33,7 @@ import { POSStaffMappingTab } from "@/components/pos/POSStaffMappingTab";
 import { DualCalendarPicker } from "@/components/common/DualCalendarPicker";
 import { useDateRangeCoverage } from "@/hooks/usePOSDateCoverage";
 import { CaptivaXLSImportDialog } from "@/components/pos/CaptivaXLSImportDialog";
+import { summarisePOSStatus } from "@/lib/posStatusSummary";
 import { HistoricalCaptivaImportDialog } from "@/components/pos/HistoricalCaptivaImportDialog";
 
 const POS_PROVIDERS = [
@@ -664,17 +665,57 @@ export default function POSIntegrationsPage() {
                   {locations?.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {/* AI Reconciliation moved to Reports */}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* At-a-glance status per location */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Status by location</CardTitle>
+            <CardDescription>
+              How sales reach each restaurant. Data fetched from the API is held for review and only counts as sales after you Apply it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 md:grid-cols-3">
+              {(locations ?? []).filter(l => !selectedLocation || l.id === selectedLocation).map(l => {
+                const integ = integrations?.find(i => i.location_id === l.id && i.pos_provider === "captiva")
+                  ?? integrations?.find(i => i.location_id === l.id) ?? null;
+                const sum = summarisePOSStatus(integ ? {
+                  pos_provider: integ.pos_provider,
+                  status: integ.status,
+                  last_test_status: integ.last_test_status,
+                  last_sync_time: integ.last_sync_time,
+                  credentialsComplete: hasValidCredentials(integ),
+                } : null);
+                return (
+                  <div key={l.id} className="rounded-md border p-3 space-y-2 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium truncate">{l.name}</span>
+                      <Badge variant={sum.tone === "ok" ? "default" : sum.tone === "warn" ? "destructive" : "secondary"}>
+                        {sum.tone === "ok" ? "Connected" : sum.tone === "warn" ? "Needs attention" : "Manual"}
+                      </Badge>
+                    </div>
+                    <p className="text-muted-foreground">{sum.method}</p>
+                    <p>{sum.live}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Last API fetch: {integ?.last_sync_time ? format(new Date(integ.last_sync_time), "MMM d, HH:mm") : "Never"}
+                    </p>
+                    <p className="text-xs"><span className="font-medium">Next:</span> {sum.nextAction}</p>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
 
         <Tabs defaultValue="integrations">
-          <TabsList>
-            <TabsTrigger value="integrations"><Plug className="h-4 w-4 mr-2" />Integrations</TabsTrigger>
-            <TabsTrigger value="mappings"><Settings2 className="h-4 w-4 mr-2" />Mappings</TabsTrigger>
-            <TabsTrigger value="logs"><List className="h-4 w-4 mr-2" />Sync Logs</TabsTrigger>
-            <TabsTrigger value="reconciliation"><BarChart3 className="h-4 w-4 mr-2" />Reconciliation</TabsTrigger>
+          <TabsList className="flex-wrap h-auto">
+            <TabsTrigger value="integrations"><Plug className="h-4 w-4 mr-2" />Connection &amp; import</TabsTrigger>
+            <TabsTrigger value="mappings"><Settings2 className="h-4 w-4 mr-2" />Product &amp; staff matching</TabsTrigger>
+            <TabsTrigger value="logs"><List className="h-4 w-4 mr-2" />History</TabsTrigger>
+            <TabsTrigger value="reconciliation"><BarChart3 className="h-4 w-4 mr-2" />Checks</TabsTrigger>
           </TabsList>
 
           <TabsContent value="integrations" className="space-y-4">
@@ -717,7 +758,13 @@ export default function POSIntegrationsPage() {
                       <CardContent className="space-y-4">
                         {/* Credentials Display for Captiva */}
                         {integration.pos_provider === "captiva" && (
-                          <div className="text-xs p-2.5 rounded-md bg-muted/50 border border-border/50 overflow-hidden">
+                          <details className="text-xs p-2.5 rounded-md bg-muted/50 border border-border/50 overflow-hidden">
+                            <summary className="cursor-pointer min-h-10 flex items-center justify-between gap-2 text-sm">
+                              <span>Connection details</span>
+                              <span className={credentialsValid ? "text-muted-foreground" : "text-destructive"}>
+                                {credentialsValid ? "Complete" : "Incomplete"}
+                              </span>
+                            </summary>
                             <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
                               <span className="text-muted-foreground whitespace-nowrap">Base URL</span>
                               <span className="font-mono text-[11px] truncate text-right" title={settings?.base_url || "Not set"}>
@@ -759,7 +806,7 @@ export default function POSIntegrationsPage() {
                                 </span>
                               )}
                             </div>
-                          </div>
+                          </details>
                         )}
 
                         {/* Test Status */}
@@ -858,7 +905,7 @@ export default function POSIntegrationsPage() {
                                 ) : (
                                   <Download className="h-4 w-4 mr-1" />
                                 )}
-                                {syncingIntegrationId === integration.id ? "Syncing..." : "Sync Now"}
+                                {syncingIntegrationId === integration.id ? "Fetching..." : "Fetch from API"}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -872,7 +919,7 @@ export default function POSIntegrationsPage() {
                                 ) : (
                                   <BarChart3 className="h-4 w-4 mr-1" />
                                 )}
-                                {applyingId === integration.id ? "Applying..." : "Apply to Dashboard"}
+                                {applyingId === integration.id ? "Applying..." : "Review & Apply sales"}
                               </Button>
                               {showCaptivaImport && (
                                 <CaptivaXLSImportDialog
@@ -887,7 +934,7 @@ export default function POSIntegrationsPage() {
                               )}
                             </>
                           )}
-                          <Button size="sm" variant="destructive" onClick={() => deleteIntegration.mutate(integration.id)}>
+                          <Button size="sm" variant="destructive" title="Remove connection" aria-label="Remove connection" onClick={() => { if (window.confirm("Remove this POS connection? Imported sales are kept.")) deleteIntegration.mutate(integration.id); }}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
