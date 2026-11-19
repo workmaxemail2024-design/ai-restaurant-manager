@@ -112,7 +112,9 @@
 - [x] P&L / Cash Flow load every sale (no 1000-row cut-off); P&L flags Estimate with reasons; revenue labelled gross
 - [x] Reports salary-day list no longer shifts a day by time zone
 - [x] `bun test` script + tests for dedupe isolation, estimate reasons, query errors
-- [ ] Phase 2: Reports "All locations" must sum per-location ledger corrections (affects editing; needs design)
-- [ ] Phase 2: one revenue source (canonical POS gross + net/VAT) for Dashboard / summary / location cards
+- [x] Phase 2: Reports "All locations" totals include per-location ledger corrections (editing unchanged)
+- [x] Phase 2: one revenue source (canonical POS gross + net/VAT) for Dashboard / summary / location cards
 - [ ] Phase 2: remaining unknown→0 (ledger covers/hours/expenses, Reports profit without labour, Cash Flow missing rates)
-- [ ] Phase 2: daily summary to read actual_expenses; price manual hours; one profit definition
+- [x] Phase 2: Financial Summary prices manual hours with user rate, margins on net when known, labelled theoretical/indicative
+- [ ] Phase 3: daily summary to read actual_expenses; one profit definition shared with Reports (Reports Est. Profit omits overheads)
+- [ ] Phase 3: Reports day card figures in All locations still show only the location-less row (note shown); POS import coverage query not paged

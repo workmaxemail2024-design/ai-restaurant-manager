@@ -103,6 +103,8 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
     !data.isComplete ||
     data.foodCostIsEstimated ||
     data.labourCost <= 0 ||
+    data.labourStatus !== "entered" ||
+    data.marginBasis !== "net" ||
     !data.labourConfirmed ||
     !data.hasOverheads;
 
@@ -135,9 +137,21 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
         <div className="grid gap-3 grid-cols-1 lg:grid-cols-3">
           <Stat
             label="Revenue"
-            value={formatCurrency(data.revenue)}
+            value={data.revenueKnown ? formatCurrency(data.revenue) : "—"}
             size="hero"
-            sub={data.revenue > 0 ? "Gross sales" : "No sales recorded"}
+            sub={
+              !data.revenueKnown
+                ? "No sales recorded"
+                : [
+                    "Gross incl. VAT",
+                    data.revenueNet != null
+                      ? `Net ${formatCurrency(data.revenueNet)}${data.vat != null ? ` · VAT ${formatCurrency(data.vat)}` : ""}`
+                      : data.netCoverage === "partial"
+                        ? "Net known for some days only"
+                        : "Net / VAT not available",
+                    data.revenueSources.manual > 0 ? `${data.revenueSources.manual} manual day${data.revenueSources.manual === 1 ? "" : "s"}` : null,
+                  ].filter(Boolean).join(" • ")
+            }
           />
           <Stat
             label="Orders"
@@ -159,12 +173,13 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
         <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
           <Stat
             label="Labour Cost"
-            value={data.labourCost > 0 ? formatCurrency(data.labourCost) : "—"}
+            value={data.labourStatus === "not_entered" ? "Not entered" : data.labourCost > 0 ? formatCurrency(data.labourCost) : "—"}
             tone="cost"
             estimated={data.labourSource === "manual" || (data.labourSource === "attendance" && !data.labourConfirmed)}
             sub={[
               data.labourHours > 0 ? `${data.labourHours.toFixed(1)}h` : null,
-              data.labourPct != null ? `${data.labourPct.toFixed(1)}% of revenue` : null,
+              data.labourPct != null ? `${data.labourPct.toFixed(1)}% of ${data.marginBasis} sales` : null,
+              data.labourStatus === "partial" ? "Some hours not priced — cost incomplete" : null,
               data.missingPayRateStaff > 0 ? `${data.missingPayRateStaff} staff missing pay rate — cost incomplete` : null,
               data.salariedLabourCost > 0
                 ? `${formatCurrency(data.hourlyLabourCost)} hourly + ${formatCurrency(data.salariedLabourCost)} salary`
@@ -182,12 +197,13 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
               .join(" • ")}
           />
           <Stat
-            label={data.foodCostIsEstimated ? "Estimated Food Cost" : "Food Cost / COGS"}
+            label={data.foodCostIsEstimated ? "Estimated Food Cost" : "Theoretical Food Cost"}
             value={formatCurrency(data.foodCost)}
             tone="cost"
             estimated={data.foodCostIsEstimated}
             sub={[
-              data.foodCostPct != null ? `${data.foodCostPct.toFixed(1)}% of revenue` : null,
+              data.foodCostPct != null ? `${data.foodCostPct.toFixed(1)}% of ${data.marginBasis} sales` : null,
+              !data.foodCostIsEstimated ? "From recipes, not stock counts" : null,
               data.foodCostIsEstimated
                 ? "Estimated — recipe data incomplete"
                 : data.recipeCoveragePct != null
@@ -228,8 +244,8 @@ export function DailyFinancialSummary({ startDate, endDate, locationId, periodLa
             estimated={isIndicative}
             sub={
               isIndicative
-                ? "Indicative — some inputs incomplete or estimated"
-                : "Revenue − food cost − labour − expenses − overheads"
+                ? `Indicative — ${data.missing.length > 0 ? data.missing.slice(0, 3).join(", ") : "some inputs incomplete or estimated"}`
+                : `${data.marginBasis === "net" ? "Net sales" : "Gross sales"} − theoretical food cost − labour − expenses − overheads`
             }
           />
           <Stat

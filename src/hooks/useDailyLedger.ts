@@ -20,6 +20,10 @@ export interface LedgerEntry {
   labour_confirmed?: boolean;
   /** Manager explicitly reviewed stock / wastage for the day */
   stock_reviewed?: boolean;
+  /** READ-ONLY (All locations): manual revenue from locations with no POS data that day. */
+  location_manual_revenue?: number;
+  /** READ-ONLY (All locations): number of per-location ledger rows folded into this day. */
+  location_correction_count?: number;
 }
 
 export type MissingField = "SALES" | "LABOUR_HOURS" | "COVERS" | "EXPENSES" | "BOOKINGS";
@@ -104,6 +108,9 @@ export function evaluateMissing(
   return { missing, isComplete: missing.length === 0, status, checklist };
 }
 
+const EMPTY_MAP = new Map<string, LedgerEntry>();
+const EMPTY_ROWS: LedgerEntry[] = [];
+
 export function useDailyLedger(
   startDate: string,
   endDate: string,
@@ -117,7 +124,7 @@ export function useDailyLedger(
   const query = useQuery({
     queryKey: ["daily-ledger", restaurantId, locationKey, startDate, endDate],
     queryFn: async () => {
-      if (!restaurantId) return new Map<string, LedgerEntry>();
+      if (!restaurantId) return { map: new Map<string, LedgerEntry>(), locationRows: [] as LedgerEntry[] };
 
       let q = supabase
         .from("daily_ledger_entries")
@@ -126,17 +133,28 @@ export function useDailyLedger(
         .gte("entry_date", startDate)
         .lte("entry_date", endDate);
 
-      if (locationId) {
-        q = q.eq("location_id", locationId);
-      } else {
-        q = q.is("location_id", null);
-      }
+      // All locations: also read per-location rows (read-only aggregation in
+      // Reports). The editable map still holds only the location-less row.
+      if (locationId) q = q.eq("location_id", locationId);
 
       const { data, error } = await q;
       if (error) throw error;
 
       const map = new Map<string, LedgerEntry>();
+      const locationRows: LedgerEntry[] = [];
       for (const row of data || []) {
+        if (!locationId && row.location_id != null) {
+          locationRows.push({
+            entry_date: row.entry_date, location_id: row.location_id,
+            covers: row.covers ?? 0, labour_hours: Number(row.labour_hours) || 0,
+            additional_expenses: Number(row.additional_expenses) || 0, notes: row.notes ?? "",
+            is_closed: (row as any).is_closed ?? false,
+            manual_revenue: (row as any).manual_revenue != null ? Number((row as any).manual_revenue) : null,
+            manual_orders: (row as any).manual_orders != null ? Number((row as any).manual_orders) : null,
+            covers_unknown: (row as any).covers_unknown ?? false,
+          });
+          continue;
+        }
         map.set(row.entry_date, {
           id: row.id,
           entry_date: row.entry_date,
@@ -154,7 +172,7 @@ export function useDailyLedger(
           stock_reviewed: (row as any).stock_reviewed ?? false,
         });
       }
-      return map;
+      return { map, locationRows };
     },
     enabled: !!restaurantId,
   });
@@ -164,7 +182,7 @@ export function useDailyLedger(
       if (!restaurantId) throw new Error("No restaurant");
 
       // Preserve flags the caller did not explicitly set
-      const existing = query.data?.get(entry.entry_date);
+      const existing = query.data?.map.get(entry.entry_date);
 
       const payload = {
         restaurant_id: restaurantId,
@@ -198,8 +216,11 @@ export function useDailyLedger(
   });
 
   return {
-    entries: query.data || new Map<string, LedgerEntry>(),
+    entries: query.data?.map || EMPTY_MAP,
+    /** All locations only: per-location rows, for read-only totals. */
+    locationRows: query.data?.locationRows || EMPTY_ROWS,
     isLoading: query.isLoading,
+    isError: query.isError,
     upsert: upsertMutation.mutate,
     isSaving: upsertMutation.isPending,
   };

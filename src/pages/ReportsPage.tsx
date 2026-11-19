@@ -80,7 +80,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
-import { buildMonthSummaries, buildWeekSummaries, sumCanonicalRevenue, type ReportsPeriodSummary } from "@/lib/reportsMonthly";
+import { buildAllLocationsReadLedger, buildMonthSummaries, buildWeekSummaries, sumCanonicalRevenue, type ReportsPeriodSummary } from "@/lib/reportsMonthly";
 
 // ─── Missing field labels ───
 const MISSING_LABELS: Record<MissingField, string> = {
@@ -515,6 +515,7 @@ function EditableMetric({
 function DayCard({
   day,
   ledger,
+  readLedger,
   onSaveLedger,
   isSaving,
   avgHourlyRate,
@@ -528,6 +529,8 @@ function DayCard({
 }: {
   day: DailyMetrics;
   ledger?: LedgerEntry;
+  /** All locations: same day with per-location corrections folded in (read-only). */
+  readLedger?: LedgerEntry;
   onSaveLedger: (entry: LedgerEntry) => void;
   isSaving: boolean;
   avgHourlyRate: number | null;
@@ -786,6 +789,14 @@ function DayCard({
 
               <CollapsibleContent>
                 <CardContent className="pt-0 pb-4 px-4 space-y-4">
+                  {!locationId && (readLedger?.location_correction_count ?? 0) > 0 && (
+                    <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+                      {readLedger!.location_correction_count} location{readLedger!.location_correction_count === 1 ? "" : "s"} have their own corrections for this day
+                      {readLedger!.manual_orders != null ? ` (orders ${readLedger!.manual_orders})` : ""}
+                      {(readLedger!.location_manual_revenue ?? 0) > 0 ? ` incl. ${formatCurrency(readLedger!.location_manual_revenue!)} manual revenue` : ""}.
+                      Period totals include them; edit them by selecting that location.
+                    </p>
+                  )}
                   {/* Quick Fix Section */}
                   {liveMissing.missing.length > 0 && !isClosed && (
                     <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-3">
@@ -1295,8 +1306,13 @@ export default function ReportsPage() {
   const reportEndDate = reportView === "monthly"
     ? format(reportYear === currentYear ? new Date() : endOfYear(new Date(reportYear, 0, 1)), "yyyy-MM-dd")
     : endDate;
-  const { data: dailyData, isLoading: dailyLoading } = useDailyBreakdown(reportStartDate, reportEndDate, selectedLocationId);
-  const { entries: ledgerEntries, upsert: upsertLedger, isSaving } = useDailyLedger(reportStartDate, reportEndDate, selectedLocationId);
+  const { data: dailyData, isLoading: dailyLoading, canonicalDays, salesLocationDays, isError: dailyError, error: dailyErrorObj } = useDailyBreakdown(reportStartDate, reportEndDate, selectedLocationId);
+  const { entries: editLedgerEntries, locationRows: ledgerLocationRows, upsert: upsertLedger, isSaving, isError: ledgerError } = useDailyLedger(reportStartDate, reportEndDate, selectedLocationId);
+  // Totals read per-location corrections in "All locations"; day cards still edit the location-less row.
+  const ledgerEntries = useMemo(
+    () => (selectedLocationId ? editLedgerEntries : buildAllLocationsReadLedger(editLedgerEntries, ledgerLocationRows, canonicalDays, salesLocationDays)),
+    [selectedLocationId, editLedgerEntries, ledgerLocationRows, canonicalDays, salesLocationDays],
+  );
   // Single costing source — date-aware ingredient costs resolved server-side.
   const { data: dailyCostMap, isLoading: costingLoading } = useDailyFoodCosting(reportStartDate, reportEndDate, selectedLocationId);
   const { data: periodCostRow } = usePeriodFoodCosting(reportStartDate, reportEndDate, selectedLocationId);
@@ -1448,6 +1464,7 @@ export default function ReportsPage() {
         if (!day.hasData && ledger.manual_revenue != null) {
           manualRevenueTotal += ledger.manual_revenue;
         }
+        manualRevenueTotal += ledger.location_manual_revenue ?? 0;
       }
     }
 
@@ -1541,7 +1558,8 @@ export default function ReportsPage() {
         <DayCard
           key={day.date}
           day={day}
-          ledger={ledgerEntries.get(day.date)}
+          ledger={editLedgerEntries.get(day.date)}
+          readLedger={ledgerEntries.get(day.date)}
           onSaveLedger={upsertLedger}
           isSaving={isSaving}
           avgHourlyRate={avgHourlyRate}
@@ -1555,7 +1573,7 @@ export default function ReportsPage() {
         />
       ))}
     </div>
-  ), [ledgerEntries, upsertLedger, isSaving, avgHourlyRate, focusedDate, setDayCardRef, bookingDaysSet, attendanceMap, shiftsMap, dailyCostMap, selectedLocationId]);
+  ), [ledgerEntries, editLedgerEntries, upsertLedger, isSaving, avgHourlyRate, focusedDate, setDayCardRef, bookingDaysSet, attendanceMap, shiftsMap, dailyCostMap, selectedLocationId]);
 
   return (
     <PageLayout title="Reports" subtitle="Review revenue, costs and profit, and reconcile each trading day.">
@@ -1766,7 +1784,12 @@ export default function ReportsPage() {
                 <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
                   Daily Performance
                 </h3>
-                {dailyLoading ? (
+                {dailyError || ledgerError ? (
+                  <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>Daily figures could not be loaded, so totals are not shown as €0. {(dailyErrorObj as Error)?.message ?? ""}</span>
+                  </div>
+                ) : dailyLoading ? (
                   <div className="text-muted-foreground text-sm">Loading daily data…</div>
                 ) : !dailyData || dailyData.length === 0 ? (
                   <p className="text-muted-foreground text-sm">No days in selected range.</p>
@@ -1776,7 +1799,8 @@ export default function ReportsPage() {
                       <DayCard
                         key={day.date}
                         day={day}
-                        ledger={ledgerEntries.get(day.date)}
+                        ledger={editLedgerEntries.get(day.date)}
+                        readLedger={ledgerEntries.get(day.date)}
                         onSaveLedger={upsertLedger}
                         isSaving={isSaving}
                         avgHourlyRate={avgHourlyRate}

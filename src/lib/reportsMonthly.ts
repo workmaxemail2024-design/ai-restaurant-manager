@@ -9,6 +9,7 @@ import {
 import type { DailyMetrics } from "@/hooks/useDailyBreakdown";
 import type { LedgerEntry } from "@/hooks/useDailyLedger";
 import { evaluateMissing } from "@/hooks/useDailyLedger";
+import { foldLocationCorrections } from "@/lib/revenueTruth";
 import { effectiveOrders, effectiveVisitors } from "@/lib/effectiveOperationalMetrics";
 import {
   buildFoodCostView,
@@ -62,11 +63,60 @@ interface BuildReportsPeriodInput {
   avgHourlyRate: number | null;
 }
 
+/**
+ * Day revenue for Reports: POS revenue when the day has data, otherwise the
+ * manual figure; plus (All locations) manual revenue from locations that had no
+ * POS data that day. Never adds manual revenue on top of the same location's POS.
+ */
+export function ledgerDayRevenue(day: Pick<DailyMetrics, "hasData" | "revenue">, ledger?: LedgerEntry): number {
+  const base = day.hasData ? day.revenue : (ledger?.manual_revenue ?? 0);
+  return base + (ledger?.location_manual_revenue ?? 0);
+}
+
 export function sumCanonicalRevenue(days: DailyMetrics[], ledgerEntries: Map<string, LedgerEntry>): number {
-  return days.reduce((total, day) => {
-    const ledger = ledgerEntries.get(day.date);
-    return total + (day.hasData ? day.revenue : (ledger?.manual_revenue ?? 0));
-  }, 0);
+  return days.reduce((total, day) => total + ledgerDayRevenue(day, ledgerEntries.get(day.date)), 0);
+}
+
+/**
+ * READ-ONLY ledger map for "All locations": the editable location-less rows with
+ * per-location corrections folded in (see foldLocationCorrections). Editing still
+ * uses the unmodified location-less map.
+ */
+export function buildAllLocationsReadLedger(
+  editable: Map<string, LedgerEntry>,
+  locationRows: LedgerEntry[],
+  canonicalDays: Parameters<typeof foldLocationCorrections>[1],
+  salesLocationDays: Set<string>,
+): Map<string, LedgerEntry> {
+  if (locationRows.length === 0) return editable;
+  const salesByDate = new Map<string, Set<string>>();
+  for (const k of salesLocationDays) {
+    const [loc, date] = k.split("|");
+    const set = salesByDate.get(date) ?? new Set<string>();
+    set.add(loc);
+    salesByDate.set(date, set);
+  }
+  const out = new Map(editable);
+  for (const date of new Set(locationRows.map((r) => r.entry_date))) {
+    const base = editable.get(date);
+    const f = foldLocationCorrections(date, canonicalDays, salesByDate.get(date) ?? new Set(), base, locationRows);
+    if (!f) continue;
+    const b: LedgerEntry = base ?? {
+      entry_date: date, location_id: null, covers: 0, labour_hours: 0, additional_expenses: 0,
+      notes: "", is_closed: false, manual_revenue: null, manual_orders: null, covers_unknown: false,
+    };
+    out.set(date, {
+      ...b,
+      manual_orders: b.manual_orders ?? f.manual_orders,
+      covers: b.covers > 0 ? b.covers : (f.covers ?? 0),
+      covers_unknown: b.covers_unknown || f.covers_unknown,
+      labour_hours: b.labour_hours + f.labour_hours,
+      additional_expenses: b.additional_expenses + f.additional_expenses,
+      location_manual_revenue: f.location_manual_revenue,
+      location_correction_count: f.locationCorrectionCount,
+    });
+  }
+  return out;
 }
 
 export function buildReportsPeriod({
@@ -101,7 +151,7 @@ export function buildReportsPeriod({
   for (const day of days) {
     const ledger = ledgerEntries.get(day.date);
     const attendance = attendanceMap.get(day.date);
-    const effectiveRevenue = day.hasData ? day.revenue : (ledger?.manual_revenue ?? 0);
+    const effectiveRevenue = ledgerDayRevenue(day, ledger);
     const orderMetric = effectiveOrders(day.orders, ledger);
     const visitorMetric = effectiveVisitors(day.visitors, ledger);
     const isTrading = !ledger?.is_closed && effectiveRevenue > 0;

@@ -4,15 +4,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { calculateOverheadForRange, type Overhead } from "./useOverheads";
 import { normalisePayType, allocateSalaryCost } from "@/lib/labour";
-import { dedupePosSales, effectiveOrdersAndCovers } from "@/lib/revenueTruth";
-import { canonicalizePosSummaries, sumNullable } from "@/lib/posDailyCanonical";
+import { effectiveOrdersAndCovers, marginBase } from "@/lib/revenueTruth";
+import { loadCanonicalRevenue } from "@/lib/canonicalRevenueLoader";
+import { getManualLabourRate, manualLabourCost } from "@/lib/labourRate";
 
 /** Default assumption used ONLY when recipe coverage is too low to be trusted. */
 export const ESTIMATED_FOOD_COST_PCT = 30;
 const RECIPE_COVERAGE_THRESHOLD = 0.5;
 
 export interface DailyFinancialSummary {
+  /** Gross takings incl. VAT (canonical per location/day). */
   revenue: number;
+  /** False = no revenue recorded (Unknown, not €0). */
+  revenueKnown: boolean;
+  /** Net of VAT, only when known for every location/day (never derived). */
+  revenueNet: number | null;
+  vat: number | null;
+  netCoverage: "full" | "partial" | "none";
+  /** Base used for %s and profit: net when fully known, else gross. */
+  marginBasis: "net" | "gross";
+  revenueSources: { pos_summary: number; sales: number; manual: number };
+  /** not_entered = no wages recorded at all (not €0); partial = some hours unpriced. */
+  labourStatus: "entered" | "partial" | "not_entered";
   orders: number | null;
   covers: number | null;
   aov: number | null;
@@ -76,45 +89,24 @@ export function useDailyFinancialSummary(
       if (!restaurantId) throw new Error("No restaurant");
 
       // ---------- Revenue / orders / covers ----------
-      let salesQ = supabase
-        .from("sales")
-        .select("dish_id, quantity, total_price, location_id, sale_date, source")
-        .eq("restaurant_id", restaurantId)
-        .gte("sale_date", startDate)
-        .lte("sale_date", endDate);
-      if (locationId) salesQ = salesQ.eq("location_id", locationId);
-      const rawSales = unwrapQuery(await salesQ, "rawSales");
-      const sales = dedupePosSales((rawSales as any[]) ?? []);
-
-      const revenue = (sales ?? []).reduce((s, r) => s + Number(r.total_price || 0), 0);
-
-      let sumQ = supabase
-        .from("pos_daily_summaries")
-        .select("report_date, location_id, pos_provider, gross_sales, order_count, visitor_count, has_product_detail, has_summary_report")
-        .eq("restaurant_id", restaurantId)
-        .gte("report_date", startDate)
-        .lte("report_date", endDate);
-      if (locationId) sumQ = sumQ.eq("location_id", locationId);
-      const summaries = unwrapQuery(await sumQ, "summaries");
-
-      // Canonical per location+date: providers for the same day are never summed.
-      const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
-
-      // ---------- Daily ledger (covers fallback + confirmation flags) ----------
-      let ledgerQ = supabase
-        .from("daily_ledger_entries")
-        .select(
-          "entry_date, location_id, manual_orders, covers, covers_unknown, labour_hours, additional_expenses, labour_confirmed"
-        )
-        .eq("restaurant_id", restaurantId)
-        .gte("entry_date", startDate)
-        .lte("entry_date", endDate);
-      if (locationId) ledgerQ = ledgerQ.eq("location_id", locationId);
-      const ledgers = unwrapQuery(await ledgerQ, "ledgers");
+      // Canonical per location+day (same rule as Dashboard and Reports).
+      const load = await loadCanonicalRevenue(restaurantId, locationId, startDate, endDate, {
+        salesColumns: "dish_id, quantity, total_price, location_id, sale_date, source",
+        ledgerColumns: "entry_date, location_id, manual_revenue, manual_orders, covers, covers_unknown, labour_hours, additional_expenses, labour_confirmed",
+      });
+      const sales = load.sales;
+      const canonicalDays = load.posDays;
+      const ledgers = load.ledger;
+      const revenueSummary = load.revenue;
+      const revenueKnown = revenueSummary.gross != null;
+      const revenue = revenueSummary.gross ?? 0;
+      // Margins use VAT-exclusive net sales only when known for every location/day.
+      const mb = marginBase(revenueSummary);
+      const marginRevenue = mb.base ?? 0;
 
       // Same per-location manual-correction rule as the Dashboard and Reports.
       const { orders, covers } = effectiveOrdersAndCovers(canonicalDays, (ledgers as any[]) ?? []);
-      const aov = orders && orders > 0 ? revenue / orders : null;
+      const aov = orders && orders > 0 && revenueKnown ? revenue / orders : null;
       const labourConfirmed =
         (ledgers?.length ?? 0) > 0 && (ledgers ?? []).every((l) => l.labour_confirmed === true);
 
@@ -157,6 +149,7 @@ export function useDailyFinancialSummary(
         }
       }
 
+      let manualRateMissing = false;
       let labourSource: DailyFinancialSummary["labourSource"] =
         labourHours > 0 ? "attendance" : "none";
       if (labourHours === 0) {
@@ -164,12 +157,17 @@ export function useDailyFinancialSummary(
         if (manualHours > 0) {
           labourHours = manualHours;
           labourSource = "manual";
+          // Manual hours are priced only with the user-set rate; otherwise Unknown.
+          const c = manualLabourCost(manualHours, getManualLabourRate(restaurantId));
+          if (c == null) manualRateMissing = true;
+          else labourCost += c;
         }
       }
       // ---------- Salaried labour allocation ----------
       let salariedQ = supabase
         .from("staff_safe")
         .select("id, annual_salary, pay_type, status, location_id")
+        .eq("restaurant_id", restaurantId)
         .eq("pay_type", "salary")
         .eq("status", "active");
       if (locationId) salariedQ = salariedQ.eq("location_id", locationId);
@@ -185,7 +183,7 @@ export function useDailyFinancialSummary(
       );
       labourCost = hourlyLabourCost + salariedLabourCost;
 
-      const labourPct = revenue > 0 && labourCost > 0 ? (labourCost / revenue) * 100 : null;
+      const labourPct = marginRevenue > 0 && labourCost > 0 && !manualRateMissing ? (labourCost / marginRevenue) * 100 : null;
 
       // ---------- Food cost (recipe-based, estimate only when labelled) ----------
       const dishQty: Record<string, number> = {};
@@ -220,8 +218,8 @@ export function useDailyFinancialSummary(
       const foodCostIsEstimated = !reliableFoodCost;
       const foodCost = reliableFoodCost
         ? recipeFoodCost
-        : revenue * (ESTIMATED_FOOD_COST_PCT / 100);
-      const foodCostPct = revenue > 0 ? (foodCost / revenue) * 100 : null;
+        : marginRevenue * (ESTIMATED_FOOD_COST_PCT / 100);
+      const foodCostPct = marginRevenue > 0 ? (foodCost / marginRevenue) * 100 : null;
 
       // ---------- Supplier purchases (received purchase orders only) ----------
       let poQ = supabase
@@ -314,20 +312,35 @@ export function useDailyFinancialSummary(
       );
 
       // ---------- Operating profit ----------
-      const operatingProfit = revenue - foodCost - labourCost - dailyExpenses - overheads;
-      const operatingMarginPct = revenue > 0 ? (operatingProfit / revenue) * 100 : null;
+      // On net sales when known; on gross (incl. VAT) it is overstated and labelled.
+      const operatingProfit = marginRevenue - foodCost - labourCost - dailyExpenses - overheads;
+      const operatingMarginPct = marginRevenue > 0 ? (operatingProfit / marginRevenue) * 100 : null;
+
+      // Days whose revenue has no product lines: recipe food cost cannot cover them.
+      const productKeys = new Set((sales ?? []).map((r: any) => `${r.location_id ?? "null"}|${r.sale_date}`));
+      const daysWithoutProductDetail = load.days.filter((d) => !productKeys.has(`${d.locationId ?? "null"}|${d.date}`)).length;
 
       const missing: string[] = [];
-      if (revenue <= 0) missing.push("Revenue");
+      if (!revenueKnown || revenue <= 0) missing.push("Revenue");
+      if (revenueKnown && mb.basis === "gross") missing.push(revenueSummary.netCoverage === "partial" ? "Net sales (VAT) for some days" : "Net sales (VAT)");
+      if (daysWithoutProductDetail > 0 && !foodCostIsEstimated) missing.push(`Product detail for ${daysWithoutProductDetail} day${daysWithoutProductDetail === 1 ? "" : "s"} (food cost incomplete)`);
+      if (manualRateMissing) missing.push("Rate for manual labour hours");
       if (foodCostIsEstimated) missing.push("Food cost data");
       if (missingRateIds.size > 0) missing.push(`Pay rate for ${missingRateIds.size} staff`);
       if (uncostedIds.size > 0) missing.push(`Recipe cost for ${uncostedIds.size} dish${uncostedIds.size === 1 ? "" : "es"}`);
-      if (labourCost <= 0) missing.push("Labour cost");
+      if (labourCost <= 0 && !manualRateMissing) missing.push("Labour cost");
       else if (!labourConfirmed) missing.push("Labour review");
       if ((overheadsRaw?.length ?? 0) === 0) missing.push("Recurring overheads");
 
       return {
         revenue,
+        revenueKnown,
+        revenueNet: revenueSummary.net,
+        vat: revenueSummary.vat,
+        netCoverage: revenueSummary.netCoverage,
+        marginBasis: mb.basis,
+        revenueSources: revenueSummary.sources,
+        labourStatus: labourSource === "none" && salariedLabourCost <= 0 ? "not_entered" : manualRateMissing || missingRateIds.size > 0 ? "partial" : "entered",
         orders,
         covers,
         aov,

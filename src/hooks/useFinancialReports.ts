@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchSalesPaged } from "@/lib/canonicalRevenueLoader";
 import { dedupePosSales, profitEstimateReasons, recipeFoodCost, sumRevenue } from "@/lib/revenueTruth";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
@@ -48,21 +49,7 @@ function toMonthlyAmount(amount: number, frequency: string): number {
   }
 }
 
-/** Page through sales (PostgREST caps responses at 1000 rows) and surface errors. */
-async function fetchMonthSales(restaurantId: string, locationId: string | null, start: string, end: string, columns: string) {
-  const PAGE = 1000;
-  const all: any[] = [];
-  for (let from = 0; ; from += PAGE) {
-    let q = supabase.from("sales").select(columns).eq("restaurant_id", restaurantId)
-      .gte("sale_date", start).lte("sale_date", end).order("id", { ascending: true }).range(from, from + PAGE - 1);
-    if (locationId) q = q.eq("location_id", locationId);
-    const { data, error } = await q;
-    if (error) throw new Error(`Could not load sales: ${error.message}`);
-    all.push(...(data ?? []));
-    if (!data || data.length < PAGE) break;
-  }
-  return all;
-}
+const fetchMonthSales = fetchSalesPaged;
 
 export function useMonthlyProfitLoss(monthsBack: number = 6) {
   const { currentRestaurant } = useRestaurant();

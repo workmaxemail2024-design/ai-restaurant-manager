@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { inferItemType, inferDrinkType, type PosItemType, type DrinkType } from "@/lib/posItemClassification";
-import { dedupePosSales } from "@/lib/revenueTruth";
+import { dedupePosSales, unwrapQuery } from "@/lib/revenueTruth";
 import { canonicalizePosSummaries, sumNullable, posReportAvailability, type CanonicalPosDay } from "@/lib/posDailyCanonical";
 
 interface DishMetric {
@@ -150,7 +150,7 @@ export function useDailyBreakdown(
         .gte("mapped_sale_date", targetStart)
         .lte("mapped_sale_date", targetEnd);
       if (locationId) q = q.eq("location_id", locationId);
-      const { data } = await q;
+      const data = unwrapQuery(await q, "POS import coverage");
       const map = new Map<string, { imported: boolean; applied: boolean }>();
       for (const row of data || []) {
         if (!row.mapped_sale_date) continue;
@@ -168,7 +168,7 @@ export function useDailyBreakdown(
   const summariesQuery = useQuery({
     queryKey: ["daily-breakdown-summaries", restaurantId, locationKey, targetStart, targetEnd],
     queryFn: async () => {
-      if (!restaurantId) return new Map<string, DailySummary>();
+      if (!restaurantId) return { map: new Map<string, DailySummary>(), canonical: [] as CanonicalPosDay[] };
       let q = supabase
         .from("pos_daily_summaries")
         .select("report_date, location_id, pos_provider, gross_sales, net_sales, vat_amount, discounts, order_count, visitor_count, average_order_value, has_product_detail, has_summary_report, product_gross_sales, summary_gross_sales")
@@ -176,7 +176,7 @@ export function useDailyBreakdown(
         .gte("report_date", targetStart)
         .lte("report_date", targetEnd);
       if (locationId) q = q.eq("location_id", locationId);
-      const { data } = await q;
+      const data = unwrapQuery(await q, "POS daily summaries");
       // One canonical day per location+date first (never add providers together),
       // then sum across locations for "All locations" views. Unknown stays null.
       const canonical = canonicalizePosSummaries((data as any[]) || []);
@@ -204,7 +204,7 @@ export function useDailyBreakdown(
           summaryGross: sumNullable(days.map((d) => d.summaryGross)),
         });
       }
-      return map;
+      return { map, canonical };
     },
     enabled: !!restaurantId,
   });
@@ -215,11 +215,11 @@ export function useDailyBreakdown(
     queryFn: async () => {
       const map = new Map<string, { type: PosItemType; drinkType: DrinkType }>();
       if (!restaurantId) return map;
-      const { data } = await supabase
+      const data = unwrapQuery(await supabase
         .from("external_pos_items")
         .select("mapped_dish_id, external_item_name, department, manual_type, manual_drink_type")
         .eq("restaurant_id", restaurantId)
-        .not("mapped_dish_id", "is", null);
+        .not("mapped_dish_id", "is", null), "product classification");
       for (const r of (data as any[]) || []) {
         const t = (r.manual_type as PosItemType | null) ?? inferItemType(r.department, r.external_item_name);
         const d = (r.manual_drink_type as DrinkType | null) ?? inferDrinkType(r.department, r.external_item_name);
@@ -237,7 +237,7 @@ export function useDailyBreakdown(
     });
     const sales = salesQuery.data || [];
     const coverage = coverageQuery.data || new Map();
-    const summaries = summariesQuery.data || new Map<string, DailySummary>();
+    const summaries = summariesQuery.data?.map || new Map<string, DailySummary>();
     const classification = classificationQuery.data || new Map<string, { type: PosItemType; drinkType: DrinkType }>();
 
     const byDate = new Map<string, SaleRow[]>();
@@ -358,8 +358,18 @@ export function useDailyBreakdown(
     });
   }, [salesQuery.data, coverageQuery.data, summariesQuery.data, classificationQuery.data, targetStart, targetEnd]);
 
+  // Per-location detail for read-only "All locations" correction folding.
+  const locationDetail = useMemo(() => {
+    const salesLocationDays = new Set<string>();
+    for (const r of salesQuery.data || []) if (r.location_id) salesLocationDays.add(`${r.location_id}|${r.sale_date}`);
+    return { canonicalDays: summariesQuery.data?.canonical ?? [], salesLocationDays };
+  }, [salesQuery.data, summariesQuery.data]);
+
   return {
     data: dailyMetrics,
+    ...locationDetail,
+    isError: salesQuery.isError || summariesQuery.isError || coverageQuery.isError || classificationQuery.isError,
+    error: salesQuery.error ?? summariesQuery.error ?? coverageQuery.error ?? classificationQuery.error,
     isLoading:
       salesQuery.isLoading ||
       coverageQuery.isLoading ||

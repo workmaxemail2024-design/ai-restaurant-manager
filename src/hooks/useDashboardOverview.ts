@@ -5,8 +5,8 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useDateRange } from "@/contexts/DateRangeContext";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
-import { canonicalizePosSummaries } from "@/lib/posDailyCanonical";
-import { dedupePosSales, effectiveOrdersAndCovers, sumRevenue } from "@/lib/revenueTruth";
+import { effectiveOrdersAndCovers } from "@/lib/revenueTruth";
+import { loadCanonicalRevenue } from "@/lib/canonicalRevenueLoader";
 
 interface HourlyRevenue {
   time: string;
@@ -15,9 +15,13 @@ interface HourlyRevenue {
 }
 
 interface DashboardOverview {
+  /** Gross takings incl. VAT (canonical per location/day). */
   revenueToday: number;
-  /** False when no sales rows exist for the range (revenue is Unknown, not €0). */
+  /** False when no revenue is recorded for the range (Unknown, not €0). */
   hasRevenueData: boolean;
+  /** Net of VAT only when every location/day has a known net; never derived. */
+  revenueNet?: number | null;
+  netCoverage?: "full" | "partial" | "none";
   ordersToday: number | null;
   aovToday: number | null;
   visitorsToday: number | null;
@@ -65,85 +69,24 @@ export function useDashboardOverview(locationId?: string | null) {
 
       }
 
-      // Fetch sales for selected date range
-      let rangeQuery = supabase
-        .from("sales")
-        .select("total_price, quantity, created_at, sale_date, location_id, source")
-        .eq("restaurant_id", restaurantId)
-        .gte("sale_date", startDate)
-        .lte("sale_date", endDate);
+      // One canonical revenue figure per location + day (same rule as Reports):
+      // POS daily summary gross > deduplicated sales lines > that location's manual revenue.
+      const range = await loadCanonicalRevenue(restaurantId, locationId ?? null, startDate, endDate);
+      const yest = await loadCanonicalRevenue(restaurantId, locationId ?? null, yesterday, yesterday);
+      const lastWk = await loadCanonicalRevenue(restaurantId, locationId ?? null, sameWeekdayLastWeek, sameWeekdayLastWeek);
 
-      if (locationId) {
-        rangeQuery = rangeQuery.eq("location_id", locationId);
-      }
+      const hasRevenueData = range.revenue.gross != null;
+      const revenueToday = range.revenue.gross ?? 0;
+      const revenueNet = range.revenue.net;
+      const netCoverage = range.revenue.netCoverage;
+      const revenueYesterday = yest.revenue.gross ?? 0;
+      const revenueSameWeekdayLastWeek = lastWk.revenue.gross ?? 0;
 
-      const rawRangeSales = unwrapQuery(await rangeQuery, "rawRangeSales");
-      // One POS source per location/day — API + XLS imports of the same day are never added together.
-      const rangeSales = dedupePosSales((rawRangeSales as any[]) || []);
-
-      // Fetch yesterday's sales (for comparison)
-      let yesterdayQuery = supabase
-        .from("sales")
-        .select("total_price, location_id, sale_date, source")
-        .eq("restaurant_id", restaurantId)
-        .eq("sale_date", yesterday);
-
-      if (locationId) {
-        yesterdayQuery = yesterdayQuery.eq("location_id", locationId);
-      }
-
-      const yesterdaySales = unwrapQuery(await yesterdayQuery, "yesterdaySales");
-
-      // Fetch same weekday last week sales
-      let lastWeekQuery = supabase
-        .from("sales")
-        .select("total_price, location_id, sale_date, source")
-        .eq("restaurant_id", restaurantId)
-        .eq("sale_date", sameWeekdayLastWeek);
-
-      if (locationId) {
-        lastWeekQuery = lastWeekQuery.eq("location_id", locationId);
-      }
-
-      const lastWeekSales = unwrapQuery(await lastWeekQuery, "lastWeekSales");
-
-      // Calculate revenue totals for the selected range
-      const revenueKnown = sumRevenue(rangeSales);
-      const hasRevenueData = revenueKnown != null;
-      const revenueToday = revenueKnown ?? 0;
-      const revenueYesterday = sumRevenue(dedupePosSales((yesterdaySales as any[]) || [])) ?? 0;
-      const revenueSameWeekdayLastWeek = sumRevenue(dedupePosSales((lastWeekSales as any[]) || [])) ?? 0;
-
-      // Prefer authoritative order/visitor/AOV counts from pos_daily_summaries.
-      // Product-row counts (sales.length) are NOT receipts, so we don't fall back to them.
-      // Canonicalize per location+date first so multiple POS providers for the
-      // same day are never added together as separate counts.
-      let summaryQuery = supabase
-        .from("pos_daily_summaries")
-        .select("report_date, location_id, pos_provider, order_count, visitor_count, average_order_value, gross_sales, has_product_detail, has_summary_report")
-        .eq("restaurant_id", restaurantId)
-        .gte("report_date", startDate)
-        .lte("report_date", endDate);
-      if (locationId) summaryQuery = summaryQuery.eq("location_id", locationId);
-      const summaries = unwrapQuery(await summaryQuery, "summaries");
-
-      const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
-
-      // Manual corrections (Reports → Daily Performance) replace only that
-      // location's POS figure for that day. Explicit 0 counts; covers_unknown → Unknown.
-      let ledgerQuery = supabase
-        .from("daily_ledger_entries")
-        .select("entry_date, location_id, manual_orders, covers, covers_unknown")
-        .eq("restaurant_id", restaurantId)
-        .gte("entry_date", startDate)
-        .lte("entry_date", endDate);
-      if (locationId) ledgerQuery = ledgerQuery.eq("location_id", locationId);
-      const ledgerRows = unwrapQuery(await ledgerQuery, "ledgerRows");
-      const eff = effectiveOrdersAndCovers(canonicalDays, (ledgerRows as any[]) || []);
+      // Manual corrections replace only that location's POS figure for that day.
+      const eff = effectiveOrdersAndCovers(range.posDays, range.ledger);
       const ordersToday = eff.orders;
       const visitorsToday = eff.covers;
-      const aovToday = ordersToday != null && ordersToday > 0 ? revenueToday / ordersToday : null;
-
+      const aovToday = ordersToday != null && ordersToday > 0 && hasRevenueData ? revenueToday / ordersToday : null;
 
       // Hourly revenue is NOT available: sales rows carry only a trading date and
       // an import timestamp (created_at), not the real transaction time. Bucketing
@@ -193,6 +136,8 @@ export function useDashboardOverview(locationId?: string | null) {
       return {
         revenueToday,
         hasRevenueData,
+        revenueNet,
+        netCoverage,
         ordersToday,
         aovToday,
         visitorsToday,
