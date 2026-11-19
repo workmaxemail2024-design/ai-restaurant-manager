@@ -85,16 +85,19 @@ export default function POSIntegrationsPage() {
   const { data: integrations, isLoading: integrationsLoading, refetch: refetchIntegrations } = usePOSIntegrations(selectedLocation || undefined);
   const { data: syncLogs, refetch: refetchLogs } = usePOSSyncLogs(selectedLocation || undefined);
 
+  const [tradingDay, setTradingDay] = useState("");
   const visibleLocations = (locations ?? []).filter(location => !selectedLocation || location.id === selectedLocation);
   const stagedQ = useQuery({
-    queryKey: ["captiva-backend-status", visibleLocations.map(location => location.id)],
+    queryKey: ["captiva-backend-status", tradingDay, visibleLocations.map(location => location.id)],
     enabled: visibleLocations.length > 0,
     queryFn: async () => {
       const statuses = await Promise.all(visibleLocations.map(async ({ id }) => {
-        const { data: latest, error } = await supabase
+        let query = supabase
           .from("pos_captiva_daily_sources")
-          .select("id, location_id, store_id, trading_date, official_gross, official_net, journal_coverage, reconciliation_state, observed_at")
-          .eq("location_id", id)
+          .select("id, location_id, store_id, trading_date, official_gross, official_net, official_vat, official_orders, journal_standard_payments, journal_coverage, reconciliation_state, observed_at")
+          .eq("location_id", id);
+        if (tradingDay) query = query.eq("trading_date", tradingDay);
+        const { data: latest, error } = await query
           .order("trading_date", { ascending: false })
           .order("observed_at", { ascending: false })
           .order("id", { ascending: false })
@@ -698,6 +701,9 @@ export default function POSIntegrationsPage() {
               Daily totals sent by your Captiva backend for each store. They are held for review and count as sales only after they are approved and applied.
             </CardDescription>
             <div className="flex flex-wrap items-center gap-2 pt-2">
+              <Label htmlFor="captiva-day">Trading date</Label>
+              <Input id="captiva-day" type="date" className="w-auto" value={tradingDay} onChange={event => setTradingDay(event.target.value)} />
+              {tradingDay && <Button variant="ghost" onClick={() => setTradingDay("")}>Show latest</Button>}
               <Button variant="outline" className="h-11" onClick={() => stagedQ.refetch()} disabled={stagedQ.isFetching} aria-label="Refresh connection status">
                 <RefreshCw className={`h-4 w-4 mr-2 ${stagedQ.isFetching ? "animate-spin" : ""}`} />
                 {stagedQ.isFetching ? "Checking…" : "Refresh connection status"}
@@ -727,16 +733,21 @@ export default function POSIntegrationsPage() {
                   <div key={l.id} className="rounded-md border p-3 space-y-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium truncate" title={l.name}>{l.name}</span>
-                      <Badge variant={v.link === "connected" ? "default" : v.link === "stale" ? "destructive" : "secondary"}>
+                      {!tradingDay && <Badge variant={v.link === "connected" ? "default" : v.link === "stale" ? "destructive" : "secondary"}>
                         {v.link === "connected" ? "Connected" : v.link === "stale" ? "No recent data" : "Not linked"}
-                      </Badge>
+                      </Badge>}
                     </div>
-                    <p className="font-medium">{v.headline}</p>
+                    <p className="font-medium">{tradingDay ? (st ? "Snapshot received" : "No snapshot for this date") : v.headline}</p>
                     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                       <dt className="text-muted-foreground">Store code</dt><dd className="font-mono">{v.storeCode ?? "—"}</dd>
-                      <dt className="text-muted-foreground">Latest trading day</dt><dd>{v.latestTradingDate ?? "—"}</dd>
+                      <dt className="text-muted-foreground">Trading day</dt><dd>{v.latestTradingDate ?? "—"}</dd>
                       <dt className="text-muted-foreground">Received</dt><dd>{v.lastReceivedAt ? format(new Date(v.lastReceivedAt), "MMM d, HH:mm") : "—"}</dd>
                       {st && <><dt className="text-muted-foreground">Official total</dt><dd>{st.latest.official_gross != null ? `${formatCurrency(Number(st.latest.official_gross))} gross` : "Unknown"}{st.latest.official_net != null ? ` · ${formatCurrency(Number(st.latest.official_net))} net` : ""}</dd></>}
+                      {st && <>
+                        <dt>VAT</dt><dd>{st.latest.official_vat == null ? "Unknown" : formatCurrency(st.latest.official_vat)}</dd>
+                        <dt>Orders</dt><dd>{st.latest.official_orders ?? "Unknown"}</dd>
+                        <dt>Payments minus gross</dt><dd>{st.latest.journal_standard_payments == null || st.latest.official_gross == null ? "Unknown" : formatCurrency(st.latest.journal_standard_payments - st.latest.official_gross)}</dd>
+                      </>}
                       <dt className="text-muted-foreground">Journal</dt><dd>{v.coverage}</dd>
                     </dl>
                     <p className="text-xs">{v.reconciliation}</p>
