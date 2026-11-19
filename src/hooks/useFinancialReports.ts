@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { dedupePosSales, recipeFoodCost } from "@/lib/revenueTruth";
+import { dedupePosSales, profitEstimateReasons, recipeFoodCost, sumRevenue } from "@/lib/revenueTruth";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
@@ -8,7 +8,11 @@ import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost
 
 export interface ProfitLossData {
   month: string;
+  /** Gross takings (incl. VAT) from sales; 0 with revenueKnown=false when no sales rows. */
   revenue: number;
+  revenueKnown?: boolean;
+  /** Non-empty when profit is an estimate (missing costs/rates/sales). */
+  estimateReasons?: string[];
   foodCost: number;
   /** Dishes sold this month whose recipe cost is unknown (excluded from foodCost). */
   uncostedDishCount?: number;
@@ -44,6 +48,22 @@ function toMonthlyAmount(amount: number, frequency: string): number {
   }
 }
 
+/** Page through sales (PostgREST caps responses at 1000 rows) and surface errors. */
+async function fetchMonthSales(restaurantId: string, locationId: string | null, start: string, end: string, columns: string) {
+  const PAGE = 1000;
+  const all: any[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = supabase.from("sales").select(columns).eq("restaurant_id", restaurantId)
+      .gte("sale_date", start).lte("sale_date", end).order("id", { ascending: true }).range(from, from + PAGE - 1);
+    if (locationId) q = q.eq("location_id", locationId);
+    const { data, error } = await q;
+    if (error) throw new Error(`Could not load sales: ${error.message}`);
+    all.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
+  }
+  return all;
+}
+
 export function useMonthlyProfitLoss(monthsBack: number = 6) {
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
@@ -63,27 +83,20 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
         const monthEnd = endOfMonth(monthDate);
         const monthLabel = format(monthDate, "MMM yyyy");
 
-        // Fetch sales for the month
-        let salesQuery = supabase
-          .from("sales")
-          .select("total_price, dish_id, quantity, location_id, sale_date, source")
-          .eq("restaurant_id", restaurantId)
-          .gte("sale_date", format(monthStart, "yyyy-MM-dd"))
-          .lte("sale_date", format(monthEnd, "yyyy-MM-dd"));
-
-        if (selectedLocationId) {
-          salesQuery = salesQuery.eq("location_id", selectedLocationId);
-        }
-
-        const { data: rawSales } = await salesQuery;
-        const sales = dedupePosSales((rawSales as any[]) ?? []);
-        const revenue = sales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
+        // Fetch sales for the month (all pages; errors are shown, never read as €0)
+        const rawSales = await fetchMonthSales(restaurantId, selectedLocationId ?? null,
+          format(monthStart, "yyyy-MM-dd"), format(monthEnd, "yyyy-MM-dd"),
+          "total_price, dish_id, quantity, location_id, sale_date, source");
+        const sales = dedupePosSales(rawSales);
+        const revenueOrNull = sumRevenue(sales);
+        const revenue = revenueOrNull ?? 0;
 
         // Recipe food cost from summed quantities (not row counts). Dishes with
         // unknown cost are counted as uncosted — never priced at €0.
         const costByDish = new Map<string, number | null>();
         for (const dishId of [...new Set(sales.map((s) => s.dish_id).filter(Boolean))] as string[]) {
-          const { data: costData } = await supabase.rpc("calculate_dish_cost", { p_dish_id: dishId });
+          const { data: costData, error: costErr } = await supabase.rpc("calculate_dish_cost", { p_dish_id: dishId });
+          if (costErr) throw new Error(`Could not load dish cost: ${costErr.message}`);
           costByDish.set(dishId, costData == null ? null : Number(costData));
         }
         const fc = recipeFoodCost(sales, costByDish);
@@ -102,7 +115,8 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
           attendanceQuery = attendanceQuery.eq("location_id", selectedLocationId);
         }
 
-        const { data: attendance } = await attendanceQuery;
+        const { data: attendance, error: attErr } = await attendanceQuery;
+        if (attErr) throw new Error(`Could not load attendance: ${attErr.message}`);
         let labourCost = 0;
         const missingRate = new Set<string>();
         attendance?.forEach((att) => {
@@ -131,7 +145,8 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
           .eq("restaurant_id", restaurantId)
           .eq("is_active", true);
 
-        const { data: overheadsData } = await overheadsQuery;
+        const { data: overheadsData, error: ohErr } = await overheadsQuery;
+        if (ohErr) throw new Error(`Could not load overheads: ${ohErr.message}`);
         let overheads = 0;
         overheadsData?.forEach((oh) => {
           // Check if overhead applies to selected location
@@ -153,6 +168,8 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
         results.push({
           month: monthLabel,
           revenue,
+          revenueKnown: revenueOrNull != null,
+          estimateReasons: profitEstimateReasons({ revenue: revenueOrNull, uncostedDishCount, missingPayRateStaff }),
           foodCost,
           uncostedDishCount,
           missingPayRateStaff,
@@ -190,21 +207,11 @@ export function useCashFlowSummary(monthsBack: number = 6) {
         const monthEnd = endOfMonth(monthDate);
         const monthLabel = format(monthDate, "MMM yyyy");
 
-        // Cash In: Sales revenue
-        let salesQuery = supabase
-          .from("sales")
-          .select("total_price")
-          .eq("restaurant_id", restaurantId)
-          .gte("sale_date", format(monthStart, "yyyy-MM-dd"))
-          .lte("sale_date", format(monthEnd, "yyyy-MM-dd"));
-
-        if (selectedLocationId) {
-          salesQuery = salesQuery.eq("location_id", selectedLocationId);
-        }
-
-        const { data: rawSales } = await salesQuery;
-        const sales = dedupePosSales((rawSales as any[]) ?? []);
-        const cashIn = sales?.reduce((sum, s) => sum + Number(s.total_price), 0) || 0;
+        // Cash In: Sales revenue (all pages; errors surfaced)
+        const rawSales = await fetchMonthSales(restaurantId, selectedLocationId ?? null,
+          format(monthStart, "yyyy-MM-dd"), format(monthEnd, "yyyy-MM-dd"), "total_price, location_id, sale_date, source");
+        const sales = dedupePosSales(rawSales);
+        const cashIn = sumRevenue(sales) ?? 0;
 
         // Cash Out: Payroll from attendance
         let attendanceQuery = supabase
@@ -218,7 +225,8 @@ export function useCashFlowSummary(monthsBack: number = 6) {
           attendanceQuery = attendanceQuery.eq("location_id", selectedLocationId);
         }
 
-        const { data: attendance } = await attendanceQuery;
+        const { data: attendance, error: attErr } = await attendanceQuery;
+        if (attErr) throw new Error(`Could not load attendance: ${attErr.message}`);
         let cashOutPayroll = 0;
         attendance?.forEach((att) => {
           if (att.clock_in && att.clock_out && !isSalariedStaffRow(att.staff)) {
@@ -243,7 +251,8 @@ export function useCashFlowSummary(monthsBack: number = 6) {
           .eq("restaurant_id", restaurantId)
           .eq("is_active", true);
 
-        const { data: overheadsData } = await overheadsQuery;
+        const { data: overheadsData, error: ohErr } = await overheadsQuery;
+        if (ohErr) throw new Error(`Could not load overheads: ${ohErr.message}`);
         let cashOutOverheads = 0;
         overheadsData?.forEach((oh) => {
           if (selectedLocationId && oh.location_id && oh.location_id !== selectedLocationId) {

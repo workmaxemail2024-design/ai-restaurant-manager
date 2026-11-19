@@ -110,3 +110,27 @@ export function recipeFoodCost(
   }
   return { cost, uncostedDishIds: uncosted, qtyByDish };
 }
+
+/**
+ * Why a profit figure is only an estimate. Empty reasons = every input was known.
+ * Revenue is gross (as stored in sales.total_price), so margins are not VAT-exclusive.
+ */
+export function profitEstimateReasons(input: {
+  revenue: number | null;
+  uncostedDishCount?: number;
+  missingPayRateStaff?: number;
+  foodCost?: number | null;
+}): string[] {
+  const reasons: string[] = [];
+  if (input.revenue == null) reasons.push("No sales recorded");
+  if ((input.uncostedDishCount ?? 0) > 0) reasons.push(`${input.uncostedDishCount} dish(es) without recipe cost`);
+  if (input.foodCost === null && input.revenue != null && input.revenue > 0) reasons.push("Food cost unknown");
+  if ((input.missingPayRateStaff ?? 0) > 0) reasons.push(`${input.missingPayRateStaff} staff without pay rate`);
+  return reasons;
+}
+
+/** Return query data, or throw so the screen shows an error instead of a silent €0 / empty result. */
+export function unwrapQuery<T>(res: { data: T; error: { message: string } | null }, what: string): T {
+  if (res.error) throw new Error(`Could not load ${what}: ${res.error.message}`);
+  return res.data;
+}

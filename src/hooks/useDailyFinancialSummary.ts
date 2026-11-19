@@ -1,3 +1,4 @@
+import { unwrapQuery } from "@/lib/revenueTruth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
@@ -82,7 +83,7 @@ export function useDailyFinancialSummary(
         .gte("sale_date", startDate)
         .lte("sale_date", endDate);
       if (locationId) salesQ = salesQ.eq("location_id", locationId);
-      const { data: rawSales } = await salesQ;
+      const rawSales = unwrapQuery(await salesQ, "rawSales");
       const sales = dedupePosSales((rawSales as any[]) ?? []);
 
       const revenue = (sales ?? []).reduce((s, r) => s + Number(r.total_price || 0), 0);
@@ -94,7 +95,7 @@ export function useDailyFinancialSummary(
         .gte("report_date", startDate)
         .lte("report_date", endDate);
       if (locationId) sumQ = sumQ.eq("location_id", locationId);
-      const { data: summaries } = await sumQ;
+      const summaries = unwrapQuery(await sumQ, "summaries");
 
       // Canonical per location+date: providers for the same day are never summed.
       const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
@@ -109,7 +110,7 @@ export function useDailyFinancialSummary(
         .gte("entry_date", startDate)
         .lte("entry_date", endDate);
       if (locationId) ledgerQ = ledgerQ.eq("location_id", locationId);
-      const { data: ledgers } = await ledgerQ;
+      const ledgers = unwrapQuery(await ledgerQ, "ledgers");
 
       // Same per-location manual-correction rule as the Dashboard and Reports.
       const { orders, covers } = effectiveOrdersAndCovers(canonicalDays, (ledgers as any[]) ?? []);
@@ -125,7 +126,7 @@ export function useDailyFinancialSummary(
         .gte("clock_in", `${startDate}T00:00:00`)
         .lte("clock_in", `${endDate}T23:59:59`);
       if (locationId) attQ = attQ.eq("location_id", locationId);
-      const { data: attendance } = await attQ;
+      const attendance = unwrapQuery(await attQ, "attendance");
 
       let labourCost = 0;
       let labourHours = 0;
@@ -133,10 +134,10 @@ export function useDailyFinancialSummary(
       const salariedIds = new Set<string>();
       if (attendance && attendance.length > 0) {
         const staffIds = Array.from(new Set(attendance.map((a) => a.staff_id)));
-        const { data: staffRows } = await supabase
+        const staffRows = unwrapQuery(await supabase
           .from("staff_safe")
           .select("id, hourly_rate, pay_type")
-          .in("id", staffIds);
+          .in("id", staffIds), "staffRows");
         const rates = new Map<string, number>();
         for (const s of staffRows ?? []) {
           const row = s as { id: string; hourly_rate: number | null; pay_type: string | null };
@@ -172,7 +173,7 @@ export function useDailyFinancialSummary(
         .eq("pay_type", "salary")
         .eq("status", "active");
       if (locationId) salariedQ = salariedQ.eq("location_id", locationId);
-      const { data: salariedStaff } = await salariedQ;
+      const salariedStaff = unwrapQuery(await salariedQ, "salariedStaff");
       const hourlyLabourCost = labourCost;
       const salariedLabourCost = allocateSalaryCost(
         (salariedStaff ?? []).map((s: any) => ({
@@ -198,9 +199,9 @@ export function useDailyFinancialSummary(
       const uncostedIds = new Set<string>();
       for (const dishId of dishIds) {
         try {
-          const { data: costData } = await supabase.rpc("calculate_dish_cost", {
+          const costData = unwrapQuery(await supabase.rpc("calculate_dish_cost", {
             p_dish_id: dishId,
-          });
+          }), "costData");
           const cost = Number(costData) || 0;
           if (cost > 0) {
             dishesWithCost++;
@@ -230,19 +231,19 @@ export function useDailyFinancialSummary(
         .gte("order_date", startDate)
         .lte("order_date", endDate);
       if (locationId) poQ = poQ.eq("location_id", locationId);
-      const { data: pos } = await poQ;
+      const pos = unwrapQuery(await poQ, "pos");
       const receivedPos = (pos ?? []).filter(
         (p) => p.status === "received" || p.received_at != null
       );
       let purchases = 0;
       if (receivedPos.length > 0) {
-        const { data: items } = await supabase
+        const items = unwrapQuery(await supabase
           .from("purchase_order_items")
           .select("purchase_order_id, quantity, cost_price")
           .in(
             "purchase_order_id",
             receivedPos.map((p) => p.id)
-          );
+          ), "items");
         purchases = (items ?? []).reduce(
           (s, i) => s + Number(i.quantity || 0) * Number(i.cost_price || 0),
           0
@@ -258,7 +259,7 @@ export function useDailyFinancialSummary(
         .gte("document_date", startDate)
         .lte("document_date", endDate);
       if (locationId) docQ = docQ.eq("location_id", locationId);
-      const { data: docs } = await docQ;
+      const docs = unwrapQuery(await docQ, "docs");
       const unvaluedSupplierDocs = (docs ?? []).filter(
         (d) => d.purchase_order_id == null
       ).length;
@@ -271,7 +272,7 @@ export function useDailyFinancialSummary(
         .gte("entry_date", startDate)
         .lte("entry_date", endDate);
       if (locationId) expQ = expQ.eq("location_id", locationId);
-      const { data: expenses } = await expQ;
+      const expenses = unwrapQuery(await expQ, "expenses");
       let dailyExpenses = (expenses ?? []).reduce((s, e) => s + Number(e.amount || 0), 0);
       const dailyExpenseCount = expenses?.length ?? 0;
       if (dailyExpenseCount === 0) {
@@ -289,7 +290,7 @@ export function useDailyFinancialSummary(
         .eq("restaurant_id", restaurantId)
         .eq("is_active", true);
       if (locationId) ohQ = ohQ.or(`location_id.eq.${locationId},location_id.is.null`);
-      const { data: overheadsRaw } = await ohQ;
+      const overheadsRaw = unwrapQuery(await ohQ, "overheadsRaw");
 
       let locationCount = 1;
       if (!locationId) {

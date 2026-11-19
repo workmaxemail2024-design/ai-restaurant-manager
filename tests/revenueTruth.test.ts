@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { dedupePosSales, effectiveOrdersAndCovers, recipeFoodCost, sumRevenue } from "../src/lib/revenueTruth";
+import { dedupePosSales, effectiveOrdersAndCovers, profitEstimateReasons, recipeFoodCost, sumRevenue, unwrapQuery } from "../src/lib/revenueTruth";
 
 const day = (locationId: string, orderCount: number | null, visitorCount: number | null = null) =>
   ({ locationId, reportDate: "2026-11-01", orderCount, visitorCount });
@@ -99,5 +99,37 @@ describe("canonical KPIs", () => {
     expect(fc.cost).toBe(8);
     expect(fc.uncostedDishIds).toEqual(["b"]);
     expect(100 - (fc.cost ?? 0)).toBe(92);
+  });
+});
+
+describe("Phase 1 reliability", () => {
+  it("dedupe is per location: XLS at A does not drop API rows at B", () => {
+    const rows = [
+      { location_id: "A", sale_date: "2026-11-01", source: "captiva_xls", total_price: 100 },
+      { location_id: "A", sale_date: "2026-11-01", source: "captiva", total_price: 100 },
+      { location_id: "B", sale_date: "2026-11-01", source: "captiva", total_price: 40 },
+    ];
+    expect(sumRevenue(dedupePosSales(rows))).toBe(140);
+  });
+  it("manual sales rows are kept alongside the chosen POS source", () => {
+    const rows = [
+      { location_id: "A", sale_date: "2026-11-01", source: "captiva_xls", total_price: 100 },
+      { location_id: "A", sale_date: "2026-11-01", source: "manual", total_price: 5 },
+    ];
+    expect(sumRevenue(dedupePosSales(rows))).toBe(105);
+  });
+  it("profit is complete only when nothing is missing", () => {
+    expect(profitEstimateReasons({ revenue: 1000, uncostedDishCount: 0, missingPayRateStaff: 0 })).toEqual([]);
+  });
+  it("uncosted dishes or missing pay rates make profit an estimate", () => {
+    expect(profitEstimateReasons({ revenue: 1000, uncostedDishCount: 2 }).length).toBe(1);
+    expect(profitEstimateReasons({ revenue: 1000, missingPayRateStaff: 1 }).length).toBe(1);
+  });
+  it("no sales makes profit an estimate, not a €0 result", () => {
+    expect(profitEstimateReasons({ revenue: null })).toContain("No sales recorded");
+  });
+  it("a failed query throws instead of returning empty data", () => {
+    expect(() => unwrapQuery({ data: null, error: { message: "denied" } }, "sales")).toThrow("Could not load sales: denied");
+    expect(unwrapQuery({ data: [1], error: null }, "sales")).toEqual([1]);
   });
 });

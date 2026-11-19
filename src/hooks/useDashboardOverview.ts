@@ -1,3 +1,4 @@
+import { unwrapQuery } from "@/lib/revenueTruth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
@@ -76,7 +77,7 @@ export function useDashboardOverview(locationId?: string | null) {
         rangeQuery = rangeQuery.eq("location_id", locationId);
       }
 
-      const { data: rawRangeSales } = await rangeQuery;
+      const rawRangeSales = unwrapQuery(await rangeQuery, "rawRangeSales");
       // One POS source per location/day — API + XLS imports of the same day are never added together.
       const rangeSales = dedupePosSales((rawRangeSales as any[]) || []);
 
@@ -91,7 +92,7 @@ export function useDashboardOverview(locationId?: string | null) {
         yesterdayQuery = yesterdayQuery.eq("location_id", locationId);
       }
 
-      const { data: yesterdaySales } = await yesterdayQuery;
+      const yesterdaySales = unwrapQuery(await yesterdayQuery, "yesterdaySales");
 
       // Fetch same weekday last week sales
       let lastWeekQuery = supabase
@@ -104,7 +105,7 @@ export function useDashboardOverview(locationId?: string | null) {
         lastWeekQuery = lastWeekQuery.eq("location_id", locationId);
       }
 
-      const { data: lastWeekSales } = await lastWeekQuery;
+      const lastWeekSales = unwrapQuery(await lastWeekQuery, "lastWeekSales");
 
       // Calculate revenue totals for the selected range
       const revenueKnown = sumRevenue(rangeSales);
@@ -124,7 +125,7 @@ export function useDashboardOverview(locationId?: string | null) {
         .gte("report_date", startDate)
         .lte("report_date", endDate);
       if (locationId) summaryQuery = summaryQuery.eq("location_id", locationId);
-      const { data: summaries } = await summaryQuery;
+      const summaries = unwrapQuery(await summaryQuery, "summaries");
 
       const canonicalDays = canonicalizePosSummaries((summaries as any[]) || []);
 
@@ -137,7 +138,7 @@ export function useDashboardOverview(locationId?: string | null) {
         .gte("entry_date", startDate)
         .lte("entry_date", endDate);
       if (locationId) ledgerQuery = ledgerQuery.eq("location_id", locationId);
-      const { data: ledgerRows } = await ledgerQuery;
+      const ledgerRows = unwrapQuery(await ledgerQuery, "ledgerRows");
       const eff = effectiveOrdersAndCovers(canonicalDays, (ledgerRows as any[]) || []);
       const ordersToday = eff.orders;
       const visitorsToday = eff.covers;
@@ -165,7 +166,7 @@ export function useDashboardOverview(locationId?: string | null) {
         attendanceQuery = attendanceQuery.eq("location_id", locationId);
       }
 
-      const { data: attendanceData } = await attendanceQuery;
+      const attendanceData = unwrapQuery(await attendanceQuery, "attendanceData");
 
       let labourTodayCost = 0;
       const hasLabourToday = (attendanceData?.length || 0) > 0;

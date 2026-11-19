@@ -1333,7 +1333,7 @@ export default function ReportsPage() {
         const cursor = new Date(`${reportStartDate}T00:00:00`);
         const last = new Date(`${reportEndDate}T00:00:00`);
         while (cursor <= last) {
-          const day = cursor.toISOString().split("T")[0];
+          const day = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
           const existing = dayMap.get(day) || { hours: 0, cost: 0 };
           dayMap.set(day, { hours: existing.hours, cost: existing.cost + alloc.perDay });
           cursor.setDate(cursor.getDate() + 1);

@@ -105,3 +105,14 @@
 - [x] Duplicate rule: invoice number / source reference is the only hard duplicate; same supplier+amount+month without a reference is flagged and needs explicit confirmation (never silently rejected or merged)
 - [x] Prove in rolled-back tests: a replaced estimate is counted once (actual only) and confirmed payroll replaces estimated labour (never added)
 - [ ] First supervised import of the real accountant workbook (needs you; signed-in check not possible here)
+
+## Finishing work — Phase 1 reliability (read-only fixes, no DB changes)
+- [x] Failed financial lookups show an error (Dashboard, Daily Financial Summary, location cards, P&L, Cash Flow) instead of €0
+- [x] Reports product detail and Cash Flow count overlapping Captiva API/XLS rows once
+- [x] P&L / Cash Flow load every sale (no 1000-row cut-off); P&L flags Estimate with reasons; revenue labelled gross
+- [x] Reports salary-day list no longer shifts a day by time zone
+- [x] `bun test` script + tests for dedupe isolation, estimate reasons, query errors
+- [ ] Phase 2: Reports "All locations" must sum per-location ledger corrections (affects editing; needs design)
+- [ ] Phase 2: one revenue source (canonical POS gross + net/VAT) for Dashboard / summary / location cards
+- [ ] Phase 2: remaining unknown→0 (ledger covers/hours/expenses, Reports profit without labour, Cash Flow missing rates)
+- [ ] Phase 2: daily summary to read actual_expenses; price manual hours; one profit definition

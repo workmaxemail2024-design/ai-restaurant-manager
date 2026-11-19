@@ -2,11 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMonthlyProfitLoss } from "@/hooks/useFinancialReports";
 import { formatCurrency } from "@/lib/currency";
-import { Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ProfitLossReport() {
-  const { data: pnlData = [], isLoading } = useMonthlyProfitLoss(6);
+  const { data: pnlData = [], isLoading, isError, error } = useMonthlyProfitLoss(6);
+  const estimateMonths = pnlData.filter((r) => (r.estimateReasons?.length ?? 0) > 0);
 
   // Calculate totals
   const totals = pnlData.reduce(
@@ -32,8 +33,26 @@ export function ProfitLossReport() {
     );
   }
 
+  if (isError) {
+    return (
+      <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>Profit & Loss could not be loaded, so no figures are shown. {(error as Error)?.message}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {estimateMonths.length > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-warning" />
+          <span>
+            Estimate — profit is not complete for {estimateMonths.map((m) => m.month).join(", ")}:{" "}
+            {[...new Set(estimateMonths.flatMap((m) => m.estimateReasons ?? []))].join("; ")}.
+          </span>
+        </div>
+      )}
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
         <Card>
@@ -42,7 +61,7 @@ export function ProfitLossReport() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totals.revenue)}</div>
-            <p className="text-xs text-muted-foreground">Last 6 months</p>
+            <p className="text-xs text-muted-foreground">Last 6 months · gross incl. VAT</p>
           </CardContent>
         </Card>
         <Card>
@@ -73,7 +92,7 @@ export function ProfitLossReport() {
             <div className={cn("text-2xl font-bold", totals.netProfit >= 0 ? "text-success" : "text-destructive")}>
               {formatCurrency(totals.netProfit)}
             </div>
-            <p className="text-xs text-muted-foreground">{avgNetMargin.toFixed(1)}% margin · before daily expenses</p>
+            <p className="text-xs text-muted-foreground">{avgNetMargin.toFixed(1)}% margin · before daily expenses{estimateMonths.length > 0 ? " · Estimate" : ""}</p>
           </CardContent>
         </Card>
       </div>
@@ -95,7 +114,7 @@ export function ProfitLossReport() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Month</TableHead>
-                  <TableHead className="text-right">Revenue</TableHead>
+                  <TableHead className="text-right">Revenue (gross)</TableHead>
                   <TableHead className="text-right">Food Cost</TableHead>
                   <TableHead className="text-right">Labour</TableHead>
                   <TableHead className="text-right">Overheads</TableHead>
@@ -108,7 +127,7 @@ export function ProfitLossReport() {
                 {pnlData.map((row) => (
                   <TableRow key={row.month}>
                     <TableCell className="font-medium">{row.month}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(row.revenue)}</TableCell>
+                    <TableCell className="text-right">{row.revenueKnown === false ? <span className="text-muted-foreground">No sales</span> : formatCurrency(row.revenue)}</TableCell>
                     <TableCell className="text-right text-destructive">
                       {formatCurrency(row.foodCost)}
                       {(row.uncostedDishCount ?? 0) > 0 && (
@@ -125,6 +144,9 @@ export function ProfitLossReport() {
                     <TableCell className="text-right">{formatCurrency(row.grossProfit)}</TableCell>
                     <TableCell className={cn("text-right font-medium", row.netProfit >= 0 ? "text-success" : "text-destructive")}>
                       {formatCurrency(row.netProfit)}
+                      {(row.estimateReasons?.length ?? 0) > 0 && (
+                        <div className="text-[10px] font-normal text-muted-foreground" title={row.estimateReasons!.join("; ")}>Estimate</div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">

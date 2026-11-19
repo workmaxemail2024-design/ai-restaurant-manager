@@ -3,14 +3,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useCashFlowSummary } from "@/hooks/useFinancialReports";
 import { useSupplierCashflow } from "@/hooks/useSupplierFinance";
 import { formatCurrency } from "@/lib/currency";
-import { Loader2, ArrowUpCircle, ArrowDownCircle, Wallet } from "lucide-react";
+import { Loader2, ArrowUpCircle, ArrowDownCircle, Wallet, AlertTriangle } from "lucide-react";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine } from "recharts";
 
 export function CashFlowReport() {
-  const { data: cashFlowData = [], isLoading } = useCashFlowSummary(6);
+  const { data: cashFlowData = [], isLoading, isError, error } = useCashFlowSummary(6);
   const sixMonthsAgo = new Date(); sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); sixMonthsAgo.setDate(1);
-  const { data: supplierCash } = useSupplierCashflow(sixMonthsAgo.toISOString().slice(0, 10), new Date().toISOString().slice(0, 10));
+  const { data: supplierCash } = useSupplierCashflow(format(sixMonthsAgo, "yyyy-MM-dd"), format(new Date(), "yyyy-MM-dd"));
 
   // Calculate totals
   const totals = cashFlowData.reduce(
@@ -31,6 +32,15 @@ export function CashFlowReport() {
     "Cash Out": -row.cashOutTotal,
     "Net Flow": row.netCashFlow,
   }));
+
+  if (isError) {
+    return (
+      <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>Cash flow could not be loaded, so no figures are shown. {(error as Error)?.message}</span>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

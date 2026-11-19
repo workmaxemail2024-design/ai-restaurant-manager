@@ -1,3 +1,4 @@
+import { unwrapQuery } from "@/lib/revenueTruth";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
@@ -17,12 +18,12 @@ export function useLocationRevenue(startDate: string, endDate: string) {
     queryKey: ["location-revenue", restaurantId, "all", startDate, endDate],
     queryFn: async (): Promise<Record<string, number>> => {
       if (!restaurantId) return {};
-      const { data } = await supabase
+      const data = unwrapQuery(await supabase
         .from("sales")
         .select("location_id, total_price, sale_date, source")
         .eq("restaurant_id", restaurantId)
         .gte("sale_date", startDate)
-        .lte("sale_date", endDate);
+        .lte("sale_date", endDate), "sales");
 
       const totals: Record<string, number> = {};
       for (const row of dedupePosSales((data as any[]) ?? [])) {

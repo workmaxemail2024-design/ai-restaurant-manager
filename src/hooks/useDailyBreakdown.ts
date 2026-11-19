@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { format, eachDayOfInterval, parseISO } from "date-fns";
 import { inferItemType, inferDrinkType, type PosItemType, type DrinkType } from "@/lib/posItemClassification";
+import { dedupePosSales } from "@/lib/revenueTruth";
 import { canonicalizePosSummaries, sumNullable, posReportAvailability, type CanonicalPosDay } from "@/lib/posDailyCanonical";
 
 interface DishMetric {
@@ -77,6 +78,7 @@ interface SaleRow {
   total_price: number;
   sale_date: string;
   location_id: string;
+  source?: string | null;
   dishes: { name: string; selling_price: number } | null;
   locations: { name: string } | null;
 }
@@ -116,7 +118,7 @@ export function useDailyBreakdown(
       for (let from = 0; ; from += PAGE) {
         let q = supabase
           .from("sales")
-          .select("dish_id, quantity, total_price, sale_date, location_id, dishes(name, selling_price), locations(name)")
+          .select("dish_id, quantity, total_price, sale_date, location_id, source, dishes(name, selling_price), locations(name)")
           .eq("restaurant_id", restaurantId)
           .gte("sale_date", targetStart)
           .lte("sale_date", targetEnd)
@@ -130,7 +132,8 @@ export function useDailyBreakdown(
         all.push(...batch);
         if (batch.length < PAGE) break;
       }
-      return all;
+      // Same location+day imported via Captiva API and XLS is counted once.
+      return dedupePosSales(all);
     },
     enabled: !!restaurantId,
   });

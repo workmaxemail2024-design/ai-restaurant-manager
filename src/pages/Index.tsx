@@ -57,14 +57,14 @@ const Index = () => {
   }, [queryClient]);
 
   // Dashboard overview - scoped to selected date range + location
-  const { data: overview, isLoading: overviewLoading } = useDashboardOverview(selectedLocationId);
+  const { data: overview, isLoading: overviewLoading, isError: overviewError } = useDashboardOverview(selectedLocationId);
 
   const activeStaffCount = staff.filter(s => s.status === "active").length;
 
   // Same sales source + restaurant/date scoping as the Financial Summary,
   // so Location Status revenue can never disagree with the headline figures.
   const { canViewAllLocations } = useLocationAccess();
-  const { data: locationRevenue, isLoading: locationRevenueLoading } = useLocationRevenue(
+  const { data: locationRevenue, isLoading: locationRevenueLoading, isError: locationRevenueError } = useLocationRevenue(
     startDate,
     endDate
   );
@@ -172,7 +172,7 @@ const Index = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
                 <MetricCard
                   title={isSingleDay ? "Revenue" : "Revenue (period)"}
-                  value={overviewLoading ? "..." : overview?.hasRevenueData ? formatCurrency(overview.revenueToday) : "—"}
+                  value={overviewLoading ? "..." : overviewError ? "Not loaded" : overview?.hasRevenueData ? formatCurrency(overview.revenueToday) : "—"}
                   change={
                     overview?.ordersToday != null
                       ? `${overview.ordersToday} orders`
@@ -186,7 +186,7 @@ const Index = () => {
                 />
                 <MetricCard
                   title={isSingleDay ? "Orders" : "Orders (period)"}
-                  value={overviewLoading ? "..." : overview?.ordersToday != null ? String(overview.ordersToday) : "—"}
+                  value={overviewLoading ? "..." : overviewError ? "Not loaded" : overview?.ordersToday != null ? String(overview.ordersToday) : "—"}
                   change={
                     overview?.aovToday != null
                       ? `AOV ${formatCurrency(overview.aovToday)}`
@@ -249,7 +249,11 @@ const Index = () => {
                           revenue={
                             locationRevenueLoading
                               ? "..."
-                              : formatCurrency(locationRevenue?.[location.id] ?? 0)
+                              : locationRevenueError
+                                ? "Not loaded"
+                                : locationRevenue?.[location.id] != null
+                                  ? formatCurrency(locationRevenue[location.id])
+                                  : "—"
                           }
                           staff={staff.filter(s => s.location_id === location.id && s.status === "active").length}
                           waitTime="--"

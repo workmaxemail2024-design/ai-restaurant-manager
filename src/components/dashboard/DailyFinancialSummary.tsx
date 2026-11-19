@@ -68,7 +68,18 @@ interface Props {
 }
 
 export function DailyFinancialSummary({ startDate, endDate, locationId, periodLabel }: Props) {
-  const { data, isLoading } = useDailyFinancialSummary(startDate, endDate, locationId);
+  const { data, isLoading, isError, error } = useDailyFinancialSummary(startDate, endDate, locationId);
+
+  if (isError) {
+    return (
+      <Card className="mt-4">
+        <CardContent role="alert" className="p-4 sm:p-5 flex items-start gap-2 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>Financial Summary could not be loaded, so no figures are shown. {(error as Error)?.message}</span>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isLoading || !data) {
     return (
