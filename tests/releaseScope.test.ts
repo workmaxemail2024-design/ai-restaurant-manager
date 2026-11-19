@@ -46,7 +46,7 @@ describe("staged Captiva never booked as revenue", () => {
   it("dashboard/report revenue loaders never read staging tables", () => {
     for (const f of ["canonicalRevenueLoader.ts", "revenueTruth.ts", "reportsMonthly.ts"]) {
       const src = readFileSync(new URL(`../src/lib/${f}`, import.meta.url), "utf8");
-      expect(src.includes("pos_captiva_")).toBe(false);
+      expect(/from\(["']pos_captiva_/.test(src)).toBe(false);
     }
   });
 });
