@@ -1,7 +1,6 @@
 import { Calendar, LogOut, Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { RestaurantSwitcher } from "@/components/RestaurantSwitcher";
-import { LocationSelector } from "@/components/LocationSelector";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
 import { RealtimeIndicator } from "@/components/dashboard/RealtimeIndicator";
@@ -97,7 +96,6 @@ export function Header({
         {showScopeSelectors && (
           <>
             <div className="flex items-center gap-2">
-              <LocationSelector />
               <Badge variant="outline" className="text-xs whitespace-nowrap hidden lg:flex">
                 Scope: {selectedLocationName || "All Locations"}
               </Badge>

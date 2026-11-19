@@ -19,7 +19,6 @@ import {
   useDeleteSitting,
   type ReservationSitting,
 } from "@/hooks/useReservations";
-import { LocationSelector } from "@/components/LocationSelector";
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -42,7 +41,6 @@ export default function ReservationSettingsPage() {
       subtitle="Set the sittings, durations and capacity rules used for bookings."
       action={
         <div className="flex items-center gap-2">
-          <LocationSelector />
           <Button size="sm" onClick={() => setShowCreate(true)}><Plus className="h-4 w-4 mr-1" /> Add Sitting</Button>
         </div>
       }

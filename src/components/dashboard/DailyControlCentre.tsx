@@ -2,7 +2,6 @@ import { MapPin, CalendarRange } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { LocationSelector } from "@/components/LocationSelector";
 import { DateRangeSelector } from "@/components/DateRangeSelector";
 import { useDateRange, type DatePreset } from "@/contexts/DateRangeContext";
 import { useLocation } from "@/contexts/LocationContext";
@@ -61,7 +60,6 @@ export function DailyControlCentre() {
 
           {/* The one primary location + date control for the whole dashboard */}
           <div className="flex flex-wrap items-center gap-2">
-            <LocationSelector />
             <DateRangeSelector />
           </div>
         </div>

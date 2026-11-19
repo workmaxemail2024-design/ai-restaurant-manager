@@ -2,7 +2,6 @@ import { PermissionFilteredSidebar } from "@/components/dashboard/PermissionFilt
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Menu } from "lucide-react";
-import { LocationSelector } from "@/components/LocationSelector";
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -38,7 +37,6 @@ export function PageLayout({ children, title, subtitle, description, action }: P
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <LocationSelector compact />
             {action}
           </div>
         </div>

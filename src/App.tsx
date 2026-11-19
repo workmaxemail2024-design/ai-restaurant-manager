@@ -54,6 +54,7 @@ import ReservationFloorPage from "./pages/ReservationFloorPage";
 import ReservationCustomersPage from "./pages/ReservationCustomersPage";
 import ReservationSettingsPage from "./pages/ReservationSettingsPage";
 
+import { AppLocationBar } from "@/components/common/AppLocationBar";
 import { RequireAllLocations } from "@/components/RequireAllLocations";
 import { LocationScopeEnforcer } from "@/components/LocationScopeEnforcer";
 
@@ -64,6 +65,7 @@ const queryClient = new QueryClient();
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
+      <AppLocationBar />
       <PageAccessGuard>{children}</PageAccessGuard>
     </AuthGuard>
   );
