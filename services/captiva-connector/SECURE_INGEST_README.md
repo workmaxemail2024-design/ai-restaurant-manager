@@ -106,3 +106,19 @@ Do not use sender.py stage until production schema, store mappings, identity tes
 - Lovable frontend.
 
 Do not represent this integration as a live automatic data sync until the above go-live prerequisites are satisfied. Live tables and endpoints exist, but no imports, notifications or daily jobs are enabled.
+
+## Daily staging candidate
+
+The user-level systemd units under `systemd/` are for the existing Oracle connector account.
+They target 06:30 Europe/Dublin and fetch the previous Irish calendar day for all three stores.
+The sender exits nonzero when any store fails, after attempting the other stores. Successful
+submissions use the existing immutable staging and replay protections. The timer does not
+post revenue or approve a trading day.
+
+Before enabling the timer, run a signed `sender.py send-preview --latest-closed-day --all`
+on Oracle and confirm all three stores succeed. Confirm that the user systemd manager stays
+running when the SSH session ends and that the checkout and Python paths match the service.
+Inspect runs with `journalctl --user -u captiva-daily-staging.service`. After a missed day,
+replay the affected date explicitly with `sender.py stage --date YYYY-MM-DD --all --confirm-staging-only`.
+A persistent timer catches up the scheduled execution after downtime, while the command still
+targets the latest closed day. Keep finance approval and ledger posting separate.

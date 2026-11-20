@@ -1,0 +1,10 @@
+[Unit]
+Description=Stage daily Captiva data after Irish trading closes
+
+[Timer]
+OnCalendar=*-*-* 06:30:00 Europe/Dublin
+Persistent=true
+Unit=captiva-daily-staging.service
+
+[Install]
+WantedBy=timers.target
