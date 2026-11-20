@@ -1,4 +1,6 @@
 import { VoidRegister } from "@/components/pos/VoidRegister";
+import { usePersistentState } from "@/hooks/usePersistentState";
+import { formatOrdinalDate, formatOrdinalRange } from "@/lib/ordinalDate";
 import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
 import { getManualLabourRate, setManualLabourRate, manualLabourCost, parseLabourRate } from "@/lib/labourRate";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
@@ -548,7 +550,7 @@ function DayCard({
   const { currentRestaurant } = useRestaurant();
   const auditRestaurantId = currentRestaurant?.id;
   const dateObj = parseISO(day.date);
-  const label = format(dateObj, "EEE dd MMM");
+  const label = formatOrdinalDate(format(dateObj, "yyyy-MM-dd"), true);
 
   // Auto-open when focused
   useEffect(() => {
@@ -1310,7 +1312,8 @@ export default function ReportsPage() {
   const { selectedLocationId } = useLocation();
   const { currentRestaurant } = useRestaurant();
   const { startDate, endDate, presetLabel, setCustomRange } = useDateRange();
-  const [reportView, setReportView] = useState<"daily" | "monthly">("daily");
+  const [reportView, setReportView] = usePersistentState<"daily" | "monthly">(`reports:view:${currentRestaurant?.id ?? "none"}`, "daily");
+  const [reportsTab, setReportsTab] = usePersistentState<string>(`reports:tab:${currentRestaurant?.id ?? "none"}`, "daily");
   const [reportYear, setReportYear] = useState(() => parseISO(startDate).getFullYear());
   const reportStartDate = reportView === "monthly" ? format(startOfYear(new Date(reportYear, 0, 1)), "yyyy-MM-dd") : startDate;
   const currentYear = new Date().getFullYear();
@@ -1588,7 +1591,7 @@ export default function ReportsPage() {
 
   return (
     <PageLayout title="Reports" subtitle="Review revenue, costs and profit, and reconcile each trading day.">
-      <Tabs defaultValue="daily" className="space-y-6">
+      <Tabs value={reportsTab} onValueChange={setReportsTab} className="space-y-6">
         <TabsList className="flex flex-wrap h-auto justify-start">
           <TabsTrigger value="daily" className="gap-2">
             <ShoppingBag className="h-4 w-4" />
@@ -1635,7 +1638,7 @@ export default function ReportsPage() {
               <span className="font-medium text-foreground">{presetLabel}</span>
               {startDate !== endDate && (
                 <span>
-                  ({startDate} → {endDate})
+                  ({formatOrdinalRange(startDate, endDate)})
                 </span>
               )}
             </div>
