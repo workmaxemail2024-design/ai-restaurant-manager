@@ -9,8 +9,8 @@ export type RouteLocationScope = "location" | "all" | "restaurant" | "page";
 export const ROUTE_LOCATION_SCOPE: Record<string, RouteLocationScope> = {
   "/": "location",
   "/locations": "all",
-  "/suppliers": "restaurant",
-  "/ingredients": "restaurant",
+  "/suppliers": "location",
+  "/ingredients": "location",
   "/stock": "location",
   "/dishes": "location",
   "/purchase-orders": "location",

@@ -81,6 +81,7 @@ export function isRecipeIngredient(item: { item_type?: string | null }): boolean
 }
 
 export interface Ingredient {
+  assigned_location_ids?: string[];
   id: string;
   name: string;
   unit: UnitType;
@@ -105,6 +106,7 @@ export interface Ingredient {
 }
 
 export type IngredientInsert = {
+  assigned_location_ids?: string[];
   name: string;
   unit: UnitType;
   supplier_id?: string | null;
@@ -166,16 +168,18 @@ export function getBaseUnit(packUnit: PackUnit | null | undefined): string {
  * `includeArchived` where existing records must still resolve (recipe lines,
  * stock rows, the Inventory Items "show archived" view).
  */
-export function useIngredients(opts: { includeArchived?: boolean } = {}) {
+export function useIngredients(opts: { locationId?: string | null; includeArchived?: boolean } = {}) {
   const includeArchived = !!opts.includeArchived;
   const { currentRestaurant } = useRestaurant();
   const restaurantId = currentRestaurant?.id;
   return useQuery({
-    queryKey: ["ingredients", restaurantId],
+    queryKey: ["ingredients", restaurantId, opts.locationId ?? "all"],
+    enabled: !!restaurantId,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ingredients")
+      const query = opts.locationId ? supabase.rpc("inventory_for_location", { p_location: opts.locationId }) : supabase.from("ingredients");
+      const { data, error } = await query
         .select("*, item_group, category, suppliers(name)")
+        .eq("restaurant_id", restaurantId!)
         .order("name");
       if (error) throw error;
       return data as unknown as Ingredient[];

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 export interface Supplier {
+  assigned_location_ids?: string[];
   id: string;
   name: string;
   contact_name: string | null;
@@ -15,14 +16,16 @@ export interface Supplier {
 
 export type SupplierInsert = Omit<Supplier, "id" | "created_at" | "updated_at">;
 
-export function useSuppliers() {
+export function useSuppliers(locationId?: string | null) {
   const { currentRestaurant } = useRestaurant();
   return useQuery({
-    queryKey: ["suppliers", currentRestaurant?.id],
+    queryKey: ["suppliers", currentRestaurant?.id, locationId ?? "all"],
+    enabled: !!currentRestaurant?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("suppliers")
+      const query = locationId ? supabase.rpc("suppliers_for_location", { p_location: locationId }) : supabase.from("suppliers");
+      const { data, error } = await query
         .select("*")
+        .eq("restaurant_id", currentRestaurant?.id!)
         .order("name");
       if (error) throw error;
       return data as Supplier[];
@@ -31,12 +34,13 @@ export function useSuppliers() {
 }
 
 export function useCreateSupplier() {
+  const { currentRestaurant } = useRestaurant();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (supplier: SupplierInsert) => {
       const { data, error } = await supabase
         .from("suppliers")
-        .insert(supplier)
+        .insert({ ...supplier, restaurant_id: currentRestaurant!.id })
         .select()
         .single();
       if (error) throw error;

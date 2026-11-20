@@ -1,3 +1,5 @@
+import { CatalogueLocations } from "@/components/inventory/CatalogueLocations";
+import { useLocation } from "@/contexts/LocationContext";
 import { useState } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { DataTable } from "@/components/common/DataTable";
@@ -14,7 +16,13 @@ import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, 
 import { SupplierAnalytics } from "@/components/suppliers/SupplierAnalytics";
 
 export default function SuppliersPage() {
-  const { data: suppliers = [], isLoading } = useSuppliers();
+  const { selectedLocationId } = useLocation();
+  return <SuppliersList key={selectedLocationId ?? "all"} locationId={selectedLocationId} />;
+}
+
+function SuppliersList({ locationId }: { locationId: string | null }) {
+  const [assigned, setAssigned] = useState<string[]>([]);
+  const { data: suppliers = [], isLoading, isError } = useSuppliers(locationId);
   const createSupplier = useCreateSupplier();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
@@ -33,15 +41,16 @@ export default function SuppliersPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingItem) {
-      await updateSupplier.mutateAsync({ id: editingItem.id, ...formData });
+      await updateSupplier.mutateAsync({ id: editingItem.id, ...formData, assigned_location_ids: assigned });
     } else {
-      await createSupplier.mutateAsync(formData);
+      await createSupplier.mutateAsync({ ...formData, assigned_location_ids: assigned });
     }
     handleClose();
   };
 
   const handleEdit = (item: Supplier) => {
     setEditingItem(item);
+    setAssigned(item.assigned_location_ids ?? []);
     setFormData({ 
       name: item.name, 
       contact_name: item.contact_name || "", 
@@ -59,6 +68,7 @@ export default function SuppliersPage() {
 
   return (
     <PageLayout title="Suppliers" subtitle="Manage suppliers and review purchasing, pricing and price history.">
+      {isError && <p role="alert">Could not load the supplier list for this location.</p>}
       <Tabs defaultValue="list" className="space-y-4">
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="list" className="flex items-center gap-2">
@@ -84,7 +94,7 @@ export default function SuppliersPage() {
           <div className="flex justify-end">
             <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
               <DialogTrigger asChild>
-                <Button onClick={() => setIsOpen(true)}>
+                <Button onClick={() => { setAssigned(locationId ? [locationId] : []); setIsOpen(true); }}>
                   <Plus className="h-4 w-4 mr-2" /> Add Supplier
                 </Button>
               </DialogTrigger>
@@ -94,7 +104,8 @@ export default function SuppliersPage() {
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label htmlFor="name">Name</Label>
+                    <CatalogueLocations value={assigned} onChange={setAssigned} />
+                <Label htmlFor="name">Name</Label>
                     <Input
                       id="name"
                       value={formData.name}
@@ -148,8 +159,8 @@ export default function SuppliersPage() {
         </TabsContent>
 
         <TabsContent value="invoices"><SupplierInvoicesTab /></TabsContent>
-        <TabsContent value="payments"><SupplierPaymentsTab /></TabsContent>
-        <TabsContent value="statements"><SupplierStatementsTab /></TabsContent>
+        <TabsContent value="payments">{locationId ? <p>Switch to All locations to view supplier payments recorded for the whole account.</p> : <SupplierPaymentsTab />}</TabsContent>
+        <TabsContent value="statements">{locationId ? <p>Switch to All locations to view supplier statements recorded for the whole account.</p> : <SupplierStatementsTab />}</TabsContent>
 
         <TabsContent value="analytics">
           <SupplierAnalytics />

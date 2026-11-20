@@ -46,19 +46,21 @@ function useInvalidate() {
   };
 }
 
-export function useSupplierInvoices() {
+export function useSupplierInvoices(locationId?: string | null) {
   const { currentRestaurant } = useRestaurant();
   const rid = currentRestaurant?.id;
   return useQuery({
-    queryKey: ["supplier-invoices", rid],
+    queryKey: ["supplier-invoices", rid, locationId],
     enabled: !!rid,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("supplier_invoices")
         .select("*, suppliers(name), supplier_invoice_lines(*)")
         .eq("restaurant_id", rid!)
         .order("invoice_date", { ascending: false })
         .limit(500);
+      if (locationId) query = query.eq("location_id", locationId);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as unknown as SupplierInvoice[];
     },

@@ -1,3 +1,4 @@
+import { useLocation } from "@/contexts/LocationContext";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,12 +12,13 @@ import { formatCurrency } from "@/lib/currency";
 import { format } from "date-fns";
 
 export function SupplierAnalytics() {
+  const { selectedLocationId } = useLocation();
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
-  const { data: suppliers = [] } = useSuppliers();
+  const { data: suppliers = [] } = useSuppliers(selectedLocationId);
   const { data: priceHistory = [], isLoading: pricesLoading } = useIngredientPriceHistory(
-    selectedSupplier || undefined
+    selectedSupplier || undefined, selectedLocationId
   );
-  const { data: deliveryPerformance = [], isLoading: deliveryLoading } = useDeliveryPerformance();
+  const { data: deliveryPerformance = [], isLoading: deliveryLoading } = useDeliveryPerformance(selectedLocationId);
 
   const selectedDelivery = selectedSupplier
     ? deliveryPerformance.find((d) => d.supplier_id === selectedSupplier)

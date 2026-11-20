@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Camera, Loader2, Pencil, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useLocation } from "@/contexts/LocationContext";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useIngredients, calculateBaseCost, getBaseUnit, categoryLabel, groupLabel, itemTypeLabel } from "@/hooks/useIngredients";
 import { useSuppliers } from "@/hooks/useSuppliers";
@@ -82,6 +83,7 @@ const toneClass = {
 };
 
 export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { selectedLocationId } = useLocation();
   const { currentRestaurant } = useRestaurant();
   const qc = useQueryClient();
   const { data: items = [] } = useIngredients({ includeArchived: true });
@@ -590,6 +592,7 @@ export function ImportStockListDialog({ open, onOpenChange }: { open: boolean; o
       });
     }
     return {
+      location_id: selectedLocationId,
       effective_date: effDate,
       suppliers: [...newSuppliers].map(([key, name]) => ({ ref: `sup:${key}`, name })),
       rows,

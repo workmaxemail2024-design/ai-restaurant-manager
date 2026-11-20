@@ -37,9 +37,9 @@ export interface DeliveryPerformance {
 }
 
 // Get historical prices per ingredient from PO items
-export function useIngredientPriceHistory(supplierId?: string) {
+export function useIngredientPriceHistory(supplierId?: string, locationId?: string | null) {
   return useQuery({
-    queryKey: ["ingredient-price-history", supplierId],
+    queryKey: ["ingredient-price-history", supplierId, locationId],
     queryFn: async () => {
       // Get PO items with ingredient and supplier info
       let query = supabase
@@ -51,10 +51,11 @@ export function useIngredientPriceHistory(supplierId?: string) {
           ingredient_id,
           purchase_order_id,
           ingredients(id, name, unit, supplier_id, suppliers(id, name)),
-          purchase_orders(id, order_date, supplier_id, suppliers(id, name))
+          purchase_orders!inner(id, order_date, supplier_id, suppliers(id, name))
         `)
         .order("purchase_order_id", { ascending: true });
 
+      if (locationId) query = query.eq("purchase_orders.location_id", locationId);
       const { data, error } = await query;
       if (error) throw error;
 
@@ -119,11 +120,11 @@ export function useIngredientPriceHistory(supplierId?: string) {
 }
 
 // Get delivery performance metrics by supplier
-export function useDeliveryPerformance() {
+export function useDeliveryPerformance(locationId?: string | null) {
   return useQuery({
-    queryKey: ["delivery-performance"],
+    queryKey: ["delivery-performance", locationId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("purchase_orders")
         .select(`
           id,
@@ -134,6 +135,8 @@ export function useDeliveryPerformance() {
           suppliers(id, name)
         `)
         .order("order_date", { ascending: false });
+      if (locationId) query = query.eq("location_id", locationId);
+      const { data, error } = await query;
 
       if (error) throw error;
 

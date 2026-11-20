@@ -1,3 +1,4 @@
+import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
 import { useState, useMemo } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,7 @@ export default function SalesPage() {
       </div>
 
       {/* Summary Totals */}
+          <CaptivaDailyFigures start={startDate} end={endDate} />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
@@ -127,7 +129,7 @@ export default function SalesPage() {
               <Euro className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Revenue</p>
+              <p className="text-xs text-muted-foreground">Posted revenue</p>
               <p className="text-xl font-bold">{formatCurrency(summary.totalRevenue)}</p>
               <p className="text-[11px] text-muted-foreground">
                 {summary.daysWithData} day{summary.daysWithData === 1 ? "" : "s"} with sales data
@@ -141,7 +143,7 @@ export default function SalesPage() {
               <ShoppingBag className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Orders</p>
+              <p className="text-xs text-muted-foreground">Posted orders</p>
               <p className="text-xl font-bold">
                 {summary.totalOrders != null ? summary.totalOrders : "—"}
               </p>
@@ -155,7 +157,7 @@ export default function SalesPage() {
               <TrendingUp className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Average Order Value</p>
+              <p className="text-xs text-muted-foreground">Posted average order value</p>
               <p className="text-xl font-bold">
                 {summary.aov != null ? formatCurrency(summary.aov) : "—"}
               </p>

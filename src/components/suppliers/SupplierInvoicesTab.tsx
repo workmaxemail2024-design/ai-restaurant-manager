@@ -1,3 +1,4 @@
+import { useLocation } from "@/contexts/LocationContext";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { Plus, PackageCheck, Link2, Ban, Pencil, CheckCircle2 } from "lucide-react";
@@ -21,7 +22,8 @@ import { SupplierInvoiceDialog } from "./SupplierInvoiceDialog";
 const today = () => new Date().toISOString().slice(0, 10);
 
 export function SupplierInvoicesTab() {
-  const { data: invoices = [], isLoading } = useSupplierInvoices();
+  const { selectedLocationId } = useLocation();
+  const { data: invoices = [], isLoading } = useSupplierInvoices(selectedLocationId);
   const { data: payments = [] } = useSupplierPayments();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission("inventory", "edit");
@@ -41,11 +43,11 @@ export function SupplierInvoicesTab() {
 
   const linkedPOs = useMemo(() => new Set(invoices.filter((i) => i.status !== "void" && i.purchase_order_id).map((i) => i.purchase_order_id)), [invoices]);
   const { data: receivedPOs = [] } = useQuery({
-    queryKey: ["purchase-orders", "received-for-link", linking?.supplier_id],
+    queryKey: ["purchase-orders", "received-for-link", linking?.location_id, linking?.supplier_id],
     enabled: !!linking,
     queryFn: async () => {
       const { data, error } = await supabase.from("purchase_orders").select("id, delivery_date, order_date, received_at")
-        .eq("supplier_id", linking!.supplier_id).not("received_at", "is", null).order("received_at", { ascending: false }).limit(100);
+        .eq("location_id", linking!.location_id).eq("supplier_id", linking!.supplier_id).not("received_at", "is", null).order("received_at", { ascending: false }).limit(100);
       if (error) throw error;
       return data ?? [];
     },

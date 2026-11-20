@@ -1,3 +1,5 @@
+import { CatalogueLocations } from "@/components/inventory/CatalogueLocations";
+import { useLocation } from "@/contexts/LocationContext";
 import { useState, useMemo, useEffect } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { DataTable } from "@/components/common/DataTable";
@@ -55,14 +57,20 @@ interface FormData extends IngredientInsert {
 }
 
 export default function IngredientsPage() {
+  const { selectedLocationId } = useLocation();
+  return <IngredientsList key={selectedLocationId ?? "all"} locationId={selectedLocationId} />;
+}
+
+function IngredientsList({ locationId }: { locationId: string | null }) {
+  const [assigned, setAssigned] = useState<string[]>([]);
   const [showArchived, setShowArchived] = useState(false);
-  const { data: allIngredients = [], isLoading } = useIngredients({ includeArchived: true });
+  const { data: allIngredients = [], isLoading, isError } = useIngredients({ includeArchived: true, locationId });
   const ingredients = useMemo(
     () => allIngredients.filter((i) => (showArchived ? !!i.archived_at : !i.archived_at)),
     [allIngredients, showArchived]
   );
-  const { data: suppliers = [] } = useSuppliers();
-  const { data: dishes = [] } = useDishes();
+  const { data: suppliers = [] } = useSuppliers(locationId);
+  const { data: dishes = [] } = useDishes(locationId);
   const createIngredient = useCreateIngredient();
   const updateIngredient = useUpdateIngredient();
   const deleteIngredient = useDeleteIngredient();
@@ -245,6 +253,7 @@ export default function IngredientsPage() {
     
     // Prepare data - if not using pack pricing, set base cost as default
     const submitData: IngredientInsert = {
+      assigned_location_ids: assigned,
       name: formData.name,
       unit: formData.unit,
       storage_type: formData.storage_type,
@@ -273,6 +282,7 @@ export default function IngredientsPage() {
 
   const handleEdit = (item: Ingredient) => {
     setEditingItem(item);
+    setAssigned(item.assigned_location_ids ?? []);
     const hasPackPricing = Boolean(item.pack_size && item.cost_per_pack);
     setFormData({ 
       name: item.name, 
@@ -324,6 +334,7 @@ export default function IngredientsPage() {
 
   return (
     <PageLayout title="Inventory Items" subtitle="Manage the ingredients, products and supplies used by your restaurant.">
+      {isError && <p role="alert">Could not load the inventory list for this location.</p>}
       <div className="flex flex-wrap justify-end gap-2 mb-4">
         {canImport && (
           <>
@@ -335,7 +346,7 @@ export default function IngredientsPage() {
         )}
         <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
           <DialogTrigger asChild>
-            <Button onClick={() => setIsOpen(true)}>
+            <Button onClick={() => { setAssigned(locationId ? [locationId] : []); setIsOpen(true); }}>
               <Plus className="h-4 w-4 mr-2" /> Add Inventory Item
             </Button>
           </DialogTrigger>
@@ -346,6 +357,7 @@ export default function IngredientsPage() {
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pb-2 pr-1 touch-pan-y [-webkit-overflow-scrolling:touch]">
               <div>
+                <CatalogueLocations value={assigned} onChange={setAssigned} />
                 <Label htmlFor="name">Name</Label>
                 <Input
                   id="name"

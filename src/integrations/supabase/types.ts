@@ -1162,6 +1162,7 @@ export type Database = {
       }
       ingredients: {
         Row: {
+          assigned_location_ids: string[]
           archived_at: string | null
           archived_by: string | null
           category: string | null
@@ -1186,6 +1187,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_location_ids?: string[]
           archived_at?: string | null
           archived_by?: string | null
           category?: string | null
@@ -1210,6 +1212,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_location_ids?: string[]
           archived_at?: string | null
           archived_by?: string | null
           category?: string | null
@@ -5059,6 +5062,7 @@ export type Database = {
       }
       suppliers: {
         Row: {
+          assigned_location_ids: string[]
           contact_name: string | null
           created_at: string
           email: string | null
@@ -5069,6 +5073,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_location_ids?: string[]
           contact_name?: string | null
           created_at?: string
           email?: string | null
@@ -5079,6 +5084,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_location_ids?: string[]
           contact_name?: string | null
           created_at?: string
           email?: string | null
@@ -5237,6 +5243,7 @@ export type Database = {
       }
     }
     Views: {
+      captiva_location_days: { Row: Pick<Database["public"]["Tables"]["pos_captiva_daily_sources"]["Row"], "restaurant_id" | "location_id" | "trading_date" | "official_gross" | "official_orders" | "reconciliation_state">; Relationships: [] }
       pos_integrations_safe: {
         Row: {
           created_at: string | null
@@ -5401,6 +5408,8 @@ export type Database = {
       }
     }
     Functions: {
+      suppliers_for_location: { Args: { p_location: string }; Returns: Database["public"]["Tables"]["suppliers"]["Row"][]; SetofOptions: { from: "*"; to: "suppliers"; isOneToOne: false; isSetofReturn: true } }
+      inventory_for_location: { Args: { p_location: string }; Returns: Database["public"]["Tables"]["ingredients"]["Row"][]; SetofOptions: { from: "*"; to: "ingredients"; isOneToOne: false; isSetofReturn: true } }
       _insert_actual_payroll: {
         Args: {
           p_amount: number

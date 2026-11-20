@@ -1,3 +1,4 @@
+import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
 import { getManualLabourRate, setManualLabourRate, manualLabourCost, parseLabourRate } from "@/lib/labourRate";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
@@ -1607,6 +1608,7 @@ export default function ReportsPage() {
         </TabsList>
 
         <TabsContent value="daily" className="space-y-4">
+          <CaptivaDailyFigures start={reportStartDate} end={reportEndDate} />
           <SegmentedControl
             value={reportView}
             onChange={(value: "daily" | "monthly") => setReportView(value)}
