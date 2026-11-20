@@ -1,3 +1,4 @@
+import { VoidRegister } from "@/components/pos/VoidRegister";
 import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
 import { getManualLabourRate, setManualLabourRate, manualLabourCost, parseLabourRate } from "@/lib/labourRate";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
@@ -1588,11 +1589,12 @@ export default function ReportsPage() {
   return (
     <PageLayout title="Reports" subtitle="Review revenue, costs and profit, and reconcile each trading day.">
       <Tabs defaultValue="daily" className="space-y-6">
-        <TabsList>
+        <TabsList className="flex flex-wrap h-auto justify-start">
           <TabsTrigger value="daily" className="gap-2">
             <ShoppingBag className="h-4 w-4" />
             Period Summary
           </TabsTrigger>
+          <TabsTrigger value="voids">Voids</TabsTrigger>
           <TabsTrigger value="pnl" className="gap-2">
             <FileText className="h-4 w-4" />
             Profit & Loss
@@ -1607,6 +1609,7 @@ export default function ReportsPage() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="voids"><VoidRegister /></TabsContent>
         <TabsContent value="daily" className="space-y-4">
           <CaptivaDailyFigures start={reportStartDate} end={reportEndDate} />
           <SegmentedControl
