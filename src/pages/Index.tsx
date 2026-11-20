@@ -1,3 +1,4 @@
+import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -86,6 +87,7 @@ const Index = () => {
 
         {/* 1. Where am I? What date? — single primary location + date control */}
         <DailyControlCentre />
+        <CaptivaDailyFigures start={startDate} end={endDate} />
 
         {/* 2. What is missing? */}
         {isSingleDay && <DailyCompletionStrip date={startDate} />}
