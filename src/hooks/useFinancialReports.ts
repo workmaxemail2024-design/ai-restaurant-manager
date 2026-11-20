@@ -6,9 +6,13 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { startOfMonth, endOfMonth, format, subMonths } from "date-fns";
 import { fetchSalaryAllocation, isSalariedStaffRow } from "@/hooks/useLabourCost";
+import { aggregateReceivedByMonth, pnlMonths, type ReceivedDayRow } from "@/lib/receivedGross";
+import { useLocations } from "@/hooks/useLocations";
 
 export interface ProfitLossData {
   month: string;
+  /** yyyy-MM */
+  monthKey?: string;
   /** Gross takings (incl. VAT) from sales; 0 with revenueKnown=false when no sales rows. */
   revenue: number;
   revenueKnown?: boolean;
@@ -51,13 +55,14 @@ function toMonthlyAmount(amount: number, frequency: string): number {
 
 const fetchMonthSales = fetchSalesPaged;
 
-export function useMonthlyProfitLoss(monthsBack: number = 6) {
+export function useMonthlyProfitLoss(range: number | "ytd" = 6) {
+  const monthsBack = range === "ytd" ? new Date().getMonth() + 1 : range;
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
   const restaurantId = currentRestaurant?.id;
 
   return useQuery({
-    queryKey: ["monthly-pnl", restaurantId, selectedLocationId, monthsBack],
+    queryKey: ["monthly-pnl", restaurantId, selectedLocationId ?? "all", range, monthsBack],
     queryFn: async () => {
       if (!restaurantId) return [];
 
@@ -154,6 +159,7 @@ export function useMonthlyProfitLoss(monthsBack: number = 6) {
 
         results.push({
           month: monthLabel,
+          monthKey: format(monthDate, "yyyy-MM"),
           revenue,
           revenueKnown: revenueOrNull != null,
           estimateReasons: profitEstimateReasons({ revenue: revenueOrNull, uncostedDishCount, missingPayRateStaff }),
@@ -267,5 +273,39 @@ export function useCashFlowSummary(monthsBack: number = 6) {
       return results;
     },
     enabled: !!restaurantId,
+  });
+}
+
+/** Official Captiva gross received per month — read-only, never added to posted revenue. */
+export function useReceivedGrossByMonth(range: number | "ytd" = 6) {
+  const { currentRestaurant } = useRestaurant();
+  const { selectedLocationId } = useLocation();
+  const { data: locations = [] } = useLocations();
+  const restaurantId = currentRestaurant?.id;
+  const months = pnlMonths(range);
+  const locationCount = selectedLocationId ? 1 : locations.length;
+  return useQuery({
+    queryKey: ["received-gross-by-month", restaurantId, selectedLocationId ?? "all", range, months[0], months[months.length - 1], locationCount],
+    enabled: !!restaurantId && locationCount > 0,
+    queryFn: async () => {
+      const start = `${months[0]}-01`;
+      const last = months[months.length - 1];
+      const [y, m] = last.split("-").map(Number);
+      const end = `${last}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+      const rows: ReceivedDayRow[] = [];
+      for (let offset = 0; ; offset += 1000) {
+        let q = supabase.from("captiva_location_days").select("location_id, trading_date, official_gross")
+          .eq("restaurant_id", restaurantId!).gte("trading_date", start).lte("trading_date", end)
+          .order("trading_date").order("location_id").range(offset, offset + 999);
+        if (selectedLocationId) q = q.eq("location_id", selectedLocationId);
+        const { data, error } = await q;
+        if (error) throw new Error(`Could not load Captiva gross: ${error.message}`);
+        rows.push(...(data as ReceivedDayRow[]));
+        if (data.length < 1000) break;
+      }
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      return aggregateReceivedByMonth(rows, months, locationCount, today);
+    },
   });
 }
