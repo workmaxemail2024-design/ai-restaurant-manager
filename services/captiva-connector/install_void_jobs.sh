@@ -16,7 +16,7 @@ for task in nightly backfill; do
 Description=Import Captiva void order details ($task)
 [Service]
 Type=oneshot
-WorkingDirectory="$dir"
+WorkingDirectory=$dir
 ExecStart=/usr/bin/python3 void_jobs.py $args
 TimeoutStartSec=infinity
 NoNewPrivileges=yes
