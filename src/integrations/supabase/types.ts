@@ -1162,9 +1162,9 @@ export type Database = {
       }
       ingredients: {
         Row: {
-          assigned_location_ids: string[]
           archived_at: string | null
           archived_by: string | null
+          assigned_location_ids: string[]
           category: string | null
           cost_per_pack: number | null
           created_at: string
@@ -1187,9 +1187,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          assigned_location_ids?: string[]
           archived_at?: string | null
           archived_by?: string | null
+          assigned_location_ids?: string[]
           category?: string | null
           cost_per_pack?: number | null
           created_at?: string
@@ -1212,9 +1212,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          assigned_location_ids?: string[]
           archived_at?: string | null
           archived_by?: string | null
+          assigned_location_ids?: string[]
           category?: string | null
           cost_per_pack?: number | null
           created_at?: string
@@ -5243,7 +5243,32 @@ export type Database = {
       }
     }
     Views: {
-      captiva_location_days: { Row: Pick<Database["public"]["Tables"]["pos_captiva_daily_sources"]["Row"], "restaurant_id" | "location_id" | "trading_date" | "official_gross" | "official_orders" | "reconciliation_state">; Relationships: [] }
+      captiva_location_days: {
+        Row: {
+          location_id: string | null
+          official_gross: number | null
+          official_orders: number | null
+          reconciliation_state: string | null
+          restaurant_id: string | null
+          trading_date: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_captiva_daily_sources_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_captiva_daily_sources_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_integrations_safe: {
         Row: {
           created_at: string | null
@@ -5408,8 +5433,6 @@ export type Database = {
       }
     }
     Functions: {
-      suppliers_for_location: { Args: { p_location: string }; Returns: Database["public"]["Tables"]["suppliers"]["Row"][]; SetofOptions: { from: "*"; to: "suppliers"; isOneToOne: false; isSetofReturn: true } }
-      inventory_for_location: { Args: { p_location: string }; Returns: Database["public"]["Tables"]["ingredients"]["Row"][]; SetofOptions: { from: "*"; to: "ingredients"; isOneToOne: false; isSetofReturn: true } }
       _insert_actual_payroll: {
         Args: {
           p_amount: number
@@ -5677,6 +5700,40 @@ export type Database = {
           p_source: string
         }
         Returns: string
+      }
+      inventory_for_location: {
+        Args: { p_location: string }
+        Returns: {
+          archived_at: string | null
+          archived_by: string | null
+          assigned_location_ids: string[]
+          category: string | null
+          cost_per_pack: number | null
+          created_at: string
+          default_cost_price: number | null
+          id: string
+          item_group: string | null
+          item_type: string
+          linked_dish_id: string | null
+          name: string
+          pack_size: number | null
+          pack_unit: string | null
+          par_level: number | null
+          purchase_unit: string | null
+          reorder_point: number | null
+          restaurant_id: string | null
+          shelf_life_days: number | null
+          storage_type: Database["public"]["Enums"]["storage_type"]
+          supplier_id: string | null
+          unit: Database["public"]["Enums"]["unit_type"]
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ingredients"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       invoice_outstanding: { Args: { p_invoice_id: string }; Returns: number }
       is_trusted_backend_session: { Args: never; Returns: boolean }
@@ -6013,6 +6070,26 @@ export type Database = {
         Returns: number
       }
       supplier_name_key: { Args: { _s: string }; Returns: string }
+      suppliers_for_location: {
+        Args: { p_location: string }
+        Returns: {
+          assigned_location_ids: string[]
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          restaurant_id: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "suppliers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       sync_own_profile: { Args: never; Returns: undefined }
       tenant_filter: { Args: { _restaurant_id: string }; Returns: boolean }
       unit_factor: { Args: { _u: string }; Returns: number }
