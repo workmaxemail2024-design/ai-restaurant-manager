@@ -1,7 +1,6 @@
 import { VoidRegister } from "@/components/pos/VoidRegister";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { formatOrdinalDate, formatOrdinalRange } from "@/lib/ordinalDate";
-import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
 import { ProductsSoldPanel } from "@/components/sales/ProductsSoldPanel";
 import { getManualLabourRate, setManualLabourRate, manualLabourCost, parseLabourRate } from "@/lib/labourRate";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
@@ -1621,7 +1620,6 @@ export default function ReportsPage() {
 
         <TabsContent value="voids"><VoidRegister /></TabsContent>
         <TabsContent value="daily" className="space-y-4">
-          <CaptivaDailyFigures start={reportStartDate} end={reportEndDate} />
           <ProductsSoldPanel start={reportStartDate} end={reportEndDate} />
           <SegmentedControl
             value={reportView}

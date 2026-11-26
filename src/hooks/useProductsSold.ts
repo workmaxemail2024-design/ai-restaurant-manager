@@ -4,12 +4,13 @@ import { useRestaurant } from "@/contexts/RestaurantContext";
 import { useLocation } from "@/contexts/LocationContext";
 import { buildProductsSold, readAllProductPages } from "@/lib/productsSold";
 
-export function useProductsSold(start: string, end: string) {
+export function useProductsSold(start: string, end: string, locationOverride?: string | null) {
   const { currentRestaurant } = useRestaurant();
   const { selectedLocationId } = useLocation();
+  const locationId = locationOverride === undefined ? selectedLocationId : locationOverride;
   const restaurantId = currentRestaurant?.id;
   return useQuery({
-    queryKey: ["products-sold", restaurantId, selectedLocationId ?? "all", start, end],
+    queryKey: ["products-sold", restaurantId, locationId ?? "all", start, end],
     enabled: !!restaurantId,
     queryFn: async () => {
       if (!restaurantId) throw new Error("Choose a restaurant");
