@@ -128,9 +128,9 @@ export function ProductsSoldPanel({ start, end }: { start: string; end: string }
         <span className="text-sm font-medium">{rankLabel}</span>
       </div>
       <div className="flex flex-wrap gap-2">
-        <SegmentedControl value={basis} onChange={setBasis} ariaLabel="Ranking period" className="w-full max-w-sm"
+        <SegmentedControl value={basis} onChange={(v: "period" | "day") => setBasis(v)} ariaLabel="Ranking period" className="w-full max-w-sm"
           options={[{ value: "period", label: "Reporting period" }, { value: "day", label: "Selected day" }]} />
-        <SegmentedControl value={kind} onChange={setKind} ariaLabel="Ranking products" className="w-full max-w-sm"
+        <SegmentedControl value={kind} onChange={(v: RankingKind) => setKind(v)} ariaLabel="Ranking products" className="w-full max-w-sm"
           options={[{ value: "food", label: "Food" }, { value: "drinks", label: "Drinks" }, { value: "both", label: "Both" }]} />
       </div>
       {rankQuery.isError ? <p role="alert" className="text-sm text-destructive">Rankings unavailable.</p> : rankQuery.isLoading || !rankData ? <p>Loading rankings…</p>
