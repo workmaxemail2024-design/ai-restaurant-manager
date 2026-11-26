@@ -56,7 +56,7 @@ describe("shared scoped Products sold", () => {
   });
   test("canonical manual drink classification wins over a journal dish-type suggestion", () => {
     const r = build({ catalogue: [{ location_id: "rudys", external_item_id: "item", manual_type: "drink", manual_drink_type: "alcoholic", department: "Main" }] });
-    expect(r.products[0].classification).toBe("drink_alcoholic"); expect(r.products[0].rankable).toBe(false);
+    expect(r.products[0].classification).toBe("drink_alcoholic"); expect(r.products[0].category).toBe("dish_drink");
   });
   test("channels require explicit evidence; missing never means dine-in", () => {
     expect(explicitSourceChannel()).toBe("Unknown"); expect(explicitSourceChannel("table 4")).toBe("Unknown");
@@ -73,5 +73,23 @@ describe("shared scoped Products sold", () => {
   test("failed page throws rather than returning missing or zero detail", async () => {
     await expect(readAllProductPages(async () => ({ data: null, error: { message: "permission denied" } }))).rejects.toThrow("permission denied");
     await expect(readAllProductPages(async () => ({ data: null, error: null }))).rejects.toThrow("no result");
+  });
+  test("generic ID reused for many descriptions is never grouped; NO CRUTTON stays 19 and hidden from dishes", () => {
+    const descs = ["NO CRUTTON", "NO BUN", "skinny", "WELL DONE", "ASAP", "no sauce"];
+    const obs = descs.map((d, i) => ({ ...observation(`g${i}`), product_id: "10000171", product_type: "untyped", description: d, quantity: d === "NO CRUTTON" ? 19 : 10 }));
+    const r = build({ observations: [...obs, observation()] });
+    const crut = r.products.filter(p => p.productId === "10000171" && p.name === "NO CRUTTON");
+    expect(crut).toHaveLength(1); expect(crut[0].quantity).toBe(19); expect(crut[0].category).toBe("kitchen_note");
+    expect(r.products.filter(p => p.productId === "10000171")).toHaveLength(6);
+    expect(r.products.find(p => p.name === "Caesar Salad")?.category).toBe("dish_drink");
+  });
+  test("journal rows never carry gross; posted gross and difference vs received are separate", () => {
+    const sale = { id: "s", location_id: "rudys", sale_date: "2026-11-25", source: "captiva_xls", dish_id: "d", quantity: 2, name: "Pizza", department: "Pizza", gross: 24, discount: 1 };
+    const r = build({ snapshots: [{ ...snapshot(), official_gross: 30, official_orders: 3 }], posted: [sale] });
+    expect(r.revenue.postedGross).toBe(24); expect(r.revenue.difference).toBe(6); expect(r.revenue.postedDiscounts).toBe(1);
+    expect(build().products[0].gross).toBeNull(); expect(build().revenue.postedGross).toBeNull();
+  });
+  test("negative quantities count as refunds/adjustments, not dishes", () => {
+    expect(build({ observations: [observation("x", "new", "rudys", -2, "combo")] }).products[0].category).toBe("adjustment");
   });
 });

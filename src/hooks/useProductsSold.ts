@@ -23,7 +23,7 @@ export function useProductsSold(start: string, end: string) {
       if (!ids.length) return { ...buildProductsSold({ restaurantId, locationIds: [], start, end, snapshots: [], observations: [], posted: [], catalogue: [] }), locations };
       const [snapshots, observations, sales, catalogue] = await Promise.all([
         readAllProductPages(async (offset, size) => await supabase.from("pos_captiva_daily_sources")
-          .select("id,restaurant_id,location_id,trading_date,observed_at,journal_coverage")
+          .select("id,restaurant_id,location_id,trading_date,observed_at,journal_coverage,official_gross,official_orders")
           .eq("restaurant_id", restaurantId).in("location_id", ids).gte("trading_date", start).lte("trading_date", end)
           .order("trading_date").order("location_id").order("observed_at").order("id").range(offset, offset + size - 1)),
         readAllProductPages(async (offset, size) => await supabase.from("pos_captiva_product_observations")
@@ -41,10 +41,10 @@ export function useProductsSold(start: string, end: string) {
       // The generated schema has no sales→import relationship. Resolve exact import IDs
       // separately rather than relying on an unsupported PostgREST embed.
       const importIds = [...new Set(sales.flatMap(s => s.pos_import_id ? [s.pos_import_id] : []))];
-      const imports = new Map<string, { external_item_id: string | null; item_name: string | null; department: string | null }>();
+      const imports = new Map<string, { external_item_id: string | null; item_name: string | null; department: string | null; gross_sales: number | null; discount_amount: number | null }>();
       for (let offset = 0; offset < importIds.length; offset += 200) {
         const { data, error } = await supabase.from("pos_sales_import")
-          .select("id,external_item_id,item_name,department").eq("restaurant_id", restaurantId)
+          .select("id,external_item_id,item_name,department,gross_sales,discount_amount").eq("restaurant_id", restaurantId)
           .in("location_id", ids).in("id", importIds.slice(offset, offset + 200));
         if (error) throw error;
         for (const row of data ?? []) imports.set(row.id, row);
@@ -52,7 +52,8 @@ export function useProductsSold(start: string, end: string) {
       const posted = sales.map(s => {
         const imported = s.pos_import_id ? imports.get(s.pos_import_id) : undefined;
         return { ...s, name: imported?.item_name ?? s.dishes?.name ?? "Unmapped product",
-          productId: imported?.external_item_id, department: imported?.department };
+          productId: imported?.external_item_id, department: imported?.department,
+          gross: imported?.gross_sales ?? null, discount: imported?.discount_amount ?? null };
       });
       return { ...buildProductsSold({ restaurantId, locationIds: ids, start, end, snapshots, observations, posted, catalogue }), locations };
     },
