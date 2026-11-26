@@ -93,3 +93,29 @@ describe("shared scoped Products sold", () => {
     expect(build({ observations: [observation("x", "new", "rudys", -2, "combo")] }).products[0].category).toBe("adjustment");
   });
 });
+
+import { defaultTradingDay, clampTradingDay, shiftTradingDay, rankProducts } from "../src/lib/productsSold";
+describe("trading day selection", () => {
+  test("defaults to latest received day in range", () => {
+    expect(defaultTradingDay(["2026-11-03", "2026-11-20", "2026-12-01"], "2026-11-01", "2026-11-30", "2026-11-26")).toBe("2026-11-20");
+  });
+  test("falls back to today capped to range when nothing received", () => {
+    expect(defaultTradingDay([], "2026-11-01", "2026-11-30", "2026-11-26")).toBe("2026-11-26");
+    expect(defaultTradingDay([], "2026-10-01", "2026-10-31", "2026-11-26")).toBe("2026-10-31");
+  });
+  test("clamps and shifts across month end", () => {
+    expect(clampTradingDay("2026-12-05", "2026-11-01", "2026-11-30")).toBe("2026-11-30");
+    expect(shiftTradingDay("2026-10-31", 1)).toBe("2026-11-01");
+  });
+  test("food/drinks rankings exclude notes and unknown quantities", () => {
+    const base = { locationId: "l", productId: "x", source: "Posted" as const, channel: "Unknown" as const, gross: null, discount: null };
+    const ps = [
+      { ...base, key: "a", name: "Pizza", quantity: 5, classification: "food" as const, rankable: true, category: "dish_drink" as const },
+      { ...base, key: "b", name: "Beer", quantity: 9, classification: "drink_alcoholic" as const, rankable: true, category: "dish_drink" as const },
+      { ...base, key: "c", name: "NO BUN", quantity: 50, classification: "modifier" as const, rankable: false, category: "kitchen_note" as const },
+    ];
+    expect(rankProducts(ps, "food", "top").map(p => p.name)).toEqual(["Pizza"]);
+    expect(rankProducts(ps, "drinks", "top").map(p => p.name)).toEqual(["Beer"]);
+    expect(rankProducts(ps, "both", "bottom").map(p => p.name)).toEqual(["Pizza", "Beer"]);
+  });
+});

@@ -116,7 +116,8 @@ export function buildProductsSold(input: {
     ? officialForPosted.reduce((t, s) => t + Number(s.official_gross), 0) : null;
   const revenue = { postedGross, postedDiscounts, officialGrossPostedDays,
     difference: postedGross != null && officialGrossPostedDays != null ? Math.round((officialGrossPostedDays - postedGross) * 100) / 100 : null };
-  return { products: [...products.values()], snapshots, revenue, observationDays: new Set(observations.map(o => `${o.location_id}|${o.trading_date}`)).size,
+  const receivedDates = [...new Set([...snapshots.map(s => s.trading_date), ...posted.map(p => p.sale_date)])].sort();
+  return { products: [...products.values()], snapshots, revenue, receivedDates, observationDays: new Set(observations.map(o => `${o.location_id}|${o.trading_date}`)).size,
     postedDays: new Set(posted.map(p => `${p.location_id}|${p.sale_date}`)).size,
     suppressedDays: snapshots.filter(s => postedDays.has(`${s.location_id}|${s.trading_date}`)).length };
 }
@@ -129,4 +130,26 @@ export async function readAllProductPages<T>(readPage: (offset: number, size: nu
     rows.push(...data);
     if (data.length < size) return rows;
   }
+}
+/** Default trading day: latest day with received data in range, else range end capped at today. */
+export function defaultTradingDay(receivedDates: string[], start: string, end: string, today: string): string {
+  const inRange = receivedDates.filter(d => d >= start && d <= end).sort();
+  if (inRange.length) return inRange[inRange.length - 1];
+  return clampTradingDay(today < end ? today : end, start, end);
+}
+export function clampTradingDay(day: string, start: string, end: string): string {
+  return day < start ? start : day > end ? end : day;
+}
+export function shiftTradingDay(day: string, delta: number): string {
+  const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+export type RankingKind = "food" | "drinks" | "both";
+export function isDrinkClass(c: ProductClass) { return c === "drink_alcoholic" || c === "drink_non_alcoholic"; }
+/** Top/bottom dish & drink rankings by known positive quantity; notes, voids and unknown quantities never rank. */
+export function rankProducts(products: SoldProduct[], kind: RankingKind, direction: "top" | "bottom", limit = 10): SoldProduct[] {
+  return products.filter(p => p.rankable && p.quantity != null &&
+    (kind === "both" || (kind === "drinks" ? isDrinkClass(p.classification) : !isDrinkClass(p.classification))))
+    .sort((a, b) => (direction === "top" ? b.quantity! - a.quantity! : a.quantity! - b.quantity!) || a.name.localeCompare(b.name))
+    .slice(0, limit);
 }

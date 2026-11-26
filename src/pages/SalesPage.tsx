@@ -1,5 +1,4 @@
 import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
-import { ProductsSoldPanel } from "@/components/sales/ProductsSoldPanel";
 import { useState, useMemo } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -168,8 +167,6 @@ export default function SalesPage() {
           </CardContent>
         </Card>
       </div>
-
-      <ProductsSoldPanel start={startDate} end={endDate} />
 
       {/* Add Sale Button */}
       <div className="flex justify-end mb-4">
