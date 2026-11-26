@@ -1,4 +1,5 @@
 import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
+import { ProductsSoldPanel } from "@/components/sales/ProductsSoldPanel";
 import { useState, useMemo } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -28,9 +29,9 @@ export default function SalesPage() {
   const isSingleDay = startDate === endDate;
 
   // Canonical per-day figures (daily-summary resolver + product rows).
-  const { data: dailyData = [], isLoading } = useDailyBreakdown(startDate, endDate, selectedLocationId);
+  const { data: dailyData = [], isLoading, isError } = useDailyBreakdown(startDate, endDate, selectedLocationId);
   // Detailed product rows — only loaded up-front for the single-day view.
-  const { data: daySales = [] } = useSales(
+  const { data: daySales = [], isError: salesError } = useSales(
     isSingleDay ? startDate : undefined,
     isSingleDay ? endDate : undefined,
     selectedLocationId
@@ -64,7 +65,8 @@ export default function SalesPage() {
     }
 
     const aov = totalOrders && totalOrders > 0 ? totalRevenue / totalOrders : null;
-    return { totalRevenue, totalOrders, aov, daysWithData };
+    const ordersComplete = daysWithData > 0 && dailyData.filter(d => d.hasData).every(d => d.orders != null);
+    return { totalRevenue, totalOrders, aov: ordersComplete ? aov : null, daysWithData, ordersComplete };
   }, [dailyData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,7 +132,7 @@ export default function SalesPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Posted revenue</p>
-              <p className="text-xl font-bold">{formatCurrency(summary.totalRevenue)}</p>
+              <p className="text-xl font-bold">{isError ? "Unavailable" : isLoading ? "…" : summary.daysWithData ? formatCurrency(summary.totalRevenue) : "No revenue posted"}</p>
               <p className="text-[11px] text-muted-foreground">
                 {summary.daysWithData} day{summary.daysWithData === 1 ? "" : "s"} with sales data
               </p>
@@ -145,9 +147,9 @@ export default function SalesPage() {
             <div>
               <p className="text-xs text-muted-foreground">Posted orders</p>
               <p className="text-xl font-bold">
-                {summary.totalOrders != null ? summary.totalOrders : "—"}
+                {isError ? "Unavailable" : summary.totalOrders != null ? summary.totalOrders : "—"}
               </p>
-              <p className="text-[11px] text-muted-foreground">From daily sales summaries</p>
+              <p className="text-[11px] text-muted-foreground">From daily sales summaries{summary.totalOrders != null && !summary.ordersComplete ? " · partial coverage" : ""}</p>
             </div>
           </CardContent>
         </Card>
@@ -159,13 +161,15 @@ export default function SalesPage() {
             <div>
               <p className="text-xs text-muted-foreground">Posted average order value</p>
               <p className="text-xl font-bold">
-                {summary.aov != null ? formatCurrency(summary.aov) : "—"}
+                {isError ? "Unavailable" : summary.aov != null ? formatCurrency(summary.aov) : "—"}
               </p>
               <p className="text-[11px] text-muted-foreground">Revenue ÷ known orders</p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <ProductsSoldPanel start={startDate} end={endDate} />
 
       {/* Add Sale Button */}
       <div className="flex justify-end mb-4">
@@ -240,7 +244,7 @@ export default function SalesPage() {
         </Dialog>
       </div>
 
-      {isLoading ? (
+      {isError || salesError ? <p role="alert" className="text-destructive">Posted sales could not be loaded. Received Captiva totals and product observations are shown separately above.</p> : isLoading ? (
         <div className="text-muted-foreground text-sm">Loading sales data…</div>
       ) : isSingleDay ? (
         /* ---------- Single day: detailed transactions straight away ---------- */
@@ -252,9 +256,8 @@ export default function SalesPage() {
           ) : (
             <EmptyState
               icon={ShoppingBag}
-              title="No sales found for this day"
-              description="There are no recorded sales on this date."
-              suggestion="Try importing POS data, recording a manual sale, or expanding the date range."
+              title="No sales posted for this day"
+              description="No applied transactions are available. Received Captiva totals and journal observations are separate above."
             />
           )
         ) : (
@@ -300,9 +303,8 @@ export default function SalesPage() {
       ) : dailyData.length === 0 ? (
         <EmptyState
           icon={ShoppingBag}
-          title="No sales found for this period"
-          description="There are no recorded sales in the selected date range."
-          suggestion="Try importing POS data, recording a manual sale, or expanding the date range."
+          title="No sales posted for this period"
+          description="No applied transactions are available. Received Captiva totals and journal observations are separate above."
         />
       ) : (
         /* ---------- Range: one compact row per trading day ---------- */

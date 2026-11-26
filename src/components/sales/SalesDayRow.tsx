@@ -22,9 +22,10 @@ interface SalesDayRowProps {
  */
 /** Detailed product rows for one date — mounted only when the day is expanded. */
 function SalesDayDetail({ date, locationId }: { date: string; locationId: string | null }) {
-  const { data: sales = [], isLoading } = useSales(date, date, locationId);
+  const { data: sales = [], isLoading, isError } = useSales(date, date, locationId);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading sales…</p>;
+  if (isError) return <p role="alert" className="text-sm text-destructive">Posted product detail unavailable.</p>;
 
   return (
     <div className="divide-y divide-border rounded-md border border-border bg-background overflow-x-auto">
@@ -65,7 +66,7 @@ export function SalesDayRow({ day, locationId }: SalesDayRowProps) {
     ? "Product detail available"
     : day.hasSummary
       ? "Summary only"
-      : "No data";
+      : "No posted data";
 
   return (
     <div className="rounded-lg border border-border overflow-hidden">
@@ -142,7 +143,7 @@ export function SalesDayRow({ day, locationId }: SalesDayRowProps) {
                 />
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No sales recorded for this day.</p>
+              <p className="text-sm text-muted-foreground">No sales posted for this day. Received Captiva figures and provisional products are separate above.</p>
             )
           ) : (
             <SalesDayDetail date={day.date} locationId={locationId} />

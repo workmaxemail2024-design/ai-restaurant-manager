@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useRestaurant } from "@/contexts/RestaurantContext";
 import { format } from "date-fns";
+import { dedupePosSales } from "@/lib/revenueTruth";
+import { readAllProductPages } from "@/lib/productsSold";
 
 export interface Sale {
   id: string;
@@ -33,12 +35,12 @@ export function useSales(startDate?: string, endDate?: string, locationId?: stri
     queryKey: ["sales", restaurantId, locationScopeKey, startDate, endDate],
     queryFn: async () => {
       if (!restaurantId) return [] as Sale[];
-
-      let query = supabase
+      const rows = await readAllProductPages(async (offset, size) => {
+        let query = supabase
         .from("sales")
         .select("*, dishes(name, selling_price), locations(name)")
         .eq("restaurant_id", restaurantId)
-        .order("sale_date", { ascending: false });
+        .order("sale_date", { ascending: false }).order("id").range(offset, offset + size - 1);
       
       if (startDate) {
         query = query.gte("sale_date", startDate);
@@ -50,9 +52,9 @@ export function useSales(startDate?: string, endDate?: string, locationId?: stri
         query = query.eq("location_id", locationId);
       }
       
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as Sale[];
+        return await query;
+      });
+      return dedupePosSales(rows) as Sale[];
     },
     enabled: !!restaurantId,
   });
@@ -95,7 +97,7 @@ export function useCreateSale() {
             const root = String(q.queryKey[0] ?? "");
             if (!root) return false;
 
-            const isTargetRoot = ["sales", "dashboard-overview", "profit-metrics"].includes(root);
+            const isTargetRoot = ["sales", "products-sold", "dashboard-overview", "profit-metrics"].includes(root);
             if (!isTargetRoot) return false;
 
             // Normalized keys: [root, restaurantId, locationScopeKey, ...]
@@ -133,6 +135,7 @@ export function useDeleteSale() {
     onSuccess: () => {
       // Broad invalidation to catch all dashboard/sales related queries
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["products-sold"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard-metrics"] });
       queryClient.invalidateQueries({ queryKey: ["profit-metrics"] });

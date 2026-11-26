@@ -122,3 +122,10 @@
 
 ## POS Integration page tidy
 - [x] Status by location summary (method, what's live, last API fetch, next step), clearer tab names, connection details folded away, remove asks for confirmation
+
+## Sales / Reports received products preview
+- [x] Inspect live totals, current journal snapshots, RLS and channel evidence without writes
+- [x] Share scoped searchable quantity rankings; separate provisional observations from posted data
+- [x] Make Reports KPI grid adapt to content width and label missing posted data honestly
+- [x] Run full tests and preview checks; isolated actual panel/grid verified at 1180px with sidebar space and 390px; signed-in routes blocked by external auth
+- [ ] Preserve explicit connector channels: blocked by absent Oracle source code and absent persisted channel fields; no schema or connector changes authorized

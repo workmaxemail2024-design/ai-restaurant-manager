@@ -2,6 +2,7 @@ import { VoidRegister } from "@/components/pos/VoidRegister";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { formatOrdinalDate, formatOrdinalRange } from "@/lib/ordinalDate";
 import { CaptivaDailyFigures } from "@/components/pos/CaptivaDailyFigures";
+import { ProductsSoldPanel } from "@/components/sales/ProductsSoldPanel";
 import { getManualLabourRate, setManualLabourRate, manualLabourCost, parseLabourRate } from "@/lib/labourRate";
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { PageLayout } from "@/components/common/PageLayout";
@@ -111,7 +112,7 @@ function getStatusLabel(status: DayStatus, ledger?: LedgerEntry): string {
     case "accounted": return "Accounted";
     case "partial": return "Partial";
     case "needs_attention": return "Needs Attention";
-    case "no_data": return "No Data";
+    case "no_data": return "No posted data";
   }
 }
 
@@ -410,7 +411,7 @@ function CalendarStrip({
           <span className="w-1.5 h-1.5 rounded-full bg-destructive" /> Needs attention
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" /> No data
+          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" /> No posted data
         </span>
         <span className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full border border-muted-foreground/60" /> No product detail
@@ -744,7 +745,7 @@ function DayCard({
             <div className="flex-1">
               <CollapsibleTrigger asChild>
                 <CardHeader className="cursor-pointer select-none py-3 px-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       {open ? (
                         <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -761,7 +762,7 @@ function DayCard({
                       )}
                     </div>
                     {hasAnyData && !isClosed ? (
-                      <div className="flex items-center gap-4 text-sm">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                         <div className="text-right">
                           <span className="text-muted-foreground mr-1">Rev</span>
                           <span className="font-medium">{formatCurrency(effectiveRevenue)}</span>
@@ -772,7 +773,7 @@ function DayCard({
                         </div>
                         <div className="text-right hidden sm:block">
                           <span className="text-muted-foreground mr-1">Qty</span>
-                          <span className="font-medium">{day.qtySold}</span>
+                          <span className="font-medium">{day.hasProductDetail ? day.qtySold : "Not posted"}</span>
                         </div>
                         <div className="text-right hidden sm:block">
                           <span className="text-muted-foreground mr-1">{profitIsEstimated ? "Est. Profit" : "Profit"}</span>
@@ -1212,7 +1213,7 @@ function DayCard({
                           Top Dishes
                         </h4>
                         {day.topDishes.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No data</p>
+                          <p className="text-sm text-muted-foreground">No posted dish detail. Received journal observations are separate in Products sold.</p>
                         ) : (
                           <div className="space-y-1.5">
                             {day.topDishes.map((dish, i) => (
@@ -1234,7 +1235,7 @@ function DayCard({
                           Bottom Dishes
                         </h4>
                         {day.worstDishes.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No data</p>
+                          <p className="text-sm text-muted-foreground">No posted dish detail. Received journal observations are separate in Products sold.</p>
                         ) : (
                           <div className="space-y-1.5">
                             {day.worstDishes.map((dish, i) => (
@@ -1501,6 +1502,12 @@ export default function ReportsPage() {
     };
   }, [dailyData, ledgerEntries, avgHourlyRate, attendanceMap, periodCostRow]);
   const profitIsEstimated = periodSummary.foodCostIsEstimated || !periodSummary.hasAnyLabour || periodSummary.labourRateMissingDays > 0;
+  const postedRevenueKnown = dailyData?.some(day => day.hasData || ledgerEntries.get(day.date)?.manual_revenue != null || ledgerEntries.get(day.date)?.location_manual_revenue != null) ?? false;
+  const postedDetailKnown = dailyData?.some(day => day.hasProductDetail) ?? false;
+  const postedUnavailable = dailyError || ledgerError;
+  const postedRevenueDays = dailyData?.filter(day => day.hasData || ledgerEntries.get(day.date)?.manual_revenue != null || ledgerEntries.get(day.date)?.location_manual_revenue != null).length ?? 0;
+  const ordersCoverageComplete = !!dailyData?.length && dailyData.every(day => (ledgerEntries.get(day.date)?.manual_orders ?? day.orders) != null);
+  const visitorsCoverageComplete = !!dailyData?.length && dailyData.every(day => day.visitors != null);
 
   // Count days needing attention for summary
   const missingDaysCount = useMemo(() => {
@@ -1591,7 +1598,7 @@ export default function ReportsPage() {
 
   return (
     <PageLayout title="Reports" subtitle="Review revenue, costs and profit, and reconcile each trading day.">
-      <Tabs value={reportsTab} onValueChange={setReportsTab} className="space-y-6">
+      <Tabs value={reportsTab} onValueChange={setReportsTab} className="min-w-0 space-y-6">
         <TabsList className="flex flex-wrap h-auto justify-start">
           <TabsTrigger value="daily" className="gap-2">
             <ShoppingBag className="h-4 w-4" />
@@ -1615,6 +1622,7 @@ export default function ReportsPage() {
         <TabsContent value="voids"><VoidRegister /></TabsContent>
         <TabsContent value="daily" className="space-y-4">
           <CaptivaDailyFigures start={reportStartDate} end={reportEndDate} />
+          <ProductsSoldPanel start={reportStartDate} end={reportEndDate} />
           <SegmentedControl
             value={reportView}
             onChange={(value: "daily" | "monthly") => setReportView(value)}
@@ -1664,24 +1672,25 @@ export default function ReportsPage() {
           ) : (
             <>
               {/* Period Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-3 [&>*]:min-w-0 [&_input]:max-w-full [&_label]:flex-wrap [&_.text-xl]:break-words">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Revenue</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Posted gross revenue</CardTitle>
                     <span className="text-xs text-primary font-medium">{currencySymbol}</span>
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{formatCurrency(periodSummary.revenue)}</div>
+                    <div className="text-xl font-bold">{postedUnavailable ? "Unavailable" : postedRevenueKnown ? formatCurrency(periodSummary.revenue) : "No revenue posted"}</div>
+                    <div className="text-[10px] text-muted-foreground">{postedRevenueDays}/{dailyData?.length ?? 0} days with posted or manual revenue{postedRevenueDays < (dailyData?.length ?? 0) ? " · partial" : ""}</div>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Orders</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Posted orders</CardTitle>
                     <Receipt className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.orders ?? "—"}</div>
-                    <div className="text-[10px] text-muted-foreground">receipts</div>
+                    <div className="text-xl font-bold">{postedUnavailable ? "Unavailable" : periodSummary.orders ?? "—"}</div>
+                    <div className="text-[10px] text-muted-foreground">receipts{!ordersCoverageComplete && periodSummary.orders != null ? " · partial coverage" : ""}</div>
                   </CardContent>
                 </Card>
                 <Card>
@@ -1690,7 +1699,7 @@ export default function ReportsPage() {
                     <span className="text-xs text-primary font-medium">{currencySymbol}</span>
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.aov != null ? formatCurrency(periodSummary.aov) : "—"}</div>
+                    <div className="text-xl font-bold">{postedUnavailable ? "Unavailable" : ordersCoverageComplete && periodSummary.aov != null ? formatCurrency(periodSummary.aov) : "—"}</div>
                   </CardContent>
                 </Card>
                 <Card>
@@ -1699,7 +1708,8 @@ export default function ReportsPage() {
                     <Users className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.visitors ?? "—"}</div>
+                    <div className="text-xl font-bold">{postedUnavailable ? "Unavailable" : periodSummary.visitors ?? "—"}</div>
+                    {!visitorsCoverageComplete && periodSummary.visitors != null && <div className="text-[10px] text-muted-foreground">Partial covers coverage</div>}
                     {periodSummary.visitors != null && periodSummary.visitors > 0 && (
                       <div className="text-[10px] text-muted-foreground">from Captiva</div>
                     )}
@@ -1707,15 +1717,15 @@ export default function ReportsPage() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">Qty Sold</CardTitle>
+                    <CardTitle className="text-xs font-medium text-muted-foreground">Posted qty sold</CardTitle>
                     <ShoppingBag className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.qtySold}</div>
+                    <div className="text-xl font-bold">{postedUnavailable ? "Unavailable" : postedDetailKnown ? periodSummary.qtySold : "Not posted"}</div>
                     <div className="text-[10px] text-muted-foreground">item units</div>
                   </CardContent>
                 </Card>
-                <Card className="col-span-2">
+                <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-1 pt-3 px-3">
                     <CardTitle className="text-xs font-medium text-muted-foreground">
                       {periodSummary.costing.isEstimated ? "Food Cost (est.)" : "Food Cost"}
@@ -1723,10 +1733,10 @@ export default function ReportsPage() {
                     <Percent className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <FoodCostBlock
+                    {!postedRevenueKnown || postedUnavailable ? <p className="text-sm text-muted-foreground">{postedUnavailable ? "Unavailable" : "No posted revenue to cost"}</p> : <FoodCostBlock
                       view={periodSummary.costing}
                       onViewMissing={() => setMissingCostsOpen(true)}
-                    />
+                    />}
                   </CardContent>
                 </Card>
                 <Card>
@@ -1735,7 +1745,7 @@ export default function ReportsPage() {
                     <Users className="h-3.5 w-3.5 text-primary" />
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
-                    <div className="text-xl font-bold">{periodSummary.labourPct != null ? `${periodSummary.labourPct.toFixed(1)}%` : "Unknown"}</div>
+                    <div className="text-xl font-bold">{postedUnavailable ? "Unavailable" : periodSummary.labourPct != null ? `${periodSummary.labourPct.toFixed(1)}%` : "Unknown"}</div>
                     <div className="text-[10px] text-muted-foreground">{formatCurrency(periodSummary.totalLabourCost)}</div>
                     {periodSummary.labourRateMissingDays > 0 && (
                       <div className="text-[10px] text-warning">{periodSummary.labourRateMissingDays} day{periodSummary.labourRateMissingDays === 1 ? "" : "s"} of manual hours not costed — set a rate</div>
@@ -1765,7 +1775,7 @@ export default function ReportsPage() {
                   </CardHeader>
                   <CardContent className="px-3 pb-3">
                     <div className={cn("text-xl font-bold", periodSummary.profit >= 0 ? "text-success" : "text-destructive")}>
-                      {formatCurrency(periodSummary.profit)}
+                      {postedUnavailable ? "Unavailable" : postedRevenueKnown ? formatCurrency(periodSummary.profit) : "No revenue posted"}
                     </div>
                     <div className="space-y-0.5 mt-0.5">
                       {periodSummary.foodCostIsEstimated && (
